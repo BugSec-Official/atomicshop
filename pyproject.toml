@@ -1,0 +1,36 @@
+# Build systems for 'wheel' and 'setuptools' of version 61.0.0 and higher. Only in version 61 was introsuced full support for parsing 'pyproject.toml'.
+[build-system]
+requires = [
+    "setuptools >= 61.0.0",
+    "wheel",
+]
+build-backend = "setuptools.build_meta"
+
+# Getting verision from '__init__.py' of the 'atomicshop' package.
+[tool.setuptools.dynamic]
+version = {attr = "atomicshop.__version__"}
+
+# While building, installing package add all non-python files from folder inside package: 'addons'. Workls recursively.
+[tool.setuptools.package-data]
+"atomicshop.addons" = ["**"]
+
+[project]
+# Name of the package.
+name = "atomicshop"
+# This is needed in order to get the 'version' variable from '[tool.setuptools.dynamic]' section.
+dynamic = ["version"]
+# Authors. 'email' section can be added for each author.
+authors = [
+  { name="Denis Kras" }
+]
+# Short description.
+description = "Atomic functions and classes to make developer life easier"
+license = {file = "LICENSE.txt"}
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Libraries :: Python Modules"
+]
