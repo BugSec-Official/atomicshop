@@ -10,7 +10,8 @@ The library is constantly being improved and supplemented with new features.
 
 There are many gems hidden in the library:
 * Print API: this is the main feature of this library. It allows you to print colored text, with different styles, with / without stdout / stderr, RTL text, logger usage. The API will be integrated in every function of the library in the future, so you can easily use it controlling outputs.
-* Socket wrapper: can be used to create a server or client and manipulate sockets with relatively easy API. Server tester available. ReadMe to follow.
+* Socket wrapper: can be used to create a server or client and manipulate sockets with relatively easy API. Server tester available.
+* MITM Proxy: allows you to create a TCP proxy server (works with SSL) that will intercept requests and responses. You can modify them, log them, etc. ReadMe to follow. Based on SocketWrapper.
 * Update checker: helps on checking if pyhon object, a file or any other thing was updated between checks.
 * Timer: measures time passed from the point you start it using python API.
 * GitHub wrapper: easily download branches and latest releases from GitHub repositories.
