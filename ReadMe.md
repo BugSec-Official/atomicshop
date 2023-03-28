@@ -13,8 +13,8 @@ The library is constantly being improved and supplemented with new features.
 
 There are many gems hidden in the library:
 * Print API: this is the main feature of this library. It allows you to print colored text, with different styles, with / without stdout / stderr, RTL text, logger usage. The API will be integrated in every function of the library in the future, so you can easily use it controlling outputs.
-* Windows ETW - Event Tracing: a wrapper for FireEye project's ETW library with much easier API. Sice FireEye didn't update their library for quite a while, maybe another solution will be considered in the future. If you have suggestions, please let me know.
-* Windows DNS Event Tracing: Traces DNS requests / responses (Event ID: 3008) on Windows OSes that support Event Tracing. Outputs the real domain (not CDN: AWS, GoogleCloud, Azure, etc) with PID. Process Name and Command Line can be retrieved by option (currently CPU intensive).
+* Windows ETW - Event Tracing: a wrapper for FireEye project's ETW library with much easier API. Since, FireEye didn't update their library for quite a while, maybe another solution will be considered in the future. If you have suggestions, please let me know.
+* Windows DNS Event Tracing: Traces DNS requests / responses (Event ID: 3008) on Windows OSes that support Event Tracing. Outputs the real domain (not CDN: AWS, GoogleCloud, Azure, etc) with PID. Process Name and Command Line can be retrieved by option. Currently, process info is CPU intensive.
 * Socket wrapper: can be used to create a server or client and manipulate sockets with relatively easy API. Server tester available.
 * MITM Proxy: allows you to create a TCP proxy server (works with SSL) that will intercept requests and responses. You can modify them, log them, etc. ReadMe to follow. Based on SocketWrapper.
 * Update checker: helps on checking if pyhon object, a file or any other thing was updated between checks.
