@@ -7,9 +7,6 @@
 
 Atomic Workshop is python's library that was built by Denis Kras under Bugsec's roof.
 
-Use this library at your own risk as it comes with no guarantees at all.
-Bugsec or Denis Kras are not responsible for any damage caused to you or any other parties by using this library or suggesting it.
-
 The main purpose of the library is to simplify the process of developing under python.
 The library is constantly being improved and supplemented with new features.
 "Atomic" is a key to basic functions that a developer needs in his daily tasks: create directory, iterate over files, read/write files, manipulate lists, dicts, etc.
