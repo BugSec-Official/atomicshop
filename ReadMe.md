@@ -62,7 +62,7 @@ To get a local copy up and running follow these simple steps.
    pip install atomicshop
    ```
    
-2. If you want to use the latest version, you can clone the repo:
+2. If you want to use the latest version, you can download or clone the repo:
    ```sh
    git clone https://github.com/BugSec-Official/atomicshop.git
    ```
