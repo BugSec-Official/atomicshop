@@ -1,4 +1,4 @@
-# v1.0.6 - 27.03.2023 00:20
+# v1.0.7 - 30.03.2023 16:30
 import os
 import urllib.request
 
@@ -8,7 +8,16 @@ from .filesystem import remove_file
 from .urls import url_parser
 
 
-def check_is_status_ok(status_code: int, **kwargs) -> bool:
+# https://www.useragents.me/
+# https://user-agents.net/
+USER_AGENTS = {
+    'Chrome_111.0.0_Windows_10-11_x64':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+        'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36'
+}
+
+
+def is_status_ok(status_code: int, **kwargs) -> bool:
     """
     Function checks is HTTP response status is 200 OK. If OK - returns True, otherwise False.
     :param status_code: status code integer.
@@ -30,6 +39,32 @@ def get_filename_from_url(file_url: str):
     file_name: str = url_parts['directories'][-1]
 
     return file_name
+
+
+def get_page_bytes(url: str, user_agent: str = str(), default_user_agent: bool = False, **kwargs) -> bytes:
+    """
+    Function returns the page content from the given URL.
+    Returns only the byte response.
+
+    :param url: string, full URL.
+    :param user_agent: string, user agent to use when downloading the page.
+    :param default_user_agent: boolean, if True, the default user agent will be used.
+    :return: string, page content.
+    """
+
+    if not default_user_agent and not user_agent:
+        raise ValueError('ERROR: No [user_agent] specified and [default_user_agent] usage is [False].')
+
+    if default_user_agent:
+        user_agent = USER_AGENTS['Chrome_111.0.0_Windows_10-11_x64']
+
+    # Create a 'Request' object with the URL and user agent.
+    request = urllib.request.Request(url, headers={'User-Agent': user_agent})
+
+    # Open the URL and read the page content.
+    response = urllib.request.urlopen(request).read()
+
+    return response
 
 
 def download_with_urllib(file_url: str, target_directory: str, file_name: str = str(), **kwargs) -> str:
@@ -68,7 +103,7 @@ def download_with_urllib(file_url: str, target_directory: str, file_name: str = 
     file_to_download = urllib.request.urlopen(file_url)
 
     # Check status of url.
-    if not check_is_status_ok(status_code=file_to_download.status, **kwargs):
+    if not is_status_ok(status_code=file_to_download.status, **kwargs):
         return None
 
     # Get file size. For some reason doesn't show for GitHub branch downloads.

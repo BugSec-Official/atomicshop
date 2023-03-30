@@ -1,12 +1,22 @@
 # v1.0.5 - 21.03.2023 13:20
 import os
 import pathlib
-from pathlib import Path
+from pathlib import Path, PurePath, PureWindowsPath
 import glob
 import shutil
 from enum import Enum
 
 from .print_api import print_api
+from .basics import strings
+
+
+def get_working_directory() -> str:
+    """
+    The function returns working directory of called script file.
+
+    :return: string.
+    """
+    return str(Path.cwd())
 
 
 def get_file_directory(file_path: str) -> str:
@@ -19,13 +29,46 @@ def get_file_directory(file_path: str) -> str:
     return str(Path(file_path).parent)
 
 
-def get_working_directory() -> str:
+def get_list_of_directories_in_file_path(
+        file_path: str, get_last_part: bool = True, convert_drive_to_string: bool = False) -> list:
     """
-    The function returns working directory of called script file.
+    The function will return list of directories in the file path.
 
+    :param file_path: string, full file path.
+    :param get_last_part: boolean, if True, the last part of the path will be included in the list.
+        In most cases only user can know if it is a file name or not, so you decide if you want to remove it or not.
+    :param convert_drive_to_string: boolean, if True, the drive letter will be converted to a single character string.
+        Only if the path is a Windows path and contains a drive letter.
+        Example: 'C:' will be converted to 'C'. 'C:\' will be converted to 'C'. '\\C:\\' will be converted to 'C'.
+    :return: list.
+    """
+
+    # If we're on Windows, convert the path to a Windows path.
+    if os.name == 'nt':
+        directory_list = list(PureWindowsPath(file_path).parts)
+    else:
+        directory_list = list(PurePath(file_path).parts)
+
+    # If 'convert_drive_to_string' was set to 'True' and the path is a Windows path and the first directory contains
+    # a drive letter, convert it to a single character string.
+    if convert_drive_to_string and strings.contains_letter(directory_list[0]) and os.name == 'nt':
+        directory_list[0] = directory_list[0].replace(':', '').replace('\\', '')
+
+    # If 'get_last_part' is set to 'False', remove the last part of the path.
+    if not get_last_part:
+        del directory_list[-1]
+
+    return directory_list
+
+
+def get_file_name(file_path: str) -> str:
+    """
+    The function will return file name of the file.
+
+    :param file_path: string, full file path.
     :return: string.
     """
-    return str(Path.cwd())
+    return str(Path(file_path).name)
 
 
 def check_absolute_path(filesystem_path) -> bool:

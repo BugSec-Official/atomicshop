@@ -1,10 +1,11 @@
-# v1.0.2 - 21.03.2023 13:50
+# v1.0.4 - 30.03.2023 16:30
 import os
 from pathlib import Path
 import functools
 
-from . import hashing, file_io, jsons
-from .print_api import print_api
+from .. import hashing, filesystem, urls
+from ..file_io import file_io, jsons
+from ..print_api import print_api
 
 
 def handle_input_file(function_name):
@@ -39,15 +40,20 @@ def handle_input_file(function_name):
 
         # If known content differs from just taken content.
         result = None
+        message = f'First Cycle on Object: {self.check_object}'
         if self.object_content != current_content:
             # If known content is not empty (if it is, it means it is the first iteration, and we don't have the input
             # file, so we don't need to update the 'result', since there is nothing to compare yet).
             if self.object_content or (not self.object_content and self.return_first_cycle):
                 result = {
+                    'object': self.check_object,
                     'old': self.object_content,
                     'updated': current_content,
                     'type': self.object_type
                 }
+
+                message = f"Object: {result['object']} | Type: {result['type']} | " \
+                          f"Old: {result['old']} | Updated: {result['updated']}"
 
             # Make known content the current, since it is updated.
             self.object_content = current_content
@@ -59,19 +65,38 @@ def handle_input_file(function_name):
                 elif self.save_as == 'json':
                     jsons.write_json_file(
                         self.object_content, self.input_file_path, use_default_indent=True, **kwargs)
+        else:
+            message = f"Object didn't change: {self.check_object}"
 
-        return result
+        return result, message
 
     return wrapper
 
 
-class UpdateChecker:
+class DiffChecker:
+    """
+    This class is used to check if an object changed since last time.
+    If there was change, dict is returned containing: the object, old state, updated state and type of object.
+        In addition, a general string message is returned.
+    If the object didn't change, it will return None and a message.
+    The object can be anything: file, directory, process, etc.
+    You will need to execute appropriate function to check the object.
+    Example: if you want to check if a file was updated, you will need to execute 'check_hash_file' function.
+    You can also specify a directory for storing input files for current state of objects,
+    to check later if this state isn't updated.
+    You don't have to use input file to store queried content, you can store it in memory only. Off course, it will
+    be lost if the script is restarted.
+    """
+
     def __init__(
             self,
-            input_file_directory: str = str(), input_file_name: str = str(),
-            add_object_type_to_input_filename: bool = False, input_file_write_only: bool = True,
-            return_first_cycle: bool = True):
+            check_object: any, input_file_directory: str = str(), input_file_name: str = str(),
+            add_object_type_to_input_filename: bool = False, create_input_directory: bool = False,
+            input_file_write_only: bool = True, return_first_cycle: bool = True):
         """
+        :param check_object: any, object to check if it changed.
+            You will need to execute appropriate function to check the object.
+            Example: if you want to check if a file was updated, you will need to execute 'check_hash_file' function.
         :param input_file_directory: string, full directory path for storing input files for current state of objects,
             to check later if this state isn't updated. If this variable is left empty, all the content will be saved
             in memory and input file will not be used.
@@ -82,10 +107,11 @@ class UpdateChecker:
             know about that if the input file wasn't written. Since, the script will not know what happened before
             restart and what hash value the file had before the update.
         :param input_file_name: string, of file name to save as. If file name wasn't specified, we will
-            generate one.
+            generate one. Each function will generate the file name based on the object type and the object name.
         :param add_object_type_to_input_filename: boolean,
             True: 'self.object_type' will be added before 'self.input_file_name'.
             False: 'self.input_file_name' will be used as is.
+        :param create_input_directory: boolean, if the directory doesn't exist, create it.
         :param input_file_write_only: boolean,
             True: read only once on script start and only write to input file each time there is an update, while
                 reading the variable from the memory each cycle.
@@ -101,20 +127,23 @@ class UpdateChecker:
         self.input_file_directory: str = input_file_directory
         self.input_file_name: str = input_file_name
 
-        # All the options must be specified if you want to use input file to save current state data.
-        if self.input_file_directory or self.input_file_name:
-            if not self.input_file_directory:
-                raise ValueError("[input_file_directory] option wasn't specified.")
-            elif not self.input_file_name:
-                raise ValueError("[input_file_name] option wasn't specified.")
+        # # All the options must be specified if you want to use input file to save current state data.
+        # if self.input_file_directory or self.input_file_name:
+        #     if not self.input_file_directory:
+        #         raise ValueError("[input_file_directory] option wasn't specified.")
+        #     elif not self.input_file_name:
+        #         raise ValueError("[input_file_name] option wasn't specified.")
 
+        if not self.input_file_directory and self.input_file_name:
+            raise ValueError("[input_file_directory] option wasn't specified.")
+
+        self.check_object = check_object
         self.input_file_path: str = str()
+        self.create_input_directory: bool = create_input_directory
         self.input_file_write_only: bool = input_file_write_only
         self.add_object_type_to_input_filename: bool = add_object_type_to_input_filename
         self.return_first_cycle: bool = return_first_cycle
 
-        # 'object' can be full file path of a file or registry path for value.
-        self.object = None
         # 'file_hash' / 'registry_value'
         self.object_type: str = str()
         # the hash of a file itself or registry value.
@@ -128,21 +157,34 @@ class UpdateChecker:
         else:
             self.input_file_path = f'{self.input_file_directory}{os.sep}{self.input_file_name}'
 
-    def check_file_hash(self, file_path: str, **kwargs):
+        if self.create_input_directory:
+            filesystem.create_folder(self.input_file_directory)
+
+    def check_hash_file(self, **kwargs):
         """
         The function will check file content for change by hashing it and comparing the hash.
-
-        :param file_path: string, full file path to a file to check for content change.
         """
 
         @handle_input_file
         def hash_file(self, **kwargs):
             # Inner function that is decorated by 'handle_input_file' function.
-            return hashing.file_hash(self.object, 'sha256')
+            return hashing.hash_file(self.check_object, 'sha256')
 
-        self.object = file_path
+        if not isinstance(self.check_object, str):
+            raise TypeError(f"[check_object] must be string, not {type(self.check_object)}.")
+
         self.object_type = 'FileHash'
         self.save_as = 'txt'
+
+        # If the file name wasn't specified, but the input directory was - we will generate the file name.
+        if not self.input_file_name and self.input_file_directory:
+            directories = filesystem.get_list_of_directories_in_file_path(
+                self.check_object, convert_drive_to_string=True)
+            # Join all the directories with '-' between them.
+            file_name = "-".join(directories)
+            # Change all the spaces and dots to '-' as well.
+            file_name = file_name.replace(" ", "-").replace(".", "-")
+            self.input_file_name = f'{file_name}.txt'
 
         # Each function need to initialize the object content to the proper type it will use.
         if not self.object_content:
@@ -151,22 +193,74 @@ class UpdateChecker:
         # Don't forget that this is decorated by 'handle_input_file'.
         return hash_file(self, **kwargs)
 
-    def check_list_of_dicts(self, list_of_dicts: list, **kwargs):
+    def check_hash_file_list(self, **kwargs):
+        """
+        The function will check list of files for file content change by hashing each file and comparing the hash.
+        The function will call 'check_hash_file' function for each file in the list and return a list of dicts
+        with the results.
+        """
+
+        if not isinstance(self.check_object, list):
+            raise TypeError(f'[check_object] must be list, not {type(self.check_object)}.')
+
+        result_list: list = list()
+        for file_path in self.check_object:
+            result_list.append(self.check_hash_file(**kwargs))
+
+        return result_list
+
+    def check_url(self, **kwargs):
+        """
+        The function will check url page for change by hashing it and comparing the hash.
+        """
+
+        @handle_input_file
+        def hash_url(self, **kwargs):
+            # Inner function that is decorated by 'handle_input_file' function.
+            return hashing.hash_url(self.check_object, 'sha256')
+
+        if not isinstance(self.check_object, str):
+            raise TypeError(f"[check_object] must be string, not {type(self.check_object)}.")
+
+        self.object_type = 'UrlHash'
+        self.save_as = 'txt'
+
+        # If the file name wasn't specified, but the input directory was - we will generate the file name.
+        if not self.input_file_name and self.input_file_directory:
+            parsed_url = urls.url_parser(self.check_object)
+            file_name: str = f"{parsed_url['netloc']}-{parsed_url['directories'][-1]}"
+            self.input_file_name = f'{file_name}.txt'
+
+        # Each function need to initialize the object content to the proper type it will use.
+        if not self.object_content:
+            self.object_content = str()
+
+        # Don't forget that this is decorated by 'handle_input_file'.
+        return hash_url(self, **kwargs)
+
+    def check_list_of_dicts(self, check_object: list = None, **kwargs):
         """
         The function will check list of dicts for change, while saving it to combined json file.
-
-        :param list_of_dicts: list, that will contain dict objects.
         """
 
         @handle_input_file
         def return_object(self, **kwargs):
             # Inner function that is decorated by 'handle_input_file' function.
             # We need to reinitialize list, so we don't pass the same instance to itself in the future.
-            return list(self.object)
+            return list(self.check_object)
 
-        self.object = list_of_dicts
+        if check_object:
+            self.check_object = check_object
+
+        if not isinstance(self.check_object, list):
+            raise TypeError(f'[check_object] must be list, not {type(self.check_object)}.')
+
         self.object_type = 'ListOfDicts'
         self.save_as = 'json'
+
+        # If the file name wasn't specified, but the input directory was - we will generate the file name.
+        if not self.input_file_name and self.input_file_directory:
+            raise NotImplementedError("This function doesn't support generating file name from list of dicts yet.")
 
         # Each function need to initialize the object content to the proper type it will use.
         if not self.object_content:

@@ -36,16 +36,16 @@ def print_api(message: any,
     :param stdout: Boolean that sets if the program should output regular prints or not.
     :param stderr: Boolean that sets if the program should output error/exception prints or not.
     :param stdcolor: Boolean that sets if the output should be colored or not.
-    :param raise_exception: boolean, if we're inside exception, this sets whether exception should be raised or passed.
-        Default is 'True' since this is the default in python.
-    :param exit_on_error: Boolean that sets if the program should end on error/exception if 'error_type' is
-        set to 'True'. 'exit_on_error' by default is set to 'False'.
-        If you want script to exit, you need to specify 'True'.
     :param oneline_exceptions: Boolean that sets if the program should print exceptions as oneline or not.
         This is needed in multithreaded script. There could be times when logger will output same message on several
         lines and these lines will be mixed with outputs from other threads.
     :return:
     """
+    # param raise_exception: boolean, if we're inside exception, this sets whether exception should be raised or passed.
+    #     Default is 'True' since this is the default in python.
+    # param exit_on_error: Boolean that sets if the program should end on error/exception if 'error_type' is
+    #     set to 'True'. 'exit_on_error' by default is set to 'False'.
+    #     If you want script to exit, you need to specify 'True'.
 
     # Inner functions already get all the local variables of the main function.
     def print_or_logger():

@@ -1,8 +1,20 @@
 import hashlib
 import sys
 
+from . import web
 
-def file_hash(file_path: str, hash_algo: str, block_size: int = 1024):
+
+def hash_bytes(bytes_object: bytes, hash_algo: str):
+    # Equivalent to sha256 example: hashlib.sha256(bytes_object).hexdigest()
+    return getattr(hashlib, hash_algo)(bytes_object).hexdigest()
+
+
+def hash_url(url: str, hash_algo: str, user_agent: str = str(), default_user_agent: bool = True):
+    response = web.get_page_bytes(url, user_agent=user_agent, default_user_agent=default_user_agent)
+    return hash_bytes(response, hash_algo)
+
+
+def hash_file(file_path: str, hash_algo: str, block_size: int = 1024):
     """
     The function will return hash of the file with specified algorithm.
 
