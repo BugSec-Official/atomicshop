@@ -198,3 +198,12 @@ def match_pattern_against_list_of_strings(pattern: str, list_of_strings: list) -
 def contains_digit(string: str) -> bool:
     """ Function to check if string contains a digit. """
     return any(char.isdigit() for char in string)
+
+
+def contains_letter(string: str) -> bool:
+    """
+    Function to check if string contains a letter. This is the fastest approach and doesn't use regex.
+    https://stackoverflow.com/a/59301031
+    """
+
+    return string.upper().isupper()

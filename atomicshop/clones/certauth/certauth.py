@@ -1,4 +1,6 @@
 """
+*** There were several fixes after the original code was copied from the GitHub repo.
+
 This is literally the file copied from the official certauth package.
 https://github.com/ikreymer/certauth/blob/master/certauth/certauth.py
 There were no changes made to the code, besides this comment.
@@ -8,8 +10,14 @@ versions are 1.3.0.
 The GitHub version 'Allow alternative SAN ips and fqdns', which is an important feature.
 The package wasn't maintained for more than 4 years, so for easier distribution, the file was copied here.
 If you have better idea on how to do this, please let me know.
+
+History:
+30.03.2023:
+    Minor python styling fixes.
+    'load_cert' function, fixed default mutable values.
+    'cert_for_host' function, fixed default mutable values.
+    'generate_host_cert' function, fixed default mutable values.
 """
-import logging
 import os
 
 from io import BytesIO
@@ -108,10 +116,12 @@ class CertificateAuthority(object):
 
         return cert, key
 
-    def is_host_ip(self, host):
+    @staticmethod
+    def is_host_ip(host):
         try:
             # if py2.7, need to decode to unicode str
-            if hasattr(host, 'decode'):  #pragma: no cover
+            # pragma: no cover
+            if hasattr(host, 'decode'):
                 host = host.decode('ascii')
 
             ipaddress.ip_address(host)
@@ -119,7 +129,8 @@ class CertificateAuthority(object):
         except (ValueError, UnicodeDecodeError):
             return False
 
-    def get_wildcard_domain(self, host):
+    @staticmethod
+    def get_wildcard_domain(host):
         host_parts = host.split('.', 1)
         if len(host_parts) < 2 or '.' not in host_parts[1]:
             return host
@@ -134,12 +145,15 @@ class CertificateAuthority(object):
 
         return host
 
-    def load_cert(self, host, overwrite=False,
-                              wildcard=False,
-                              wildcard_use_parent=False,
-                              include_cache_key=False,
-                              cert_ips=set(),
-                              cert_fqdns=set()):
+    def load_cert(
+            self, host, overwrite=False, wildcard=False, wildcard_use_parent=False, include_cache_key=False,
+            cert_ips=None, cert_fqdns=None):
+
+        if not cert_ips:
+            cert_ips = set()
+
+        if not cert_fqdns:
+            cert_fqdns = set()
 
         is_ip = self.is_host_ip(host)
 
@@ -188,25 +202,26 @@ class CertificateAuthority(object):
 
             return cert, key, cache_key
 
-    def cert_for_host(self, host, overwrite=False,
-                                  wildcard=False,
-                                  cert_ips=set(),
-                                  cert_fqdns=set()):
+    def cert_for_host(self, host, overwrite=False, wildcard=False, cert_ips=None, cert_fqdns=None):
 
-        res = self.load_cert(host, overwrite=overwrite,
-                                wildcard=wildcard,
-                                wildcard_use_parent=False,
-                                include_cache_key=True,
-                                cert_ips=cert_ips,
-                                cert_fqdns=cert_fqdns)
+        if not cert_ips:
+            cert_ips = set()
+        if not cert_fqdns:
+            cert_fqdns = set()
+
+        res = self.load_cert(host,
+                             overwrite=overwrite,
+                             wildcard=wildcard,
+                             wildcard_use_parent=False,
+                             include_cache_key=True,
+                             cert_ips=cert_ips,
+                             cert_fqdns=cert_fqdns)
 
         return res[2]
 
     def get_wildcard_cert(self, cert_host, overwrite=False):
-        res = self.load_cert(cert_host, overwrite=overwrite,
-                                        wildcard=True,
-                                        wildcard_use_parent=True,
-                                        include_cache_key=True)
+        res = self.load_cert(
+            cert_host, overwrite=overwrite, wildcard=True, wildcard_use_parent=True, include_cache_key=True)
 
         return res[2]
 
@@ -264,8 +279,13 @@ class CertificateAuthority(object):
                            wildcard=False,
                            hash_func=DEF_HASH_FUNC,
                            is_ip=False,
-                           cert_ips=set(),
-                           cert_fqdns=set()):
+                           cert_ips=None,
+                           cert_fqdns=None):
+
+        if not cert_ips:
+            cert_ips = set()
+        if not cert_fqdns:
+            cert_fqdns = set()
 
         utf8_host = host.encode('utf-8')
 
@@ -307,11 +327,13 @@ class CertificateAuthority(object):
         cert.sign(root_key, hash_func)
         return cert, key
 
-    def write_pem(self, buff, cert, key):
+    @staticmethod
+    def write_pem(buff, cert, key):
         buff.write(crypto.dump_privatekey(FILETYPE_PEM, key))
         buff.write(crypto.dump_certificate(FILETYPE_PEM, cert))
 
-    def read_pem(self, buff):
+    @staticmethod
+    def read_pem(buff):
         cert = crypto.load_certificate(FILETYPE_PEM, buff.read())
         buff.seek(0)
         key = crypto.load_privatekey(FILETYPE_PEM, buff.read())
@@ -344,7 +366,7 @@ class FileCache(object):
         try:
             with open(filename, 'rb') as fh:
                 return fh.read()
-        except:
+        except Exception:
             return b''
 
 
@@ -441,11 +463,13 @@ def main(args=None):
 
     # Sign a certificate for a given host
     overwrite = r.force
-    ca.load_cert(hostname, overwrite=overwrite,
-                           wildcard=wildcard,
-                           wildcard_use_parent=False,
-                           cert_ips=cert_ips,
-                           cert_fqdns=cert_fqdns)
+    ca.load_cert(
+        hostname,
+        overwrite=overwrite,
+        wildcard=wildcard,
+        wildcard_use_parent=False,
+        cert_ips=cert_ips,
+        cert_fqdns=cert_fqdns)
 
     if cert_cache.modified:
         print('Created new cert "' + hostname +
@@ -459,5 +483,6 @@ def main(args=None):
         return 1
 
 
-if __name__ == "__main__":  #pragma: no cover
+# pragma: no cover
+if __name__ == "__main__":
     main()

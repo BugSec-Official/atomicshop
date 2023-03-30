@@ -6,6 +6,10 @@ requires = [
 ]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+# If you have several folders, you have to specify which one is the package.
+packages = ["atomicshop"]
+
 # Getting verision from '__init__.py' of the 'atomicshop' package.
 [tool.setuptools.dynamic]
 version = {attr = "atomicshop.__version__"}
@@ -34,3 +38,6 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Topic :: Software Development :: Libraries :: Python Modules"
 ]
+
+[project.urls]
+"Homepage" = "https://github.com/BugSec-Official/atomicshop"

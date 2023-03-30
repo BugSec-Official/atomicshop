@@ -1,8 +1,8 @@
-# v1.0.4 - 24.03.2023 - 15:40
+# v1.0.5 - 28.03.2023 - 17:20
 from operator import itemgetter
 from json import dumps, loads
 
-from .basics import dicts
+from . import dicts
 
 
 def remove_duplicates(list_of_dicts: list, preserve_order: bool = False):

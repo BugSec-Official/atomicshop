@@ -1,12 +1,11 @@
-# v1.0.1 - 24.03.2023 - 19:30
+# v1.0.2 - 28.03.2023 - 17:30
 import shlex
 import threading
 import multiprocessing
 import types
 import time
 
-from ..basics import dicts
-from .. import list_of_dicts
+from ..basics import dicts, list_of_dicts
 from ..print_api import print_api
 
 import psutil

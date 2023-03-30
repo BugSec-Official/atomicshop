@@ -1,9 +1,9 @@
-# v1.0.5 - 24.03.2023 - 16:50
+# v1.0.6 - 28.03.2023 - 17:20
 import os
 import ast
 import importlib
 
-from ..file_io import read_file
+from ..file_io.file_io import read_file
 
 
 def create_empty_class():

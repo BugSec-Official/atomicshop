@@ -1,5 +1,6 @@
 echo Check git commit version
 echo Check ReadMe version
+echo Backup
 pause
 cd..
 git status
@@ -8,7 +9,7 @@ echo Check Connection
 pause
 git add .
 pause
-git commit -m "ReadMe Update"
+git commit -m "1.6.0"
 pause
 git push
 pause

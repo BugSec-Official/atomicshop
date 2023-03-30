@@ -1,4 +1,4 @@
-# v1.0.2 - 26.03.2023 23:20
+# v1.0.3 - 28.03.2023 17:20
 import sys
 
 from .threads import current_thread_id

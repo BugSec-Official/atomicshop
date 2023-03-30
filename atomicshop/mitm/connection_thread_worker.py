@@ -1,4 +1,4 @@
-# v1.0.2 - 27.03.2023 12:10
+# v1.0.4 - 28.03.2023 17:30
 import ssl
 from datetime import datetime
 
@@ -8,7 +8,7 @@ from ..sockets.receiver import Receiver
 from ..sockets.sender import Sender
 from ..sockets.socket_client import SocketClient
 from ..http_parse import HTTPRequestParse, HTTPResponseParse
-from ..threads import current_thread_id
+from ..basics.threads import current_thread_id
 
 
 # Thread function on client connect.
