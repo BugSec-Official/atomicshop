@@ -103,6 +103,13 @@ To follow. For now, check the files in the library. I tried my best with underst
   * atomicshop.sound
 * pip install numpy
   * atomicshop.wrappers.numpyw
+* pip install pyopenssl
+  * atomicshop.clones.certauth
+* pip install tldextract
+  * atomicshop.clones.certauth
+* pip install pywintrace
+  * atomicshop.etw.etw
+
 
 
 
