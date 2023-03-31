@@ -6,6 +6,7 @@ def convert_float64_to_int16(data):
     return (data * 32767).astype(numpy.int16)
 
 
+# noinspection PyRedundantParentheses
 def concatenate_array_list(array_list: list):
     """
     Concatenates a list of numpy arrays into one numpy array.

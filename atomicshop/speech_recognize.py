@@ -1,6 +1,6 @@
-# v1.0.0 - 07.03.2023 23:40
-from atomicshopext.ffmpeg_wrapper import FFmpegWrapper
-from atomicshop.tempfile_operations import TempFile
+# v1.0.1 - 31.03.2023 17:00
+from .wrappers.ffmpegw import FFmpegWrapper
+from .tempfiles import TempFile
 from atomicshop.web import download_with_urllib
 
 
@@ -15,7 +15,6 @@ def get_text_from_wav(wav_file_path: str) -> str:
     # Lazy import.
     from speech_recognition import Recognizer, AudioFile
 
-
     # Initialize speech recognizer classes.
     speech_recognizer = Recognizer()
     # Import wav file.
@@ -25,7 +24,7 @@ def get_text_from_wav(wav_file_path: str) -> str:
         audio = speech_recognizer.record(source)
     # Convert to text.
     # When using 'recognize_google' it outputs debugging JSON, there's an option 'show_all=False',
-    # which is set by default, could be bug in current version 3.9.0. There are some changes in GitHub for it
+    # which is set by default, could be a bug in current version 3.9.0. There are some changes in GitHub for it
     # but not in PyPi, will wait.
     text = speech_recognizer.recognize_google(audio)
 

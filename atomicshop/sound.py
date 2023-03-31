@@ -1,6 +1,6 @@
-from atomicshop.custom_api import print_api
-from atomicshopext.console_output_presets import print_status
-from atomicshopext.wrappers import numpyw
+# v1.0.0 - 31.03.2023 17:10
+from .print_api import print_api, print_status
+from .wrappers import numpyw
 
 import soundcard
 import soundfile
@@ -172,9 +172,10 @@ def record_stereo_mix(
     with soundfile.SoundFile(file_path, mode='w', samplerate=samplerate, channels=2, subtype=bit_rate) as output_file:
         # Use first input interface (with only 1 interface in the list at this stage).
         with loopback_inputs[0].recorder(samplerate=samplerate) as input_interface:
-            print_api(f'Recording Seconds: [{seconds}]. '
-                      f'Buffer size (frames): [{buffer_size}]. '
-                      f'Total Frames: [{total_frames}].')
+            message = f'Recording Seconds: [{seconds}]. ' \
+                      f'Buffer size (frames): [{buffer_size}]. ' \
+                      f'Total Frames: [{total_frames}].'
+            print_api(message, **kwargs)
 
             # Record while the amount of recorded frames is not equal to the final total amount of frames.
             while recorded_frames != total_frames:

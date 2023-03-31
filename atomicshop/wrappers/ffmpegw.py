@@ -1,14 +1,13 @@
-# v1.0.2 - 17.02.2023 17:10
-# Basic imports.
+# v1.0.3 - 31.03.2023 17:10
 import fnmatch
 import os
 import shlex
-# Custom imports.
-from atomicshop.custom_api import print_api
-from atomicshop.tempfile_operations import TempFile
-from atomicshop.github_wrapper import GitHubWrapper
-from atomicshop.process import execute_with_live_output
-from atomicshop.filesystem import create_folder
+
+from ..print_api import print_api
+from ..tempfiles import TempFile
+from ..github_wrapper import GitHubWrapper
+from ..process import execute_with_live_output
+from ..filesystem import create_folder
 
 
 class FFmpegWrapper:
