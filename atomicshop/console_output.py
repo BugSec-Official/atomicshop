@@ -1,3 +1,4 @@
+# v1.0.0 - 31.03.2023 17:00
 import contextlib
 import io
 
@@ -5,7 +6,7 @@ import io
 class TempDisableOutput:
     """
     The class was built to use with 'with' statement in order to temporarily disable output to console for function
-    executions that their output cann not be disabled.
+    executions that their output can not be disabled.
 
     Usage:
         from atomicshop.console_output import TempDisableOutput
@@ -26,7 +27,7 @@ class TempDisableOutput:
         test.__enter__()
         print('test')
         # '__exit__' method gets the 3 arguments of exception object, thus passing the exception parameters
-        # if it occures.
+        # if it occurs.
         test.__exit__(*sys.exc_info())
     """
     def __init__(self):

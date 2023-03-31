@@ -1,15 +1,18 @@
-# v1.0.0 - 26.03.2023 15:10
+# v1.0.1 - 31.03.2023 17:10
 # These are specified with hardcoded paths instead of relative, because 'create_module_template.py' copies the content.
 from atomicshop.mitm.engines.__parent.responder___parent import ResponderParent
 from atomicshop.mitm.shared_functions import create_custom_logger
-# import time
-# datetime
-# import binascii
 
-# # This is 'example' '.proto' file that contains message 'ExampleResponse'.
-# from .example_pb2 import ExampleRequest
-# # Import from 'protobuf' the 'json_format' library.
-# from google.protobuf import json_format
+"""
+import time
+datetime
+import binascii
+
+# This is 'example' '.proto' file that contains message 'ExampleResponse'.
+from .example_pb2 import ExampleRequest
+# Import from 'protobuf' the 'json_format' library.
+from google.protobuf import json_format
+"""
 
 
 # The class that is responsible for generating response to client based on the received message.

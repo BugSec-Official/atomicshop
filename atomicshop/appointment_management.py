@@ -1,15 +1,12 @@
-# v1.0.0
-# Basic imports.
+# v1.0.1 - 31.03.2023 17:00
 import os
-import sys
-import csv
 import datetime
-# Custom class imports.
-from atomicshop.custom_api import print_api
-from atomicshop.list_operations import remove_duplicates_from_list, sort_list
-from atomicshop.datetime_operations import convert_single_digit_to_zero_padded, create_date_range_for_year, \
+
+from .print_api import print_api
+from .basics.lists import remove_duplicates
+from .datetimes import convert_single_digit_to_zero_padded, create_date_range_for_year, \
     create_date_range_for_year_month
-from atomicshop.csv_wrapper import read_csv_to_list
+from .file_io.csvs import read_csv_to_list
 
 
 class AppointmentManager:
@@ -30,7 +27,7 @@ class AppointmentManager:
 
         # If 'skip_days' was specified.
         if skip_days != 0:
-            # We'll add the number of days specified to current time and now it will be the earliest time to check.
+            # We'll add the number of days specified to current time, and now it will be the earliest time to check.
             self.earliest_date_to_check = self.earliest_date_to_check + datetime.timedelta(days=skip_days)
             # Remove the time completely, so it will check from the day beginning.
             self.earliest_date_to_check = self.earliest_date_to_check.replace(
@@ -50,7 +47,7 @@ class AppointmentManager:
             latest_date_dict['month'] = convert_single_digit_to_zero_padded(latest_date_dict['month'])
             latest_date_dict['day'] = convert_single_digit_to_zero_padded(latest_date_dict['day'])
 
-            # Make a datetime string and convert it to datetim object.
+            # Make a datetime string and convert it to datetime object.
             latest_date_string = f"{latest_date_dict['day']}.{latest_date_dict['month']}." \
                                  f"{latest_date_dict['year']} {latest_date_dict['time']}"
             self.latest_date_to_check = datetime.datetime.strptime(latest_date_string, "%d.%m.%Y %H:%M")
@@ -105,11 +102,12 @@ class BlacklistEngine:
             # Read the csv to list of dicts.
             csv_list = read_csv_to_list(file_path=self.blacklist_dates_filepath, raise_exception=True)
 
+            daterange = None
             # Iterate through all the rows.
             for row in csv_list:
                 if row['day'] != '' and row['month'] == '' and row['year'] != '':
                     message = f'You specified "day" and "year", but not "month" ' \
-                              f'in "{self.exception_dates_filename}", this is not allowed:\n' \
+                              f'in "{self.blacklist_dates_filename}", this is not allowed:\n' \
                               f'{row}'
                     print_api(message, message_type_error=True, color='red', exit_on_error=True)
                 elif row['day'] == '' and row['month'] == '' and row['year'] == '':
@@ -134,7 +132,7 @@ class BlacklistEngine:
                     self.blacklist_dates_list += daterange
             # For loop for CSV row cycles ends here
 
-            self.blacklist_dates_list = remove_duplicates_from_list(self.blacklist_dates_list)
+            self.blacklist_dates_list = remove_duplicates(self.blacklist_dates_list)
             self.blacklist_dates_list.sort()
 
         # If the file wasn't found we will not use the latest time to check at all.
