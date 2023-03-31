@@ -9,7 +9,7 @@ echo Check Connection
 pause
 git add .
 pause
-git commit -m "1.6.0"
+git commit -m "1.6.2"
 pause
 git push
 pause

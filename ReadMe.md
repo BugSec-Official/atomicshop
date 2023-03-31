@@ -22,6 +22,7 @@ There are many gems hidden in the library:
 * atomicshop.gitHub_wrapper: easily download branches and latest releases from GitHub repositories.
 * atomicshop.archiver: extract archives using options.
 * atomicshop.wrappers.configparserw.ConfigParserWrapper: read / write config files to dict, converting string values to other formats (int, bool, list, list_of_ints, etc).
+* atomicshop.wrappers.ffmpegw.FFmpegWrapper: wrapper for FFmpeg, allows you to convert files to other formats. Downloads latest compiled release of ffmpeg from GitHub, if it doesn't find one.
 * atomicshop.sound: this module currently can record sound from Stereo mix to WAV file.
 * atomicshop.process: Process wrapper, can be used to get live output from a console process, while it still runs. Execute process in new cmd window, etc.
 * atomicshop.scheduling: Scheduler with threads, you can schedule a function to run periodically each 30 minutes (or any specified period of time) using threads (or not).
@@ -98,6 +99,14 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 <!-- HISTORY -->
 ## History
 
+* 1.6.2 - 31.03.2023
+  * Added 'wrappers.numpyw' module.
+  * Added 'wrappers.ffmpegw' module.
+  * Added 'speech_recognize' module.
+  * Added 'console_output' module.
+  * Added 'appointment_management' module.
+  * Added 'question_answer_engine' module.
+  * Added 'print_status' function to 'print_api' module
 * 1.6.1 - 31.03.2023
   * Added 'sound' module.
 * 1.6.0 - 30.03.2023

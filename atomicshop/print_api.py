@@ -118,3 +118,36 @@ def print_api(message: any,
     # If 'exit_on_error' is set to 'True', we'll end the script.
     # if exit_on_error and error_type:
     #     sys.exit()
+
+
+def print_status(same_line: bool, prefix_string: str, current_state, final_state, suffix_string: str = str(), **kwargs):
+    """
+    The function will print specified variables in a specific format on the same line, based on 'same_line' parameter.
+
+    :param same_line: Boolean, if True, the lines will be printed on the same line, otherwise on different lines.
+    :param prefix_string: string, will be printed before the status.
+    :param current_state: numeric representation of current state.
+    :param final_state: numeric representation of final state.
+        Example: current_state / final_state, 1 / 10, 2 / 10, 3 / 10, etc.
+    :param suffix_string: string, since the lines are printed on the same line, it can happen that one line can be
+        longer than the other. If shorter line come after the longer one, it will align on top of the longer line.
+
+        Example:
+        Line 1: 'Downloaded bytes: 100 / 1000'
+        Line 2: 'Skipped Empty bytes: 200 / 1000'
+        Line 3: 'Downloaded bytes: 300 / 1000000'
+        Since line 3 is shorter than line 2, it will align on top of line 2.
+        So, to avoid this, we can add a suffix string with empty spaces to line 3:
+        print_status(
+            same_line=True, prefix_string='Downloaded bytes', current_state=300, final_state=1000, suffix_string='    ')
+        This will add 4 empty spaces to the end of line 3:
+        Line 2: 'Skipped Empty bytes: 200 / 1000'
+        Line 3: 'Downloaded bytes: 300 / 1000    '
+    :param kwargs: keyword arguments to pass to 'print_api' function.
+    :return: None
+    """
+
+    if same_line:
+        print_api(f'{prefix_string}: {current_state} / {final_state}{suffix_string}', print_end='\r', **kwargs)
+    else:
+        print_api(f'{prefix_string}: {current_state} / {final_state}{suffix_string}', **kwargs)
