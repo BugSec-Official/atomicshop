@@ -12,22 +12,23 @@ The library is constantly being improved and supplemented with new features.
 "Atomic" is a key to basic functions that a developer needs in his daily tasks: create directory, iterate over files, read/write files, manipulate lists, dicts, etc.
 
 There are many gems hidden in the library:
-* Print API: this is the main feature of this library. It allows you to print colored text, with different styles, with / without stdout / stderr, RTL text, logger usage. The API will be integrated in every function of the library in the future, so you can easily use it controlling outputs.
-* Windows ETW - Event Tracing: a wrapper for FireEye project's ETW library with much easier API. Since, FireEye didn't update their library for quite a while, maybe another solution will be considered in the future. If you have suggestions, please let me know.
-* Windows DNS Event Tracing: Traces DNS requests / responses (Event ID: 3008) on Windows OSes that support Event Tracing. Outputs the real domain (not CDN: AWS, GoogleCloud, Azure, etc) with PID. Process Name and Command Line can be retrieved by option. Currently, process info is CPU intensive.
-* Socket wrapper: can be used to create a server or client and manipulate sockets with relatively easy API. Server tester available.
-* MITM Proxy: allows you to create a TCP proxy server (works with SSL) that will intercept requests and responses. You can modify them, log them, etc. ReadMe to follow. Based on SocketWrapper.
-* HTTP parser: parse HTTP requests and responses to dictionary.
-* Difference checker: helps on checking if pyhon object, a file or any other thing was updated between checks.
-* GitHub wrapper: easily download branches and latest releases from GitHub repositories.
-* Archiver: extract archives using options.
-* ConfigParserWrapper: read / write config files to dict, converting string values to other formats (int, bool, list, list_of_ints, etc).
-* Process wrapper: can be used to get live output from a console process, while it still runs. Execute process in new cmd window, etc.
-* Scheduler with threads: you can schedule a function to run periodically each 30 minutes (or any specified period of time) using threads (or not).
-* Timer: measures time passed from the point you start it using python API.
-* File downloader with status.
-* File csv / json / text reader / writer.
-* Filesystem functions: move / create folders, copy / delete files, etc.
+* atomicshop.print_api: this is the main feature of this library. It allows you to print colored text, with different styles, with / without stdout / stderr, RTL text, logger usage. The API will be integrated in every function of the library in the future, so you can easily use it controlling outputs.
+* atomicshop.etw.etw: Windows ETW - Event Tracing, a wrapper for FireEye project's ETW library with much easier API. Since, FireEye didn't update their library for quite a while, maybe another solution will be considered in the future. If you have suggestions, please let me know.
+* atomicshop.etw.dns_trace: Windows DNS Event Tracing, Traces DNS requests / responses (Event ID: 3008) on Windows OSes that support Event Tracing. Outputs the real domain (not CDN: AWS, GoogleCloud, Azure, etc) with PID. Process Name and Command Line can be retrieved by option. Currently, process info is CPU intensive.
+* atomicshop.sockets: Socket wrapper, can be used to create a server or client and manipulate sockets with relatively easy API. Server tester available.
+* atomicshop.mitm: MITM Proxy, allows you to create a TCP proxy server (works with SSL) that will intercept requests and responses. You can modify them, log them, etc. ReadMe to follow. Based on SocketWrapper.
+* atomicshop.http_parser: parse HTTP requests and responses to dictionary.
+* atomicshop.diff_check.diff_check.DiffChecker: helps on checking if pyhon object, a file or any other thing was updated between checks.
+* atomicshop.gitHub_wrapper: easily download branches and latest releases from GitHub repositories.
+* atomicshop.archiver: extract archives using options.
+* atomicshop.wrappers.configparserw.ConfigParserWrapper: read / write config files to dict, converting string values to other formats (int, bool, list, list_of_ints, etc).
+* atomicshop.sound: this module currently can record sound from Stereo mix to WAV file.
+* atomicshop.process: Process wrapper, can be used to get live output from a console process, while it still runs. Execute process in new cmd window, etc.
+* atomicshop.scheduling: Scheduler with threads, you can schedule a function to run periodically each 30 minutes (or any specified period of time) using threads (or not).
+* atomicshop.timer: measures time passed from the point you start it using python API.
+* atomicshop.web.download_with_urllib: File downloader with status.
+* atomicshop.file_io: File csv / json / text reader / writer.
+* atomicshop.filesystem: functions like, move / create folders, copy / delete files, etc.
 * And many more...
 
 Currently, for complete picture you'll have to check the files in the library. I tried my best with understandable naming and grouping convention.
@@ -97,6 +98,8 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 <!-- HISTORY -->
 ## History
 
+* 1.6.1 - 31.03.2023
+  * Added 'sound' module.
 * 1.6.0 - 30.03.2023
   * csvs, jsons, file_io - moved to 'file_io' folder.
   * argparse_template, exceptions, guids, list_of_dicts, threads - moved to 'basic' folder.
