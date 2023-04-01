@@ -1,4 +1,4 @@
-# v1.1.0 - 21.03.2023 16:40
+# v1.1.1 - 01.04.2023 22:40
 from .basics.ansi_escape_codes import ColorsBasic, get_colors_basic_dict
 
 
@@ -147,7 +147,12 @@ def print_status(same_line: bool, prefix_string: str, current_state, final_state
     :return: None
     """
 
-    if same_line:
-        print_api(f'{prefix_string}: {current_state} / {final_state}{suffix_string}', print_end='\r', **kwargs)
+    if final_state:
+        message = f'{prefix_string}: {current_state} / {final_state}{suffix_string}'
     else:
-        print_api(f'{prefix_string}: {current_state} / {final_state}{suffix_string}', **kwargs)
+        message = f'{prefix_string}: {current_state}{suffix_string}'
+
+    if same_line:
+        print_api(message, print_end='\r', **kwargs)
+    else:
+        print_api(message, **kwargs)

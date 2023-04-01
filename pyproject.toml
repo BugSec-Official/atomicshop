@@ -32,6 +32,18 @@ description = "Atomic functions and classes to make developer life easier"
 license = {file = "LICENSE.txt"}
 readme = "README.md"
 requires-python = ">=3.10"
+dependencies = [
+    "cryptography",
+    "pyopenssl",
+    "tldextract",
+    "paramiko",
+    "pywintrace",
+    "numpy",
+    "psutil",
+    "soundfile",
+    "SoundCard",
+    "SpeechRecognition"
+]
 classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",

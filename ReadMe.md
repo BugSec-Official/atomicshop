@@ -89,30 +89,6 @@ To follow. For now, check the files in the library. I tried my best with underst
 
 
 
-<!-- KNOWN REQUIREMENTS -->
-## Known Requirements
-
-* pip install SpeechRecognition
-  * atomicshop.speech_recognize
-* pip install psutil
-  * atomicshop.process
-  * atomicshop.wrappers.psutilw
-* pip install SoundCard
-  * atomicshop.sound
-* pip install soundfile
-  * atomicshop.sound
-* pip install numpy
-  * atomicshop.wrappers.numpyw
-* pip install pyopenssl
-  * atomicshop.clones.certauth
-* pip install tldextract
-  * atomicshop.clones.certauth
-* pip install pywintrace
-  * atomicshop.etw.etw
-
-
-
-
 <!-- LICENSE -->
 ## License
 
@@ -123,6 +99,13 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 <!-- HISTORY -->
 ## History
 
+* 1.6.4 - 02.04.2023
+  * Renamed 'process_wrapper_curl.py' to '_process_wrapper_curl.py'
+  * Renamed 'process_wrapper_tar.py' to '_process_wrapper_tar.py'
+  * 'tempfiles' - converted some functions to private.
+  * 'print_api.print_status' - added functionality for empty 'final_state' parameter.
+  * Created 'sound.StereoMixRecorder' class for enhanced recording capabilities.
+  * Added some python libraries as dependencies to be installed automatically.
 * 1.6.3 - 31.03.2023
   * Fixed API references in modules added in 1.6.2.
 * 1.6.2 - 31.03.2023

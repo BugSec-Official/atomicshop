@@ -1,4 +1,4 @@
-# v1.0.2 - 27.03.2021 - 00:20
+# v1.0.3 - 01.04.2021 - 15:30
 import os
 import datetime
 import tempfile
@@ -8,7 +8,7 @@ from .print_api import print_api
 from .inspect_wrapper import get_target_function_default_args_and_combine_with_current
 
 
-def write_tempfile_object_decorator(function_name):
+def _write_tempfile_object_decorator(function_name):
     @functools.wraps(function_name)
     def wrapper_write_tempfile_object_decorator(*args, **kwargs):
         # Put 'args' into 'kwargs' with appropriate key.
@@ -43,8 +43,8 @@ def write_tempfile_object_decorator(function_name):
     return wrapper_write_tempfile_object_decorator
 
 
-@ write_tempfile_object_decorator
-def write_tempfile_from_file_object(file_object=None, **kwargs):
+@ _write_tempfile_object_decorator
+def _write_tempfile_from_file_object(file_object=None, **kwargs):
     return
 
 

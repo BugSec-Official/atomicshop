@@ -1,4 +1,8 @@
-# v1.0.0 - 31.03.2023 17:10
+# v1.0.1 - 02.04.2023 02:50
+import io
+import queue
+import threading
+
 from .print_api import print_api, print_status
 from .wrappers import numpyw
 
@@ -123,83 +127,236 @@ def get_loopback_inputs(first: bool = False, select_interface=None, **kwargs):
     return input_loopback_list
 
 
-def record_stereo_mix(
-        file_path: str, seconds: int, buffer_size: int = 1024, samplerate: int = 44100, bit_rate: str = 'PCM_16',
-        skip_empty_buffers: bool = False, use_first_loopback: bool = True, select_interface=None, **kwargs):
-    """
-    The function will record from stereo mix loopback in the sound driver for specified amount of time.
+class StereoMixRecorder:
+    def __init__(
+            self, samplerate: int = 44100, bit_rate: str = 'PCM_16', buffer_size: int = 1024,
+            skip_empty_buffers: bool = False, use_first_loopback: bool = True, select_interface=None):
+        """
+        :param samplerate: integer, sample rate of the wave that will be recorded. The default is '44100', since regular
+            audio wav files for listening are this quality.
+        :param bit_rate: string, the bit rate of the wave that will be recorded. The default is 'PCM_16'.
+            The string represents 'subtype' option of 'soundfile' library. Currently supported:
+                'PCM_S8':         0x0001,  # Signed 8-bit data
+                'PCM_16':         0x0002,  # Signed 16-bit data
+                'PCM_24':         0x0003,  # Signed 24 bit data
+                'PCM_32':         0x0004,  # Signed 32-bit data
+                'PCM_U8':         0x0005,  # Unsigned 8-bit data (WAV and RAW only)
+                'FLOAT':          0x0006,  # 32-bit float data
+                'DOUBLE':         0x0007,  # 64-bit float data
+                'MPEG_LAYER_III': 0x0082,  # MPEG-2 Audio Layer III.
+                * More options are available in 'soundfile' library.
+        :param buffer_size: integer, amount of frames / samples to record at once. The default is '1024'.
+        :param skip_empty_buffers: boolean, skip empty buffers. The default is 'False' - do not skip.
+            Each buffer contains 'buffer_size' amount of frames / samples. If the buffer is empty, it means that there
+            was no sound in the input interface and all the frames came as zeroes.
+        :param use_first_loopback: boolean, get the first loopback input interface that was found.
+        :param select_interface: None / integer, select the interface from the input loopback interfaces list.
+        """
 
-    :param file_path: string, full file path to '.wav' file to save.
-    :param seconds: integer, amount of seconds to record.
-    :param buffer_size: integer, amount of frames / samples to record at once. The default is '1024'.
-    :param samplerate: integer, sample rate of the wave that will be recorded. The default is '44100', since regular
-        audio wav files for listening are this quality.
-    :param bit_rate: string, the bit rate of the wave that will be recorded. The default is 'PCM_16'.
-        The string represents 'subtype' option of 'soundfile' library. Currently supported:
-            'PCM_S8':         0x0001,  # Signed 8-bit data
-            'PCM_16':         0x0002,  # Signed 16-bit data
-            'PCM_24':         0x0003,  # Signed 24 bit data
-            'PCM_32':         0x0004,  # Signed 32-bit data
-            'PCM_U8':         0x0005,  # Unsigned 8-bit data (WAV and RAW only)
-            'FLOAT':          0x0006,  # 32-bit float data
-            'DOUBLE':         0x0007,  # 64-bit float data
-            'MPEG_LAYER_III': 0x0082,  # MPEG-2 Audio Layer III.
-            * More options are available in 'soundfile' library.
-    :param skip_empty_buffers: boolean, skip empty buffers. The default is 'False' - do not skip.
-        Each buffer contains 'buffer_size' amount of frames / samples. If the buffer is empty, it means that there
-        was no sound in the input interface and all the frames came as zeroes.
-    :param use_first_loopback: boolean, get the first loopback input interface that was found.
-    :param select_interface: None / integer, select the interface from the input loopback interfaces list.
-    :param kwargs: parameters for 'print_api'.
-    :return: None.
-    """
+        self.samplerate: int = samplerate
+        self.bit_rate: str = bit_rate
+        self.buffer_size: int = buffer_size
+        self.skip_empty_buffers: bool = skip_empty_buffers
+        self.use_first_loopback: bool = use_first_loopback
+        self.select_interface: int = select_interface
 
-    # Get the loopback input. We need only one.
-    loopback_inputs = get_loopback_inputs(first=use_first_loopback, input_interface=select_interface)
+        self.recording: bool = False
+        self.loopback_input = self._initialize_input_interface()
+        self._buffer_queue: queue.Queue = queue.Queue()
+        self._some_data_was_recorded: bool = False
 
-    # If more than 1 loopback interface was found.
-    if len(loopback_inputs) > 1:
-        raise RuntimeError("There can't be more than 1 input interface, use selection option.")
-    # If no loopback interfaces were found.
-    elif not loopback_inputs:
-        raise RuntimeError("Loopback input interface wasn't found.")
+    def _initialize_input_interface(self):
+        """
+        The function will initialize the input interface.
+        """
 
-    # Getting the total number of buffers.
-    total_frames = seconds * samplerate
-    # Currently no frames were recorded.
-    recorded_frames = 0
+        # Get the loopback input. We need only one.
+        loopback_inputs = get_loopback_inputs(first=self.use_first_loopback, input_interface=self.select_interface)
 
-    with soundfile.SoundFile(file_path, mode='w', samplerate=samplerate, channels=2, subtype=bit_rate) as output_file:
+        # If more than 1 loopback interface was found.
+        if len(loopback_inputs) > 1:
+            raise RuntimeError("There can't be more than 1 input interface, use selection option.")
+        # If no loopback interfaces were found.
+        elif not loopback_inputs:
+            raise RuntimeError("Loopback input interface wasn't found.")
+
+        return loopback_inputs[0]
+
+    def start(
+            self, file_path: str = str(), emit_type: str = None, cut_emit_buffers: int = None,
+            record_until_zero_array: bool = False, **kwargs):
+        """
+        The function will start recording from stereo mix loopback in the sound driver.
+
+        :param file_path: string, full file path to '.wav' file to save. Default is empty string, meaning that no file
+            will be saved.
+        :param emit_type: string, the type of the emitted data through 'emit()' method. The default is None.
+            Currently supported:
+                None: no data will be emitted, meaning that 'emit()' method will be disabled.
+                'byteio': 'io.BytesIO' object - file object that will contain the same data that is stored in actual
+                    '.wav' file.
+                'nparray': float64 numpy array.
+        :param cut_emit_buffers: integer, amount of buffers to emit. applicable only for 'emit_type='byteio'.
+            The default is None, meaning that all the buffers will be emitted when record finishes.
+        :param kwargs:
+        :return:
+        """
+
+        self.recording = True
+        threading.Thread(
+            target=self._thread_record,
+            args=(file_path, emit_type, cut_emit_buffers, record_until_zero_array),
+            kwargs=kwargs
+        ).start()
+
+    def _thread_record(
+            self, file_path: str, emit_type: str, cut_emit_buffers: int, record_until_zero_array: bool, **kwargs):
+        # # Getting the total number of buffers.
+        # total_frames = seconds * self.samplerate
+        # Currently no frames were recorded.
+        recorded_frames = 0
+
+        output_file = None
+        if file_path:
+            output_file = soundfile.SoundFile(
+                file_path, mode='w', samplerate=self.samplerate, channels=2, subtype=self.bit_rate)
+
+        output_memory = None
+        byte_io = None
+        if emit_type == 'byteio':
+            byte_io = io.BytesIO()
+            # byte_io.name = 'test.wav'
+            output_memory = soundfile.SoundFile(
+                byte_io, mode='w', samplerate=self.samplerate, channels=2, subtype=self.bit_rate, format='WAV')
+
+        emit_buffers_counter = 0
         # Use first input interface (with only 1 interface in the list at this stage).
-        with loopback_inputs[0].recorder(samplerate=samplerate) as input_interface:
-            message = f'Recording Seconds: [{seconds}]. ' \
-                      f'Buffer size (frames): [{buffer_size}]. ' \
-                      f'Total Frames: [{total_frames}].'
-            print_api(message, **kwargs)
-
+        with self.loopback_input.recorder(samplerate=self.samplerate) as input_interface:
             # Record while the amount of recorded frames is not equal to the final total amount of frames.
-            while recorded_frames != total_frames:
-                frames_left = total_frames - recorded_frames
-                same_line = True
-                # If the amount of frames left is less than the buffer size that was set in the beginning,
-                # it means that we are in the last buffer, and we need to set the buffer size to the amount of frames
-                # left and also set 'same_line' to 'False' so that the prints after that will be printed in a new line.
-                if frames_left <= buffer_size:
-                    same_line = False
-                    buffer_size = frames_left
-
+            while self.recording:
+                emit_buffers_counter += 1
+                # print(emit_buffers_counter)
                 # Record audio data from selected loopback input interface for 'buffer_size' amount of frames.
-                data = input_interface.record(numframes=buffer_size)
+                data = input_interface.record(numframes=self.buffer_size)
+                if emit_type == 'nparray':
+                    self._buffer_queue.put(data)
 
-                recorded_frames = recorded_frames + buffer_size
+                recorded_frames = recorded_frames + self.buffer_size
+
+                if record_until_zero_array and self._some_data_was_recorded and numpyw.check_if_array_is_empty(data):
+                    self.stop()
 
                 # If 'skip_empty_buffers' is 'True' and the buffer is empty, skip it.
-                if skip_empty_buffers and numpyw.check_if_array_is_empty(data):
-                    print_status(same_line, 'Skipping Empty Frames', recorded_frames, total_frames, color="yellow")
+                if self.skip_empty_buffers and numpyw.check_if_array_is_empty(data):
+                    print_status(True, 'Skipping Empty Frames', recorded_frames, None, color="yellow")
                 # If the buffer is not empty, write it to the wave file.
                 else:
-                    output_file.write(data)
-                    print_status(same_line, 'Recorded Frames', recorded_frames, total_frames, suffix_string='         ')
+                    if not numpyw.check_if_array_is_empty(data):
+                        self._some_data_was_recorded = True
+
+                    if file_path:
+                        output_file.write(data)
+                    if emit_type == 'byteio':
+                        output_memory.write(data)
+
+                    print_status(
+                        True, 'Recorded Seconds | Frames', f'[{recorded_frames / self.samplerate} | {recorded_frames}]',
+                        None, suffix_string='         ', **kwargs)
+
+                    if cut_emit_buffers:
+                        if emit_buffers_counter == cut_emit_buffers:
+                            output_memory.close()
+                            byte_io.seek(0)
+                            emit_bytes = byte_io.read()
+                            self._buffer_queue.put(emit_bytes)
+                            byte_io = io.BytesIO()
+                            # byte_io.name = 'test.wav'
+                            output_memory = soundfile.SoundFile(
+                                byte_io, mode='w', samplerate=self.samplerate, channels=2, subtype=self.bit_rate,
+                                format='WAV')
+
+        if file_path:
+            output_file.close()
+        if emit_type == 'byteio':
+            output_memory.close()
+            byte_io.seek(0)
+            emit_bytes = byte_io.read()
+            self._buffer_queue.put(emit_bytes)
+
+    def stop(self):
+        """
+        The function will stop recording from stereo mix loopback in the sound driver.
+
+        :return: None.
+        """
+
+        self.recording = False
+
+    def emit(self):
+        """
+        The function will emit the data that was recorded.
+        Blocking function, since it will wait until data is available by using queue.Queue object
+        'self._buffer_queue.get()'.
+
+        If 'emit_type' is 'byteio', the function will return 'bytes' object (contains WAV file) that was extracted
+        from 'io.BytesIO' object.
+        If 'emit_type' is 'nparray', the function will return 'float64' numpy array.
+
+        :return: 'bytes' wav file object or 'float64' numpy array.
+        """
+
+        return self._buffer_queue.get()
+
+    def record_stereo_mix(self, file_path: str, seconds: int, **kwargs):
+        """
+        The function will record from stereo mix loopback in the sound driver for specified amount of time.
+
+        :param file_path: string, full file path to '.wav' file to save.
+        :param seconds: integer, amount of seconds to record.
+        :param kwargs: parameters for 'print_api'.
+        :return: None.
+        """
+
+        # Getting the total number of buffers.
+        total_frames = seconds * self.samplerate
+        # Currently no frames were recorded.
+        recorded_frames = 0
+
+        # Open the output file.
+        with soundfile.SoundFile(
+                file_path, mode='w', samplerate=self.samplerate, channels=2, subtype=self.bit_rate) as output_file:
+            # Use first input interface (with only 1 interface in the list at this stage).
+            with self.loopback_input.recorder(samplerate=self.samplerate) as input_interface:
+                message = f'Recording Seconds: [{seconds}]. ' \
+                          f'Buffer size (frames): [{self.buffer_size}]. ' \
+                          f'Total Frames: [{total_frames}].'
+                print_api(message, **kwargs)
+
+                # Record while the amount of recorded frames is not equal to the final total amount of frames.
+                while recorded_frames != total_frames:
+                    frames_left = total_frames - recorded_frames
+                    same_line = True
+                    # If the amount of frames left is less than the buffer size that was set in the beginning,
+                    # it means that we are in the last buffer, and we need to set the buffer size to the amount
+                    # of frames left and also set 'same_line' to 'False' so that the prints after that will be printed
+                    # in a new line.
+                    if frames_left <= buffer_size:
+                        same_line = False
+                        buffer_size = frames_left
+
+                    # Record audio data from selected loopback input interface for 'buffer_size' amount of frames.
+                    data = input_interface.record(numframes=buffer_size)
+
+                    recorded_frames = recorded_frames + buffer_size
+
+                    # If 'skip_empty_buffers' is 'True' and the buffer is empty, skip it.
+                    if self.skip_empty_buffers and numpyw.check_if_array_is_empty(data):
+                        print_status(same_line, 'Skipping Empty Frames', recorded_frames, total_frames, color="yellow")
+                    # If the buffer is not empty, write it to the wave file.
+                    else:
+                        output_file.write(data)
+                        print_status(
+                            same_line, 'Recorded Frames', recorded_frames, total_frames, suffix_string='         ')
 
     """
     Recording comments:
