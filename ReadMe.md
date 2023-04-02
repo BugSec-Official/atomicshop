@@ -99,4 +99,4 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 <!-- HISTORY -->
 ## History
 
-[History.md](History.md#history)
+[History.md](https://github.com/BugSec-Official/atomicshop/blob/main/History.md#history)
