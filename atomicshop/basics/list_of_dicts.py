@@ -2,7 +2,7 @@
 from operator import itemgetter
 from json import dumps, loads
 
-from . import dicts
+from . import dicts, strings
 
 
 def remove_duplicates(list_of_dicts: list, preserve_order: bool = False):
@@ -82,6 +82,37 @@ def merge_to_dict(list_of_dicts: list) -> dict:
         result_dict.update(item)
 
     return result_dict
+
+
+def is_value_exist_in_key(list_of_dicts: list, key: str, value_to_match: str, prefix_suffix: bool = False) -> bool:
+    """
+    The function will check if a value exists in a key in a list of dicts.
+
+    Example:
+        list_of_dicts = [{'key1': 'value1'}, {'key1': 'value2'}, {'key1': 'value3'}]
+    You want to find if 'value1' exists in 'key1' in any of the dicts in the list.
+        is_value_exist_in_key(list_of_dicts, 'key1', '*lue1') -> True
+
+    :param list_of_dicts: list of dicts.
+    :param key: str, the key to check in each entry (dict) in the list.
+    :param value_to_match: str, the value to find in the key.
+        This values is a pattern, so it can be a part of the value and can contain wildcards as "*" character.
+    :param prefix_suffix: bool, related to how pattern of 'value_to_find' is matched against the value in the key.
+        Check the 'strings.match_pattern_against_string' function for more information.
+    :return: bool, True if the value exists in the key in any entry in the list of dicts, False if not.
+    """
+
+    for dictionary in list_of_dicts:
+        try:
+            # if value_to_find in dictionary.get(key, None):
+            if strings.match_pattern_against_string(value_to_match, dictionary.get(key, None), prefix_suffix):
+                return True
+        # If the key is not present in the dict 'TypeError' will be raised, since 'None' doesn't have the 'in' operator.
+        except TypeError:
+            # We will pass this exception, since it means that the value is not present in current list entry (dict).
+            pass
+
+    return False
 
 
 def convert_to_set(list_of_dicts, sort_keys: bool = False) -> set:
