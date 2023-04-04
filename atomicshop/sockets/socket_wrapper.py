@@ -1,4 +1,4 @@
-# v1.1.1 - 21.03.2023 13:50
+# v1.1.2 - 02.04.2023 18:00
 import sys
 import datetime
 import socket
@@ -10,6 +10,7 @@ import select
 import io
 from contextlib import redirect_stdout
 
+from ..print_api import print_api
 from ..script_as_string_processor import ScriptAsStringProcessor
 from ..domains import get_domain_without_first_subdomain_if_no_subdomain_return_as_is
 from ..wrappers.certauthw import CertAuthWrapper
@@ -270,9 +271,7 @@ class SocketWrapper:
     def accept_connection(self, socket_object, statistics, **kwargs):
         function_client_socket = None
         function_client_address: tuple = tuple()
-
-        if 'logger' in kwargs.keys():
-            logger = kwargs['logger']
+        message = str()
 
         try:
             # "accept()" bloc script I/O calls until receives network connection. When client connects "accept()"
@@ -294,62 +293,75 @@ class SocketWrapper:
         except ConnectionAbortedError:
             message = f"Socket Accept: {SNI_QUEUE.queue}:{socket_object.getsockname()[1]}: " \
                       f"* Established connection was aborted by software on the host..."
-            logger.error_exception_oneliner(message)
+            print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
             pass
         except ConnectionResetError:
             message = f"Socket Accept: {SNI_QUEUE.queue}:{socket_object.getsockname()[1]}: " \
                       f"* An existing connection was forcibly closed by the remote host..."
-            logger.error_exception_oneliner(message)
+            print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
             pass
-        except ssl.SSLEOFError:
+        except ssl.SSLEOFError as e:
             # A subclass of SSLError raised when the SSL connection has been terminated abruptly. Generally, you
             # shouldn't try to reuse the underlying transport when this error is encountered.
             # https://docs.python.org/3/library/ssl.html#ssl.SSLEOFError
             # Nothing to do with it.
 
-            message = "* SSL EOF Error on accept. Could be connection aborted in the middle..."
+            message = f"ssl.SSLEOFError: {e}"
             try:
                 message = f"Socket Accept: {SNI_QUEUE.queue}:{socket_object.getsockname()[1]}: {message}"
-                logger.error_exception_oneliner(message)
+                print_api(message, logger=self.logger, logger_method='error')
             except Exception:
                 message = f"Socket Accept: port {socket_object.getsockname()[1]}: {message}"
-                logger.error_exception_oneliner(message)
+                print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
+                pass
+            pass
+        except ssl.SSLZeroReturnError as e:
+            message = f"ssl.SSLZeroReturnError: {e}"
+            try:
+                message = f"Socket Accept: {SNI_QUEUE.queue}:{socket_object.getsockname()[1]}: {message}"
+                print_api(message, logger=self.logger, logger_method='error')
+            except Exception:
+                message = f"Socket Accept: port {socket_object.getsockname()[1]}: {message}"
+                print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
                 pass
             pass
         except ssl.SSLError as exception_object:
             # Getting the exact reason of "ssl.SSLError"
             if exception_object.reason == "HTTP_REQUEST":
                 message = f"Socket Accept: HTTP Request on SSL Socket: {get_source_destination(socket_object)}"
-                logger.error_exception_oneliner(message)
+                print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
             elif exception_object.reason == "TSV1_ALERT_UNKNOWN_CA":
                 message = f"Socket Accept: Check certificate on the client for CA " \
                           f"{get_source_destination(socket_object)}"
-                logger.error_exception_oneliner(message)
+                print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
+            elif exception_object.reason == "SSLV3_ALERT_CERTIFICATE_UNKNOWN":
+                message = f'ssl.SSLError:{exception_object}'
+                message = f"Socket Accept: {SNI_QUEUE.queue}:{socket_object.getsockname()[1]}: {message}"
+                print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
             else:
                 # Not all requests have the server name passed through Client Hello.
                 # If it is not passed an error of undefined variable will be raised.
                 # So, we'll check if the variable as a string is in the "locals()" variable pool.
                 # Alternatively we can check if the variable is in the "global()" and then pull it from there.
 
-                message = "SSLError on accept. For more info check the OpenSSL module documentation..."
+                message = "SSLError on accept. Not documented..."
                 try:
                     message = f"Socket Accept: {SNI_QUEUE.queue}:{socket_object.getsockname()[1]}: {message}"
-                    logger.error_exception_oneliner(message)
+                    print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
                 except Exception:
                     message = f"Socket Accept: port {socket_object.getsockname()[1]}: {message}"
-                    logger.error_exception_oneliner(message)
+                    print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
                 pass
             pass
         except FileNotFoundError:
             message = "'SSLSocket.accept()' crashed: 'FileNotFoundError'. Some problem with SSL during Handshake - " \
                       "Could be certificate, client, or server."
-            try:
-                message = f"Socket Accept: {SNI_QUEUE.queue}:{socket_object.getsockname()[1]}: {message}"
-                logger.error_exception_oneliner(message)
-            except Exception:
-                message = f"Socket Accept: port {socket_object.getsockname()[1]}: {message}"
-                logger.error_exception_oneliner(message)
-                pass
+            message = f"Socket Accept: {SNI_QUEUE.queue}:{socket_object.getsockname()[1]}: {message}"
+            print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
+            # except Exception:
+            #     message = f"Socket Accept: port {socket_object.getsockname()[1]}: {message}"
+            #     print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
+            #     pass
             pass
         # After all executions tested, this is what will be executed.
         finally:
@@ -646,23 +658,18 @@ class SocketWrapper:
 
     # Creating listening sockets.
     def create_socket_ipv4_tcp_ssl_sni_extended(self, ip_address: str, port: int):
-        # Catching all the socket exceptions until accept
-        try:
-            self.sni_execute_extended = True
-            self.read_script_string_for_ssh()
+        self.sni_execute_extended = True
+        self.read_script_string_for_ssh()
 
-            self.create_socket_ipv4_tcp()
-            self.add_reusable_address_option()
-            self.set_new_server_ssl_context()
-            self.add_sni_callback_function_reference_to_ssl_context()
-            self.select_server_ssl_context_certificate()
-            self.load_certificate_and_key_into_server_ssl_context()
-            self.wrap_socket_with_ssl_context_server()
-            self.bind_socket_with_ip_port(ip_address, port)
-            self.set_listen_on_socket()
-        except Exception:
-            self.logger.critical_exception("General Exception from the MAIN thread on socket creation.")
-            sys.exit()
+        self.create_socket_ipv4_tcp()
+        self.add_reusable_address_option()
+        self.set_new_server_ssl_context()
+        self.add_sni_callback_function_reference_to_ssl_context()
+        self.select_server_ssl_context_certificate()
+        self.load_certificate_and_key_into_server_ssl_context()
+        self.wrap_socket_with_ssl_context_server()
+        self.bind_socket_with_ip_port(ip_address, port)
+        self.set_listen_on_socket()
 
         return self.socket_object
 

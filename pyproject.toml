@@ -37,12 +37,16 @@ dependencies = [
     "pyopenssl",
     "tldextract",
     "paramiko",
+    "dnslib",
+    "dnspython",
     "pywintrace",
     "numpy",
     "psutil",
     "soundfile",
     "SoundCard",
-    "SpeechRecognition"
+    "SpeechRecognition",
+    "python-bidi",
+    "protobuf"
 ]
 classifiers = [
     "Intended Audience :: Developers",

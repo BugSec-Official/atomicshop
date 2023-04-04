@@ -4,7 +4,7 @@ import threading
 from .socket_client import SocketClient
 from ..wrappers.configparserw import ConfigParserWrapper
 from ..filesystem import get_file_paths_and_relative_directories
-from .. import logger_custom
+from ..wrappers.loggingw import loggingw
 from ..file_io import jsons, file_io
 
 
@@ -55,7 +55,7 @@ def execute_test(config_static):
     config = config_importer.config['config']
 
     # SocketClient is working with 'network' logger by default, so we will initialize it.
-    logger_custom.CustomLogger("network")
+    loggingw.get_logger_with_stream_handler("network")
 
     # Get all the files in requests folder recursively.
     request_file_list, _ = get_file_paths_and_relative_directories(config['requests_directory'])

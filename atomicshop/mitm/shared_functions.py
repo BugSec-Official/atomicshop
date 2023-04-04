@@ -5,7 +5,7 @@ import datetime
 # Needed to get the function caller module.
 import inspect
 
-from ..logger_custom import CustomLogger
+from ..wrappers.loggingw import loggingw
 
 
 # If the string has several dot characters (".") - return the most right string after the last dot.
@@ -37,7 +37,7 @@ def create_custom_logger():
     # Get the logger name only.
     logger_name = build_module_names(class_name)[0]
 
-    return CustomLogger(logger_name)
+    return loggingw.get_logger_with_level(logger_name)
 
 
 def dict_converter(data):

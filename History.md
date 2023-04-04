@@ -1,6 +1,12 @@
 <!-- HISTORY -->
 ## History
 
+* 1.6.6 - 02.04.2023
+  * Moved 'traceback_oneline' function from 'logger_custom' to 'get_as_string' in 'basics.tracebacks'.
+  * Removed traceback helper methods from 'logger_custom' module.
+  * 'logger_custom' - moved to 'wrappers.loggingw'. Overall functionality was rewritten and split into numerous helper modules. The result is easier manipulation of the 'logging.Logger' object.
+  * 'print_api' - removed 'traceback_oneline_string' key argument, added 'oneline' and 'oneline_end' key arguments.
+  * Added 'python-bidi', 'dnslib', 'dnspython' libraries to dependencies.
 * 1.6.5 - 02.04.2023
   * Added 'basics.list_to_dicts.is_value_exist_in_key' function.
 * 1.6.4 - 02.04.2023

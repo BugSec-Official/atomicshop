@@ -1,11 +1,13 @@
 # v1.0.1 - 21.03.2023 13:40
 import ssl
-from ..logger_custom import CustomLogger
+
+from ..print_api import print_api
+from ..wrappers.loggingw import loggingw
 
 
 class Receiver:
     """ Receiver Class is responsible for receiving the message from socket and populate the message class """
-    logger = CustomLogger("network." + __name__.rpartition('.')[2])
+    logger = loggingw.get_logger_with_level("network." + __name__.rpartition('.')[2])
 
     def __init__(self, ssl_socket: ssl.SSLSocket):
         self.ssl_socket: ssl.SSLSocket = ssl_socket
@@ -33,15 +35,18 @@ class Receiver:
             # "recv(byte buffer size)" to read the server's response.
             class_data = self.ssl_socket.recv(self.buffer_size_receive)
         except ConnectionAbortedError:
-            self.logger.critical_exception_oneliner("* Connection was aborted by the client. Exiting...")
+            message = "* Connection was aborted by the client. Exiting..."
+            print_api(message, logger=self.logger, logger_method='critical', traceback_string=True, oneline=True)
             # This will be treated as empty message - indicate that socket was closed and will be handled properly.
             pass
         except ConnectionResetError:
-            self.logger.critical_exception_oneliner("* Connection was forcibly closed by the client. Exiting...")
+            message = "* Connection was forcibly closed by the client. Exiting..."
+            print_api(message, logger=self.logger, logger_method='critical', traceback_string=True, oneline=True)
             # This will be treated as empty message - indicate that socket was closed and will be handled properly.
             pass
         except ssl.SSLError:
-            self.logger.critical_exception_oneliner("* Encountered SSL error on packet receive. Exiting...")
+            message = "* Encountered SSL error on packet receive. Exiting..."
+            print_api(message, logger=self.logger, logger_method='critical', traceback_string=True, oneline=True)
             # This will be treated as empty message - indicate that socket was closed and will be handled properly.
             pass
 

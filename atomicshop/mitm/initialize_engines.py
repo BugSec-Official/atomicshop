@@ -4,7 +4,7 @@ import sys
 import configparser
 
 from ..basics.classes import import_first_class_name_from_file_path
-from ..logger_custom import CustomLogger
+from ..wrappers.loggingw import loggingw
 from .engines.__reference_general import parser___reference_general, responder___reference_general, \
     recorder___reference_general
 
@@ -80,8 +80,8 @@ class ModuleCategory:
 
         # Initiating logger for each engine by its name
         # initiate_logger(current_module.engine_name, log_file_extension)
-        CustomLogger(logger_name=self.engine_name).add_timedfilehandler_with_queuehandler(
-            file_extension='.txt', directory_path=logs_path)
+        loggingw.get_logger_with_stream_handler_and_timedfilehandler(
+            logger_name=self.engine_name, directory_path=logs_path, disable_duplicate_ms=True)
 
 
 # Assigning external class object by message domain received from client. If the domain is not in the list,

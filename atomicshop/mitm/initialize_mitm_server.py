@@ -1,4 +1,4 @@
-# v1.0.2 - 26.03.2023 18:40
+# v1.0.3 - 02.04.2023 17:30
 import os
 import threading
 
@@ -6,13 +6,14 @@ import atomicshop
 from .import_config import ImportConfig
 from .initialize_engines import ModuleCategory
 from .connection_thread_worker import thread_worker_main
+from ..print_api import print_api
 from ..filesystem import get_file_paths_and_relative_directories, ComparisonOperator
 from .. import filesystem
 from ..python_functions import get_current_python_version_string, check_python_version_compliance
 from ..sockets.socket_wrapper import SocketWrapper, DomainQueue
 from ..sockets.dns_server import DnsServer
 from ..basics import dicts_nested
-from ..logger_custom import CustomLogger
+from ..wrappers.loggingw import loggingw
 
 
 def initialize_mitm_server(config_static):
@@ -33,7 +34,7 @@ def initialize_mitm_server(config_static):
                                    'process_cmd',
                                    'error'
                                    ]
-        statistics.logger.info(','.join(statistics_header))
+        statistics_logger.info(','.join(statistics_header))
 
     # After modules import - we check for python version.
     check_python_version_compliance(minimum_version='3.10')
@@ -50,58 +51,57 @@ def initialize_mitm_server(config_static):
     filesystem.create_folder(config['recorder']['recordings_path'])
 
     # Create a logger that will log messages to file, Initiate System logger.
-    system = type('', (), {})()
-    system.logger = CustomLogger("system")
-    system.logger.add_timedfilehandler_with_queuehandler(config_static.TXT_EXTENSION, config['log']['logs_path'])
+    system_logger = loggingw.get_logger_with_stream_handler_and_timedfilehandler(
+        "system", config['log']['logs_path'], disable_duplicate_ms=True)
 
     # Writing first log.
-    system.logger.info("======================================")
+    system_logger.info("======================================")
 
     if config_importer.admin_rights is not None:
         if not config_importer.admin_rights:
-            system.logger.error("User continued with errors on Command Line harvesting for system processes.")
+            system_logger.error("User continued with errors on Command Line harvesting for system processes.")
 
-    system.logger.info("Server Started.")
-    system.logger.info(f"Python Version: {get_current_python_version_string()}")
-    system.logger.info(f"Script Version: {config_static.SCRIPT_VERSION}")
-    system.logger.info(f"Atomic Workshop Version: {atomicshop.__version__}")
-    system.logger.info(f"Loaded config.ini: {config_importer.config_parser.file_path}")
-    system.logger.info(f"Log folder: {config['log']['logs_path']}")
-    system.logger.info(f"Recordings folder for Requests/Responses: {config['recorder']['recordings_path']}")
-    system.logger.info(f"Loaded system logger: {system.logger}")
+    system_logger.info("Server Started.")
+    system_logger.info(f"Python Version: {get_current_python_version_string()}")
+    system_logger.info(f"Script Version: {config_static.SCRIPT_VERSION}")
+    system_logger.info(f"Atomic Workshop Version: {atomicshop.__version__}")
+    system_logger.info(f"Loaded config.ini: {config_importer.config_parser.file_path}")
+    system_logger.info(f"Log folder: {config['log']['logs_path']}")
+    system_logger.info(f"Recordings folder for Requests/Responses: {config['recorder']['recordings_path']}")
+    system_logger.info(f"Loaded system logger: {system_logger}")
 
     # Catching exception on the main execution to log.
     try:
-        system.logger.info(f"TCP Server Target IP: {config['dns']['target_tcp_server_ipv4']}")
+        system_logger.info(f"TCP Server Target IP: {config['dns']['target_tcp_server_ipv4']}")
 
         # Some 'config.ini' settings logging ===========================================================================
         if config['certificates']['default_server_certificate_usage']:
-            system.logger.info(
+            system_logger.info(
                 f"Default server certificate usage enabled, if no SNI available: "
                 f"{config_static.CONFIG_EXTENDED['certificates']['default_server_certificate_directory']}"
                 f"{os.sep}{config_static.CONFIG_EXTENDED['certificates']['default_server_certificate_name']}.pem")
 
         if config['certificates']['sni_create_server_certificate_for_each_domain']:
-            system.logger.info(
+            system_logger.info(
                 f"SNI function certificates creation enabled. Certificates cache: "
                 f"{config_static.CONFIG_EXTENDED['certificates']['sni_server_certificates_cache_directory']}")
         else:
-            system.logger.info(f"SNI function certificates creation disabled.")
+            system_logger.info(f"SNI function certificates creation disabled.")
 
         if config['certificates']['custom_server_certificate_usage']:
-            system.logger.info(f"Custom server certificate usage is enabled.")
-            system.logger.info(f"Custom Certificate Path: {config['certificates']['custom_server_certificate_path']}")
+            system_logger.info(f"Custom server certificate usage is enabled.")
+            system_logger.info(f"Custom Certificate Path: {config['certificates']['custom_server_certificate_path']}")
 
             # If 'custom_private_key_path' field was populated.
             if config['certificates']['custom_private_key_path']:
-                system.logger.info(
+                system_logger.info(
                     f"Custom Certificate Private Key Path: {config['certificates']['custom_private_key_path']}")
             else:
-                system.logger.info(f"Custom Certificate Private Key Path wasn't provided in [advanced] section. "
+                system_logger.info(f"Custom Certificate Private Key Path wasn't provided in [advanced] section. "
                                    f"Assuming the private key is inside the certificate file.")
 
         # === Importing engine modules =================================================================================
-        system.logger.info("Importing engine modules.")
+        system_logger.info("Importing engine modules.")
 
         # Get full paths of all the 'engine_config.ini' files.
         engine_config_path_list, _ = get_file_paths_and_relative_directories(
@@ -116,7 +116,7 @@ def initialize_mitm_server(config_static):
             current_module = ModuleCategory(config_static.WORKING_DIRECTORY)
             current_module.fill_engine_fields_from_config(engine_config_path)
             current_module.initialize_engine(logs_path=config['log']['logs_path'],
-                                             logger=system.logger)
+                                             logger=system_logger)
 
             # Extending the full engine domain list with this list.
             domains_engine_list_full.extend(current_module.domain_list)
@@ -127,22 +127,22 @@ def initialize_mitm_server(config_static):
         reference_module = ModuleCategory(config_static.WORKING_DIRECTORY)
         reference_module.fill_engine_fields_from_general_reference(config_static.ENGINES_DIRECTORY_PATH)
         reference_module.initialize_engine(logs_path=config['log']['logs_path'],
-                                           logger=system.logger, stdout=False, reference_general=True)
+                                           logger=system_logger, stdout=False, reference_general=True)
         # === EOF Initialize Reference Module ==========================================================================
         # === Engine logging ===========================================================================================
         # If engines were found.
         if engines_list:
             # Printing the parsers using "start=1" for index to start counting from "1" and not "0"
-            system.logger.info("[*] Found Engines:")
+            system_logger.info("[*] Found Engines:")
             for index, engine in enumerate(engines_list, start=1):
-                system.logger.info(f"[*] {index}: {engine.engine_name} | {engine.domain_list}")
-                system.logger.info(f"[*] Modules: {engine.parser_class_object.__name__}, "
+                system_logger.info(f"[*] {index}: {engine.engine_name} | {engine.domain_list}")
+                system_logger.info(f"[*] Modules: {engine.parser_class_object.__name__}, "
                                    f"{engine.responder_class_object.__name__}, "
                                    f"{engine.recorder_class_object.__name__}")
         # If engines weren't found.
         else:
-            system.logger.info("[*] NO ENGINES WERE FOUND!")
-            system.logger.info(f"Server will process all the incoming (domains) connections by "
+            system_logger.info("[*] NO ENGINES WERE FOUND!")
+            system_logger.info(f"Server will process all the incoming (domains) connections by "
                                f"[{reference_module.engine_name}] engine.")
         # === EOF Engine Logging =======================================================================================
 
@@ -150,31 +150,20 @@ def initialize_mitm_server(config_static):
         config_static.CONFIG_EXTENDED['certificates']['domains_all_times'] = list(domains_engine_list_full)
 
         # Creating Statistics logger.
-        statistics_logger_name = "statistics"
-        statistics = type('', (), {})()
-        statistics.logger = CustomLogger(logger_name=statistics_logger_name)
-        statistics.logger.add_timedfilehandler_with_queuehandler(
-            file_extension=config_static.CSV_EXTENSION,
-            directory_path=config['log']['logs_path'],
-            formatter='{message}'
+        statistics_logger = loggingw.get_logger_with_stream_handler_and_timedfilehandler(
+            logger_name="statistics", directory_path=config['log']['logs_path'],
+            file_extension=config_static.CSV_EXTENSION, formatter_message_only=True
         )
         output_statistics_csv_header()
 
-        # Create and initiate empty class, so we can add logger as attribute
-        # class Network: pass
         network_logger_name = "network"
-        network = type('', (), {})()
-        network.logger = CustomLogger(logger_name=network_logger_name)
-        network.logger.add_timedfilehandler_with_queuehandler(
-            file_extension=config_static.TXT_EXTENSION, directory_path=config['log']['logs_path'])
-        network.logger.add_timedfilehandler_with_queuehandler(
-            file_extension=config_static.CSV_EXTENSION, directory_path=config['log']['logs_path'])
-        system.logger.info(f"Loaded network logger: {network.logger}")
+        network_logger = loggingw.get_logger_with_stream_handler_and_timedfilehandler(
+            logger_name=network_logger_name, directory_path=config['log']['logs_path'], disable_duplicate_ms=True)
+        system_logger.info(f"Loaded network logger: {network_logger}")
 
         # Initiate Listener logger, which is a child of network logger, so he uses the same settings and handlers
-        listener = type('', (), {})()
-        listener.logger = CustomLogger(network_logger_name + ".listener")
-        system.logger.info(f"Loaded listener logger: {listener.logger}")
+        listener_logger = loggingw.get_logger_with_level(f'{network_logger_name}.listener')
+        system_logger.info(f"Loaded listener logger: {listener_logger}")
 
         # Create request domain queue.
         domain_queue = DomainQueue()
@@ -193,15 +182,16 @@ def initialize_mitm_server(config_static):
         # === EOF Initialize DNS module ================================================================================
 
         socket_wrapper = SocketWrapper(
-            config=dicts_nested.merge(config, config_static.CONFIG_EXTENDED), logger=listener.logger,
-            statistics_logger=statistics.logger)
+            config=dicts_nested.merge(config, config_static.CONFIG_EXTENDED), logger=listener_logger,
+            statistics_logger=statistics_logger)
 
         socket_wrapper.create_tcp_listening_socket_list()
 
         socket_wrapper.requested_domain_from_dns_server = domain_queue
 
         socket_wrapper.loop_for_incoming_sockets(function_reference=thread_worker_main, reference_args=(
-            network, statistics, engines_list, reference_module, config,))
+            network_logger, statistics_logger, engines_list, reference_module, config,))
     except Exception:
-        system.logger.critical_exception("Undocumented exception in General settings of the MAIN thread")
+        message = "Undocumented exception in General settings of the MAIN thread"
+        print_api(message, logger=system_logger, logger_method='critical', traceback_string=True, oneline=True)
         raise
