@@ -1,10 +1,12 @@
-# v1.0.1 - 21.03.2023 13:50
+# v1.0.2 - 02.04.2023 17:30
 import ssl
-from ..logger_custom import CustomLogger
+
+from ..print_api import print_api
+from ..wrappers.loggingw import loggingw
 
 
 class Sender:
-    logger = CustomLogger("network." + __name__.rpartition('.')[2])
+    logger = loggingw.get_logger_with_level("network." + __name__.rpartition('.')[2])
 
     def __init__(self, ssl_socket: ssl.SSLSocket, class_message: bytearray):
         self.class_message: bytearray = class_message
@@ -48,17 +50,20 @@ class Sender:
             # At this point the sending loop finished successfully
             self.logger.info(f"Sent the message to destination.")
         except ConnectionResetError:
-            self.logger.critical_exception_oneliner("* Couldn't reach the server - Connection was reset. Exiting...")
+            message = "* Couldn't reach the server - Connection was reset. Exiting..."
+            print_api(message, logger=self.logger, logger_method='critical', traceback_string=True, oneline=True)
             # Since the connection is down, it will be handled in thread_worker_main
             function_result = False
             pass
         except ssl.SSLEOFError:
-            self.logger.critical_exception_oneliner("SSLError on send, Exiting...")
+            message = "SSLError on send, Exiting..."
+            print_api(message, logger=self.logger, logger_method='critical', traceback_string=True, oneline=True)
             # Since the connection is down, it will be handled in thread_worker_main
             function_result = False
             pass
         except ssl.SSLZeroReturnError:
-            self.logger.critical_exception_oneliner("TLS/SSL connection has been closed (EOF), Exiting...")
+            message = "TLS/SSL connection has been closed (EOF), Exiting..."
+            print_api(message, logger=self.logger, logger_method='critical', traceback_string=True, oneline=True)
             # Since the connection is down, it will be handled in thread_worker_main
             function_result = False
             pass

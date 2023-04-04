@@ -1,11 +1,13 @@
+# v1.0.0 - 02.04.2023 17:30
 import sys
 import socket
 import ssl
 import time
 
-from ..logger_custom import CustomLogger
 from .receiver import Receiver
 from .sender import Sender
+from ..print_api import print_api
+from ..wrappers.loggingw import loggingw
 
 # External libraries
 try:
@@ -16,7 +18,7 @@ except ImportError as exception_object:
 
 
 class SocketClient:
-    logger = CustomLogger("network." + __name__.rpartition('.')[2])
+    logger = loggingw.get_logger_with_level("network." + __name__.rpartition('.')[2])
 
     # noinspection GrazieInspection
     def __init__(self, service_name: str, service_port: int, service_ip=None, dns_servers_list=None):
@@ -137,36 +139,39 @@ class SocketClient:
                 # "connect()" to the server using address and port
                 self.ssl_socket.connect((destination, self.service_port))
             except ConnectionRefusedError:
-                self.logger.error_exception_oneliner(
-                    f"Couldn't connect to: {self.service_name}. The server is unreachable - Connection refused.")
+                message = f"Couldn't connect to: {self.service_name}. The server is unreachable - Connection refused."
+                print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
                 # Socket close will be handled in the thread_worker_main
                 function_result = False
                 pass
             except ConnectionAbortedError:
-                self.logger.error_exception_oneliner(
-                    f"Connection was aborted (by the software on host) to {self.service_name}.")
+                message = f"Connection was aborted (by the software on host) to {self.service_name}."
+                print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
                 # Socket close will be handled in the thread_worker_main
                 function_result = False
                 pass
             except socket.gaierror:
-                self.logger.error_exception_oneliner(f"Couldn't resolve [{self.service_name}] to IP using default "
-                                                     f"methods. Domain doesn't exist or there's no IP assigned to it.")
+                message = f"Couldn't resolve [{self.service_name}] to IP using default methods. " \
+                          f"Domain doesn't exist or there's no IP assigned to it."
+                print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
                 # Socket close will be handled in the thread_worker_main
                 function_result = False
                 pass
             except ssl.SSLError:
-                self.logger.error_exception_oneliner(f"SSLError raised on connection to {self.service_name}.")
+                message = f"SSLError raised on connection to {self.service_name}."
+                print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
                 # Socket close will be handled in the thread_worker_main
                 function_result = False
                 pass
             except TimeoutError:
-                self.logger.error_exception_oneliner(f"TimeoutError raised on connection to {self.service_name}.")
+                message = f"TimeoutError raised on connection to {self.service_name}."
+                print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
                 # Socket close will be handled in the thread_worker_main
                 function_result = False
                 pass
             except Exception:
-                self.logger.error_exception_oneliner(f"Unknown exception raised, while connection to "
-                                                     f"{self.service_name}.")
+                message = f"Unknown exception raised, while connection to {self.service_name}."
+                print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
                 # Socket close will be handled in the thread_worker_main
                 function_result = False
                 pass
@@ -217,7 +222,7 @@ class SocketClient:
         # If connection to service server wasn't successful
         if not function_service_connection:
             error_string = "Wasn't able to connect to service, closing the destination service socket"
-            self.logger.error_exception_oneliner(error_string)
+            print_api(error_string, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
 
             # We'll close the socket and nullify the object
             self.close_socket()

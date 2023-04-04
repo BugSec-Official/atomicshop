@@ -22,6 +22,7 @@ There are many gems hidden in the library:
 * atomicshop.gitHub_wrapper: easily download branches and latest releases from GitHub repositories.
 * atomicshop.archiver: extract archives using options.
 * atomicshop.wrappers.configparserw.ConfigParserWrapper: read / write config files to dict, converting string values to other formats (int, bool, list, list_of_ints, etc).
+* atomicshop.wrappers.loggingw: wrapper for 'logging' module, allows easier creation and manipulation of the 'logging.Logger' object with enhanced functionality on TimedRotatingFileHandler and formatters. 
 * atomicshop.wrappers.ffmpegw.FFmpegWrapper: wrapper for FFmpeg, allows you to convert files to other formats. Downloads latest compiled release of ffmpeg from GitHub, if it doesn't find one.
 * atomicshop.sound: this module currently can record sound from Stereo mix to WAV file.
 * atomicshop.process: Process wrapper, can be used to get live output from a console process, while it still runs. Execute process in new cmd window, etc.
@@ -49,7 +50,7 @@ Since, it's pre-alpha API names and functionality can change.
 Follow project's change history for the latest. 
 
 I tried my best to use as less external libraries as possible, but some of them are required.
-The list of required libraries will follow, but for now - test to see what may be missing. I don't want for libraries to be requirements, since these libraries usage depend on your needs. 
+Most of them already were added to 'dependencies' section of the setup. 
 
 Currently, the library is being developed on Windows 10 and python 3.10. No other platforms or python versions were tested.
 Most of the features will work, but some require at least version 3.10, like SocketWrapper. Since, some features in it are 3.10 specific.

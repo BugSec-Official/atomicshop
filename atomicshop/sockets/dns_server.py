@@ -1,4 +1,4 @@
-# v1.0.3 - 26.03.2023 18:50
+# v1.0.4 - 02.04.2023 17:20
 import os
 import sys
 import datetime
@@ -6,7 +6,8 @@ import time
 import threading
 import socket
 
-from ..logger_custom import CustomLogger
+from ..print_api import print_api
+from ..wrappers.loggingw import loggingw
 
 # External libraries
 try:
@@ -21,7 +22,7 @@ class DnsServer:
     """
     DnsServer class is responsible to handle DNS Requests on port 53 based on configuration and send DNS Response back.
     """
-    logger: CustomLogger = CustomLogger("network." + __name__.rpartition('.')[2])
+    logger = loggingw.get_logger_with_level("network." + __name__.rpartition('.')[2])
 
     def __init__(self, config):
         # Settings for static DNS Responses in offline mode.
@@ -57,12 +58,13 @@ class DnsServer:
         # Filename to save domains and their IPv4 addresses by time they hit the DNS server.
         self.known_dns_ipv4_by_time_filename: str = 'dns_ipv4_by_time.txt'
 
-        # Logger that logs all the DNS Requests and responses in DNS format. These entries will not present in
-        # network log of TCP Server module.
-        self.dns_full_logger = None
-
         # Configuration object with all the settings.
         self.config = config
+
+        # Logger that logs all the DNS Requests and responses in DNS format. These entries will not present in
+        # network log of TCP Server module.
+        self.dns_full_logger = loggingw.get_logger_with_timedfilehandler(
+            logger_name="dns", directory_path=self.config['log']['logs_path'], disable_duplicate_ms=True)
 
     def thread_worker_empty_dns_cache(self, function_sleep_time: int):
         """
@@ -84,11 +86,6 @@ class DnsServer:
         """
 
         self.logger.info("DNS Server Module Started.")
-
-        # Initiate full logger.
-        self.dns_full_logger = CustomLogger(logger_name="dns", add_stream=False)
-        self.dns_full_logger.add_timedfilehandler_with_queuehandler(
-            file_extension=".txt", directory_path=self.config['log']['logs_path'])
 
         # Define objects for global usage
         forward_to_tcp_server: bool = bool()
@@ -149,13 +146,15 @@ class DnsServer:
                     client_address: tuple
                 except ConnectionResetError:
                     message = "Error: to receive DNS request, An existing connection was forcibly closed"
-                    self.logger.error_exception_oneliner(message)
-                    self.dns_full_logger.error_exception_oneliner(message)
+                    print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
+                    print_api(
+                        message, logger=self.dns_full_logger, logger_method='error', traceback_string=True, oneline=True)
                     self.dns_full_logger.info("==========")
                     pass
                     continue
                 except Exception:
-                    self.logger.critical_exception_oneliner("Unknown Exception: to receive DNS request")
+                    message = "Unknown Exception: to receive DNS request"
+                    print_api(message, logger=self.logger, logger_method='critical', traceback_string=True, oneline=True)
                     self.logger.info("==========")
                     pass
                     continue
@@ -293,10 +292,10 @@ class DnsServer:
                                 elif qtype_string == "SRV" or qtype_string == "SOA":
                                     dns_built_response.add_answer(*RR.fromZone(self.offline_srv_answer))
 
-                                    message = f"!!! Question / Answer is in offline mode returning: \n" \
+                                    message = f"!!! Question / Answer is in offline mode returning: " \
                                               f"{self.offline_srv_answer}."
-                                    self.logger.info_oneliner(message)
-                                    self.dns_full_logger.info_oneliner(message)
+                                    self.logger.info(message)
+                                    self.dns_full_logger.info(message)
                                 elif qtype_string == "ANY":
                                     dns_built_response.add_answer(
                                         # *RR.fromZone(question_domain + " " + str(response_ttl) + " " + qclass_string +
@@ -323,18 +322,23 @@ class DnsServer:
                             # Values error means in most cases that you create wrong response
                             # for specific type of request.
                             except ValueError:
-                                self.logger.critical_exception_oneliner(
-                                    f"Looks like wrong type of response for QTYPE: {qtype_string}. Response: ")
-                                self.logger.critical_exception_oneliner(f"{dns_built_response}")
+                                message = f"Looks like wrong type of response for QTYPE: {qtype_string}. Response: "
+                                print_api(message, logger=self.logger, logger_method='critical',
+                                          traceback_string=True, oneline=True)
+                                print_api(f"{dns_built_response}", logger=self.logger, logger_method='critical',
+                                          traceback_string=True, oneline=True)
                                 # Pass the exception.
                                 pass
                                 # Continue to the next DNS request, since there's nothing to do here right now.
                                 continue
                             # General exception in response creation.
                             except Exception:
-                                self.logger.critical_exception_oneliner(
-                                    f"Unknown exception while creating response for QTYPE: {qtype_string}. Response: ")
-                                self.logger.critical_exception_oneliner(f"{dns_built_response}")
+                                message = \
+                                    f"Unknown exception while creating response for QTYPE: {qtype_string}. Response: "
+                                print_api(message, logger=self.logger, logger_method='critical',
+                                          traceback_string=True, oneline=True)
+                                print_api(f"{dns_built_response}", logger=self.logger, logger_method='critical',
+                                          traceback_string=True, oneline=True)
                                 # Pass the exception.
                                 pass
                                 # Continue to the next DNS request, since there's nothing to do here right now.
@@ -380,7 +384,8 @@ class DnsServer:
                                     dns_response, google_address = \
                                         google_dns_ipv4_socket.recvfrom(self.buffer_size_receive)
                                 except Exception as function_exception_object:
-                                    self.logger.error_exception_oneliner(function_exception_object)
+                                    print_api(function_exception_object, logger=self.logger, logger_method='error',
+                                              traceback_string=True, oneline=True)
                                     google_dns_ipv4_socket.close()
                                     counter += 1
                                     # Pass the exception.
@@ -433,11 +438,11 @@ class DnsServer:
                 if forward_to_tcp_server:
                     self.dns_full_logger.info(f"Response IP: {dns_built_response.short()}")
 
-                    self.logger.info_oneliner(f"Response Details: {dns_built_response.rr}")
+                    message = f"Response Details: {dns_built_response.rr}"
+                    print_api(message, logger=self.dns_full_logger, logger_method='info', oneline=True)
 
-                    message = f"Response Full Details:\n" \
-                              f"{dns_built_response.format(prefix='', sort=True)}"
-                    self.dns_full_logger.info_oneliner(message)
+                    message = f"Response Full Details: {dns_built_response.format(prefix='', sort=True)}"
+                    print_api(message, logger=self.dns_full_logger, logger_method='info', oneline=True)
 
                     # Now we can turn it to false, so it won't trigger this
                     # condition next time if the response was not built
@@ -461,11 +466,11 @@ class DnsServer:
                                 # Adding the address to the list as 'str' object and not 'dnslib.dns.A'.
                                 ipv4_addresses.append(str(rr.rdata))
 
-                    self.logger.info_oneliner(f"Response Details: {dns_response_parsed.rr}")
+                    message = f"Response Details: {dns_response_parsed.rr}"
+                    print_api(message, logger=self.dns_full_logger, logger_method='info', oneline=True)
 
-                    message = f"Response Full Details:\n" \
-                              f"{dns_response_parsed}"
-                    self.dns_full_logger.info_oneliner(message)
+                    message = f"Response Full Details: {dns_response_parsed}"
+                    print_api(message, logger=self.dns_full_logger, logger_method='info', oneline=True)
 
                 self.dns_full_logger.info("Sending DNS response back to client...")
                 main_socket_object.sendto(dns_response, client_address)

@@ -15,10 +15,9 @@ def download_file_with_curl(file_url: str, target_directory: str) -> None:
     """
 
     # Get only the filename from URL.
-    file_name, file_path = web.get_filename_and_target_filepath(
-        file_url=file_url, target_directory=target_directory)
+    file_name = web.get_filename_from_url(file_url=file_url)
 
-    cmd: str = f'curl -L {file_url} --output "{file_path}"'
+    cmd: str = f'curl -L {file_url} --output "{target_directory}"'
     cmd_list: list = shlex.split(cmd)
 
     output_list: list = process.execute_with_live_output(cmd=cmd_list)

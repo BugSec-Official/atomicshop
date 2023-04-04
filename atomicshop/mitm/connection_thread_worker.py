@@ -9,14 +9,15 @@ from ..sockets.sender import Sender
 from ..sockets.socket_client import SocketClient
 from ..http_parse import HTTPRequestParse, HTTPResponseParse
 from ..basics.threads import current_thread_id
+from ..print_api import print_api
 
 
 # Thread function on client connect.
 def thread_worker_main(
         function_client_socket_object: ssl.SSLSocket,
         process_commandline: str,
-        network,
-        statistics,
+        network_logger,
+        statistics_logger,
         engines_list,
         reference_module,
         config):
@@ -67,7 +68,7 @@ def thread_worker_main(
             pass
         statistics_dict['error'] = str()
 
-        statistics.logger.info(f"{statistics_dict['request_time_sent']},"
+        statistics_logger.info(f"{statistics_dict['request_time_sent']},"
                                f"{statistics_dict['host']},"
                                f"\"{statistics_dict['path']}\","
                                f"{statistics_dict['command']},"
@@ -98,7 +99,7 @@ def thread_worker_main(
     # Putting the process command line.
     client_message.process_name = process_commandline
 
-    network.logger.info(f"Thread Created - Client [{client_message.client_ip}:{client_message.source_port}] | "
+    network_logger.info(f"Thread Created - Client [{client_message.client_ip}:{client_message.source_port}] | "
                         f"Destination service: [{client_message.server_name}:{client_message.destination_port}]")
 
     # Loading parser by domain, if there is no parser for current domain - general reference parser is loaded.
@@ -106,7 +107,7 @@ def thread_worker_main(
     parser, responder, recorder = assign_class_by_domain(engines_list,
                                                          client_message.server_name,
                                                          reference_module=reference_module,
-                                                         logger=network.logger)
+                                                         logger=network_logger)
 
     # Defining client connection boolean variable to enter the loop
     client_connection_boolean: bool = True
@@ -132,7 +133,7 @@ def thread_worker_main(
         statistics_dict['process_cmd'] = str()
         statistics_dict['error'] = str()
 
-        network.logger.info("Initializing Receiver")
+        network_logger.info("Initializing Receiver")
         # Getting message from the client over the socket using specific class.
         client_received_raw_data = Receiver(function_client_socket_object).receive()
 
@@ -150,7 +151,10 @@ def thread_worker_main(
             try:
                 request_decoded = HTTPRequestParse(client_message.request_raw_bytes)
             except Exception:
-                network.logger.critical_exception_oneliner("There was an exception in HTTP Parsing module!")
+                message = "There was an exception in HTTP Parsing module!"
+                print_api(
+                    message, error_type=True, logger=network_logger, logger_method='critical',
+                    traceback_string=True, oneline=True)
                 # Socket connection can be closed since we have a problem in current thread and break the loop
                 client_connection_boolean = False
                 break
@@ -160,18 +164,18 @@ def thread_worker_main(
 
             # Currently, we don't care if it's HTTP or not. If there was no error we can continue. Just log the reason.
             if not http_parsing_error:
-                network.logger.info(http_parsing_reason)
+                network_logger.info(http_parsing_reason)
             # If there was error, it means that the request is really HTTP, but there's a problem with its structure.
             # So, we'll stop the loop.
             else:
                 client_message.error = http_parsing_reason
-                network.logger.critical(client_message.error)
+                network_logger.critical(client_message.error)
                 break
 
             # If the request is HTTP protocol.
             if request_is_http:
-                network.logger.info(f"Method: {request_decoded.command}")
-                network.logger.info(f"Path: {request_decoded.path}")
+                network_logger.info(f"Method: {request_decoded.command}")
+                network_logger.info(f"Path: {request_decoded.path}")
                 # statistics.dict['path'] = request_decoded.path
                 client_message.request_raw_decoded = request_decoded
             # HTTP Parsing section EOF =================================================================================
@@ -181,8 +185,12 @@ def thread_worker_main(
                 parser(client_message).parse()
             except Exception:
                 message = "Exception in Parser"
-                parser.logger.critical_exception_oneliner(message)
-                network.logger.critical_exception_oneliner(message)
+                print_api(
+                    message, error_type=True, logger=parser.logger, logger_method='critical',
+                    traceback_string=True, oneline=True)
+                print_api(
+                    message, error_type=True, logger=network_logger, logger_method='critical',
+                    traceback_string=True, oneline=True)
                 # At this point we can pass the exception and continue the script.
                 pass
                 # Socket connection can be closed since we have a problem in current thread and break the loop
@@ -210,8 +218,12 @@ def thread_worker_main(
                     responder.create_response(client_message)
                 except Exception:
                     message = "Exception in Responder"
-                    responder.logger.critical_exception_oneliner(message)
-                    network.logger.critical_exception_oneliner(message)
+                    print_api(
+                        message, error_type=True, logger=responder.logger, logger_method='critical',
+                        traceback_string=True, oneline=True)
+                    print_api(
+                        message, error_type=True, logger=network_logger, logger_method='critical',
+                        traceback_string=True, oneline=True)
                     pass
                     # Socket connection can be closed since we have a problem in current thread and break the loop.
                     client_connection_boolean = False
@@ -270,8 +282,12 @@ def thread_worker_main(
                                          record_path=config['recorder']['recordings_path']).record()
             except Exception:
                 message = "Exception in Recorder"
-                recorder.logger.critical_exception_oneliner(message)
-                network.logger.critical_exception_oneliner(message)
+                print_api(
+                    message, error_type=True, logger=recorder.logger, logger_method='critical',
+                    traceback_string=True, oneline=True)
+                print_api(
+                    message, error_type=True, logger=network_logger, logger_method='critical',
+                    traceback_string=True, oneline=True)
                 pass
 
             function_recorded = True
@@ -283,7 +299,7 @@ def thread_worker_main(
                 # If there is a response, then send it.
                 if response_raw_bytes:
                     # Sending response/s to client no matter if in record mode or not.
-                    network.logger.info(f"Sending messages to client: {len(client_message.response_list_of_raw_bytes)}")
+                    network_logger.info(f"Sending messages to client: {len(client_message.response_list_of_raw_bytes)}")
                     function_data_sent = None
 
                     # Iterate through the list of byte responses.
@@ -296,10 +312,12 @@ def thread_worker_main(
                 # If there is no response, close the socket.
                 else:
                     function_data_sent = None
-                    network.logger.info(f"Response empty, nothing to send to client.")
+                    network_logger.info(f"Response empty, nothing to send to client.")
             except Exception:
-                network.logger.critical_exception_oneliner(
-                    "Not sending anything to the client, since there is no response available")
+                message = "Not sending anything to the client, since there is no response available"
+                print_api(
+                    message, error_type=True, logger=network_logger, logger_method='critical',
+                    traceback_string=True, oneline=True)
                 # Pass the exception
                 pass
                 # Break the while loop
@@ -318,12 +336,16 @@ def thread_worker_main(
     # If recorder wasn't executed before, then execute it now
     if not function_recorded:
         try:
-            recorded_file = recorder(class_client_message=client_message,
-                                     record_path=config['recorder']['recordings_path']).record()
+            recorded_file = recorder(
+                class_client_message=client_message, record_path=config['recorder']['recordings_path']).record()
         except Exception:
             message = "Exception in Recorder"
-            recorder.logger.critical_exception_oneliner(message)
-            network.logger.critical_exception_oneliner(message)
+            print_api(
+                message, error_type=True, logger=recorder.logger, logger_method='critical',
+                traceback_string=True, oneline=True)
+            print_api(
+                message, error_type=True, logger=network_logger, logger_method='critical',
+                traceback_string=True, oneline=True)
             pass
 
         # Save statistics file.
@@ -338,6 +360,6 @@ def thread_worker_main(
     # If client socket is still opened - close
     if function_client_socket_object:
         function_client_socket_object.close()
-        network.logger.info(f"Closed client socket [{client_message.client_ip}:{client_message.source_port}]...")
+        network_logger.info(f"Closed client socket [{client_message.client_ip}:{client_message.source_port}]...")
 
-    network.logger.info("Thread Finished. Will continue listening on the Main thread")
+    network_logger.info("Thread Finished. Will continue listening on the Main thread")

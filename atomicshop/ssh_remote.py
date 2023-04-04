@@ -1,9 +1,10 @@
-# v1.0.1 - 27.03.2021 00:10
+# v1.0.2 - 02.04.2021 17:40
 import sys
 import base64
 import socket
 
-from .logger_custom import CustomLogger
+from .print_api import print_api
+from .wrappers.loggingw import loggingw
 
 
 # External Libraries
@@ -86,7 +87,7 @@ class SSHRemote:
             sys.exit(main())
 
     """
-    logger = CustomLogger("network." + __name__.rpartition('.')[2])
+    logger = loggingw.get_logger_with_level("network." + __name__.rpartition('.')[2])
 
     def __init__(self, ip_address: str, username: str, password: str):
         self.ip_address: str = ip_address
@@ -98,7 +99,7 @@ class SSHRemote:
 
     def connect(self):
         # Defining variables.
-        function_error = None
+        error = None
 
         # Since we're connecting within private network we don't actually care about security, so setting
         # the policy to Automatic instead of
@@ -112,38 +113,32 @@ class SSHRemote:
             # Executing SSH connection to client.
             self.ssh_client.connect(self.ip_address, username=self.username, password=self.password, timeout=60)
         # When port 22 is unreachable on the client.
-        except paramiko.ssh_exception.NoValidConnectionsError as function_exception_object:
-            # Returning the error.
-            function_error = function_exception_object
+        except paramiko.ssh_exception.NoValidConnectionsError as error:
             # Logging the error also. Since the process name isn't critical, we'll continue script execution.
-            self.logger.error_exception_oneliner(function_error)
+            print_api(error, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
             pass
-        except paramiko.ssh_exception.SSHException as function_exception_object:
-            # Returning the error.
-            function_error = function_exception_object
+        except paramiko.ssh_exception.SSHException as error:
             # Logging the error also. Since the process name isn't critical, we'll continue script execution.
-            self.logger.error_exception_oneliner(function_error)
+            print_api(error, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
             pass
         except ConnectionResetError:
             # Returning the error.
-            function_error = "An existing connection was forcibly closed by the remote host."
+            error = "An existing connection was forcibly closed by the remote host."
             # Logging the error also. Since the process name isn't critical, we'll continue script execution.
-            self.logger.error_exception_oneliner(function_error)
+            print_api(error, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
             pass
         except TimeoutError:
             # Returning the error.
-            function_error = "Connection timed out."
+            error = "Connection timed out."
             # Logging the error also. Since the process name isn't critical, we'll continue script execution.
-            self.logger.error_exception_oneliner(function_error)
+            print_api(error, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
             pass
-        except Exception as function_exception_object:
-            # Returning the error.
-            function_error = function_exception_object
+        except Exception as error:
             # Logging the error also. Since the process name isn't critical, we'll continue script execution.
-            self.logger.error_exception_oneliner(function_error)
+            print_api(error, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
             pass
 
-        return function_error
+        return error
 
     def close(self):
         self.ssh_client.close()
@@ -162,23 +157,24 @@ class SSHRemote:
         except AttributeError as function_exception_object:
             if function_exception_object.name == "open_session":
                 result_exception = "'SSHRemote().connect' wasn't executed."
-                self.logger.error_exception_oneliner(result_exception)
+                print_api(result_exception, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
+
                 # Since getting Process name is not the main feature of the server, we can pass the exception
                 pass
             else:
                 result_exception = f"Couldn't execute script over SSH. Unknown yet exception with 'AttributeError' " \
                                    f"and name: {function_exception_object.name}"
-                self.logger.error_exception_oneliner(result_exception)
+                print_api(result_exception, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
                 # Since getting Process name is not the main feature of the server, we can pass the exception
                 pass
         except socket.error:
             result_exception = "Couldn't execute script over SSH. SSH socket closed."
-            self.logger.error_exception_oneliner(result_exception)
+            print_api(result_exception, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
             # Since getting Process name is not the main feature of the server, we can pass the exception
             pass
         except Exception:
             result_exception = "Couldn't execute script over SSH. Unknown yet exception."
-            self.logger.error_exception_oneliner(result_exception)
+            print_api(result_exception, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
             # Since getting Process name is not the main feature of the server, we can pass the exception
             pass
 
@@ -330,7 +326,7 @@ class SSHRemote:
             # Basically we don't care much about SSH exceptions. Just log them and pass to record.
             except Exception as function_exception_object:
                 execution_error = function_exception_object
-                self.logger.error_exception_oneliner(function_exception_object)
+                print_api(execution_error, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
                 pass
 
             # Closing SSH connection at this stage.

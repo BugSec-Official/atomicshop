@@ -1,22 +1,27 @@
-# v1.1.1 - 01.04.2023 22:40
+import sys
+
 from .basics.ansi_escape_codes import ColorsBasic, get_colors_basic_dict
+from .basics import tracebacks
 
 
 # noinspection PyUnusedLocal
-def print_api(message: any,
-              color: any = None,
-              print_end: str = '\n',
-              rtl: bool = False,
-              error_type: bool = False,
-              logger: object = None,
-              logger_method: str = 'info',
-              stdout: bool = True,
-              stderr: bool = True,
-              stdcolor: bool = True,
-              # raise_exception: bool = True,
-              # exit_on_error: bool = False,
-              oneline_exceptions: bool = False,
-              **kwargs: object) -> None:
+def print_api(
+        message: any,
+        color: any = None,
+        print_end: str = '\n',
+        rtl: bool = False,
+        error_type: bool = False,
+        logger: object = None,
+        logger_method: str = 'info',
+        stdout: bool = True,
+        stderr: bool = True,
+        stdcolor: bool = True,
+        traceback_string: bool = False,
+        oneline: bool = False,
+        oneline_end: str = '',
+        # raise_exception: bool = True,
+        # exit_on_error: bool = False,
+        **kwargs: object) -> None:
     """
     Function of custom api that is responsible for printing messages to console.
     By default, the 'logger' is 'None', meaning regular 'print' function will be used.
@@ -25,7 +30,7 @@ def print_api(message: any,
     :param message: Message that will be printed to console. Doesn't have to be string - can be 'any'.
     :param color: color of message to print.
     :param print_end: string, that sets 'end' method for print function. Since, this is not available for loggers,
-        and it is much harder to implement in multithreading environment. Currently supported:
+        and it is much harder to implement in multithreading environment. Currently tested values are:
             '\r': print on the same line and remove previous.
     :param rtl: boolean, that sets Right-To-Left printing. If you see unreadable characters in your terminal / CMD,
         you need to set default font in properties that supports your language. 'Courier New' should be fine.
@@ -36,11 +41,15 @@ def print_api(message: any,
     :param stdout: Boolean that sets if the program should output regular prints or not.
     :param stderr: Boolean that sets if the program should output error/exception prints or not.
     :param stdcolor: Boolean that sets if the output should be colored or not.
-    :param oneline_exceptions: Boolean that sets if the program should print exceptions as oneline or not.
+    :param traceback_string: Boolean that sets if the program should print traceback of exceptions or not.
+        If 'stderr' is set to 'False', this will be ignored.
+    :param oneline: Boolean that sets if the program should output multiline message to oneline.
         This is needed in multithreaded script. There could be times when logger will output same message on several
         lines and these lines will be mixed with outputs from other threads.
+    :param oneline_end: String that will be used to replace '\n' in 'message' if 'oneline' is set to 'True'.
     :return:
     """
+
     # param raise_exception: boolean, if we're inside exception, this sets whether exception should be raised or passed.
     #     Default is 'True' since this is the default in python.
     # param exit_on_error: Boolean that sets if the program should end on error/exception if 'error_type' is
@@ -51,6 +60,7 @@ def print_api(message: any,
     def print_or_logger():
         nonlocal message
         nonlocal color
+        nonlocal traceback_string
 
         # This section takes care of different types of string manipulations for message.
 
@@ -77,6 +87,18 @@ def print_api(message: any,
 
             if color:
                 message = get_colors_basic_dict(color) + message + ColorsBasic.END
+
+        # If exception was raised and 'stderr=True'.
+        if sys.exc_info()[0] is not None and stderr:
+            # If 'traceback' is set to 'True', we'll output traceback of exception.
+            if traceback_string:
+                message = f'{message} | Exception: {tracebacks.get_as_string()}'
+
+            color = 'red'
+
+        # If 'online' is set to 'True', we'll output message as oneline.
+        if oneline:
+            message = message.replace("\n", oneline_end)
 
         # ================================
         # This section outputs the message.
