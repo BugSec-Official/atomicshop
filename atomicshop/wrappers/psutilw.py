@@ -1,9 +1,5 @@
-# v1.0.2 - 28.03.2023 - 17:30
 import shlex
-import threading
-import multiprocessing
 import types
-import time
 
 from ..basics import dicts, list_of_dicts
 from ..print_api import print_api
@@ -133,7 +129,9 @@ def convert_processes_to_list_of_dicts(processes, cmdline_to_string: bool = Fals
 def filter_processes_with_present_connections(processes) -> list:
     processes_with_present_connections: list = list()
     for process in processes:
-        if not process['connections']:
+        if 'connections' not in process.keys():
+            continue
+        elif not process['connections']:
             continue
         else:
             processes_with_present_connections.append(process)
@@ -470,81 +468,3 @@ def cross_connections_and_processes(connections: list, processes: dict, **kwargs
             continue
 
         i += 1
-
-
-class ProcessPollerPool:
-    """
-    The class is responsible for polling processes and storing them in a pool.
-    Currently, this works with 'psutil' library and takes up to 16% of CPU on my machine.
-    Because 'psutil' fetches 'cmdline' for each 'pid' dynamically, and it takes time and resources
-    Later, I'll find a solution to make it more efficient.
-    """
-    def __init__(self, store_cycles: int = 1, interval_seconds: float = 0, operation: str = 'process'):
-        """
-        :param store_cycles: int, how many cycles to store. Each cycle is polling processes.
-            Example: Specifying 3 will store last 3 polled cycles of processes.
-            Default is 1, which means that only the last cycle will be stored.
-        :param interval_seconds: float, how many seconds to wait between each cycle.
-            Default is 0, which means that the polling will be as fast as possible.
-        :param operation: str, 'thread' or 'process'. Default is 'process'.
-            'thread': The polling will be done in a new thread.
-            'process': The polling will be done in a new process.
-        """
-
-        self.store_cycles: int = store_cycles
-        self.interval_seconds: float = interval_seconds
-        self.operation: str = operation
-
-        self.psutil_process = PsutilProcesses()
-
-        # Current process pool.
-        self.processes: dict = dict()
-
-        # The variable is responsible to stop the thread if it is running.
-        self.running: bool = False
-
-        self.queue = multiprocessing.Queue()
-
-    def start(self):
-        if self.operation == 'thread':
-            self._start_thread()
-        elif self.operation == 'process':
-            self._start_process()
-        else:
-            raise ValueError(f'Invalid operation type [{self.operation}]')
-
-    def stop(self):
-        self.running = False
-
-    def _start_thread(self):
-        self.running = True
-        threading.Thread(target=self._thread_worker).start()
-
-    def _start_process(self):
-        self.running = True
-        multiprocessing.Process(target=self._thread_worker).start()
-        threading.Thread(target=self._thread_get_queue).start()
-
-    def _thread_worker(self):
-        list_of_processes: list = list()
-        while self.running:
-            # If the list is full (to specified 'store_cycles'), remove the first element.
-            if len(list_of_processes) == self.store_cycles:
-                del list_of_processes[0]
-
-            # Get processes as dict and append to list.
-            current_processes: dict = self.psutil_process.get_processes_as_dict(
-                attrs=['pid', 'name', 'cmdline'], cmdline_to_string=True)
-            list_of_processes.append(current_processes)
-
-            # Merge all dicts in the list to one dict, updating with most recent PIDs.
-            self.processes = list_of_dicts.merge_to_dict(list_of_processes)
-
-            if self.operation == 'process':
-                self.queue.put(self.processes)
-
-            time.sleep(self.interval_seconds)
-
-    def _thread_get_queue(self):
-        while True:
-            self.processes = self.queue.get()

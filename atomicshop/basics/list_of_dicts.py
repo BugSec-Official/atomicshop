@@ -1,4 +1,3 @@
-# v1.0.5 - 28.03.2023 - 17:20
 from operator import itemgetter
 from json import dumps, loads
 
@@ -66,6 +65,23 @@ def get_difference(main_list: list, check_list: list) -> list:
             missing_from_main_list.append(item)
 
     return missing_from_main_list
+
+
+def convert_key_names(list_of_dicts: list, key_name_converter: dict) -> list:
+    """
+    The function will convert the key names in a list of dicts.
+    Converts inplace.
+
+    :param list_of_dicts: list of dicts.
+    :param key_name_converter: dict, the keys are the current key names and the values are the new key names.
+        The keys in the 'key_name_converter' must be the same as the keys in the dicts in the 'list_of_dicts'.
+    :return: list of dicts.
+    """
+
+    for i, item in enumerate(list_of_dicts):
+        list_of_dicts[i] = dicts.convert_key_names(item, key_name_converter)
+
+    return list_of_dicts
 
 
 def merge_to_dict(list_of_dicts: list) -> dict:

@@ -1,4 +1,3 @@
-# v1.0.5 - 26.03.2023 12:50
 def remove_keys(input_dict: dict, key_list: list) -> None:
     """
     The function will remove a key from dictionary without raising an exception if it doesn't exist.
@@ -53,6 +52,27 @@ def reorder_keys(input_dict: dict, key_list: list, skip_keys_not_in_list: bool =
     if not skip_keys_not_in_list:
         # Add the remaining keys to the new dictionary.
         new_dict.update(input_dict)
+
+    return new_dict
+
+
+def convert_key_names(input_dict: dict, key_name_converter: dict) -> dict:
+    """
+    The function will convert the key names in a dictionary to a new name.
+
+    :param input_dict: dict, the dictionary that the keys will be converted.
+    :param key_name_converter: dict, the keys are the current key names and the values are the new key names.
+        The keys in the 'key_name_converter' must be the same as the keys in the 'input_dict'.
+    :return: dict, the new dictionary with the converted keys.
+    """
+
+    new_dict = dict()
+
+    # Iterate through the keys in the 'key_name_converter' and add them to the new dictionary,
+    # while removing them from the original.
+    # 'pop' method returns the key value when it is removed if it exists.
+    for key, new_key in key_name_converter.items():
+        new_dict[new_key] = input_dict[key]
 
     return new_dict
 

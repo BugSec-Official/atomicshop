@@ -1,8 +1,8 @@
-# v1.0.2 - 26.03.2023 13:50
 from . import etw
 from .. import dns
-from ..basics import dicts
 from ..wrappers import psutilw
+from ..basics import dicts
+from ..process_poller import ProcessPollerPool
 
 
 class DnsTrace:
@@ -26,7 +26,7 @@ class DnsTrace:
         )
 
         if self.enable_process_poller:
-            self.process_poller = psutilw.ProcessPollerPool(store_cycles=15, interval_seconds=0.1)
+            self.process_poller = ProcessPollerPool(store_cycles=15, interval_seconds=0.1)
 
     def start(self):
         if self.enable_process_poller:
