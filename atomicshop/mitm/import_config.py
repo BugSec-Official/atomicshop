@@ -3,7 +3,7 @@ import sys
 
 from ..wrappers.configparserw import ConfigParserWrapper
 from ..filesystem import check_file_existence
-from ..permissions import check_admin
+from ..permissions import is_admin
 from ..basics.booleans import check_3_booleans_when_only_1_can_be_true
 
 
@@ -91,7 +91,7 @@ class ImportConfig:
         # Also, check Admin privileges only if 'config.tcp['get_process_name']' was set to 'True' in 'config.ini' of
         # the script.
         if self.config['dns']['target_tcp_server_ipv4'] == "127.0.0.1" and self.config['sni']['get_process_name']:
-            self.admin_rights = check_admin()
+            self.admin_rights = is_admin()
 
             # If we're not running with admin rights, prompt to the user and make him decide what to do.
             # If he wants to continue running with 'psutil' exceptions or close the script and rerun with admin rights.
@@ -104,7 +104,7 @@ class ImportConfig:
                     "on Process Command Line harvesting or rerun the script with Administrative Rights..."
                 print(error_on_admin)
                 # Stopping execution and waiting for user's [ENTER] key.
-                key = input()
+                input()
                 print("=============================================================")
 
     def manipulations_after_import(self):

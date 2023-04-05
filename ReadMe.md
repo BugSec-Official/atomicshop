@@ -14,7 +14,7 @@ The library is constantly being improved and supplemented with new features.
 There are many gems hidden in the library:
 * atomicshop.print_api: this is the main feature of this library. It allows you to print colored text, with different styles, with / without stdout / stderr, RTL text, logger usage. The API will be integrated in every function of the library in the future, so you can easily use it controlling outputs.
 * atomicshop.etw.etw: Windows ETW - Event Tracing, a wrapper for FireEye project's ETW library with much easier API. Since, FireEye didn't update their library for quite a while, maybe another solution will be considered in the future. If you have suggestions, please let me know.
-* atomicshop.etw.dns_trace: Windows DNS Event Tracing, Traces DNS requests / responses (Event ID: 3008) on Windows OSes that support Event Tracing. Outputs the real domain (not CDN: AWS, GoogleCloud, Azure, etc) with PID. Process Name and Command Line can be retrieved by option. Currently, process info is CPU intensive.
+* atomicshop.etw.dns_trace: Windows DNS Event Tracing, Traces DNS requests / responses (Event ID: 3008) on Windows OSes that support Event Tracing. Outputs the real domain (not CDN: AWS, GoogleCloud, Azure, etc) with PID. Process Name and Command Line can be retrieved by option.
 * atomicshop.sockets: Socket wrapper, can be used to create a server or client and manipulate sockets with relatively easy API. Server tester available.
 * atomicshop.mitm: MITM Proxy, allows you to create a TCP proxy server (works with SSL) that will intercept requests and responses. You can modify them, log them, etc. ReadMe to follow. Based on SocketWrapper.
 * atomicshop.http_parser: parse HTTP requests and responses to dictionary.
