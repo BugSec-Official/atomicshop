@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 1.6.8 - 05.04.2023
+  * 'check_admin' reference fix in mitm.
 * 1.6.7 - 05.04.2023
   * 'permissions.check_admin' - renamed to 'permissions.is_admin' and function rewritten to use ctypes under Windows.
   * 'wrappers.pywin32.wmi_win32process' - added.

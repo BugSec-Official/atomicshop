@@ -2,6 +2,25 @@ import win32com.client
 import pythoncom
 
 
+"""
+Sample example:
+import win32com.client
+import time
+
+host_to_query = "."
+com_object_wmi_service = win32com.client.Dispatch("WbemScripting.SWbemLocator")
+wmi_cim_root = com_object_wmi_service.ConnectServer(host_to_query, "root\cimv2")
+
+while True:
+    win32_process_items: list = list(wmi_cim_root.ExecQuery("SELECT * FROM Win32_Process"))
+
+    processes_dict = dict()
+    for process in win32_process_items:
+        processes_dict[process.ProcessId] = {process.Name: process.CommandLine}
+
+    time.sleep(0.1)
+"""
+
 def convert_single_process_to_dict(process, attrs: list = None) -> dict:
     """
     The function will convert pywin32 WMI COM object of Win32_Process to dict.
@@ -17,11 +36,11 @@ def convert_single_process_to_dict(process, attrs: list = None) -> dict:
     # If 'attrs' wasn't provided, iterate through all the attributes.
     if not attrs:
         # Iterate through all the properties of the process.
-        for property in process.Properties_:
+        for process_property in process.Properties_:
             # Get property name.
-            property_name = property.Name
+            property_name = process_property.Name
             # Get property value.
-            property_value = property.Value
+            property_value = process_property.Value
 
             # Sometimes properties are None, so we need to convert them to str.
             if property_value is None:
