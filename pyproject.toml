@@ -42,6 +42,7 @@ dependencies = [
     "pywintrace",
     "numpy",
     "psutil",
+    "pywin32",
     "soundfile",
     "SoundCard",
     "SpeechRecognition",

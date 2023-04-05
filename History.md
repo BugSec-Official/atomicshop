@@ -1,6 +1,12 @@
 <!-- HISTORY -->
 ## History
 
+* 1.6.7 - 05.04.2023
+  * 'permissions.check_admin' - renamed to 'permissions.is_admin' and function rewritten to use ctypes under Windows.
+  * 'wrappers.pywin32.wmi_win32process' - added.
+  * 'wrappers.psutilw.ProcessPollerPool' - moved to 'process_poller.ProcessPollerPool'.
+  * 'process_poller.ProcessPollerPool' - added 'polling_method' argument to include 'pywin32' WMI Win32_Process polling.
+  * Added 'pywin32' library to dependencies.
 * 1.6.6 - 02.04.2023
   * Moved 'traceback_oneline' function from 'logger_custom' to 'get_as_string' in 'basics.tracebacks'.
   * Removed traceback helper methods from 'logger_custom' module.
