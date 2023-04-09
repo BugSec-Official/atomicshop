@@ -1,4 +1,3 @@
-# v1.0.0 - 31.03.2023 17:00
 import contextlib
 import io
 

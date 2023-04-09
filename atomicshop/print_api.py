@@ -170,9 +170,9 @@ def print_status(same_line: bool, prefix_string: str, current_state, final_state
     """
 
     if final_state:
-        message = f'{prefix_string}: {current_state} / {final_state}{suffix_string}'
+        message = f'{prefix_string}{current_state} / {final_state}{suffix_string}'
     else:
-        message = f'{prefix_string}: {current_state}{suffix_string}'
+        message = f'{prefix_string}{current_state}{suffix_string}'
 
     if same_line:
         print_api(message, print_end='\r', **kwargs)

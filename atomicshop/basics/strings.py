@@ -1,6 +1,31 @@
-# v1.0.4 - 26.03.2023 13:10
 import fnmatch
 import re
+
+
+STRINGS_TO_NUMBERS: dict = {
+    'zero': '0',
+    'one': '1',
+    'two': '2',
+    'three': '3',
+    'four': '4',
+    'five': '5',
+    'six': '6',
+    'seven': '7',
+    'eight': '8',
+    'nine': '9',
+}
+
+
+STRINGS_MISTAKES_TO_NUMBERS: dict = {
+    'for': '4'
+}
+
+
+STRINGS_MISTAKES_TO_CHARACTERS: dict = {
+    'and': 'n',
+    'why': 'y',
+    'you': 'u'
+}
 
 
 def get_nth_character_from_start(input_string: str, nth: int):

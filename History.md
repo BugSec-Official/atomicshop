@@ -1,6 +1,10 @@
 <!-- HISTORY -->
 ## History
 
+* 1.6.9 - 09.04.2023
+  * 'wrappers.numpyw.check_if_array_is_empty' - renamed to 'wrappers.numpyw.is_array_empty'.
+  * 'basics.numbers.is_divisible' - added.
+  * 'basics.numbers.strings' - numerous string conversion dicts were added.
 * 1.6.8 - 05.04.2023
   * 'check_admin' reference fix in mitm.
 * 1.6.7 - 05.04.2023
