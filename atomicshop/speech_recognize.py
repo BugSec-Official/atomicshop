@@ -1,14 +1,17 @@
-# v1.0.1 - 31.03.2023 17:00
 from .wrappers.ffmpegw import FFmpegWrapper
 from .tempfiles import TempFile
 from atomicshop.web import download_with_urllib
 
 
-def get_text_from_wav(wav_file_path: str) -> str:
+def get_text_from_wav(wav_file_path: str, engine: str = "google", adjust_for_ambient_noise: bool = False) -> str:
     """
     The function recognizes speech in source WAV file and returns recognized text.
 
     :param wav_file_path: string, full file path to WAV file.
+    :param engine: string, offline speech recognition engine, default is 'google'. Available engines:
+        'google', 'sphinx', 'tensorflow', 'whisper', 'vosk'.
+    :param adjust_for_ambient_noise: bool, if True, will adjust for ambient noise before recognizing.
+        Default is False.
     :return: string, recognized text from WAV file.
     """
 
@@ -21,12 +24,32 @@ def get_text_from_wav(wav_file_path: str) -> str:
     speech_recognizer_recaptcha_audio = AudioFile(wav_file_path)
     # Process the file.
     with speech_recognizer_recaptcha_audio as source:
+        # If 'adjust_for_ambient_noise' is True, will adjust for ambient noise before recognizing.
+        if adjust_for_ambient_noise:
+            speech_recognizer.adjust_for_ambient_noise(source)
+
         audio = speech_recognizer.record(source)
     # Convert to text.
     # When using 'recognize_google' it outputs debugging JSON, there's an option 'show_all=False',
     # which is set by default, could be a bug in current version 3.9.0. There are some changes in GitHub for it
     # but not in PyPi, will wait.
-    text = speech_recognizer.recognize_google(audio)
+
+    text = str()
+    if engine == "google":
+        text = speech_recognizer.recognize_google(audio)
+    elif engine == "sphinx":
+        # pip install pocketsphinx
+        text = speech_recognizer.recognize_sphinx(audio)
+    elif engine == "tensorflow":
+        # pip install tensorflow
+        text = speech_recognizer.recognize_tensorflow(audio)
+    elif engine == "whisper":
+        # pip install torch
+        # pip install whisper
+        text = speech_recognizer.recognize_whisper(audio)
+    elif engine == "vosk":
+        # pip install vosk
+        text = speech_recognizer.recognize_vosk(audio)
 
     return text
 

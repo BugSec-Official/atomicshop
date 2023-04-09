@@ -19,7 +19,7 @@ def concatenate_array_list(array_list: list):
     return numpy.concatenate((array_list))
 
 
-def check_if_array_is_empty(numpy_array: numpy.ndarray):
+def is_array_empty(numpy_array: numpy.ndarray):
     """
     Checks if a numpy array is empty.
 

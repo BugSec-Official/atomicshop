@@ -1,10 +1,10 @@
-# v1.0.1 - 02.04.2023 02:50
 import io
 import queue
 import threading
 
 from .print_api import print_api, print_status
 from .wrappers import numpyw
+from .basics import numbers
 
 import soundcard
 import soundfile
@@ -127,6 +127,65 @@ def get_loopback_inputs(first: bool = False, select_interface=None, **kwargs):
     return input_loopback_list
 
 
+def open_byteio_soundfile(samplerate: int = 44100, bit_rate: str = 'PCM_16'):
+    byte_io = io.BytesIO()
+    # In order for the 'soundfile' library to recognize the 'io.BytesIO' object as a file,
+    # we need to give it a name with extension of '.wav'.
+    # byte_io.name = 'test.wav'
+    # Or we can use the "format='WAV'" parameter.
+    output_memory = soundfile.SoundFile(
+        byte_io, mode='w', samplerate=samplerate, channels=2, subtype=bit_rate, format='WAV')
+
+    return output_memory
+
+
+def close_byteio_soundfile():
+    return
+
+
+class ByteIOSoundFile:
+    def __init__(self, samplerate: int = 44100, bit_rate: str = 'PCM_16', return_type: str = 'file'):
+        """
+
+        :param samplerate: int, default 44100.
+        :param bit_rate: str, default 'PCM_16'.
+        :param return_type: string, return type of the 'ByteIOSoundFile' object on 'close()' method.
+            Default is 'file'. Available:
+                'file' - return the 'io.BytesIO' object.
+                'bytes' - return the 'io.BytesIO' object as bytes.
+        """
+
+        self.samplerate: int = samplerate
+        self.bit_rate: str = bit_rate
+        self.return_type: str = return_type
+
+        self.byte_io = None
+        self.output_memory = None
+
+    def open(self):
+        self.byte_io = io.BytesIO()
+        # In order for the 'soundfile' library to recognize the 'io.BytesIO' object as a file,
+        # we need to give it a name with extension of '.wav'.
+        # byte_io.name = 'test.wav'
+        # Or we can use the "format='WAV'" parameter.
+        self.output_memory = soundfile.SoundFile(
+            self.byte_io, mode='w', samplerate=self.samplerate, channels=2, subtype=self.bit_rate, format='WAV')
+
+    def write(self, data):
+        self.output_memory.write(data)
+
+    def close(self):
+        self.output_memory.close()
+        self.byte_io.seek(0)
+
+        if self.return_type == 'file':
+            # Return the 'io.BytesIO' object as is.
+            return self.byte_io
+        elif self.return_type == 'bytes':
+            # Convert the 'io.BytesIO' object to bytes.
+            return self.byte_io.read()
+
+
 class StereoMixRecorder:
     def __init__(
             self, samplerate: int = 44100, bit_rate: str = 'PCM_16', buffer_size: int = 1024,
@@ -183,105 +242,168 @@ class StereoMixRecorder:
         return loopback_inputs[0]
 
     def start(
-            self, file_path: str = str(), emit_type: str = None, cut_emit_buffers: int = None,
-            record_until_zero_array: bool = False, **kwargs):
+            self, split_emit_buffers: int = None, emit_type: str = None, file_path: str = None,
+            record_until_zero_array: bool = False, seconds: int = None, **kwargs):
         """
         The function will start recording from stereo mix loopback in the sound driver.
 
-        :param file_path: string, full file path to '.wav' file to save. Default is empty string, meaning that no file
-            will be saved.
+        :param split_emit_buffers: integer/None, amount of buffers to emit.
+            The default is None.
+            None: all the buffers will be emitted when record 'stop()'s.
+            1: meaning that each buffer will be emitted as it enters from the 'soundcard' module.
+            2: meaning that every 2 buffers will be emitted as one, etc.
         :param emit_type: string, the type of the emitted data through 'emit()' method. The default is None.
             Currently supported:
                 None: no data will be emitted, meaning that 'emit()' method will be disabled.
                 'byteio': 'io.BytesIO' object - file object that will contain the same data that is stored in actual
                     '.wav' file.
                 'nparray': float64 numpy array.
-        :param cut_emit_buffers: integer, amount of buffers to emit. applicable only for 'emit_type='byteio'.
-            The default is None, meaning that all the buffers will be emitted when record finishes.
+        :param file_path: string, full file path to '.wav' file to save. Default is None, meaning that no file
+            will be saved.
+        :param record_until_zero_array: boolean, record until the numpy array output from 'record()' method
+            is all zeros. The default is 'False'.
+            This happens when nothing is playing in the stereo mix.
+            If this parameter is 'True', the recording will stop when the playback in stereo mix will stop.
+        :param seconds: integer, amount of seconds to record. The default is None, meaning that the recording will
+            continue until the 'stop()' method is called.
         :param kwargs:
         :return:
         """
 
+        if not file_path and not emit_type:
+            raise ValueError("Either 'file_path' or 'emit_type' must be specified.")
+
         self.recording = True
         threading.Thread(
             target=self._thread_record,
-            args=(file_path, emit_type, cut_emit_buffers, record_until_zero_array),
+            args=(split_emit_buffers, emit_type, file_path, record_until_zero_array, seconds),
             kwargs=kwargs
         ).start()
 
     def _thread_record(
-            self, file_path: str, emit_type: str, cut_emit_buffers: int, record_until_zero_array: bool, **kwargs):
-        # # Getting the total number of buffers.
-        # total_frames = seconds * self.samplerate
+            self, split_emit_buffers: int, emit_type: str, file_path: str, record_until_zero_array: bool, seconds,
+            **kwargs):
         # Currently no frames were recorded.
         recorded_frames = 0
 
+        # If the 'file_path' was specified, then wav file will be written to it.
         output_file = None
         if file_path:
             output_file = soundfile.SoundFile(
                 file_path, mode='w', samplerate=self.samplerate, channels=2, subtype=self.bit_rate)
 
-        output_memory = None
-        byte_io = None
+        # If the 'emit_type' of 'byteio' was specified, then the data will be emitted as 'io.BytesIO' object,
+        # containing bytes of the recorded audio as WAV.
+        byteio_soundfile = None
+        data_nparray_buffer_list = None
         if emit_type == 'byteio':
-            byte_io = io.BytesIO()
-            # byte_io.name = 'test.wav'
-            output_memory = soundfile.SoundFile(
-                byte_io, mode='w', samplerate=self.samplerate, channels=2, subtype=self.bit_rate, format='WAV')
+            byteio_soundfile = ByteIOSoundFile(self.samplerate, self.bit_rate)
+            byteio_soundfile.open()
+        elif emit_type == 'nparray':
+            data_nparray_buffer_list = list()
+
+        total_frames = None
+        if seconds:
+            # Getting the total number of buffers.
+            total_frames = seconds * self.samplerate
+
+            # If the total amount of frames is not divisible by the buffer size, this means that the last buffer
+            # will be smaller than the rest of the buffers. To avoid this, we will add the buffer size to the total
+            # amount of frames, so that the last buffer will be the same size as the rest of the buffers.
+
+            # To do that we'll divide the total amount of frames by the buffer size, to know how many buffers there
+            # are, this number will be converted to int to drop all the numbers after the '.' dot.
+            # Then multiply it by the buffer size, to get the total amount of frames without the last buffer.
+            # Then add the buffer size to get the total amount of frames with the last buffer.
+            if not numbers.is_divisible(total_frames, self.buffer_size):
+                total_frames = int(total_frames/self.buffer_size)*self.buffer_size + self.buffer_size
+
+            message = f"Record will stop after: [{seconds}] Seconds, [{total_frames}] Frames"
+            print_api(message)
 
         emit_buffers_counter = 0
         # Use first input interface (with only 1 interface in the list at this stage).
         with self.loopback_input.recorder(samplerate=self.samplerate) as input_interface:
             # Record while the amount of recorded frames is not equal to the final total amount of frames.
             while self.recording:
+                # If the 'seconds' parameter was specified, and the total amount of recorded frames is equal to
+                # the total amount of frames, then stop recording.
+                if seconds and recorded_frames == total_frames:
+                    self.stop()
+
                 emit_buffers_counter += 1
                 # print(emit_buffers_counter)
                 # Record audio data from selected loopback input interface for 'buffer_size' amount of frames.
-                data = input_interface.record(numframes=self.buffer_size)
-                if emit_type == 'nparray':
-                    self._buffer_queue.put(data)
+                data_nparray = input_interface.record(numframes=self.buffer_size)
 
+                # Aggregating the total amount of recorded frames as integer.
                 recorded_frames = recorded_frames + self.buffer_size
 
-                if record_until_zero_array and self._some_data_was_recorded and numpyw.check_if_array_is_empty(data):
+                # If 'record_until_zero_array' is 'True' and the buffer is empty, and some data was already present in
+                # previous cycle - stop recording.
+                if record_until_zero_array and self._some_data_was_recorded and numpyw.is_array_empty(data_nparray):
                     self.stop()
 
                 # If 'skip_empty_buffers' is 'True' and the buffer is empty, skip it.
-                if self.skip_empty_buffers and numpyw.check_if_array_is_empty(data):
+                if self.skip_empty_buffers and numpyw.is_array_empty(data_nparray):
                     print_status(True, 'Skipping Empty Frames', recorded_frames, None, color="yellow")
                 # If the buffer is not empty, write it to the wave file.
                 else:
-                    if not numpyw.check_if_array_is_empty(data):
+                    # If the buffer is not empty, set the flag to 'True'.
+                    if not numpyw.is_array_empty(data_nparray):
                         self._some_data_was_recorded = True
 
+                    # Write the data to the file and/or to the memory ByteIO object/numpy array list.
                     if file_path:
-                        output_file.write(data)
+                        output_file.write(data_nparray)
+
                     if emit_type == 'byteio':
-                        output_memory.write(data)
+                        byteio_soundfile.write(data_nparray)
+                    elif emit_type == 'nparray':
+                        data_nparray_buffer_list.append(data_nparray)
 
                     print_status(
-                        True, 'Recorded Seconds | Frames', f'[{recorded_frames / self.samplerate} | {recorded_frames}]',
+                        True,
+                        'Recorded: Seconds | Frames: ', f'[{recorded_frames / self.samplerate} | {recorded_frames}]',
                         None, suffix_string='         ', **kwargs)
 
-                    if cut_emit_buffers:
-                        if emit_buffers_counter == cut_emit_buffers:
-                            output_memory.close()
-                            byte_io.seek(0)
-                            emit_bytes = byte_io.read()
-                            self._buffer_queue.put(emit_bytes)
-                            byte_io = io.BytesIO()
-                            # byte_io.name = 'test.wav'
-                            output_memory = soundfile.SoundFile(
-                                byte_io, mode='w', samplerate=self.samplerate, channels=2, subtype=self.bit_rate,
-                                format='WAV')
+                    # If the 'split_emit_buffers' was specified, emit the data in chunks.
+                    if split_emit_buffers:
+                        # If the counter reached the split amount, emit the data.
+                        if emit_buffers_counter == split_emit_buffers:
+                            # Reset the counter.
+                            emit_buffers_counter = 0
 
+                            if emit_type == 'byteio':
+                                # Emit the data and close the SoundFile and ByteIO object.
+                                emit_bytes = byteio_soundfile.close()
+                                self._buffer_queue.put(emit_bytes)
+                                # Open new SoundFile and ByteIO object.
+                                byteio_soundfile.open()
+                            elif emit_type == 'nparray':
+                                # If 'split_emit_buffers' is 1, then emit the data as is.
+                                if split_emit_buffers == 1:
+                                    self._buffer_queue.put(data_nparray)
+                                # If 'split_emit_buffers' is more than 1, then concatenate the list of data arrays
+                                # and emit it.
+                                else:
+                                    self._buffer_queue.put(numpyw.concatenate_array_list(data_nparray_buffer_list))
+                                    # Clear the list.
+                                    data_nparray_buffer_list = list()
+
+        # ==============================================================================================================
+        # At this point the recording has stopped.
+
+        # If the 'file_path' was specified, then rest of the wav file will be written to it.
         if file_path:
             output_file.close()
+        # If the 'emit_type' of 'byteio' was specified, then the data will be emitted as 'io.BytesIO' object,
+        # and emit to buffer queue.
         if emit_type == 'byteio':
-            output_memory.close()
-            byte_io.seek(0)
-            emit_bytes = byte_io.read()
+            emit_bytes = byteio_soundfile.close()
             self._buffer_queue.put(emit_bytes)
+        elif emit_type == 'nparray':
+            self._buffer_queue.put(numpyw.concatenate_array_list(data_nparray_buffer_list))
 
     def stop(self):
         """
@@ -307,95 +429,25 @@ class StereoMixRecorder:
 
         return self._buffer_queue.get()
 
-    def record_stereo_mix(self, file_path: str, seconds: int, **kwargs):
-        """
-        The function will record from stereo mix loopback in the sound driver for specified amount of time.
 
-        :param file_path: string, full file path to '.wav' file to save.
-        :param seconds: integer, amount of seconds to record.
-        :param kwargs: parameters for 'print_api'.
-        :return: None.
-        """
+"""
+Recording comments:
+1. Tried to use 'wave' built-in library, It can write buffer chunks to wave file - you don't have to write
+the whole numpy array at once. Since, 'soundcard' library returns 'float64' numpy array, you have to convert
+it to 'int16' numpy array before recording it to wave file or you will get noise while saving to 16 bit wave file.
+Only after converting to 'int16' numpy array, you can convert numpy array to bytes and write it to wave file.
+This gave me clipped distorted wave file for some reason.
 
-        # Getting the total number of buffers.
-        total_frames = seconds * self.samplerate
-        # Currently no frames were recorded.
-        recorded_frames = 0
-
-        # Open the output file.
-        with soundfile.SoundFile(
-                file_path, mode='w', samplerate=self.samplerate, channels=2, subtype=self.bit_rate) as output_file:
-            # Use first input interface (with only 1 interface in the list at this stage).
-            with self.loopback_input.recorder(samplerate=self.samplerate) as input_interface:
-                message = f'Recording Seconds: [{seconds}]. ' \
-                          f'Buffer size (frames): [{self.buffer_size}]. ' \
-                          f'Total Frames: [{total_frames}].'
-                print_api(message, **kwargs)
-
-                # Record while the amount of recorded frames is not equal to the final total amount of frames.
-                while recorded_frames != total_frames:
-                    frames_left = total_frames - recorded_frames
-                    same_line = True
-                    # If the amount of frames left is less than the buffer size that was set in the beginning,
-                    # it means that we are in the last buffer, and we need to set the buffer size to the amount
-                    # of frames left and also set 'same_line' to 'False' so that the prints after that will be printed
-                    # in a new line.
-                    if frames_left <= buffer_size:
-                        same_line = False
-                        buffer_size = frames_left
-
-                    # Record audio data from selected loopback input interface for 'buffer_size' amount of frames.
-                    data = input_interface.record(numframes=buffer_size)
-
-                    recorded_frames = recorded_frames + buffer_size
-
-                    # If 'skip_empty_buffers' is 'True' and the buffer is empty, skip it.
-                    if self.skip_empty_buffers and numpyw.check_if_array_is_empty(data):
-                        print_status(same_line, 'Skipping Empty Frames', recorded_frames, total_frames, color="yellow")
-                    # If the buffer is not empty, write it to the wave file.
-                    else:
-                        output_file.write(data)
-                        print_status(
-                            same_line, 'Recorded Frames', recorded_frames, total_frames, suffix_string='         ')
-
-    """
-    Recording comments:
-    1. Tried to use 'wave' built-in library, It can write buffer chunks to wave file - you don't have to write
-    the whole numpy array at once. Since, 'soundcard' library returns 'float64' numpy array, you have to convert
-    it to 'int16' numpy array before recording it to wave file or you will get noise while saving to 16 bit wave file.
-    Only after converting to 'int16' numpy array, you can convert numpy array to bytes and write it to wave file.
-    This gave me clipped distorted wave file for some reason.
-    
-    Usage:
-    import wave
-    with wave.open(file_path, "w") as output_file:
-        # 2 Channels.
-        output_file.setnchannels(2)
-        # Sample width is bit rate, just in bytes. Meaning, 16-bit bitrate is 2 bytes samplewidth.
-        # output_file.setsampwidth(2)
-        # Or you can just divide the bitrate by 8, to get bytes for sample width.
-        output_file.setsampwidth(bitrate/8)
-        output_file.setframerate(samplerate)
-        
-        # Recording loop.
-        while True:
-            # Get the float64 numpy array of recorded data.
-            data = input_interface.record(numframes=buffer_size)
-            # Convert the numpy array to int16 numpy array.
-            data = numpyw.convert_float64_to_int16(data)
-            # Write the data to wave file, while converting numpy array to bytes.
-            output_file.writeframes(numpyw.convert_array_to_bytes(data))
-            
-    2. Tried to use 'scipy.io.wavfile.write', this worked fine, but it requires the whole numpy array to be recorded
-    at once. Scipy doesn't support writing buffer chunks to wave file. And, the same applies here, you have to convert
-    the 'float64' numpy array to 'int16' numpy array before recording it to wave file or you will get noise while 
-    saving to 16 bit wave file.
-    
-    Usage:
-    from scipy.io.wavfile import write
-    
-    # 'buffer_list' will store the recorded data.
-    buffer_list: list = list()
+Usage:
+import wave
+with wave.open(file_path, "w") as output_file:
+    # 2 Channels.
+    output_file.setnchannels(2)
+    # Sample width is bit rate, just in bytes. Meaning, 16-bit bitrate is 2 bytes samplewidth.
+    # output_file.setsampwidth(2)
+    # Or you can just divide the bitrate by 8, to get bytes for sample width.
+    output_file.setsampwidth(bitrate/8)
+    output_file.setframerate(samplerate)
     
     # Recording loop.
     while True:
@@ -403,14 +455,34 @@ class StereoMixRecorder:
         data = input_interface.record(numframes=buffer_size)
         # Convert the numpy array to int16 numpy array.
         data = numpyw.convert_float64_to_int16(data)
-        # Append the data to buffer list.
-        buffer_list.append(data)
+        # Write the data to wave file, while converting numpy array to bytes.
+        output_file.writeframes(numpyw.convert_array_to_bytes(data))
         
-    # Concatenate the numpy arrays in the buffer list.
-    concatenated_numpy_array = numpyw.concatenate_numpy_arrays(buffer_list)
-    # Write the wave file with 'scipy'.
-    write(file_path, samplerate, concatenated_numpy_array)
+2. Tried to use 'scipy.io.wavfile.write', this worked fine, but it requires the whole numpy array to be recorded
+at once. Scipy doesn't support writing buffer chunks to wave file. And, the same applies here, you have to convert
+the 'float64' numpy array to 'int16' numpy array before recording it to wave file or you will get noise while 
+saving to 16 bit wave file.
+
+Usage:
+from scipy.io.wavfile import write
+
+# 'buffer_list' will store the recorded data.
+buffer_list: list = list()
+
+# Recording loop.
+while True:
+    # Get the float64 numpy array of recorded data.
+    data = input_interface.record(numframes=buffer_size)
+    # Convert the numpy array to int16 numpy array.
+    data = numpyw.convert_float64_to_int16(data)
+    # Append the data to buffer list.
+    buffer_list.append(data)
     
-    3. Finally 'soundfile' library, was the only one that converts the 'float64' numpy array to 'int16' numpy array
-    automatically, and also supports writing buffer chunks to wave file. So, this is the best option. 
-    """
+# Concatenate the numpy arrays in the buffer list.
+concatenated_numpy_array = numpyw.concatenate_numpy_arrays(buffer_list)
+# Write the wave file with 'scipy'.
+write(file_path, samplerate, concatenated_numpy_array)
+
+3. Finally 'soundfile' library, was the only one that converts the 'float64' numpy array to 'int16' numpy array
+automatically, and also supports writing buffer chunks to wave file. So, this is the best option. 
+"""
