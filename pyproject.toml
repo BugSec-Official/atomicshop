@@ -6,9 +6,15 @@ requires = [
 ]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-# If you have several folders, you have to specify which one is the package.
-packages = ["atomicshop"]
+#[tool.setuptools]
+## If you have several folders, you have to specify which one is the package.
+#packages = ["atomicshop"]
+
+#[tool.setuptools.packages]
+#find = {}
+
+[tool.setuptools.packages.find]
+include = ["atomicshop*"]
 
 # Getting verision from '__init__.py' of the 'atomicshop' package.
 [tool.setuptools.dynamic]
@@ -34,22 +40,24 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "cryptography",
-    "pyopenssl",
-    "tldextract",
-    "paramiko",
     "dnslib",
     "dnspython",
-    "pywintrace",
     "numpy",
-    "psutil",
-    "pywin32",
-    "soundfile",
-    "SoundCard",
-    "SpeechRecognition",
-    "python-bidi",
-    "protobuf",
+    "paramiko",
     "playwright",
-    "playwright-stealth"
+    "playwright-stealth",
+    "protobuf",
+    "psutil",
+    "pyautogui",
+    "pyopenssl",
+    "python-bidi",
+    "pywin32",
+    "pywintrace",
+    "SoundCard",
+    "soundfile",
+    "SpeechRecognition",
+    "tldextract",
+    "wheel"
 ]
 classifiers = [
     "Intended Audience :: Developers",
