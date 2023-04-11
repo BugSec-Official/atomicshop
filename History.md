@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 1.7.1 - 11.04.2023
+  * Fixes in 'project.toml' file.
+  * Added 'pyautogui' library to dependencies.
 * 1.7.0 - 11.04.2023
   * 'basics.lists' - added 'replace_elements_with_values_from_dict' function.
   * 'speech_recognize' - added 'change_words_to_characters_and_numbers' function.
