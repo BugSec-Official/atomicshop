@@ -15,7 +15,7 @@ class Timer:
         :param nanoseconds: True to measure time in nanoseconds, False to measure time in seconds (default).
         """
         self._start_time = None
-        self._nanoseconds = nanoseconds
+        self._nanoseconds: bool = nanoseconds
 
     def start(self):
         """Start a new timer"""
@@ -27,6 +27,12 @@ class Timer:
             self._start_time = time.perf_counter_ns()
         else:
             self._start_time = time.perf_counter()
+
+    def restart(self):
+        """Reset the timer"""
+
+        self._start_time = None
+        self.start()
 
     def measure(self):
         """Measure the elapsed time"""

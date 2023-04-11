@@ -1,4 +1,3 @@
-# v1.0.5 - 21.03.2023 18:00
 import functools
 import shlex
 from subprocess import Popen, PIPE, STDOUT, CREATE_NEW_CONSOLE

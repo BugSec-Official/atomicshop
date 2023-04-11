@@ -31,6 +31,7 @@ def hash_file(file_path: str, hash_algo: str, block_size: int = 1024):
         bytearray_empty = bytearray(128*block_size)
         memoryview_object = memoryview(bytearray_empty)
         with open(file_path, 'rb', buffering=0) as file_object:
+            # noinspection PyUnresolvedReferences
             while n := file_object.readinto(memoryview_object):
                 hashlib_object.update(memoryview_object[:n])
         return hashlib_object.hexdigest()

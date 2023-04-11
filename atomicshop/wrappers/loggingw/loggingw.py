@@ -54,15 +54,16 @@ def get_logger_with_timedfilehandler(
         directory_path, file_name: str = None, file_extension: str = '.txt',
         logging_level="DEBUG", formatter='default',
         formatter_message_only: bool = False, disable_duplicate_ms: bool = False,
-        when: str = "midnight", interval: int = 1, delay: bool = True
+        when: str = "midnight", interval: int = 1, delay: bool = True, encoding=None
 ) -> logging.Logger:
     logger = get_logger_with_level(logger_name, logging_level)
     add_timedfilehandler_with_queuehandler(
         logger, directory_path, file_name, file_extension, logging_level, formatter,
-        formatter_message_only, disable_duplicate_ms, when, interval, delay
+        formatter_message_only, disable_duplicate_ms, when, interval, delay, encoding
     )
 
     return logger
+
 
 def get_logger_with_stream_handler_and_timedfilehandler(
         logger_name: str,
@@ -70,13 +71,13 @@ def get_logger_with_stream_handler_and_timedfilehandler(
         logging_level="DEBUG", formatter_filehandler='default',
         formatter_streamhandler: str = "%(levelname)s | %(threadName)s | %(name)s | %(message)s",
         formatter_message_only: bool = False, disable_duplicate_ms: bool = False,
-        when: str = "midnight", interval: int = 1, delay: bool = True
+        when: str = "midnight", interval: int = 1, delay: bool = True, encoding=None
 ) -> logging.Logger:
     logger = get_logger_with_level(logger_name, logging_level)
     add_stream_handler(logger, logging_level, formatter_streamhandler, formatter_message_only)
     add_timedfilehandler_with_queuehandler(
         logger, directory_path, file_name, file_extension, logging_level, formatter_filehandler,
-        formatter_message_only, disable_duplicate_ms, when, interval, delay
+        formatter_message_only, disable_duplicate_ms, when, interval, delay, encoding
     )
 
     return logger
@@ -119,10 +120,10 @@ def add_stream_handler(
 
 
 def add_timedfilehandler_with_queuehandler(
-        logger: logging.Logger, directory_path, file_name: str = None, file_extension: str = '.txt',
+        logger: logging.Logger, directory_path, file_name_no_extension: str = None, file_extension: str = '.txt',
         logging_level="DEBUG",
         formatter='default', formatter_message_only: bool = False, disable_duplicate_ms: bool = False,
-        when: str = 'midnight', interval: int = 1, delay: bool = True):
+        when: str = 'midnight', interval: int = 1, delay: bool = True, encoding=None):
     """
     Function to add TimedRotatingFileHandler and QueueHandler to logger.
     TimedRotatingFileHandler will output messages to the file through QueueHandler.
@@ -130,7 +131,8 @@ def add_timedfilehandler_with_queuehandler(
 
     :param logger: Logger to add the handler to.
     :param directory_path: string, Path to the directory where the log file will be created.
-    :param file_name: string, Name of the log file. If not provided, logger name will be used.
+    :param file_name_no_extension: string, Name of the log file without file extension, since we add it through
+        separate argument. If not provided, logger name will be used.
     :param file_extension: string, Extension of the log file. Default is '.txt'.
     :param logging_level: str or int, Logging level for the handler, that will use the logger while initiated.
     :param formatter: string, Formatter to use for handler. It is template of how a message will look like.
@@ -154,14 +156,15 @@ def add_timedfilehandler_with_queuehandler(
         If 'when="midnight"' and 'interval=1', then the log file will be rotated every midnight.
         If 'when="midnight"' and 'interval=2', then the log file will be rotated every 2nd midnights.
     :param delay: bool, If set to True, the log file will be created only if there's something to write.
+    :param encoding: string, Encoding to use for the log file. Default is None.
     """
 
     # If file name wasn't provided we will use the logger name instead.
-    if not file_name:
-        file_name = logger.name
+    if not file_name_no_extension:
+        file_name_no_extension = logger.name
 
     # Set log file path.
-    log_file_path = f'{directory_path}{os.sep}{file_name}{file_extension}'
+    log_file_path = f'{directory_path}{os.sep}{file_name_no_extension}{file_extension}'
 
     # Setting the TimedRotatingFileHandler, without adding it to the logger.
     # It will be added to the QueueListener, which will use the TimedRotatingFileHandler to write logs.
@@ -171,7 +174,7 @@ def add_timedfilehandler_with_queuehandler(
     # Creating file handler with log filename. At this stage the log file is created and locked by the handler,
     # Unless we use "delay=True" to tell the class to write the file only if there's something to write.
     file_handler = handlers.get_timed_rotating_file_handler(
-        log_file_path, when=when, interval=interval, delay=delay)
+        log_file_path, when=when, interval=interval, delay=delay, encoding=encoding)
     loggers.set_logging_level(file_handler, logging_level)
 
     if formatter == "default":

@@ -1,31 +1,7 @@
 import fnmatch
 import re
 
-
-STRINGS_TO_NUMBERS: dict = {
-    'zero': '0',
-    'one': '1',
-    'two': '2',
-    'three': '3',
-    'four': '4',
-    'five': '5',
-    'six': '6',
-    'seven': '7',
-    'eight': '8',
-    'nine': '9',
-}
-
-
-STRINGS_MISTAKES_TO_NUMBERS: dict = {
-    'for': '4'
-}
-
-
-STRINGS_MISTAKES_TO_CHARACTERS: dict = {
-    'and': 'n',
-    'why': 'y',
-    'you': 'u'
-}
+from . import lists
 
 
 def get_nth_character_from_start(input_string: str, nth: int):
@@ -232,3 +208,43 @@ def contains_letter(string: str) -> bool:
     """
 
     return string.upper().isupper()
+
+
+def replace_words_with_values_from_dict(sentence: str, dictionary: dict, contains: bool = False):
+    """
+    Function replaces words, which are keys with values from dictionary.
+
+    Example:
+        sentence = 'Hello, my name is name, and I am age years old.'
+        dictionary = {'name': 'John', 'age': '30'}
+        replace_words_with_values_from_dict(sentence, dictionary)
+    Result:
+        'Hello, my name is John, and I am 30 years old.'
+
+    :param sentence: string, to replace words in, should contain spaces " " between words.
+    :param dictionary: dictionary, with words to replace and values to replace with.
+    :param contains: boolean, if 'True' will try to replace words that are a part of another word.
+        Example:
+            sentence = 'Hello, my name is names987, and I am agesbla years old.'
+            dictionary = {'name': 'John', 'age': '30'}
+            replace_words_with_values_from_dict(sentence, dictionary, contains=True)
+        Result:
+            'Hello, my name is Johns987, and I am 30sbla years old.'
+        With 'contains=False' the result would unchanged:
+            'Hello, my name is names987, and I am agesbla years old.'
+    :return: string, with replaced words.
+    """
+
+    # Split the sentence to words.
+    sentence_parts: list = sentence.split(" ")
+
+    # Replace exact words with values from dictionary.
+    sentence_parts = lists.replace_elements_with_values_from_dict(sentence_parts, dictionary)
+    joined_sentence: str = ' '.join(sentence_parts)
+
+    if contains:
+        # After we tried the exact matches for each word, there can be cases where the word is a part of another word.
+        for key, value in dictionary.items():
+            joined_sentence = joined_sentence.replace(key, value)
+
+    return joined_sentence

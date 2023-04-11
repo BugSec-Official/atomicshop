@@ -1,4 +1,3 @@
-# v1.0.7 - 30.03.2023 16:30
 import os
 import urllib.request
 
@@ -41,7 +40,7 @@ def get_filename_from_url(file_url: str):
     return file_name
 
 
-def get_page_bytes(url: str, user_agent: str = str(), default_user_agent: bool = False, **kwargs) -> bytes:
+def get_page_bytes(url: str, user_agent: str = str(), default_user_agent: bool = False) -> bytes:
     """
     Function returns the page content from the given URL.
     Returns only the byte response.
@@ -67,7 +66,7 @@ def get_page_bytes(url: str, user_agent: str = str(), default_user_agent: bool =
     return response
 
 
-def download_with_urllib(file_url: str, target_directory: str, file_name: str = str(), **kwargs) -> str:
+def download(file_url: str, target_directory: str, file_name: str = str(), **kwargs) -> str:
     """
     The function receives url and target filesystem directory to download the file.
 
@@ -156,7 +155,7 @@ def download_and_extract_file(
     """
 
     # Download the repo to current working directory and return full file path of downloaded file.
-    file_path = download_with_urllib(
+    file_path = download(
         file_url=file_url, target_directory=target_directory, file_name=file_name, **kwargs)
 
     # Extract the archive and remove the first directory.
