@@ -8,6 +8,7 @@ from .basics import numbers
 
 import soundcard
 import soundfile
+import pythoncom
 
 
 def get_inputs(include_loopback: bool = False, **kwargs):
@@ -220,7 +221,7 @@ class StereoMixRecorder:
         self.select_interface: int = select_interface
 
         self.recording: bool = False
-        self.loopback_input = self._initialize_input_interface()
+        self.loopback_input = None
         self._buffer_queue: queue.Queue = queue.Queue()
         self._some_data_was_recorded: bool = False
 
@@ -283,6 +284,18 @@ class StereoMixRecorder:
     def _thread_record(
             self, split_emit_buffers: int, emit_type: str, file_path: str, record_until_zero_array: bool, seconds,
             **kwargs):
+        # Since, 'soundcard' module uses COM objects, which aren't thread safe, we need to use 'CoInitialize()' of
+        # COM objects in order for it to be. Or you will get an exception:
+        # RuntimeError: Error 0x800401f0
+        # The error code 0x800401F0 is CO_E_NOTINITIALIZED ("CoInitialize has not been called").
+        # That suggests that you did not call CoInitialize() first. That is, a thread needs to call CoInitialize()
+        # (or CoInitializeEx() ) before calling CoCreateInstance() or any other COM call.
+        # When thread is finished, it should call CoUninitialize() to release the thread's COM resources.
+        # noinspection PyUnresolvedReferences
+        pythoncom.CoInitialize()
+
+        self.loopback_input = self._initialize_input_interface()
+
         # Currently no frames were recorded.
         recorded_frames = 0
 
@@ -404,6 +417,10 @@ class StereoMixRecorder:
             self._buffer_queue.put(emit_bytes)
         elif emit_type == 'nparray':
             self._buffer_queue.put(numpyw.concatenate_array_list(data_nparray_buffer_list))
+
+        # Release the COM object in multithreaded environment when thread is finished.
+        # noinspection PyUnresolvedReferences
+        pythoncom.CoUninitialize()
 
     def stop(self):
         """

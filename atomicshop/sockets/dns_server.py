@@ -1,6 +1,4 @@
-# v1.0.4 - 02.04.2023 17:20
 import os
-import sys
 import datetime
 import time
 import threading
@@ -9,13 +7,8 @@ import socket
 from ..print_api import print_api
 from ..wrappers.loggingw import loggingw
 
-# External libraries
-try:
-    import dnslib
-    from dnslib import DNSRecord, DNSHeader, RR, A
-except ImportError as exception_object:
-    print(f"Library missing: {exception_object.name}. Install by executing: pip install dnslib")
-    sys.exit()
+import dnslib
+from dnslib import DNSRecord, DNSHeader, RR, A
 
 
 class DnsServer:

@@ -24,11 +24,12 @@ There are many gems hidden in the library:
 * atomicshop.wrappers.configparserw.ConfigParserWrapper: read / write config files to dict, converting string values to other formats (int, bool, list, list_of_ints, etc).
 * atomicshop.wrappers.loggingw: wrapper for 'logging' module, allows easier creation and manipulation of the 'logging.Logger' object with enhanced functionality on TimedRotatingFileHandler and formatters. 
 * atomicshop.wrappers.ffmpegw.FFmpegWrapper: wrapper for FFmpeg, allows you to convert files to other formats. Downloads latest compiled release of ffmpeg from GitHub, if it doesn't find one.
+* atomicshop.wrappers.playwrightw: wrapper for Microsoft Playwright, allows you to automate browsers. Has many advanced functions and features, like wait for full page load (wrappers.playwrightw.waits.maximum_idle), that Playwright doesn't have by default.
 * atomicshop.sound: this module currently can record sound from Stereo mix to WAV file.
 * atomicshop.process: Process wrapper, can be used to get live output from a console process, while it still runs. Execute process in new cmd window, etc.
 * atomicshop.scheduling: Scheduler with threads, you can schedule a function to run periodically each 30 minutes (or any specified period of time) using threads (or not).
 * atomicshop.timer: measures time passed from the point you start it using python API.
-* atomicshop.web.download_with_urllib: File downloader with status.
+* atomicshop.web.download: File downloader with status.
 * atomicshop.file_io: File csv / json / text reader / writer.
 * atomicshop.filesystem: functions like, move / create folders, copy / delete files, etc.
 * And many more...

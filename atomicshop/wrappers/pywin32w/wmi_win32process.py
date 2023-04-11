@@ -136,6 +136,7 @@ class Pywin32Processes:
         and 'connect' method should be executed inside the started thread/process and not before.
         """
 
+        # noinspection PyUnresolvedReferences
         com_object_wmi_service = win32com.client.Dispatch("WbemScripting.SWbemLocator", pythoncom.CoInitialize())
         self.wmi_cim_root = com_object_wmi_service.ConnectServer(self.host_to_query, "root\cimv2")
 

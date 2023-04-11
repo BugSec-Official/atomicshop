@@ -47,7 +47,9 @@ dependencies = [
     "SoundCard",
     "SpeechRecognition",
     "python-bidi",
-    "protobuf"
+    "protobuf",
+    "playwright",
+    "playwright-stealth"
 ]
 classifiers = [
     "Intended Audience :: Developers",

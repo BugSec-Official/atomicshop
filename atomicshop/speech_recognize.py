@@ -1,6 +1,61 @@
 from .wrappers.ffmpegw import FFmpegWrapper
 from .tempfiles import TempFile
-from atomicshop.web import download_with_urllib
+from .web import download
+from .basics import strings
+
+
+STRINGS_TO_NUMBERS: dict = {
+    'zero': '0',
+    'one': '1',
+    'two': '2',
+    'three': '3',
+    'four': '4',
+    'five': '5',
+    'six': '6',
+    'seven': '7',
+    'eight': '8',
+    'nine': '9',
+}
+
+
+STRINGS_MISTAKES_TO_NUMBERS: dict = {
+    'free': '3',
+    'for': '4',
+    'hate': '8',
+    'sex': '6',
+    'sexy': '6'
+}
+
+
+STRINGS_MISTAKES_TO_CHARACTERS: dict = {
+    'and': 'n',
+    'ass': 's',
+    'in': 'n',
+    'see': 'c',
+    'why': 'y',
+    'you': 'u'
+}
+
+
+def change_words_to_characters_and_numbers(sentence: str):
+    """
+    Function changes words to characters and numbers based on defined dicts of:
+        STRINGS_TO_NUMBERS
+        STRINGS_MISTAKES_TO_NUMBERS
+        STRINGS_MISTAKES_TO_CHARACTERS
+
+    :param sentence: string, to change words to characters and numbers.
+    :return: string, with changed words to characters and numbers.
+    """
+
+    # Change words to numbers.
+    sentence = strings.replace_words_with_values_from_dict(sentence, STRINGS_TO_NUMBERS, True)
+    # Change words with mistakes to numbers.
+    sentence = strings.replace_words_with_values_from_dict(sentence, STRINGS_MISTAKES_TO_NUMBERS, True)
+    # Change words with mistakes to characters.
+    sentence = strings.replace_words_with_values_from_dict(sentence, STRINGS_MISTAKES_TO_CHARACTERS, True)
+
+    return sentence
 
 
 def get_text_from_wav(wav_file_path: str, engine: str = "google", adjust_for_ambient_noise: bool = False) -> str:
@@ -77,7 +132,7 @@ def download_mp3_convert_and_get_text(audio_file_url: str):
     temp_file_mp3 = TempFile()
     temp_file_wav = TempFile()
     # Download the file.
-    temp_file_mp3.file_path = download_with_urllib(audio_file_url, temp_file_mp3.directory)
+    temp_file_mp3.file_path = download(audio_file_url, temp_file_mp3.directory)
     # Add the file path to wav temp file including extension '.wav'.
     temp_file_wav.file_path = temp_file_mp3.file_path + ".wav"
 

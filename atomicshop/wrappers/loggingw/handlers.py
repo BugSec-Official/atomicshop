@@ -15,7 +15,7 @@ def get_stream_handler() -> logging.StreamHandler:
 
 
 def get_timed_rotating_file_handler(
-        log_file_path: str, when: str = "midnight", interval: int = 1, delay: bool = False
+        log_file_path: str, when: str = "midnight", interval: int = 1, delay: bool = False, encoding=None
 ) -> logging.handlers.TimedRotatingFileHandler:
     """
     Function to get a TimedRotatingFileHandler.
@@ -30,10 +30,12 @@ def get_timed_rotating_file_handler(
         "midnight" - Roll over at midnight
     :param interval: Interval to rotate the log file.
     :param delay: bool, If set to True, the log file will be created only if there's something to write.
+    :param encoding: Encoding to use for the log file. Same as for the TimeRotatingFileHandler, which uses Default None.
     :return: TimedRotatingFileHandler.
     """
 
-    return TimedRotatingFileHandler(filename=log_file_path, when=when, interval=interval, delay=delay)
+    return TimedRotatingFileHandler(
+        filename=log_file_path, when=when, interval=interval, delay=delay, encoding=encoding)
 
 
 def start_queue_listener_for_file_handler(

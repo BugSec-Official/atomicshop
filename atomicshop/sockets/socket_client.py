@@ -1,5 +1,3 @@
-# v1.0.0 - 02.04.2023 17:30
-import sys
 import socket
 import ssl
 import time
@@ -9,12 +7,7 @@ from .sender import Sender
 from ..print_api import print_api
 from ..wrappers.loggingw import loggingw
 
-# External libraries
-try:
-    import dns.resolver
-except ImportError as exception_object:
-    print(f"Library missing: {exception_object.name}. Install by executing: pip install dnspython")
-    sys.exit()
+import dns.resolver
 
 
 class SocketClient:

@@ -1,10 +1,20 @@
 <!-- HISTORY -->
 ## History
 
+* 1.7.0 - 11.04.2023
+  * 'basics.lists' - added 'replace_elements_with_values_from_dict' function.
+  * 'speech_recognize' - added 'change_words_to_characters_and_numbers' function.
+  * 'basics.strings' - added 'replace_words_with_values_from_dict' function.
+  * Moved all conversion dicts from 'basics.strings' to 'speech_recognize'.
+  * 'timer.Timer' - added 'restart()' method.
+  * 'web.download_with_urllib' - renamed to 'web.download'.
+  * 'wrappers.playwrightw' - added wrapper for Microsoft Playwright.
+  * 'sound' - Fixed Error 0x800401f0.
+  * 'wrappers.loggingw' - added 'encoding' argument to all FileHandler creation functions.
 * 1.6.9 - 09.04.2023
   * 'wrappers.numpyw.check_if_array_is_empty' - renamed to 'wrappers.numpyw.is_array_empty'.
   * 'basics.numbers.is_divisible' - added.
-  * 'basics.numbers.strings' - numerous string conversion dicts were added.
+  * 'basics.strings' - numerous string conversion dicts were added.
 * 1.6.8 - 05.04.2023
   * 'check_admin' reference fix in mitm.
 * 1.6.7 - 05.04.2023
