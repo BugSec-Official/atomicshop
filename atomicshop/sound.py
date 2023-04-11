@@ -275,6 +275,11 @@ class StereoMixRecorder:
             raise ValueError("Either 'file_path' or 'emit_type' must be specified.")
 
         self.recording = True
+
+        # Initialize the input interface. Should be placed here and not in the thread, since there can be times
+        # when playback can start before the input interface is initialized, since thread runs in parallel.
+        self.loopback_input = self._initialize_input_interface()
+
         threading.Thread(
             target=self._thread_record,
             args=(split_emit_buffers, emit_type, file_path, record_until_zero_array, seconds),
@@ -293,8 +298,6 @@ class StereoMixRecorder:
         # When thread is finished, it should call CoUninitialize() to release the thread's COM resources.
         # noinspection PyUnresolvedReferences
         pythoncom.CoInitialize()
-
-        self.loopback_input = self._initialize_input_interface()
 
         # Currently no frames were recorded.
         recorded_frames = 0

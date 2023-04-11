@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 1.7.2 - 11.04.2023
+ * 'sound' - moved initialization function from thread to beginning of the 'start()' method.
 * 1.7.1 - 11.04.2023
   * Fixes in 'project.toml' file.
   * Added 'pyautogui' library to dependencies.
