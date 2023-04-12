@@ -29,8 +29,12 @@ STRINGS_MISTAKES_TO_NUMBERS: dict = {
 
 STRINGS_MISTAKES_TO_CHARACTERS: dict = {
     'and': 'n',
+    'ask': 's',
     'ass': 's',
+    'are': 'r',
+    'be': 'b',
     'in': 'n',
+    'jay': 'j',
     'see': 'c',
     'why': 'y',
     'you': 'u'

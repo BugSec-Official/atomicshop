@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 1.7.3 - 12.04.2023
+ * 'speech_recognition' - more additions to conversion dictionaries.
 * 1.7.2 - 11.04.2023
  * 'sound' - moved initialization function from thread to beginning of the 'start()' method.
 * 1.7.1 - 11.04.2023

@@ -234,7 +234,7 @@ class PlaywrightEngine:
         message = f'Could be the site is down, will retry in {time_to_sleep_minutes} minutes'
         print_api(message, error_type=True, color="red")
         time.sleep(time_to_sleep_minutes * 60)
-        combos.page_refresh___wait_maximum_idle(self.page)
+        # combos.page_refresh___wait_maximum_idle(self.page)
 
     def check_for_element_change(self, locator_string: str):
         """

@@ -56,8 +56,9 @@ class AppointmentManager:
             print_api("Assuming you don't need this functionality", color='yellow')
             pass
 
-    def find_earliest_date(self, date_list: list):
+    def find_earliest_date(self, date_list: list, **kwargs):
         date_list.sort()
+        print_api(f"Dates to check: {date_list}", **kwargs)
         for single_date in date_list:
             # Check if current date iteration is not blacklisted and between earliest and latest dates.
             if single_date not in self.blacklist_dates and \
