@@ -23,7 +23,8 @@ STRINGS_MISTAKES_TO_NUMBERS: dict = {
     'for': '4',
     'hate': '8',
     'sex': '6',
-    'sexy': '6'
+    'sexy': '6',
+    'thor': '4'
 }
 
 
@@ -53,11 +54,11 @@ def change_words_to_characters_and_numbers(sentence: str):
     """
 
     # Change words to numbers.
-    sentence = strings.replace_words_with_values_from_dict(sentence, STRINGS_TO_NUMBERS, True)
+    sentence = strings.replace_words_with_values_from_dict(sentence, STRINGS_TO_NUMBERS, True, True)
     # Change words with mistakes to numbers.
-    sentence = strings.replace_words_with_values_from_dict(sentence, STRINGS_MISTAKES_TO_NUMBERS, True)
+    sentence = strings.replace_words_with_values_from_dict(sentence, STRINGS_MISTAKES_TO_NUMBERS, True, True)
     # Change words with mistakes to characters.
-    sentence = strings.replace_words_with_values_from_dict(sentence, STRINGS_MISTAKES_TO_CHARACTERS, True)
+    sentence = strings.replace_words_with_values_from_dict(sentence, STRINGS_MISTAKES_TO_CHARACTERS, True, True)
 
     return sentence
 

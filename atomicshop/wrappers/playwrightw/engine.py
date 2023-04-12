@@ -229,13 +229,6 @@ class PlaywrightEngine:
             # Click the submit button.
             self.page.locator("#sign-in-form").get_by_role("button", name=submit_button_text).click()
 
-    def wait_and_reload_page_in_exception(self, exception, time_to_sleep_minutes: int):
-        print_api(exception, error_type=True, color="red")
-        message = f'Could be the site is down, will retry in {time_to_sleep_minutes} minutes'
-        print_api(message, error_type=True, color="red")
-        time.sleep(time_to_sleep_minutes * 60)
-        # combos.page_refresh___wait_maximum_idle(self.page)
-
     def check_for_element_change(self, locator_string: str):
         """
         Function gets the locator string input, read text from all the locators that contain this object.
