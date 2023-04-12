@@ -210,7 +210,16 @@ def contains_letter(string: str) -> bool:
     return string.upper().isupper()
 
 
-def replace_words_with_values_from_dict(sentence: str, dictionary: dict, contains: bool = False):
+def is_alphanumeric_only(string: str) -> bool:
+    """
+    Function to check if string contains only alphanumeric characters.
+    """
+
+    return string.isalnum()
+
+
+def replace_words_with_values_from_dict(
+        sentence: str, dictionary: dict, contains: bool = False, case_insensitive: bool = False) -> str:
     """
     Function replaces words, which are keys with values from dictionary.
 
@@ -232,6 +241,8 @@ def replace_words_with_values_from_dict(sentence: str, dictionary: dict, contain
             'Hello, my name is Johns987, and I am 30sbla years old.'
         With 'contains=False' the result would unchanged:
             'Hello, my name is names987, and I am agesbla years old.'
+    :param case_insensitive: boolean, if 'True' will treat words in the 'sentence' as case-insensitive.
+        Default is 'False'.
     :return: string, with replaced words.
     """
 
@@ -239,12 +250,8 @@ def replace_words_with_values_from_dict(sentence: str, dictionary: dict, contain
     sentence_parts: list = sentence.split(" ")
 
     # Replace exact words with values from dictionary.
-    sentence_parts = lists.replace_elements_with_values_from_dict(sentence_parts, dictionary)
+    sentence_parts = lists.replace_elements_with_values_from_dict(
+        sentence_parts, dictionary, contains=contains, case_insensitive=case_insensitive)
     joined_sentence: str = ' '.join(sentence_parts)
-
-    if contains:
-        # After we tried the exact matches for each word, there can be cases where the word is a part of another word.
-        for key, value in dictionary.items():
-            joined_sentence = joined_sentence.replace(key, value)
 
     return joined_sentence

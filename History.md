@@ -1,6 +1,12 @@
 <!-- HISTORY -->
 ## History
 
+* 1.7.4 - 12.04.2023
+  * 'basics.strings' - added 'is_alphanumeric_only' function.
+  * 'speech_recognition' - more additions to conversion dictionaries.
+  * 'speech_recognition.change_words_to_characters_and_numbers' - optimized behavior to case-insensitive input.
+  * 'basics.strings.replace_words_with_values_from_dict' - added 'case_insensitive' key argument and optimized function.
+  * 'basics.lists.replace_elements_with_values_from_dict' - added 'contains' and 'case_insensitive' key arguments and optimized function.
 * 1.7.3 - 12.04.2023
  * 'speech_recognition' - more additions to conversion dictionaries.
 * 1.7.2 - 11.04.2023
