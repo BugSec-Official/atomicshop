@@ -5,8 +5,6 @@ import random
 import getpass
 from tempfile import gettempdir
 
-from . import combos
-
 from ...print_api import print_api
 from ...keyboard_press import send_alt_tab
 from ...filesystem import create_folder
@@ -144,26 +142,6 @@ class PlaywrightEngine:
         # The size of the browsing inner window. The resolution you're browsing with. Doesn't have to be the same
         # as your desktop resolution.
         return self.page.viewport_size
-
-    def mouse_move(self, x_pos: int, y_pos: int, steps: int):
-        # This move is done by playwright, doesn't evade bot recognition.
-        self.page.mouse.move(x=x_pos, y=y_pos, steps=steps)
-
-    def mouse_click(self, x_pos: int, y_pos: int):
-        # This click is done by playwright, doesn't evade bot recognition. Almost the same as 'locator.click()'.
-        self.page.mouse.click(x=x_pos, y=y_pos)
-
-    def get_locator_by_element___find_position___move___click_mouse(
-            self, page_locator, element: str, attribute: str, value: str):
-        # Get position and size of locator.
-        element_position_size = combos.get_locator_by_tag___get_position_and_size(
-            page_locator, element, attribute, value)
-        # Get X and Y position of center of the element.
-        x_pos: int = element_position_size["x"] + element_position_size["width"] / 2
-        y_pos: int = element_position_size["y"] + element_position_size["height"] / 2
-
-        self.mouse_move(x_pos, y_pos, steps=100)
-        self.mouse_click(x_pos, y_pos)
 
     def wait_for_selector_by_object_attribute_value(self, element: str, attribute: str, value: str):
         """

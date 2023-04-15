@@ -34,9 +34,11 @@ STRINGS_MISTAKES_TO_CHARACTERS: dict = {
     'ass': 's',
     'are': 'r',
     'be': 'b',
+    'hey': 'a',
     'in': 'n',
     'jay': 'j',
     'see': 'c',
+    'tea': 't',
     'why': 'y',
     'you': 'u'
 }
@@ -66,6 +68,13 @@ def change_words_to_characters_and_numbers(sentence: str):
 def get_text_from_wav(wav_file_path: str, engine: str = "google", adjust_for_ambient_noise: bool = False) -> str:
     """
     The function recognizes speech in source WAV file and returns recognized text.
+
+    Known exceptions, should be handled at higher level:
+        speech_recognition.exceptions.UnknownValueError: Exception raised when SpeechRecognition engine fails.
+        ConnectionResetError: This is 'socket' library exception. Since, SpeechRecognition needs to connect to
+            Google's servers, it uses 'urllib' library, which uses 'http' library, which uses 'socket' library.
+            If the connection is reset, this exception will be raised.
+            "[WinError 10054] An existing connection was forcibly closed by the remote host"
 
     :param wav_file_path: string, full file path to WAV file.
     :param engine: string, offline speech recognition engine, default is 'google'. Available engines:
