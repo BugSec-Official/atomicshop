@@ -1,6 +1,13 @@
 <!-- HISTORY -->
 ## History
 
+* 1.7.5 - 15.04.2023
+  * 'speech_recognition' - more additions to conversion dictionaries.
+  * 'speech_recognition.get_text_from_wav' - Added known exception types to docstrings.
+  * 'wrappers.configparserw' - added unicode key argument to all functions.
+  * 'wrappers.playwrightw.base' - added 'get_url' and 'click_force_locator' functions.
+  * 'wrappers.playwrightw' - added 'mouse.py' module.
+  * 
 * 1.7.4 - 12.04.2023
   * 'basics.strings' - added 'is_alphanumeric_only' function.
   * 'speech_recognition' - more additions to conversion dictionaries.

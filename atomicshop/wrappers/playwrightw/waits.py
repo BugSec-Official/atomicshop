@@ -147,13 +147,13 @@ def maximum_idle(page, **kwargs) -> None:
     :return: None
     """
 
-    print('Before wait_for_load')
+    print_api('Before wait_for_load', **kwargs)
     load(page)
-    print('After wait_for_load, Before wait_for_domcontentloaded')
+    print_api('After wait_for_load, Before wait_for_domcontentloaded', **kwargs)
     domcontentloaded(page)
-    print('After wait_for_domcontentloaded')
+    print_api('After wait_for_domcontentloaded', **kwargs)
     # For some reason 'networkidle' can result in timeout errors, so currently this is disabled.
     # networkidle(page)
-    print('Before wait_for_network_fully_idle')
+    print_api('Before wait_for_network_fully_idle', **kwargs)
     network_fully_idle(page, **kwargs)
-    print('After wait_for_network_fully_idle')
+    print_api('After wait_for_network_fully_idle', **kwargs)

@@ -1,4 +1,4 @@
-from . import locators, base, waits
+from . import locators, base, waits, mouse
 
 
 def navigate_to_url___wait_maximum_idle(page, url: str, **kwargs) -> None:
@@ -87,6 +87,31 @@ def get_locator_by_tag___get_position_and_size(
     return base.get_position_and_size_of_locator(current_locator)
 
 
+def get_locator_by_tag___find_position___click_mouse(
+        page, locator, tag_name: str, attribute: str, value: str):
+    # Get position and size of locator.
+    element_position_size = get_locator_by_tag___get_position_and_size(
+        locator, tag_name, attribute, value)
+    # Get X and Y position of center of the element.
+    x_pos: int = element_position_size["x"] + element_position_size["width"] / 2
+    y_pos: int = element_position_size["y"] + element_position_size["height"] / 2
+
+    mouse.click(page, x_pos, y_pos)
+
+
+def get_locator_by_tag___find_position___move___click_mouse(
+        page, locator, tag_name: str, attribute: str, value: str):
+    # Get position and size of locator.
+    element_position_size = get_locator_by_tag___get_position_and_size(
+        locator, tag_name, attribute, value)
+    # Get X and Y position of center of the element.
+    x_pos: int = element_position_size["x"] + element_position_size["width"] / 2
+    y_pos: int = element_position_size["y"] + element_position_size["height"] / 2
+
+    mouse.move(page, x_pos, y_pos, steps=100)
+    mouse.click(page, x_pos, y_pos)
+
+
 def get_locator_by_tagname_and_text___click(
         page_or_locator, tag_name: str, text: str):
     current_locator = locators.get_by_tagname_and_text(page_or_locator, tag_name, text)
@@ -111,3 +136,13 @@ def get_locator_by_tagname_and_text___click___wait_maximum_idle(
     current_locator = locators.get_by_tagname_and_text(locator, tag_name, text)
     base.click_locator(current_locator)
     waits.maximum_idle(page, **kwargs)
+
+
+def find_position_of_locator___click_mouse(page, locator):
+    # Get position and size of locator.
+    element_position_size = base.get_position_and_size_of_locator(locator)
+    # Get X and Y position of center of the element.
+    x_pos: int = element_position_size["x"] + element_position_size["width"] / 2
+    y_pos: int = element_position_size["y"] + element_position_size["height"] / 2
+
+    mouse.click(page, x_pos, y_pos)

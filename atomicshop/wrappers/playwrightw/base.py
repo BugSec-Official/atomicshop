@@ -12,6 +12,17 @@ def page_refresh(page):
     page.reload()
 
 
+def get_url(page):
+    """
+    Get the current URL of the page.
+
+    :param page:
+    :return:
+    """
+
+    return page.url
+
+
 def get_first_locator(locator):
     return locator.first()
 
@@ -42,6 +53,18 @@ def click_locator(locator) -> None:
     :return:
     """
     locator.click()
+
+
+def click_force_locator(locator) -> None:
+    """
+    This function doesn't do any checks whatsoever. The locator can be hidden and invisible.
+    This function will click it anyway.
+    Documented: https://playwright.dev/python/docs/input#forcing-the-click
+
+    :param locator:
+    :return:
+    """
+    locator.dispatch_event('click')
 
 
 def get_locator_text(locator):
@@ -83,6 +106,8 @@ def get_position_and_size_of_locator(locator):
         box_x_center: int = box["x"] + box["width"] / 2
         # Divide height by 2 and add it to the top left Y position.
         box_y_center: int = box["y"] + box["height"] / 2
+
+    Returns None if the element is not visible.
 
     :param locator:
     :return:

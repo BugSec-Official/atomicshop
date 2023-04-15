@@ -1,4 +1,3 @@
-# v1.0.7 - 27.03.2023 12:10
 import os
 import configparser
 from typing import Any
@@ -45,7 +44,7 @@ class ConfigParserWrapper:
 
         # After that you can use 'convert_string_values' function to convert certain key values to other types.
 
-    def read_to_dict(self, **kwargs) -> dict[Any, Any]:
+    def read_to_dict(self, unicode_encoding: bool = False, **kwargs) -> dict[Any, Any]:
         """
         Usage Example:
             # If 'config.ini' in current working directory of the script.
@@ -54,12 +53,13 @@ class ConfigParserWrapper:
             config = ImportConfig(directory_path=working_directory)
             config.read_to_dict()
 
+        :param unicode_encoding: boolean, that sets if 'configparser.ConfigParser()' should use 'unicode' encoding.
         :return: parsed dict.
         """
 
         # Reading "config.ini".
         self.initialize_config_parser()
-        self.read_config_file(**kwargs)
+        self.read_config_file(unicode_encoding=unicode_encoding, **kwargs)
         self.convert_config_to_dict()
         return self.config
 
