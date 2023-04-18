@@ -1,4 +1,3 @@
-# v1.0.6 - 28.03.2023 - 17:20
 import os
 import ast
 import importlib

@@ -1,8 +1,7 @@
-# v1.0.2 - 02.04.2023 17:30
 import ssl
 
-from ..print_api import print_api
-from ..wrappers.loggingw import loggingw
+from ...print_api import print_api
+from ..loggingw import loggingw
 
 
 class Sender:

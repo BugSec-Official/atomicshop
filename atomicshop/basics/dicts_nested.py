@@ -1,4 +1,3 @@
-# v1.0.0 - 26.03.2023 12:50
 def merge(dict1: dict, dict2: dict) -> dict:
     merged_dict = dict1
 

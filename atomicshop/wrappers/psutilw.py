@@ -7,6 +7,16 @@ from ..print_api import print_api
 import psutil
 
 
+def get_network_interfaces() -> list:
+    """
+    The function will return list of all network interfaces.
+
+    :return: list.
+    """
+
+    return list(psutil.net_if_addrs().items())
+
+
 def get_available_process_attrs(self) -> list:
     """
     The function will return list of all available process attributes.

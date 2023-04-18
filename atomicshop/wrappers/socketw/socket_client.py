@@ -4,8 +4,8 @@ import time
 
 from .receiver import Receiver
 from .sender import Sender
-from ..print_api import print_api
-from ..wrappers.loggingw import loggingw
+from ...print_api import print_api
+from ..loggingw import loggingw
 
 import dns.resolver
 
@@ -91,11 +91,30 @@ class SocketClient:
         return self.ssl_socket
 
     # noinspection PyBroadException
-    def service_connection_with_error_handling(self):
+    def service_connection(self):
         """ Function to establish connection to server """
-        # Defining result boolean variable, which would mean that connection succeeded
-        function_result: bool = True
+        # Check if socket to service domain exists.
+        # If not
+        if not self.ssl_socket:
+            # Create the socket and connect to it
+            self.ssl_socket = self.create_service_ssl_socket()
+        # If the socket exists check if it's still connected. socket.fileno() has value of "-1" if socket
+        # was disconnected. We can't do this with previous statement like:
+        # if not self.ssl_socket or self.ssl_socket.fileno() == -1:
+        # since if "ssl_socket" doesn't exist we'll get an "UnboundError" on checking "fileno" on it.
+        elif self.ssl_socket.fileno() == -1:
+            # Create the socket and connect to it
+            self.ssl_socket = self.create_service_ssl_socket()
+        # If the socket exists and still connected.
+        else:
+            self.logger.info(
+                f"SSL Socket already defined to [{self.service_name}:{self.service_port}]. "
+                f"Should be connected - Reusing.")
+            # Since, restart the function each send_receive iteration, and there's still a connection we need to
+            # set it True, or the socket object will be nullified in the next step.
+            return True
 
+        # If 'dns_servers_list' was provided, we will resolve the domain to ip through these servers.
         if self.dns_servers_list:
             self.logger.info(f"DNS Service List specified: {self.dns_servers_list}. "
                              f"Resolving the domain [{self.service_name}]")
@@ -115,66 +134,67 @@ class SocketClient:
                 self.logger.error(f"Domain {self.service_name} doesn't exist - Couldn't resolve with "
                                   f"{self.dns_servers_list}.")
                 pass
-                function_result = False
+                return None
 
-        # If DNS was resolved correctly or DNS servers weren't specified, this will be True, and we can try connecting.
-        if function_result:
-            # If 'service_ip' was manually specified or resolved with 'dnspython' - the connection
-            # will be made to the IP.
-            if self.service_ip:
-                destination = self.service_ip
-            # If not, then the domain name will be used.
-            else:
-                destination = self.service_name
+        # If DNS was resolved correctly or DNS servers weren't specified - we can try connecting.
+        # If 'service_ip' was manually specified or resolved with 'dnspython' - the connection
+        # will be made to the IP.
+        if self.service_ip:
+            destination = self.service_ip
+        # If not, then the domain name will be used.
+        else:
+            destination = self.service_name
 
-            self.logger.info(f"Connecting to [{destination}]")
-            try:
-                # "connect()" to the server using address and port
-                self.ssl_socket.connect((destination, self.service_port))
-            except ConnectionRefusedError:
-                message = f"Couldn't connect to: {self.service_name}. The server is unreachable - Connection refused."
-                print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
-                # Socket close will be handled in the thread_worker_main
-                function_result = False
-                pass
-            except ConnectionAbortedError:
-                message = f"Connection was aborted (by the software on host) to {self.service_name}."
-                print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
-                # Socket close will be handled in the thread_worker_main
-                function_result = False
-                pass
-            except socket.gaierror:
-                message = f"Couldn't resolve [{self.service_name}] to IP using default methods. " \
-                          f"Domain doesn't exist or there's no IP assigned to it."
-                print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
-                # Socket close will be handled in the thread_worker_main
-                function_result = False
-                pass
-            except ssl.SSLError:
-                message = f"SSLError raised on connection to {self.service_name}."
-                print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
-                # Socket close will be handled in the thread_worker_main
-                function_result = False
-                pass
-            except TimeoutError:
-                message = f"TimeoutError raised on connection to {self.service_name}."
-                print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
-                # Socket close will be handled in the thread_worker_main
-                function_result = False
-                pass
-            except Exception:
-                message = f"Unknown exception raised, while connection to {self.service_name}."
-                print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
-                # Socket close will be handled in the thread_worker_main
-                function_result = False
-                pass
+        self.logger.info(f"Connecting to [{destination}]")
+        try:
+            # "connect()" to the server using address and port
+            self.ssl_socket.connect((destination, self.service_port))
+        except ConnectionRefusedError:
+            message = f"Couldn't connect to: {self.service_name}. The server is unreachable - Connection refused."
+            print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
+            # Socket close will be handled in the thread_worker_main
+            pass
+            return None
+        except ConnectionAbortedError:
+            message = f"Connection was aborted (by the software on host) to {self.service_name}."
+            print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
+            # Socket close will be handled in the thread_worker_main
+            pass
+            return None
+        except socket.gaierror:
+            message = f"Couldn't resolve [{self.service_name}] to IP using default methods. " \
+                      f"Domain doesn't exist or there's no IP assigned to it."
+            print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
+            # Socket close will be handled in the thread_worker_main
+            pass
+            return None
+        except ssl.SSLError:
+            message = f"SSLError raised on connection to {self.service_name}."
+            print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
+            # Socket close will be handled in the thread_worker_main
+            pass
+            return None
+        except TimeoutError:
+            message = f"TimeoutError raised on connection to {self.service_name}."
+            print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
+            # Socket close will be handled in the thread_worker_main
+            pass
+            return None
+        except ValueError as e:
+            message = f'{str(e)} | on connect to [{self.service_name}].'
+            print_api(message, logger=self.logger, logger_method='error')
+            # Socket close will be handled in the thread_worker_main
+            pass
+            return None
 
-            if function_result:
-                # print(f"Connected to server {function_server_address_from_socket} on
-                # {function_server_port_from_socket}")
-                self.logger.info("Connected...")
+        # If everything was fine, we'll log the connection.
+        self.logger.info("Connected...")
 
-        return function_result
+        # Return the connected socket.
+        return self.ssl_socket
+
+    def get_socket(self):
+        return self.ssl_socket
 
     def close_socket(self):
         self.ssl_socket.close()
@@ -186,36 +206,11 @@ class SocketClient:
         # Define variables
         function_service_data = None
         error_string = None
-        # At this stage the service domain wasn't connected, so we'll set it False
-        function_service_connection: bool = False
-
-        # Check if socket to service domain exists.
-        # If not
-        if not self.ssl_socket:
-            # Create the socket and connect to it
-            self.ssl_socket = self.create_service_ssl_socket()
-            function_service_connection = self.service_connection_with_error_handling()
-        # If the socket exists check if it's still connected. socket.fileno() has value of "-1" if socket
-        # was disconnected. We can't do this with previous statement like:
-        # if not self.ssl_socket or self.ssl_socket.fileno() == -1:
-        # since if "ssl_socket" doesn't exist we'll get an "UnboundError" on checking "fileno" on it.
-        elif self.ssl_socket.fileno() == -1:
-            # Create the socket and connect to it
-            self.ssl_socket = self.create_service_ssl_socket()
-            function_service_connection = self.service_connection_with_error_handling()
-        # If the socket exists and still connected.
-        else:
-            self.logger.info(
-                f"SSL Socket already defined to [{self.service_name}:{self.service_port}]. "
-                f"Should be connected - Reusing.")
-            # Since, restart the function each send_receive iteration, and there's still a connection we need to
-            # set it True, or the socket object will be nullified in the next step.
-            function_service_connection = True
 
         # If connection to service server wasn't successful
-        if not function_service_connection:
+        if not self.service_connection():
             error_string = "Wasn't able to connect to service, closing the destination service socket"
-            print_api(error_string, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
+            print_api(error_string, logger=self.logger, logger_method='error')
 
             # We'll close the socket and nullify the object
             self.close_socket()

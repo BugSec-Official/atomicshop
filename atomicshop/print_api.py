@@ -117,6 +117,9 @@ def print_api(
     # = Main Section with printing cases ===============================================================================
     # exit_message: str = 'Exiting...'
 
+    # Convert message to string.
+    message = str(message)
+
     # If we should print.
     if stdout and stderr:
         print_or_logger()

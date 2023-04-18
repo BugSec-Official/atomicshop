@@ -1,10 +1,10 @@
-# v1.0.2 - 02.04.2021 17:40
 import sys
 import base64
 import socket
 
 from .print_api import print_api
 from .wrappers.loggingw import loggingw
+from .wrappers.socketw import base
 
 
 # External Libraries
@@ -98,8 +98,18 @@ class SSHRemote:
         self.ssh_client = paramiko.SSHClient()
 
     def connect(self):
-        # Defining variables.
-        error = None
+        error: str = str()
+
+        # Get all local interfaces IPv4 addresses.
+        local_interfaces_ipv4 = base.get_local_network_interfaces_ip_address("ipv4", True)
+        # Check if the target IP address is in the list of local interfaces.
+        if self.ip_address in local_interfaces_ipv4:
+            # If it is, we don't need to connect to it via SSH, it means that we want to connect to ourselves.
+            # Probably the target computer is a VM with NAT connection, should be bridged.
+            error = f"SSHRemote: Target IP [{self.ip_address}] is one of the local computer network interfaces! " \
+                    f"Probably the target computer is a VM with NAT connection, should be bridged connection."
+            print_api(error, logger=self.logger, logger_method='error')
+            return error
 
         # Since we're connecting within private network we don't actually care about security, so setting
         # the policy to Automatic instead of
@@ -113,11 +123,13 @@ class SSHRemote:
             # Executing SSH connection to client.
             self.ssh_client.connect(self.ip_address, username=self.username, password=self.password, timeout=60)
         # When port 22 is unreachable on the client.
-        except paramiko.ssh_exception.NoValidConnectionsError as error:
+        except paramiko.ssh_exception.NoValidConnectionsError as e:
+            error = str(e)
             # Logging the error also. Since the process name isn't critical, we'll continue script execution.
             print_api(error, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
             pass
-        except paramiko.ssh_exception.SSHException as error:
+        except paramiko.ssh_exception.SSHException as e:
+            error = str(e)
             # Logging the error also. Since the process name isn't critical, we'll continue script execution.
             print_api(error, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
             pass
@@ -130,10 +142,6 @@ class SSHRemote:
         except TimeoutError:
             # Returning the error.
             error = "Connection timed out."
-            # Logging the error also. Since the process name isn't critical, we'll continue script execution.
-            print_api(error, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
-            pass
-        except Exception as error:
             # Logging the error also. Since the process name isn't critical, we'll continue script execution.
             print_api(error, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
             pass

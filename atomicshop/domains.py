@@ -1,15 +1,8 @@
-# v1.0.1 - 21.03.2023 18:10
-import sys
-
-# External imports.
-try:
-    import tldextract
-except ImportError as exception_object:
-    print(f"Library missing: {exception_object.name}. Install by executing: pip install tldextract")
-    sys.exit()
+import tldextract
 
 
-def get_domain_without_first_subdomain_if_no_subdomain_return_as_is(host: str) -> str:
+def get_domain_without_first_subdomain_if_no_subdomain_return_as_is(
+        host: str, offline_tld_database: bool = True) -> str:
     """
     The function returns domain without the first subdomain.
         Example: sub1.sub2.main.com
@@ -22,6 +15,8 @@ def get_domain_without_first_subdomain_if_no_subdomain_return_as_is(host: str) -
     the list of known tlds.
 
     :param host: the domain.
+    :param offline_tld_database: if True, the function will use 'tldextract' offline database. If False, it will go
+        online and fetch the list of known tlds.
     :return:
     """
 
@@ -32,12 +27,12 @@ def get_domain_without_first_subdomain_if_no_subdomain_return_as_is(host: str) -
     if len(host_parts) < 2 or '.' not in host_parts[1]:
         return host
 
-    # Extract main domain, subdomains and suffix from passed 'host'.
-    # Documented way of using 'tldextract' module without HTTP fetching.
-    # tldextract_object = tldextract.TLDExtract(suffix_list_urls=None)
-    # ext = tldextract_object(host)
-    # Oneliner:
-    extracted_domain_parts = tldextract.TLDExtract(suffix_list_urls=None)(host)
+    if offline_tld_database:
+        # Extract main domain, subdomains and suffix from passed 'host'.
+        # Documented way of using 'tldextract' module without HTTP fetching.
+        extracted_domain_parts = tldextract.TLDExtract(suffix_list_urls=str())(host)
+    else:
+        extracted_domain_parts = tldextract.extract(host)
 
     # allow using parent domain if:
     # 1) no suffix (unknown tld)
@@ -61,7 +56,7 @@ def get_registered_domain(domain: str) -> str:
     :return: string of main registered domain with tld only.
     """
     # Extract all the parts from domain with 'tldextract'.
-    extracted_domain_parts = tldextract.TLDExtract(suffix_list_urls=None)(domain)
+    extracted_domain_parts = tldextract.TLDExtract(suffix_list_urls=str())(domain)
 
     # If 'suffix' is empty, it means that the tld is not in 'tldextract' offline database or there is no tld at all,
     # for example: some-domain-without-tld

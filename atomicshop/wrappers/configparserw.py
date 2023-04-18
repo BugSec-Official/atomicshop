@@ -253,7 +253,7 @@ class ConfigParserWrapper:
             message = f"Key is missing in 'config.ini' file: {exception_object}"
             print_api(message, error_type=True, color="red", **kwargs)
 
-    def _auto_convert_values(
+    def auto_convert_values(
             self, booleans: bool = True, convert_01_to_bool: bool = True, integers: bool = True,
             convert_section_key_list_to_list: list = None,
             skip_sections_list: list = None, skip_keys_list: list = None):

@@ -1,12 +1,11 @@
-# v1.0.4 - 28.03.2023 17:30
 import ssl
 from datetime import datetime
 
 from .message import ClientMessage
 from .initialize_engines import assign_class_by_domain
-from ..sockets.receiver import Receiver
-from ..sockets.sender import Sender
-from ..sockets.socket_client import SocketClient
+from ..wrappers.socketw.receiver import Receiver
+from ..wrappers.socketw.sender import Sender
+from ..wrappers.socketw.socket_client import SocketClient
 from ..http_parse import HTTPRequestParse, HTTPResponseParse
 from ..basics.threads import current_thread_id
 from ..print_api import print_api

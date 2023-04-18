@@ -1,52 +1,18 @@
 """
-*** There were several fixes after the original code was copied from the GitHub repo.
-
-This is literally the file copied from the official certauth package.
-https://github.com/ikreymer/certauth/blob/master/certauth/certauth.py
-There were no changes made to the code, besides this comment.
-All credit goes to the original author.
-The reason for this is that the GitHub package last update was Nov 2019, while PyPi update was Aug 2019 and both
-versions are 1.3.0.
-The GitHub version 'Allow alternative SAN ips and fqdns', which is an important feature.
-The package wasn't maintained for more than 4 years, so for easier distribution, the file was copied here.
-If you have better idea on how to do this, please let me know.
-
-History:
-30.03.2023:
-    Minor python styling fixes.
-    'load_cert' function, fixed default mutable values.
-    'cert_for_host' function, fixed default mutable values.
-    'generate_host_cert' function, fixed default mutable values.
+Original code was taken from: https://github.com/ikreymer/certauth/blob/master/certauth/certauth.py
+The script undergone many changes from the original.
 """
 import os
-
 from io import BytesIO
-
-from OpenSSL import crypto
-from OpenSSL.SSL import FILETYPE_PEM
-
-import random
-
-import ipaddress
-import tldextract
-
 from argparse import ArgumentParser
-
 from collections import OrderedDict
-
 import threading
 
-# =================================================================
-# Valid for 3 years from now
-# Max validity is 39 months:
-# https://casecurity.org/2015/02/19/ssl-certificate-validity-periods-limited-to-39-months-starting-in-april/
-CERT_NOT_AFTER = 3 * 365 * 24 * 60 * 60
+from .. import pyopensslw
+from ... import domains, ip_addresses, certificates
 
-CERTS_DIR = './ca/certs/'
+from OpenSSL import crypto
 
-CERT_NAME = 'certauth sample CA'
-
-DEF_HASH_FUNC = 'sha256'
 
 ROOT_CA = '!!root_ca'
 
@@ -68,7 +34,7 @@ class CertificateAuthority(object):
                  ca_file_cache,
                  cert_cache=None,
                  cert_not_before=0,
-                 cert_not_after=CERT_NOT_AFTER,
+                 cert_not_after=certificates.SECONDS_NOT_AFTER_3_YEARS,
                  overwrite=False):
 
         if isinstance(ca_file_cache, str):
@@ -116,73 +82,59 @@ class CertificateAuthority(object):
 
         return cert, key
 
-    @staticmethod
-    def is_host_ip(host):
-        try:
-            # if py2.7, need to decode to unicode str
-            # pragma: no cover
-            if hasattr(host, 'decode'):
-                host = host.decode('ascii')
-
-            ipaddress.ip_address(host)
-            return True
-        except (ValueError, UnicodeDecodeError):
-            return False
-
-    @staticmethod
-    def get_wildcard_domain(host):
-        host_parts = host.split('.', 1)
-        if len(host_parts) < 2 or '.' not in host_parts[1]:
-            return host
-
-        ext = tldextract.extract(host)
-
-        # allow using parent domain if:
-        # 1) no suffix (unknown tld)
-        # 2) the parent domain contains 'domain.suffix', not just .suffix
-        if not ext.suffix or ext.domain + '.' + ext.suffix in host_parts[1]:
-            return host_parts[1]
-
-        return host
-
     def load_cert(
-            self, host, overwrite=False, wildcard=False, wildcard_use_parent=False, include_cache_key=False,
-            cert_ips=None, cert_fqdns=None):
+            self,
+            host,
+            certificate=None,
+            overwrite=False,
+            wildcard=False,
+            wildcard_use_parent=False,
+            include_cache_key=False,
+            cert_ips=None,
+            cert_fqdns=None):
 
         if not cert_ips:
             cert_ips = set()
-
         if not cert_fqdns:
             cert_fqdns = set()
 
-        is_ip = self.is_host_ip(host)
+        # Check if provided host is an IP address.
+        is_host_ip = ip_addresses.is_ip_address(host)
 
-        if is_ip:
+        # If host is an IP address, then 'wildcard' definitely will be 'False', since it is only for domains.
+        if is_host_ip:
             wildcard = False
 
         if wildcard and wildcard_use_parent:
-            host = self.get_wildcard_domain(host)
+            host = domains.get_domain_without_first_subdomain_if_no_subdomain_return_as_is(host)
 
-        cert_ips = list(cert_ips)  # set to ordered list
+        # Convert 'set' instance to ordered 'list' instance.
+        cert_ips = list(cert_ips)
 
+        # If 'overwrite' wasn't specified, then check if the certificate is already in the cache.
+        # None will be returned if not found.
         cert_str = None
-
         if not overwrite:
             cert_str = self.cert_cache.get(host)
 
-        # if cached, just read pem
+        # If certificate was found in the cache, then read pem from the cache.
         if cert_str:
             cert, key = self.read_pem(BytesIO(cert_str))
-
+        # If not, create new.
         else:
             # if not cached, generate new root or host cert
-            cert, key = self.generate_host_cert(host,
-                                                self.ca_cert,
-                                                self.ca_key,
-                                                wildcard,
-                                                is_ip=is_ip,
-                                                cert_ips=cert_ips,
-                                                cert_fqdns=cert_fqdns)
+            cert, key = pyopensslw.generate_server_certificate_ca_signed(
+                ca_cert=self.ca_cert,
+                ca_key=self.ca_key,
+                host=host,
+                certificate=certificate,
+                wildcard=wildcard,
+                is_host_ip=is_host_ip,
+                cert_ips=cert_ips,
+                cert_fqdns=cert_fqdns,
+                seconds_not_before=self.cert_not_before,
+                seconds_not_after=self.cert_not_after,
+            )
 
             # Write cert + key
             buff = BytesIO()
@@ -194,7 +146,6 @@ class CertificateAuthority(object):
 
         if not include_cache_key:
             return cert, key
-
         else:
             cache_key = host
             if hasattr(self.cert_cache, 'key_for_host'):
@@ -202,7 +153,7 @@ class CertificateAuthority(object):
 
             return cert, key, cache_key
 
-    def cert_for_host(self, host, overwrite=False, wildcard=False, cert_ips=None, cert_fqdns=None):
+    def cert_for_host(self, host, certificate=None, overwrite=False, wildcard=False, cert_ips=None, cert_fqdns=None):
 
         if not cert_ips:
             cert_ips = set()
@@ -210,6 +161,7 @@ class CertificateAuthority(object):
             cert_fqdns = set()
 
         res = self.load_cert(host,
+                             certificate=certificate,
                              overwrite=overwrite,
                              wildcard=wildcard,
                              wildcard_use_parent=False,
@@ -237,23 +189,12 @@ class CertificateAuthority(object):
     def get_root_pem_filename(self):
         return self.ca_file_cache.ca_file
 
-    def _make_cert(self, certname):
-        cert = crypto.X509()
-        cert.set_serial_number(random.randint(0, 2 ** 64 - 1))
-        cert.get_subject().CN = certname
-
-        cert.set_version(2)
-        cert.gmtime_adj_notBefore(self.cert_not_before)
-        cert.gmtime_adj_notAfter(self.cert_not_after)
-        return cert
-
-    def generate_ca_root(self, ca_name, hash_func=DEF_HASH_FUNC):
+    def generate_ca_root(self, ca_name, hash_algo: str = 'sha256'):
         # Generate key
-        key = crypto.PKey()
-        key.generate_key(crypto.TYPE_RSA, 2048)
+        key = pyopensslw.generate_private_key()
 
         # Generate cert
-        cert = self._make_cert(ca_name)
+        cert = pyopensslw.generate_server_certificate_empty(ca_name, self.cert_not_before, self.cert_not_after)
 
         cert.set_issuer(cert.get_subject())
         cert.set_pubkey(key)
@@ -271,72 +212,20 @@ class CertificateAuthority(object):
                                  b"hash",
                                  subject=cert),
             ])
-        cert.sign(key, hash_func)
+        cert.sign(key, hash_algo)
 
-        return cert, key
-
-    def generate_host_cert(self, host, root_cert, root_key,
-                           wildcard=False,
-                           hash_func=DEF_HASH_FUNC,
-                           is_ip=False,
-                           cert_ips=None,
-                           cert_fqdns=None):
-
-        if not cert_ips:
-            cert_ips = set()
-        if not cert_fqdns:
-            cert_fqdns = set()
-
-        utf8_host = host.encode('utf-8')
-
-        # Generate key
-        key = crypto.PKey()
-        key.generate_key(crypto.TYPE_RSA, 2048)
-
-        # Generate CSR
-        req = crypto.X509Req()
-        req.get_subject().CN = utf8_host
-        req.set_pubkey(key)
-        req.sign(key, hash_func)
-
-        # Generate Cert
-        cert = self._make_cert(utf8_host)
-
-        cert.set_issuer(root_cert.get_subject())
-        cert.set_pubkey(req.get_pubkey())
-
-        all_hosts = ['DNS:'+host]
-
-        if wildcard:
-            all_hosts += ['DNS:*.' + host]
-
-        elif is_ip:
-            all_hosts += ['IP:' + host]
-
-        all_hosts += ['IP: {}'.format(ip) for ip in cert_ips]
-        all_hosts += ['DNS: {}'.format(fqdn) for fqdn in cert_fqdns]
-
-        san_hosts = ', '.join(all_hosts)
-        san_hosts = san_hosts.encode('utf-8')
-
-        cert.add_extensions([
-            crypto.X509Extension(b'subjectAltName',
-                                 False,
-                                 san_hosts)])
-
-        cert.sign(root_key, hash_func)
         return cert, key
 
     @staticmethod
     def write_pem(buff, cert, key):
-        buff.write(crypto.dump_privatekey(FILETYPE_PEM, key))
-        buff.write(crypto.dump_certificate(FILETYPE_PEM, cert))
+        buff.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, key))
+        buff.write(crypto.dump_certificate(crypto.FILETYPE_PEM, cert))
 
     @staticmethod
     def read_pem(buff):
-        cert = crypto.load_certificate(FILETYPE_PEM, buff.read())
+        cert = crypto.load_certificate(crypto.FILETYPE_PEM, buff.read())
         buff.seek(0)
-        key = crypto.load_privatekey(FILETYPE_PEM, buff.read())
+        key = crypto.load_privatekey(crypto.FILETYPE_PEM, buff.read())
         return cert, key
 
 
@@ -363,10 +252,11 @@ class FileCache(object):
 
     def get(self, host):
         filename = self.key_for_host(host)
+
         try:
             with open(filename, 'rb') as fh:
                 return fh.read()
-        except Exception:
+        except FileNotFoundError:
             return b''
 
 
@@ -400,13 +290,13 @@ def main(args=None):
     parser.add_argument('root_ca_cert',
                         help='Path to existing or new root CA file')
 
-    parser.add_argument('-c', '--certname', action='store', default=CERT_NAME,
+    parser.add_argument('-c', '--certname', action='store',
                         help='Name for root certificate')
 
     parser.add_argument('-n', '--hostname',
                         help='Hostname certificate to create')
 
-    parser.add_argument('-d', '--certs-dir', default=CERTS_DIR,
+    parser.add_argument('-d', '--certs-dir',
                         help='Directory for host certificates')
 
     parser.add_argument('-f', '--force', action='store_true',
