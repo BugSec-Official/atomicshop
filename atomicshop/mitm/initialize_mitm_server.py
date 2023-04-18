@@ -1,4 +1,3 @@
-# v1.0.3 - 02.04.2023 17:30
 import os
 import threading
 
@@ -6,12 +5,11 @@ import atomicshop
 from .import_config import ImportConfig
 from .initialize_engines import ModuleCategory
 from .connection_thread_worker import thread_worker_main
-from ..print_api import print_api
 from ..filesystem import get_file_paths_and_relative_directories, ComparisonOperator
-from .. import filesystem
+from .. import filesystem, queues
 from ..python_functions import get_current_python_version_string, check_python_version_compliance
-from ..sockets.socket_wrapper import SocketWrapper, DomainQueue
-from ..sockets.dns_server import DnsServer
+from ..wrappers.socketw.socket_wrapper import SocketWrapper
+from ..wrappers.socketw.dns_server import DnsServer
 from ..basics import dicts_nested
 from ..wrappers.loggingw import loggingw
 
@@ -46,9 +44,11 @@ def initialize_mitm_server(config_static):
     config_importer.open()
     config = config_importer.config
 
-    # Create basic folders.
+    # Create folders.
     filesystem.create_folder(config['log']['logs_path'])
     filesystem.create_folder(config['recorder']['recordings_path'])
+    if config['certificates']['sni_get_server_certificate_from_server_socket']:
+        filesystem.create_folder(config['certificates']['sni_server_certificate_from_server_socket_download_directory'])
 
     # Create a logger that will log messages to file, Initiate System logger.
     system_logger = loggingw.get_logger_with_stream_handler_and_timedfilehandler(
@@ -70,128 +70,122 @@ def initialize_mitm_server(config_static):
     system_logger.info(f"Recordings folder for Requests/Responses: {config['recorder']['recordings_path']}")
     system_logger.info(f"Loaded system logger: {system_logger}")
 
-    # Catching exception on the main execution to log.
-    try:
-        system_logger.info(f"TCP Server Target IP: {config['dns']['target_tcp_server_ipv4']}")
+    system_logger.info(f"TCP Server Target IP: {config['dns']['target_tcp_server_ipv4']}")
 
-        # Some 'config.ini' settings logging ===========================================================================
-        if config['certificates']['default_server_certificate_usage']:
+    # Some 'config.ini' settings logging ===========================================================================
+    if config['certificates']['default_server_certificate_usage']:
+        system_logger.info(
+            f"Default server certificate usage enabled, if no SNI available: "
+            f"{config_static.CONFIG_EXTENDED['certificates']['default_server_certificate_directory']}"
+            f"{os.sep}{config_static.CONFIG_EXTENDED['certificates']['default_server_certificate_name']}.pem")
+
+    if config['certificates']['sni_server_certificates_cache_directory']:
+        system_logger.info(
+            f"SNI function certificates creation enabled. Certificates cache: "
+            f"{config['certificates']['sni_server_certificates_cache_directory']}")
+    else:
+        system_logger.info(f"SNI function certificates creation disabled.")
+
+    if config['certificates']['custom_server_certificate_usage']:
+        system_logger.info(f"Custom server certificate usage is enabled.")
+        system_logger.info(f"Custom Certificate Path: {config['certificates']['custom_server_certificate_path']}")
+
+        # If 'custom_private_key_path' field was populated.
+        if config['certificates']['custom_private_key_path']:
             system_logger.info(
-                f"Default server certificate usage enabled, if no SNI available: "
-                f"{config_static.CONFIG_EXTENDED['certificates']['default_server_certificate_directory']}"
-                f"{os.sep}{config_static.CONFIG_EXTENDED['certificates']['default_server_certificate_name']}.pem")
-
-        if config['certificates']['sni_create_server_certificate_for_each_domain']:
-            system_logger.info(
-                f"SNI function certificates creation enabled. Certificates cache: "
-                f"{config_static.CONFIG_EXTENDED['certificates']['sni_server_certificates_cache_directory']}")
+                f"Custom Certificate Private Key Path: {config['certificates']['custom_private_key_path']}")
         else:
-            system_logger.info(f"SNI function certificates creation disabled.")
+            system_logger.info(f"Custom Certificate Private Key Path wasn't provided in [advanced] section. "
+                               f"Assuming the private key is inside the certificate file.")
 
-        if config['certificates']['custom_server_certificate_usage']:
-            system_logger.info(f"Custom server certificate usage is enabled.")
-            system_logger.info(f"Custom Certificate Path: {config['certificates']['custom_server_certificate_path']}")
+    # === Importing engine modules =================================================================================
+    system_logger.info("Importing engine modules.")
 
-            # If 'custom_private_key_path' field was populated.
-            if config['certificates']['custom_private_key_path']:
-                system_logger.info(
-                    f"Custom Certificate Private Key Path: {config['certificates']['custom_private_key_path']}")
-            else:
-                system_logger.info(f"Custom Certificate Private Key Path wasn't provided in [advanced] section. "
-                                   f"Assuming the private key is inside the certificate file.")
+    # Get full paths of all the 'engine_config.ini' files.
+    engine_config_path_list, _ = get_file_paths_and_relative_directories(
+        directory_fullpath=config_static.ENGINES_DIRECTORY_PATH,
+        file_name_check_tuple=(config_static.ENGINE_CONFIG_FILE_NAME, ComparisonOperator.EQ))
 
-        # === Importing engine modules =================================================================================
-        system_logger.info("Importing engine modules.")
+    # Iterate through all the 'engine_config.ini' file paths.
+    domains_engine_list_full: list = list()
+    engines_list: list = list()
+    for engine_config_path in engine_config_path_list:
+        # Initialize engine.
+        current_module = ModuleCategory(config_static.WORKING_DIRECTORY)
+        current_module.fill_engine_fields_from_config(engine_config_path)
+        current_module.initialize_engine(logs_path=config['log']['logs_path'],
+                                         logger=system_logger)
 
-        # Get full paths of all the 'engine_config.ini' files.
-        engine_config_path_list, _ = get_file_paths_and_relative_directories(
-            directory_fullpath=config_static.ENGINES_DIRECTORY_PATH,
-            file_name_check_tuple=(config_static.ENGINE_CONFIG_FILE_NAME, ComparisonOperator.EQ))
+        # Extending the full engine domain list with this list.
+        domains_engine_list_full.extend(current_module.domain_list)
+        # Append the object to the engines list
+        engines_list.append(current_module)
+    # === EOF Importing engine modules =============================================================================
+    # ==== Initialize Reference Module =============================================================================
+    reference_module = ModuleCategory(config_static.WORKING_DIRECTORY)
+    reference_module.fill_engine_fields_from_general_reference(config_static.ENGINES_DIRECTORY_PATH)
+    reference_module.initialize_engine(logs_path=config['log']['logs_path'],
+                                       logger=system_logger, stdout=False, reference_general=True)
+    # === EOF Initialize Reference Module ==========================================================================
+    # === Engine logging ===========================================================================================
+    # If engines were found.
+    if engines_list:
+        # Printing the parsers using "start=1" for index to start counting from "1" and not "0"
+        system_logger.info("[*] Found Engines:")
+        for index, engine in enumerate(engines_list, start=1):
+            system_logger.info(f"[*] {index}: {engine.engine_name} | {engine.domain_list}")
+            system_logger.info(f"[*] Modules: {engine.parser_class_object.__name__}, "
+                               f"{engine.responder_class_object.__name__}, "
+                               f"{engine.recorder_class_object.__name__}")
+    # If engines weren't found.
+    else:
+        system_logger.info("[*] NO ENGINES WERE FOUND!")
+        system_logger.info(f"Server will process all the incoming (domains) connections by "
+                           f"[{reference_module.engine_name}] engine.")
+    # === EOF Engine Logging =======================================================================================
 
-        # Iterate through all the 'engine_config.ini' file paths.
-        domains_engine_list_full: list = list()
-        engines_list: list = list()
-        for engine_config_path in engine_config_path_list:
-            # Initialize engine.
-            current_module = ModuleCategory(config_static.WORKING_DIRECTORY)
-            current_module.fill_engine_fields_from_config(engine_config_path)
-            current_module.initialize_engine(logs_path=config['log']['logs_path'],
-                                             logger=system_logger)
+    # Assigning all the engines domains to all time domains, that will be responsible for adding new domains.
+    config_static.CONFIG_EXTENDED['certificates']['domains_all_times'] = list(domains_engine_list_full)
 
-            # Extending the full engine domain list with this list.
-            domains_engine_list_full.extend(current_module.domain_list)
-            # Append the object to the engines list
-            engines_list.append(current_module)
-        # === EOF Importing engine modules =============================================================================
-        # ==== Initialize Reference Module =============================================================================
-        reference_module = ModuleCategory(config_static.WORKING_DIRECTORY)
-        reference_module.fill_engine_fields_from_general_reference(config_static.ENGINES_DIRECTORY_PATH)
-        reference_module.initialize_engine(logs_path=config['log']['logs_path'],
-                                           logger=system_logger, stdout=False, reference_general=True)
-        # === EOF Initialize Reference Module ==========================================================================
-        # === Engine logging ===========================================================================================
-        # If engines were found.
-        if engines_list:
-            # Printing the parsers using "start=1" for index to start counting from "1" and not "0"
-            system_logger.info("[*] Found Engines:")
-            for index, engine in enumerate(engines_list, start=1):
-                system_logger.info(f"[*] {index}: {engine.engine_name} | {engine.domain_list}")
-                system_logger.info(f"[*] Modules: {engine.parser_class_object.__name__}, "
-                                   f"{engine.responder_class_object.__name__}, "
-                                   f"{engine.recorder_class_object.__name__}")
-        # If engines weren't found.
-        else:
-            system_logger.info("[*] NO ENGINES WERE FOUND!")
-            system_logger.info(f"Server will process all the incoming (domains) connections by "
-                               f"[{reference_module.engine_name}] engine.")
-        # === EOF Engine Logging =======================================================================================
+    # Creating Statistics logger.
+    statistics_logger = loggingw.get_logger_with_stream_handler_and_timedfilehandler(
+        logger_name="statistics", directory_path=config['log']['logs_path'],
+        file_extension=config_static.CSV_EXTENSION, formatter_message_only=True
+    )
+    output_statistics_csv_header()
 
-        # Assigning all the engines domains to all time domains, that will be responsible for adding new domains.
-        config_static.CONFIG_EXTENDED['certificates']['domains_all_times'] = list(domains_engine_list_full)
+    network_logger_name = "network"
+    network_logger = loggingw.get_logger_with_stream_handler_and_timedfilehandler(
+        logger_name=network_logger_name, directory_path=config['log']['logs_path'], disable_duplicate_ms=True)
+    system_logger.info(f"Loaded network logger: {network_logger}")
 
-        # Creating Statistics logger.
-        statistics_logger = loggingw.get_logger_with_stream_handler_and_timedfilehandler(
-            logger_name="statistics", directory_path=config['log']['logs_path'],
-            file_extension=config_static.CSV_EXTENSION, formatter_message_only=True
-        )
-        output_statistics_csv_header()
+    # Initiate Listener logger, which is a child of network logger, so he uses the same settings and handlers
+    listener_logger = loggingw.get_logger_with_level(f'{network_logger_name}.listener')
+    system_logger.info(f"Loaded listener logger: {listener_logger}")
 
-        network_logger_name = "network"
-        network_logger = loggingw.get_logger_with_stream_handler_and_timedfilehandler(
-            logger_name=network_logger_name, directory_path=config['log']['logs_path'], disable_duplicate_ms=True)
-        system_logger.info(f"Loaded network logger: {network_logger}")
+    # Create request domain queue.
+    domain_queue = queues.NonBlockQueue()
 
-        # Initiate Listener logger, which is a child of network logger, so he uses the same settings and handlers
-        listener_logger = loggingw.get_logger_with_level(f'{network_logger_name}.listener')
-        system_logger.info(f"Loaded listener logger: {listener_logger}")
+    # === Initialize DNS module ====================================================================================
+    if config['dns']['enable_dns_server']:
+        # before executing TCP sockets and after executing 'network' logger.
+        dns_server = DnsServer(config)
+        # Passing the engine domain list to DNS server to work with.
+        # 'list' function re-initializes the current list, or else it will be the same instance object.
+        dns_server.domain_list = list(domains_engine_list_full)
 
-        # Create request domain queue.
-        domain_queue = DomainQueue()
+        dns_server.request_domain_queue = domain_queue
+        # Initiate the thread.
+        threading.Thread(target=dns_server.start).start()
+    # === EOF Initialize DNS module ================================================================================
 
-        # === Initialize DNS module ====================================================================================
-        if config['dns']['enable_dns_server']:
-            # before executing TCP sockets and after executing 'network' logger.
-            dns_server = DnsServer(config)
-            # Passing the engine domain list to DNS server to work with.
-            # 'list' function re-initializes the current list, or else it will be the same instance object.
-            dns_server.domain_list = list(domains_engine_list_full)
+    socket_wrapper = SocketWrapper(
+        config=dicts_nested.merge(config, config_static.CONFIG_EXTENDED), logger=listener_logger,
+        statistics_logger=statistics_logger)
 
-            dns_server.request_domain_queue = domain_queue
-            # Initiate the thread.
-            threading.Thread(target=dns_server.start).start()
-        # === EOF Initialize DNS module ================================================================================
+    socket_wrapper.create_tcp_listening_socket_list()
 
-        socket_wrapper = SocketWrapper(
-            config=dicts_nested.merge(config, config_static.CONFIG_EXTENDED), logger=listener_logger,
-            statistics_logger=statistics_logger)
+    socket_wrapper.requested_domain_from_dns_server = domain_queue
 
-        socket_wrapper.create_tcp_listening_socket_list()
-
-        socket_wrapper.requested_domain_from_dns_server = domain_queue
-
-        socket_wrapper.loop_for_incoming_sockets(function_reference=thread_worker_main, reference_args=(
-            network_logger, statistics_logger, engines_list, reference_module, config,))
-    except Exception:
-        message = "Undocumented exception in General settings of the MAIN thread"
-        print_api(message, logger=system_logger, logger_method='critical', traceback_string=True, oneline=True)
-        raise
+    socket_wrapper.loop_for_incoming_sockets(function_reference=thread_worker_main, reference_args=(
+        network_logger, statistics_logger, engines_list, reference_module, config,))

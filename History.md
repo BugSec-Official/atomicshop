@@ -1,6 +1,17 @@
 <!-- HISTORY -->
 ## History
 
+* 1.7.6 - 18.04.2023
+  * 'ssh_remote' - added check for NAT VM config.
+  * 'queues' - added NonBlockingQueue class.
+  * 'print_api' - added 'message' convert to string.
+  * 'ip_addresses' - added function to check if string is an IP address.
+  * 'wrappers':
+    * 'cryptographyw' - added.
+    * 'pyopensslw' - added.
+    * 'socketw' - rewritten most of the API.
+    * 'certauthw' - many functions changed and added.
+  * 'mitm' - bug fixes and optimization.
 * 1.7.5 - 15.04.2023
   * 'speech_recognition' - more additions to conversion dictionaries.
   * 'speech_recognition.get_text_from_wav' - Added known exception types to docstrings.

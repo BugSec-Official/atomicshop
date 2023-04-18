@@ -1,4 +1,3 @@
-# v1.0.5 - 21.03.2023 13:50
 """Loading resources using stdlib importlib.resources APIs (Python 3.7+)
 https://docs.python.org/3/library/importlib.html#module-importlib.resources"""
 import importlib.resources
@@ -16,6 +15,8 @@ class ScriptAsStringProcessor:
         self.script_string = importlib.resources.read_text(
             f'{__package__}.{self.resources_directory_name}',
             f'{script_file_name}.py')
+
+        return self
 
     def put_variable_into_script_string(self, input_variable: any, logger):
         # Defining variables

@@ -1,4 +1,3 @@
-# v1.0.1 - 21.03.2023 16:40
 import sys
 import argparse
 from argparse import RawTextHelpFormatter

@@ -1,7 +1,3 @@
-# v1.0.3 - 21.03.2023 13:10
-from ..print_api import print_api
-
-
 def check_3_booleans_when_only_1_can_be_true(boolean1: tuple, boolean2: tuple, boolean3: tuple) -> None:
     """
     Example:
@@ -28,7 +24,7 @@ def check_if_3_booleans_are_false(boolean1: tuple, boolean2: tuple, boolean3: tu
                   f"{boolean1[1]}={boolean1[0]}\n" \
                   f"{boolean2[1]}={boolean2[0]}\n" \
                   f"{boolean3[1]}={boolean3[0]}"
-        print_api(message, error_type=True)
+        raise ValueError(message)
 
 
 def check_if_2_booleans_are_true(boolean1: tuple, boolean2: tuple) -> None:
@@ -36,4 +32,4 @@ def check_if_2_booleans_are_true(boolean1: tuple, boolean2: tuple) -> None:
         message = f"Only one configuration can be 'True':\n" \
                   f"{boolean1[1]}={boolean1[0]}\n" \
                   f"{boolean2[1]}={boolean2[0]}\n"
-        print_api(message, error_type=True)
+        raise ValueError(message)

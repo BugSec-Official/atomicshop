@@ -4,8 +4,8 @@ import time
 import threading
 import socket
 
-from ..print_api import print_api
-from ..wrappers.loggingw import loggingw
+from ...print_api import print_api
+from ..loggingw import loggingw
 
 import dnslib
 from dnslib import DNSRecord, DNSHeader, RR, A
@@ -376,7 +376,7 @@ class DnsServer:
 
                                     dns_response, google_address = \
                                         google_dns_ipv4_socket.recvfrom(self.buffer_size_receive)
-                                except Exception as function_exception_object:
+                                except TimeoutError as function_exception_object:
                                     print_api(function_exception_object, logger=self.logger, logger_method='error',
                                               traceback_string=True, oneline=True)
                                     google_dns_ipv4_socket.close()

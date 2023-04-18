@@ -1,11 +1,10 @@
-# v1.0.2 - 28.03.2023 17:30
 import threading
 
 from .socket_client import SocketClient
-from ..wrappers.configparserw import ConfigParserWrapper
-from ..filesystem import get_file_paths_and_relative_directories
-from ..wrappers.loggingw import loggingw
-from ..file_io import jsons, file_io
+from ..configparserw import ConfigParserWrapper
+from ..loggingw import loggingw
+from ...filesystem import get_file_paths_and_relative_directories
+from ...file_io import jsons, file_io
 
 
 def get_key_values_from_json(json_dict: dict, extract_keys: list):

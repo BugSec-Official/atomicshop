@@ -1,8 +1,7 @@
-# v1.0.1 - 21.03.2023 13:40
 import ssl
 
-from ..print_api import print_api
-from ..wrappers.loggingw import loggingw
+from ...print_api import print_api
+from ..loggingw import loggingw
 
 
 class Receiver:

@@ -1,18 +1,9 @@
-# v1.0.2 - 22.03.2021 - 11:10
-import sys
+from ...domains import get_domain_without_first_subdomain_if_no_subdomain_return_as_is
+from ...print_api import print_api
+from .certauth import CertificateAuthority
 
-from ..domains import get_domain_without_first_subdomain_if_no_subdomain_return_as_is
-from ..print_api import print_api
-from ..clones.certauth.certauth import CertificateAuthority
-
-# External imports.
 # Needed to read SAN (Subject Alternative Names) from certificate.
-try:
-    # noinspection PyPackageRequirements
-    from cryptography import x509
-except ImportError as exception_object:
-    print(f"Library missing: {exception_object.name}. Install by executing: pip install cryptography")
-    sys.exit()
+from cryptography import x509
 
 
 def convert_list_of_domains_to_wildcarded(domain_list: list):
@@ -100,19 +91,20 @@ class CertAuthWrapper:
 
         return server_certificate_tuple
 
-    def create_read_server_certificate_ca_signed(self, domain: str):
+    def create_read_server_certificate_ca_signed(self, domain: str, certificate=None) -> str:
         # Same goes for service host certificate. "cert_for_host" creates new certificate with domain's name,
         # including subdomain, returns full path to that certificate as string.
         # If certificate file exists, the function will try to read it. If the format of certificate is wrong
         # or certificate is corrupted, an exception will be raised about it and no full path to certificate file
         # as string will be returned.
-        server_certificate_file_path: str = self.cert_auth.cert_for_host(domain)
+        server_certificate_file_path: str = self.cert_auth.cert_for_host(domain, certificate=certificate)
+        return server_certificate_file_path
 
     # noinspection PyBroadException
     def create_overwrite_server_certificate_ca_signed_return_path_and_san(
             self,
-            domain_list: list, server_certificate_file_name_no_extension: str,
-            **kwargs):
+            domain_list: list, server_certificate_file_name_no_extension: str
+    ):
         """
         Overwrites the default server certificate that will contain all the domains that the script extracted
         from engines 'engine_config.ini' file in 'domains' section and also all the new domains that were passed through
@@ -122,7 +114,6 @@ class CertAuthWrapper:
             to server certificate.
         :param server_certificate_file_name_no_extension: string, name of server certificate that will be signed by CA.
             Also, will be used as file name for server certificate. '.pem' extension will be added by certauth.
-        :type kwargs: object, will be passed to 'print_api'.
         :return: The path to the cached file.
         """
 

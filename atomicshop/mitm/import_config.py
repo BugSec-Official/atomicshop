@@ -1,4 +1,3 @@
-# v1.0.7 - 26.03.2023 18:30
 import sys
 
 from ..wrappers.configparserw import ConfigParserWrapper
@@ -18,7 +17,6 @@ class ImportConfig:
         self.config_parser = ConfigParserWrapper(file_name=file_name, directory_path=self.directory_path)
         self.config: dict = dict()
 
-    # noinspection PyProtectedMember
     def open(self) -> None:
         """
         Open configuration file
@@ -31,14 +29,16 @@ class ImportConfig:
 
         # === Convert string values to python objects. ===
         # Auto convert to booleans.
-        self.config_parser._auto_convert_values(integers=False)
+        self.config_parser.auto_convert_values(integers=False)
         # Convert keys.
         self.config_parser.convert_string_values(['listening_port', 'cache_timeout_minutes'], 'int')
         self.config_parser.convert_string_values(
             ['forwarding_dns_service_ipv4_list___only_for_localhost'], 'list')
         self.config_parser.convert_string_values(['listening_port_list'], 'list_of_int')
         self.config_parser.convert_string_values(
-            ['logs_path', 'recordings_path', 'custom_server_certificate_path', 'custom_private_key_path'],
+            ['logs_path', 'recordings_path', 'custom_server_certificate_path', 'custom_private_key_path',
+             'sni_server_certificates_cache_directory',
+             'sni_server_certificate_from_server_socket_download_directory'],
             'path_relative_to_full')
 
         # Move final dict to local config.
@@ -70,9 +70,9 @@ class ImportConfig:
             (self.config['certificates']['custom_server_certificate_usage'], 'custom_server_certificate_usage'))
 
         if not self.config['certificates']['default_server_certificate_usage'] and \
-                self.config['sni']['default_server_certificate_sni_addons']:
+                self.config['sni']['default_server_certificate_addons']:
             print(
-                f"No point setting [default_server_certificate_sni_addons = True]\n"
+                f"No point setting [default_server_certificate_addons = True]\n"
                 f"If you're not going to use default certificates [default_server_certificate_usage = False]\n"
                 f"Exiting...")
             sys.exit()
