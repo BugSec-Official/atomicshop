@@ -149,3 +149,14 @@ def generate_server_certificate_ca_signed(
 
     server_certificate.sign(ca_key, hash_algo)
     return server_certificate, key
+
+
+def convert_certificate_to_string(certificate_path: str):
+    """Convert certificate to string.
+
+    :param certificate_path: path to certificate.
+    :return: certificate as string.
+    """
+
+    cert = crypto.load_certificate(crypto.FILETYPE_PEM, open(certificate_path).read())
+    return crypto.dump_certificate(crypto.FILETYPE_TEXT, cert)
