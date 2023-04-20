@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 1.7.8 - 20.04.2023
+  * 'wrappers.playwrightw' - light changes in the wrapper initialization.
 * 1.7.7 - 18.04.2023
   * 'wrappers.pyopensslw' - added 'convert_certificate_to_string' function.
 * 1.7.6 - 18.04.2023
