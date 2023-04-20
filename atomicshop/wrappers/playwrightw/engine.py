@@ -104,10 +104,8 @@ class PlaywrightEngine:
             #     geolocation={"longitude": 0, "latitude": 0},
             #     permissions=["geolocation"]
             # )
-            self.page = self.context.new_page()
 
-            # Making playwright stealthier with less footprint of automation.
-            stealth_sync(self.page)
+            self.open_new_page()
         # If Incognito was set to False, then this is setting that will use a folder that is created for all the
         # content like cookies.
         else:
@@ -125,8 +123,17 @@ class PlaywrightEngine:
             self.browser = selected_browser.launch_persistent_context(
                 self.browser_content_directory_path, channel=channel, headless=False
             )
-            # 'launch_persistent_context' doesn't have a 'new_context()' method, so starting page right away.
+            # 'launch_persistent_context' doesn't have a 'new_context()' method, so starting page from browser.
+            self.open_new_page()
+
+    def open_new_page(self):
+        if self.context:
+            self.page = self.context.new_page()
+        else:
             self.page = self.browser.new_page()
+
+        # Making playwright stealthier with less footprint of automation.
+        stealth_sync(self.page)
 
     def close_browser(self) -> None:
         self.page.close()

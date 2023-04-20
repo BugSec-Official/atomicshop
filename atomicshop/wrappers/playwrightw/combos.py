@@ -52,9 +52,10 @@ def get_locator_by_tag___fill_text(
     base.fill_text_in_locator(current_locator, fill_text)
 
 
-def get_locator_by_tag___click(page_or_locator, tag_name: str, attribute: str, value: str) -> None:
+def get_locator_by_tag___click(
+        page_or_locator, tag_name: str, attribute: str, value: str, timeout: int = 30000) -> None:
     current_locator = locators.get_by_tag(page_or_locator, tag_name, attribute, value)
-    base.click_locator(current_locator)
+    base.click_locator(current_locator, timeout=timeout)
 
 
 def get_locator_by_tag___get_text(page_or_locator, tag_name: str, attribute: str, value: str) -> str:

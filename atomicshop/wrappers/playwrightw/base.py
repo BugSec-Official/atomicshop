@@ -39,7 +39,7 @@ def fill_text_in_locator(locator, fill_text: str):
     locator.fill(fill_text)
 
 
-def click_locator(locator) -> None:
+def click_locator(locator, timeout: int = 30000) -> None:
     """
     Checking the 'Auto-wait' explanation from official docs:
     https://playwright.dev/docs/actionability
@@ -50,9 +50,10 @@ def click_locator(locator) -> None:
     locator.isVisible().
 
     :param locator:
+    :param timeout:
     :return:
     """
-    locator.click()
+    locator.click(timeout=timeout)
 
 
 def click_force_locator(locator) -> None:
