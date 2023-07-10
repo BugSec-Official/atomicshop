@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 1.8.0 - 10.07.2023
+  * 'wrappers.loggingw.loggers' - added 'set_propagation' function.
+  * 'wrappers.loggingw' - added propagation to false from root logger on 'add_stream_handler' and 'add_timedfilehandler_with_queuehandler' functions.
 * 1.7.8 - 20.04.2023
   * 'wrappers.playwrightw' - light changes in the wrapper initialization.
 * 1.7.7 - 18.04.2023
