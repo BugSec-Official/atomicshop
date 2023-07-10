@@ -118,6 +118,9 @@ def add_stream_handler(
     # Adding the handler to the main logger
     loggers.add_handler(logger, stream_handler)
 
+    # Disable propagation from the 'root' logger, so we will not see the messages twice.
+    loggers.set_propagation(logger)
+
 
 def add_timedfilehandler_with_queuehandler(
         logger: logging.Logger, directory_path, file_name_no_extension: str = None, file_extension: str = '.txt',
@@ -206,6 +209,9 @@ def add_timedfilehandler_with_queuehandler(
 
     # Add the QueueHandler to the logger.
     loggers.add_handler(logger, queue_handler)
+
+    # Disable propagation from the 'root' logger, so we will not see the messages twice.
+    loggers.set_propagation(logger)
 
 
 def start_queue_listener_for_file_handler_and_get_queue_handler(file_handler):

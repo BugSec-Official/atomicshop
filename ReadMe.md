@@ -53,9 +53,9 @@ Follow project's change history for the latest.
 I tried my best to use as less external libraries as possible, but some of them are required.
 Most of them already were added to 'dependencies' section of the setup. 
 
-Currently, the library is being developed on Windows 10 and python 3.10. No other platforms or python versions were tested.
+Currently, the library is being developed on Windows 10 and python 3.11. No other platforms or python versions were tested.
+This means that the official support of the library is mainly for python 3.11 under Windows 10.
 Most of the features will work, but some require at least version 3.10, like SocketWrapper. Since, some features in it are 3.10 specific.
-In June 2023, I will be moving to python 3.11.4 when it comes out and official support will move to that version as well.
 
 The library and its features will evolve based on my curiosity and needs. But as of now, the updates to features list are almost on daily basis.
 

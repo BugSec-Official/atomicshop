@@ -52,6 +52,19 @@ def add_handler(logger: logging.Logger, handler: logging.Handler):
     logger.addHandler(handler)
 
 
+def set_propagation(logger: logging.Logger, enable: bool = False):
+    """
+    Function that sets propagation from the 'root' logger.
+    If 'propagation is set to 'True' all the handlers that are enabled for the 'root' logger will also output messages
+    resulting in duplicate messages that will appear twice.
+
+    :param logger: Logger to add the handler to.
+    :param enable: Sets the propagation from the 'root' logger to 'True' or 'False'.
+    """
+
+    logger.propagate = enable
+
+
 def logger_shutdown():
-    # Shutdown the logging module for cleanup purposes
+    """ Shutdown the logging module for cleanup purposes """
     logging.shutdown()
