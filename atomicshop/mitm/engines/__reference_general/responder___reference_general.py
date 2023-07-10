@@ -1,4 +1,3 @@
-# v1.0.1 - 31.03.2023 17:10
 # These are specified with hardcoded paths instead of relative, because 'create_module_template.py' copies the content.
 from atomicshop.mitm.engines.__parent.responder___parent import ResponderParent
 from atomicshop.mitm.shared_functions import create_custom_logger
