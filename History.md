@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 1.8.2 - 10.07.2023
+  * 'mitm.engines.create_module_template' - Updated 'working_directory' check method to '__file__'.
 * 1.8.1 - 10.07.2023
   * 'DiffChecker' - Added exception on empty 'check_object'.
 * 1.8.0 - 10.07.2023

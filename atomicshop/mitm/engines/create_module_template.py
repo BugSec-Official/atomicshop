@@ -1,6 +1,4 @@
-# v1.0.1 - 26.03.2021 - 18:00
 import os
-
 from ... import filesystem
 
 
@@ -12,7 +10,8 @@ class CreateModuleTemplate:
         self.engines_directory_path: str = engines_directory_path
 
         # === Working directory of current script. ===
-        self.working_directory: str = filesystem.get_working_directory()
+        # 'filesystem.get_working_directory()' won't work here because the function is called from another script.
+        self.working_directory: str = filesystem.get_file_directory(__file__)
 
         # === Variable manipulations ===
         # New engines directory.
