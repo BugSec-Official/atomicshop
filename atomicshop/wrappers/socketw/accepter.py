@@ -108,6 +108,11 @@ def accept_connection(socket_object, statistics, sni_queue, process_name_queue, 
         #     print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
         #     pass
         pass
+    except Exception:
+        message = "Undocumented exception on accept."
+        message = f"Socket Accept: {sni_queue.queue}:{socket_object.getsockname()[1]}: {message}"
+        print_api(message, logger_method='error', traceback_string=True, oneline=True, **kwargs)
+        pass
     # After all executions tested, this is what will be executed.
     finally:
         # If 'message' is not defined, it means there was no execution and there is no need for statistics.
@@ -126,6 +131,10 @@ def accept_connection(socket_object, statistics, sni_queue, process_name_queue, 
                 f"{statistics_dict['error']}"
             )
         except UnboundLocalError:
+            pass
+        except Exception:
+            message = "Undocumented exception after accept on building statistics."
+            print_api(message, logger_method='error', traceback_string=True, oneline=True, **kwargs)
             pass
 
     return client_socket, client_address_tuple
