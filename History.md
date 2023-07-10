@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 1.8.4 - 10.07.2023
+  * 'mitm.initialize_mitm_server' - changed minimum python requirement to 3.11.
+  * 'wrappers.socketw.accepter' - Added generic exceptions for accept and statistics creation.
 * 1.8.3 - 10.07.2023
   * 'DiffChecker' - Fixed ValueException on empty string of 'check_object'.
 * 1.8.2 - 10.07.2023

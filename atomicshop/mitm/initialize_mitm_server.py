@@ -35,7 +35,7 @@ def initialize_mitm_server(config_static):
         statistics_logger.info(','.join(statistics_header))
 
     # After modules import - we check for python version.
-    check_python_version_compliance(minimum_version='3.10')
+    check_python_version_compliance(minimum_version='3.11')
 
     # Preparing everything for the logging module.
     # Log folder path is in the "config.ini" file, so we need to read it before setting loggers.
