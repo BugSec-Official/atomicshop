@@ -136,8 +136,9 @@ class DiffChecker:
 
         if not self.input_file_directory and self.input_file_name:
             raise ValueError("[input_file_directory] option wasn't specified.")
-        if not check_object:
-            raise ValueError("[check_object] option wasn't specified.")
+        # 'check_object' can be none, so checking if it not equals empty string.
+        if check_object == "":
+            raise ValueError("[check_object] option can't be empty string.")
 
         self.check_object = check_object
         self.input_file_path: str = str()
