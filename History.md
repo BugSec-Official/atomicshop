@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 1.8.1 - 10.07.2023
+  * 'DiffChecker' - Added exception on empty 'check_object'.
 * 1.8.0 - 10.07.2023
   * 'wrappers.loggingw.loggers' - added 'set_propagation' function.
   * 'wrappers.loggingw' - added propagation to false from root logger on 'add_stream_handler' and 'add_timedfilehandler_with_queuehandler' functions.
