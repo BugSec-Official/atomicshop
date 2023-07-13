@@ -1,4 +1,3 @@
-# v1.0.3 - 31.03.2023 17:10
 import fnmatch
 import os
 import shlex

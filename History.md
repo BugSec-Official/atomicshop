@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 1.8.5 - 13.07.2023
+  * 'wrappers.cryptographyw' - added 'copy_extensions_from_old_cert_to_new_cert' function.
 * 1.8.4 - 10.07.2023
   * 'mitm.initialize_mitm_server' - changed minimum python requirement to 3.11.
   * 'wrappers.socketw.accepter' - Added generic exceptions for accept and statistics creation.
