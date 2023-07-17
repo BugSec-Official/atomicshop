@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 1.8.7 - 17.07.2023
+  * 'wrappers.socketw.socket_wrapper' - fixed 'create_overwrite_default_server_certificate_ca_signed' exception.
 * 1.8.6 - 17.07.2023
   * 'mitm.initialize_mitm_server' - added general exception for error logging.
 * 1.8.5 - 13.07.2023

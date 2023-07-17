@@ -86,8 +86,7 @@ class SocketWrapper:
         server_certificate_file_path, default_server_certificate_san = \
             self.certauth_wrapper.create_overwrite_server_certificate_ca_signed_return_path_and_san(
                 domain_list=domain_list,
-                server_certificate_file_name_no_extension=server_certificate_file_name_no_extension,
-                logger=self.logger
+                server_certificate_file_name_no_extension=server_certificate_file_name_no_extension
             )
 
         return server_certificate_file_path, default_server_certificate_san
