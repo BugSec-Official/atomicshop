@@ -2,6 +2,7 @@ import os
 import threading
 
 import atomicshop
+from atomicshop.print_api import print_api
 from .import_config import ImportConfig
 from .initialize_engines import ModuleCategory
 from .connection_thread_worker import thread_worker_main
@@ -187,5 +188,10 @@ def initialize_mitm_server(config_static):
 
     socket_wrapper.requested_domain_from_dns_server = domain_queue
 
-    socket_wrapper.loop_for_incoming_sockets(function_reference=thread_worker_main, reference_args=(
-        network_logger, statistics_logger, engines_list, reference_module, config,))
+    # The general exception handler will catch all the exceptions that occurred in the threads and write it to the log.
+    try:
+        socket_wrapper.loop_for_incoming_sockets(function_reference=thread_worker_main, reference_args=(
+            network_logger, statistics_logger, engines_list, reference_module, config,))
+    except Exception:
+        message = f"Unhandled Exception occurred in 'loop_for_incoming_sockets' function"
+        print_api(message, error_type=True, color="red", logger=network_logger, traceback_string=True, oneline=True)
