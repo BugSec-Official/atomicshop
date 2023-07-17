@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 1.8.6 - 17.07.2023
+  * 'mitm.initialize_mitm_server' - added general exception for error logging.
 * 1.8.5 - 13.07.2023
   * 'wrappers.cryptographyw' - added 'copy_extensions_from_old_cert_to_new_cert' function.
 * 1.8.4 - 10.07.2023
