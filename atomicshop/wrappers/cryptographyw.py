@@ -12,12 +12,12 @@ https://cryptography.io/en/latest/faq/#what-happened-to-the-backend-argument
 """
 
 
-OID_TO_BUILDER_EXT_NAME: dict = {
+OID_TO_BUILDER_CLASS_EXTENSION_NAME: dict = {
     '2.5.29.37': 'ExtendedKeyUsage'
 }
 
 
-def convert_pem_to_x509_certificate_object(certificate):
+def convert_pem_to_x509_object(certificate):
     """Convert PEM certificate to x509 object.
 
     :param certificate: string or bytes - certificate to convert.
@@ -32,7 +32,7 @@ def convert_pem_to_x509_certificate_object(certificate):
     return x509.load_pem_x509_certificate(certificate)
 
 
-def convert_der_to_x509_certificate_object(certificate: bytes):
+def convert_der_to_x509_object(certificate: bytes):
     """Convert DER certificate from socket to x509 object.
 
     :param certificate: bytes, certificate to convert.
@@ -42,7 +42,7 @@ def convert_der_to_x509_certificate_object(certificate: bytes):
     return x509.load_der_x509_certificate(certificate)
 
 
-def convert_x509_certificate_object_to_pem_bytes(certificate) -> bytes:
+def convert_x509_object_to_pem_bytes(certificate) -> bytes:
     """Convert x509 object to PEM certificate.
     :param certificate: certificate in x509 object of 'cryptography' module.
     :return: string or bytes of certificate in PEM byte string format.
@@ -82,7 +82,7 @@ def copy_extensions_from_old_cert_to_new_cert(
         no standard for them. They may be different from application to application. So we're using the ones that are
         provided with cryptography module. This is highly advised not to use this option, unless you know what you're
         doing.
-    :return: new x509 certificate object of cryptography module with copied extensions.
+    :return: new x509 certificate object of cryptography module with copied extensions and old public key.
     """
 
     # We need to generate a new private key, since we can't use the old one to sign the new certificate.
@@ -95,6 +95,7 @@ def copy_extensions_from_old_cert_to_new_cert(
     builder = builder.not_valid_before(certificate.not_valid_before)
     builder = builder.not_valid_after(certificate.not_valid_after)
     builder = builder.serial_number(certificate.serial_number)
+
     # We're using the new private key that we will sign with the new certificate later.
     builder = builder.public_key(new_private_key.public_key())
     # In case you want to use the old one.
@@ -127,12 +128,12 @@ def copy_extensions_from_old_cert_to_new_cert(
                 for usage in old_extension.value:
                     # If 'use_extension_names' is false, we'll use the 'dotted_string' of the extension.
                     if not use_extension_names and usage.dotted_string in skip_extensions:
-                        message = f'Skipping extension {usage.dotted_string}.'
+                        message = f'Skipping certificate extension OID: {usage.dotted_string}.'
                         print_api(message, **kwargs)
                         continue
                     # If 'use_extension_names' is true, we'll use the '_name' of the extension.
                     elif use_extension_names and usage._name in skip_extensions:
-                        message = f'Skipping extension {usage._name}.'
+                        message = f'Skipping certificate extension: {usage._name}.'
                         print_api(message, **kwargs)
                         continue
 
@@ -141,7 +142,7 @@ def copy_extensions_from_old_cert_to_new_cert(
                 # Only add the extension if there are any usages left.
                 if new_usages:
                     # Get the class name of X509 module that corresponds to the current extension OID.
-                    builder_class = OID_TO_BUILDER_EXT_NAME[old_extension.oid.dotted_string]
+                    builder_class = OID_TO_BUILDER_CLASS_EXTENSION_NAME[old_extension.oid.dotted_string]
                     # Add the extension to the new certificate by the extension class name string of the x509 module.
                     builder = builder.add_extension(
                         getattr(x509, builder_class)(new_usages), critical=old_extension.critical)

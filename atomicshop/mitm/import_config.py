@@ -77,6 +77,13 @@ class ImportConfig:
                 f"Exiting...")
             sys.exit()
 
+        if self.config['certificates']['sni_get_server_certificate_from_server_socket'] and \
+                not self.config['certificates']['sni_create_server_certificate_for_each_domain']:
+            print("[sni_get_server_certificate_from_server_socket] was set to 'True', "
+                  "but no [sni_create_server_certificate_for_each_domain] was specified.\n"
+                  "Exiting...")
+            sys.exit()
+
         if self.config['certificates']['custom_server_certificate_usage'] and \
                 not self.config['certificates']['custom_server_certificate_path']:
             print("[custom_server_certificate_usage] was set to 'True', but no [custom_server_certificate_path] "

@@ -4,14 +4,34 @@ from OpenSSL import crypto
 from .. import certificates
 
 
-def convert_der_x509_bytes_to_x509_object(certificate) -> crypto.X509:
-    """Convert certificate from socket to pyOpenSSL x509 object.
+def convert_der_to_x509_object(certificate) -> crypto.X509:
+    """Convert certificate from socket (or der format in bytes) to pyOpenSSL x509 object.
 
     :param certificate: certificate to convert
     :return: certificate in x509 object
     """
 
     return crypto.load_certificate(crypto.FILETYPE_ASN1, certificate)
+
+
+def convert_pem_to_x509_object(certificate) -> crypto.X509:
+    """Convert certificate in PEM format to pyOpenSSL x509 object.
+
+    :param certificate: certificate to convert
+    :return: certificate in x509 object
+    """
+
+    return crypto.load_certificate(crypto.FILETYPE_PEM, certificate)
+
+
+def convert_x509_object_to_pem(certificate):
+    """Convert certificate to PEM format.
+
+    :param certificate: certificate to convert.
+    :return: certificate in PEM format.
+    """
+
+    return crypto.dump_certificate(crypto.FILETYPE_PEM, certificate)
 
 
 def generate_private_key(crypto_type=crypto.TYPE_RSA, bits: int = 2048):
@@ -151,7 +171,7 @@ def generate_server_certificate_ca_signed(
     return server_certificate, key
 
 
-def convert_certificate_to_string(certificate_path: str):
+def convert_certificate_file_to_string(certificate_path: str):
     """Convert certificate to string.
 
     :param certificate_path: path to certificate.

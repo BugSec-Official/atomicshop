@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 1.8.8 - 18.07.2023
+  * 'wrappers.socketw.socket_wrapper' - Added an option to remove certificate extensions through OID. Including, features in 'cryptographyw' and 'pyopensslw'.
 * 1.8.7 - 17.07.2023
   * 'wrappers.socketw.socket_wrapper' - fixed 'create_overwrite_default_server_certificate_ca_signed' exception.
 * 1.8.6 - 17.07.2023

@@ -7,7 +7,7 @@ import select
 
 from . import base, ssl_base, socket_client, creator, get_process, accepter
 from ..certauthw.certauthw import CertAuthWrapper
-from .. import pyopensslw
+from .. import pyopensslw, cryptographyw
 from ...print_api import print_api
 from ...script_as_string_processor import ScriptAsStringProcessor
 from ...domains import get_domain_without_first_subdomain_if_no_subdomain_return_as_is
@@ -276,7 +276,8 @@ class SocketWrapper:
         # === Connect to the domain and get the certificate. ===========================================================
         certificate_from_socket_x509 = None
         if self.config['certificates']['sni_get_server_certificate_from_server_socket']:
-            # Generate PEM certificate file path.
+            # Generate PEM certificate file path for downloaded certificates. Signed certificates will go to the
+            # 'certs' folder.
             certificate_from_socket_file_path: str = \
                 self.config['certificates']['sni_server_certificate_from_server_socket_download_directory'] + \
                 os.sep + self.sni_received_dict['destination_name'] + ".pem"
@@ -307,16 +308,35 @@ class SocketWrapper:
                 # Close the socket.
                 service_client.close_socket()
 
-                # Convert certificate to PEM format.
+                # Convert DER certificate from socket to PEM string format.
                 certificate_from_socket_pem_string: str = \
                     ssl_base.convert_der_x509_bytes_to_pem_string(certificate_from_socket_bytes)
 
-                # Write certificate to file.
+                # Write PEM certificate to file.
                 file_io.write_file(
                     certificate_from_socket_pem_string, file_path=certificate_from_socket_file_path, logger=self.logger)
 
-                certificate_from_socket_x509 = pyopensslw.convert_der_x509_bytes_to_x509_object(
+                # Convert DER certificate from socket to X509 cryptography module object.
+                certificate_from_socket_x509_cryptography_object = cryptographyw.convert_der_to_x509_object(
                     certificate_from_socket_bytes)
+
+                skip_extensions = ['1.3.6.1.5.5.7.3.2', '2.5.29.31', '1.3.6.1.5.5.7.1.1']
+
+                # Copy extensions from old certificate to new certificate, without specified extensions.
+                x509_cryptography_object_without_extensions, _ = \
+                    cryptographyw.copy_extensions_from_old_cert_to_new_cert(
+                        certificate_from_socket_x509_cryptography_object,
+                        skip_extensions=skip_extensions,
+                        logger=self.logger
+                    )
+
+                # Convert X509 cryptography module object to PEM string format, so it can be converted to pyopenssl
+                # object later.
+                pem_certificate_without_extensions = \
+                    cryptographyw.convert_x509_object_to_pem_bytes(x509_cryptography_object_without_extensions)
+
+                # Convert PEM certificate to pyopenssl object, since this is what CertAuthWrapper uses.
+                certificate_from_socket_x509 = pyopensslw.convert_pem_to_x509_object(pem_certificate_without_extensions)
 
         # === EOF Get certificate from the domain. =====================================================================
 
