@@ -330,20 +330,15 @@ class SocketWrapper:
                         logger=self.logger
                     )
 
-                # Convert X509 cryptography module object to PEM string format, so it can be converted to pyopenssl
-                # object later.
-                pem_certificate_without_extensions = \
-                    cryptographyw.convert_x509_object_to_pem_bytes(x509_cryptography_object_without_extensions)
-
-                # Convert PEM certificate to pyopenssl object, since this is what CertAuthWrapper uses.
-                certificate_from_socket_x509 = pyopensslw.convert_pem_to_x509_object(pem_certificate_without_extensions)
+                # # Convert X509 cryptography module object to pyopenssl, since certauth uses pyopenssl.
+                certificate_from_socket_x509 = \
+                    pyopensslw.convert_cryptography_object_to_pyopenssl(x509_cryptography_object_without_extensions)
 
         # === EOF Get certificate from the domain. =====================================================================
 
         # If CertAuthWrapper wasn't initialized yet, it means that CA wasn't created/loaded yet.
         if not self.certauth_wrapper:
             self.initialize_certauth_create_use_ca_certificate()
-
         # try:
         # Create if non-existent / read existing server certificate.
         sni_server_certificate_file_path = self.certauth_wrapper.create_read_server_certificate_ca_signed(

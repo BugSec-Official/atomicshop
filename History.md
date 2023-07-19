@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 1.8.9 - 19.07.2023
+  * Changed the way pyopenssl x509 object converted to cryptography x509 certificate.
 * 1.8.8 - 18.07.2023
   * 'wrappers.socketw.socket_wrapper' - Added an option to remove certificate extensions through OID. Including, features in 'cryptographyw' and 'pyopensslw'.
 * 1.8.7 - 17.07.2023

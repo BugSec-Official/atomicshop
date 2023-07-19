@@ -34,6 +34,26 @@ def convert_x509_object_to_pem(certificate):
     return crypto.dump_certificate(crypto.FILETYPE_PEM, certificate)
 
 
+def convert_cryptography_object_to_pyopenssl(certificate):
+    """Convert certificate from 'cryptography' module to pyOpenSSL x509 object.
+
+    :param certificate: certificate in x509 object of 'cryptography' module.
+    :return: certificate in x509 object of pyOpenSSL module.
+    """
+
+    return crypto.X509.from_cryptography(certificate)
+
+
+def convert_pyopenssl_object_to_cryptography(certificate):
+    """Convert certificate from pyOpenSSL x509 object to 'cryptography' module x509 object.
+
+    :param certificate: certificate in x509 object of pyOpenSSL module.
+    :return: certificate in x509 object of 'cryptography' module.
+    """
+
+    return crypto.X509.to_cryptography(certificate)
+
+
 def generate_private_key(crypto_type=crypto.TYPE_RSA, bits: int = 2048):
     """Generate private key.
 
