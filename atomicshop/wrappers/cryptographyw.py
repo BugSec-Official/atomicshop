@@ -4,6 +4,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives import hashes
+from OpenSSL import crypto
 
 
 """
@@ -110,12 +111,12 @@ def copy_extensions_from_old_cert_to_new_cert(
             # If 'use_extension_names' is false, we'll use the 'dotted_string' of the extension.
             if not use_extension_names and old_extension.oid.dotted_string in skip_extensions:
                 # If it is, we'll skip it.
-                message = f'Skipping extension {old_extension.oid.dotted_string}.'
+                message = f'Skipping certificate extension OID: {old_extension.oid.dotted_string}.'
                 print_api(message, **kwargs)
                 continue
             # If 'use_extension_names' is true, we'll use the '_name' of the extension.
             elif use_extension_names and old_extension.oid._name in skip_extensions:
-                message = f'Skipping extension {old_extension.oid._name}.'
+                message = f'Skipping certificate extension: {old_extension.oid._name}.'
                 print_api(message, **kwargs)
                 continue
 
