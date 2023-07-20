@@ -4,7 +4,6 @@ from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives import hashes
-from OpenSSL import crypto
 
 
 """
@@ -62,7 +61,7 @@ def generate_private_key(public_exponent: int = 65537, bits: int = 2048):
 
 
 def copy_extensions_from_old_cert_to_new_cert(
-        certificate, skip_extensions: list = None, use_extension_names: bool = False, **kwargs):
+        certificate, skip_extensions: list = None, _use_extension_names: bool = False, print_kwargs: dict = None):
     """Copy extensions from one certificate to another.
 
     Python's cryptography module doesn't provide a method to remove extensions from certificate.
@@ -77,12 +76,13 @@ def copy_extensions_from_old_cert_to_new_cert(
 
     :param certificate: x509 certificate object of cryptography module to copy extensions from.
     :param skip_extensions: list of strings of OIDs in "dotted_string" format of extensions to skip.
-    :param use_extension_names: boolean, if True, "skip_extensions" will be treated as extension names, not OIDs.
+    :param _use_extension_names: boolean, if True, "skip_extensions" will be treated as extension names, not OIDs.
         Since the easiest place to find the extension name was in "extension.oid._name" and "_name" is a private field,
         this option is False by default. The official documentation doesn't support extension names, since there is
         no standard for them. They may be different from application to application. So we're using the ones that are
         provided with cryptography module. This is highly advised not to use this option, unless you know what you're
         doing.
+    :param print_kwargs: keyword arguments dictionary to pass to 'print_api' function.
     :return: new x509 certificate object of cryptography module with copied extensions and old public key.
     """
 
@@ -108,16 +108,16 @@ def copy_extensions_from_old_cert_to_new_cert(
         if skip_extensions:
             # We'll check if the current extension is in the list of extensions to skip.
 
-            # If 'use_extension_names' is false, we'll use the 'dotted_string' of the extension.
-            if not use_extension_names and old_extension.oid.dotted_string in skip_extensions:
+            # If '_use_extension_names' is false, we'll use the 'dotted_string' of the extension.
+            if not _use_extension_names and old_extension.oid.dotted_string in skip_extensions:
                 # If it is, we'll skip it.
                 message = f'Skipping certificate extension OID: {old_extension.oid.dotted_string}.'
-                print_api(message, **kwargs)
+                print_api(message, **print_kwargs)
                 continue
             # If 'use_extension_names' is true, we'll use the '_name' of the extension.
-            elif use_extension_names and old_extension.oid._name in skip_extensions:
+            elif _use_extension_names and old_extension.oid._name in skip_extensions:
                 message = f'Skipping certificate extension: {old_extension.oid._name}.'
-                print_api(message, **kwargs)
+                print_api(message, **print_kwargs)
                 continue
 
             # We'll try to iterate through the sub-keys of the current extension.
@@ -127,15 +127,15 @@ def copy_extensions_from_old_cert_to_new_cert(
                 # we'll skip it. Return only the list of not skipped usages.
                 new_usages: list = list()
                 for usage in old_extension.value:
-                    # If 'use_extension_names' is false, we'll use the 'dotted_string' of the extension.
-                    if not use_extension_names and usage.dotted_string in skip_extensions:
+                    # If '_use_extension_names' is false, we'll use the 'dotted_string' of the extension.
+                    if not _use_extension_names and usage.dotted_string in skip_extensions:
                         message = f'Skipping certificate extension OID: {usage.dotted_string}.'
-                        print_api(message, **kwargs)
+                        print_api(message, **print_kwargs)
                         continue
-                    # If 'use_extension_names' is true, we'll use the '_name' of the extension.
-                    elif use_extension_names and usage._name in skip_extensions:
+                    # If '_use_extension_names' is true, we'll use the '_name' of the extension.
+                    elif _use_extension_names and usage._name in skip_extensions:
                         message = f'Skipping certificate extension: {usage._name}.'
-                        print_api(message, **kwargs)
+                        print_api(message, **print_kwargs)
                         continue
 
                     new_usages.append(usage)
@@ -186,86 +186,3 @@ def _get_extensions_properties(certificate):
             sub_keys = vars(ext._value)
 
         print(f'{ext.oid._name}: {sub_keys}')
-
-
-"""
-def _testing_references():
-    x509.NameOID.COMMON_NAME
-
-    from cryptography.x509.oid import ObjectIdentifier
-    ObjectIdentifier('2.5.4.3')
-
-    import ssl
-    ssl._txt2obj(x509.NameOID.COMMON_NAME.dotted_string)
-    # NID, short name, long name, OID
-
-    extended_key_usage = x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.SERVER_AUTH])
-
-
-def convert_certificate_to_dict(certificate):
-    def to_dict(obj):
-        def get_keys(obj):
-            keys = list()
-            for key in dir(obj):
-                if not key.startswith('__'):
-                    keys.append(key)
-            return keys
-
-        # if isinstance(obj, dict):
-
-        if not (hasattr(obj, "__dict__") or isinstance(obj, dict) or isinstance(obj, list)):
-            test_dict = obj
-        elif isinstance(obj, list):
-            test_dict = []
-            for item in obj:
-                test_dict.append(to_dict(item))
-        # elif \
-        #         isinstance(obj, x509.Extension) or \
-        #         isinstance(obj, x509.Extensions) or \
-        #         isinstance(obj, x509.BasicConstraints):
-        #     test_dict = vars(obj)
-        #     for key, value in test_dict.items():
-        #         test_dict[key] = to_dict(value)
-        # elif isinstance(obj, x509.ObjectIdentifier):
-        #     keys = dir(obj)
-        #     test_dict = dict()
-        #
-        #     for key in keys:
-        #         if not key.startswith('__'):
-        #             test_dict[key] = getattr(obj, key)
-        else:
-            try:
-                test_dict = vars(obj)
-                for key, value in test_dict.items():
-                    test_dict[key] = to_dict(value)
-            except TypeError:
-                # if not (isinstance(obj, str) or isinstance(obj, int) or isinstance(obj, bool)):
-                keys = get_keys(obj)
-
-                test_dict = dict()
-                for key in keys:
-                    value = getattr(obj, key)
-                    if hasattr(value,"__dict__") or isinstance(value, dict) or isinstance(value, list):
-                        test_dict[key] = to_dict(value)
-                    else:
-                        test_dict[key] = value
-                # else:
-                #     test_dict = obj
-
-
-        return test_dict
-    # test = dict()
-
-    # test = vars(certificate.extensions)
-    # test = certificate.extensions
-    test = to_dict(certificate)
-    print(test)
-
-
-    # for ext in certificate.extensions:
-    #     try:
-    #         for single_value in ext.value:
-    #             print(single_value)
-    #     except TypeError:
-    #         test.update(vars(ext))
-"""

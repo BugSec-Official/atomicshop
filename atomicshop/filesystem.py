@@ -1,4 +1,3 @@
-# v1.0.5 - 21.03.2023 13:20
 import os
 import pathlib
 from pathlib import Path, PurePath, PureWindowsPath
@@ -13,6 +12,8 @@ from .basics import strings
 def get_working_directory() -> str:
     """
     The function returns working directory of called script file.
+    If the function is placed in other file and is called from the main script, it will return
+    the main script directory and not the file that the function is in.
 
     :return: string.
     """

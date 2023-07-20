@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 1.9.1 - 20.07.2023
+  * Overall fixes and improvements.
+  * 'mitm.engines.create_module_template' - Improvements in engines_directory code.
 * 1.9.0 - 20.07.2023
   * New features in 'mitm' and 'socketw' modules. Now extensions of downloaded certificate can be removed through config.ini.
 * 1.8.9 - 19.07.2023
