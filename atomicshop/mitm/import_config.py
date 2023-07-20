@@ -126,3 +126,13 @@ class ImportConfig:
                 # Check private key file existence.
                 if not check_file_existence(file_path=self.config['certificates']['custom_private_key_path']):
                     raise FileNotFoundError
+
+        skip_extensions: list = list()
+        if self.config['skip_extensions']['tls_web_client_authentication']:
+            skip_extensions.append('1.3.6.1.5.5.7.3.2')
+        if self.config['skip_extensions']['crl_distribution_points']:
+            skip_extensions.append('2.5.29.31')
+        if self.config['skip_extensions']['authority_information_access']:
+            skip_extensions.append('1.3.6.1.5.5.7.1.1')
+
+        self.config['skip_extensions'] = skip_extensions

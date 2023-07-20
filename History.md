@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 1.9.0 - 20.07.2023
+  * New features in 'mitm' and 'socketw' modules. Now extensions of downloaded certificate can be removed through config.ini.
 * 1.8.9 - 19.07.2023
   * Changed the way pyopenssl x509 object converted to cryptography x509 certificate.
 * 1.8.8 - 18.07.2023
@@ -44,7 +46,6 @@
   * 'wrappers.configparserw' - added unicode key argument to all functions.
   * 'wrappers.playwrightw.base' - added 'get_url' and 'click_force_locator' functions.
   * 'wrappers.playwrightw' - added 'mouse.py' module.
-  * 
 * 1.7.4 - 12.04.2023
   * 'basics.strings' - added 'is_alphanumeric_only' function.
   * 'speech_recognition' - more additions to conversion dictionaries.
