@@ -309,7 +309,7 @@ class SocketWrapper:
                     cryptographyw.copy_extensions_from_old_cert_to_new_cert(
                         certificate_from_socket_x509_cryptography_object,
                         skip_extensions=self.config['skip_extensions'],
-                        logger=self.logger
+                        print_kwargs={'logger': self.logger}
                     )
 
             # If certificate was downloaded successfully, then convert it to pyopenssl object.

@@ -3,11 +3,17 @@ from ... import filesystem
 
 
 class CreateModuleTemplate:
-    def __init__(self, engine_name: str, domains: list, engines_directory_path: str):
+    def __init__(self, engine_name: str, domains: list, engines_directory_path: str = None):
         # === Get input variables. ===
         self.engine_name: str = engine_name
         self.domains: list = domains
-        self.engines_directory_path: str = engines_directory_path
+
+        if engines_directory_path:
+            self.engines_directory_path: str = engines_directory_path
+        else:
+            # === Get engines directory path. ===
+            # Get the caller file directory, and add the 'engines' directory.
+            self.engines_directory_path: str = filesystem.get_working_directory() + os.sep + 'engines'
 
         # === Working directory of current script. ===
         # 'filesystem.get_working_directory()' won't work here because the function is called from another script.
@@ -45,6 +51,9 @@ class CreateModuleTemplate:
     def create_template(self):
         print(f"Engine Name: {self.engine_name}")
         print(f"Engine Class Name: {self.engine_class_name}")
+
+        # Create the 'engines' directory if it doesn't exist.
+        filesystem.create_folder(self.engines_directory_path)
 
         # Create new engines folder.
         filesystem.create_folder(self.new_engine_directory)

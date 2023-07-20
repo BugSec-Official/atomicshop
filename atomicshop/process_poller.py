@@ -90,6 +90,7 @@ class ProcessPollerPool:
             # If poller_method is 'psutil'.
             if self.poller_method == 'psutil':
                 # Get processes as dict.
+                # noinspection PyArgumentList
                 current_processes = self.process_polling_instance.get_processes_as_dict(
                     attrs=['pid', 'name', 'cmdline'], cmdline_to_string=True)
             # If poller_method is 'pywin32'.
