@@ -4,8 +4,12 @@ import time
 
 from .receiver import Receiver
 from .sender import Sender
-from ...print_api import print_api
+from . import ssl_base
+from .. import cryptographyw
 from ..loggingw import loggingw
+from ...print_api import print_api
+from ...file_io import file_io
+from ... import filesystem
 
 import dns.resolver
 
@@ -14,7 +18,7 @@ class SocketClient:
     logger = loggingw.get_logger_with_level("network." + __name__.rpartition('.')[2])
 
     # noinspection GrazieInspection
-    def __init__(self, service_name: str, service_port: int, service_ip=None, dns_servers_list=None):
+    def __init__(self, service_name: str, service_port: int, connection_ip=None, dns_servers_list=None):
         """
         If you have a certificate for domain, but not for the IPv4 address, the SSL Socket context can be created for
         domain and the connection itself (socket.connect()) made for the IP. This way YOU decide to which IPv4 your
@@ -23,26 +27,32 @@ class SocketClient:
         :param service_name: Should be domain, but can be IPv4 address. In this case SSL Socket will be created to
             IPv4 address.
         :param service_port: Destination server port. Example: 443.
-        :param service_ip: (Optional) If specified, the SSL Socket will be created to 'service_name' and '.connect'
-            will be to specified IPv4 address. If not specified, will be populated from 'socket' resolving and
-            available sources.
+        :param connection_ip: (Optional) If specified, the SSL Socket will be created to 'service_name' and
+            'socket.connect' will be to specified IPv4 address. If not specified, will be populated from 'socket'
+            resolving and available sources. If 'dns_servers_list' specified, will be populated from resolving of the
+            'service_name' by these DNS servers, with the first IPv4 result.
         :param dns_servers_list: (Optional) List object with dns IPv4 addresses that 'service_name' will be resolved
-            with, using 'dnspython' module. 'service_ip' will be populated with first resolved IP.
+            with, using 'dnspython' module. 'connection_ip' will be populated with first resolved IP.
+
+        If both 'connection_ip' and 'dns_servers_list' specified, ValueException with raise.
         """
         self.service_name: str = service_name
         self.service_port: int = service_port
-        self.service_ip = service_ip
+        self.connection_ip = connection_ip
         self.dns_servers_list = dns_servers_list
 
         self.ssl_socket = None
 
-        # If 'service_ip' was specified, but no 'dns_servers_list', then this IP will be used for 'socket.connect()'.
-        # In any way if 'dns_servers_list' the 'service_ip' will be populated from there and in this case
-        # it doesn't matter if you specify the 'service_ip' manually or not.
-        if self.service_ip and not self.dns_servers_list:
+        # If 'connection_ip' was specified, but no 'dns_servers_list', then this IP will be used for 'socket.connect()'.
+        # In any way if 'dns_servers_list' the 'connection_ip' will be populated from there and in this case
+        # it doesn't matter if you specify the 'connection_ip' manually or not.
+        if self.connection_ip and not self.dns_servers_list:
             self.logger.info(
                 f"Manual IPv4 address specified. SSL Socket will be created to domain [{self.service_name}] and "
-                f"connected to IPv4 [{self.service_ip}]")
+                f"connected to IPv4 [{self.connection_ip}]")
+        # If both 'connection_ip' and 'dns_servers_list' specified, raise an exception.
+        elif self.connection_ip and self.dns_servers_list:
+            raise ValueError("Both 'connection_ip' and 'dns_servers_list' were specified.")
 
     # Function to create SSL socket to destination service
     def create_service_ssl_socket(self):
@@ -128,8 +138,8 @@ class SocketClient:
                 # Get the DNS
                 function_server_address = resolver.resolve(self.service_name, 'A')
                 # Get only the first entry of the list of IPs [0]
-                self.service_ip = function_server_address[0].to_text()
-                self.logger.info(f"Resolved to [{self.service_ip}]")
+                self.connection_ip = function_server_address[0].to_text()
+                self.logger.info(f"Resolved to [{self.connection_ip}]")
             except dns.resolver.NXDOMAIN:
                 self.logger.error(f"Domain {self.service_name} doesn't exist - Couldn't resolve with "
                                   f"{self.dns_servers_list}.")
@@ -137,10 +147,10 @@ class SocketClient:
                 return None
 
         # If DNS was resolved correctly or DNS servers weren't specified - we can try connecting.
-        # If 'service_ip' was manually specified or resolved with 'dnspython' - the connection
+        # If 'connection_ip' was manually specified or resolved with 'dnspython' - the connection
         # will be made to the IP.
-        if self.service_ip:
-            destination = self.service_ip
+        if self.connection_ip:
+            destination = self.connection_ip
         # If not, then the domain name will be used.
         else:
             destination = self.service_name
@@ -222,8 +232,8 @@ class SocketClient:
             # that was at hand (local DNS cache).
             # Since at this point the connection to the server's domain address was successful - the IP is
             # connectable.
-            self.service_ip = self.ssl_socket.getpeername()[0]
-            self.logger.info(f"[{self.service_name}] resolves to ip: [{self.service_ip}]. Pulled IP from the socket.")
+            self.connection_ip = self.ssl_socket.getpeername()[0]
+            self.logger.info(f"[{self.service_name}] resolves to ip: [{self.connection_ip}]. Pulled IP from the socket.")
 
             # Send the data received from the client to the service over socket
             function_data_sent = Sender(self.ssl_socket, request_bytes).send()
@@ -245,7 +255,7 @@ class SocketClient:
                     # We'll close the socket and nullify the object
                     self.close_socket()
 
-        return function_service_data, error_string, self.service_ip, self.ssl_socket
+        return function_service_data, error_string, self.connection_ip, self.ssl_socket
 
     def send_receive_message_list_with_interval(
             self, requests_bytes_list: list, intervals_list: list, intervals_defaults: int, cycles: int = 1):
@@ -318,7 +328,7 @@ class SocketClient:
                 # be passed.
                 # If there was connection error or socket close, then "ssl_socket" of the "service_client"
                 # will be empty.
-                response_raw_bytes, error_string, self.service_ip, service_ssl_socket = \
+                response_raw_bytes, error_string, self.connection_ip, service_ssl_socket = \
                     self.send_receive_to_service(request_raw_bytes)
 
                 # Adding the response to responses list. Same for error.
@@ -337,4 +347,58 @@ class SocketClient:
         if self.ssl_socket:
             self.close_socket()
 
-        return responses_list, errors_list, self.service_ip
+        return responses_list, errors_list, self.connection_ip
+
+    def get_certificate_from_server(
+            self,
+            save_as_file: bool = False,
+            cert_file_path: str = None,
+            cert_output_type: str = 'der',
+            **kwargs
+    ):
+        """
+        This function will get the certificate from the server and return it.
+
+        :param save_as_file: If True, the certificate will be saved to file.
+        :param cert_file_path: The path to the file where the certificate will be saved.
+        :param cert_output_type: The type of the certificate output.
+            'der' - DER bytes format.
+            'cryptography' - cryptography.x509.Certificate object.
+        """
+
+        # If "save_as_file" is True, then "cert_file_path" must be provided, if not, raise an exception.
+        if save_as_file and not cert_file_path:
+            raise ValueError("If 'save_as_file' is True, then 'cert_file_path' must be provided.")
+        # If 'save_as_file' is True and 'cert_file_path' is provided, then check if the file exists.
+        # Since there is no point fetching the certificate from the socket if it already exists.
+        elif save_as_file and cert_file_path:
+            # If certificate from socket exists, then we don't need to get it from the socket and write to file.
+            # and we will return None, since no certificate was fetched.
+            if filesystem.check_file_existence(cert_file_path):
+                return None
+            else:
+                print_api("Certificate from socket doesn't exist, fetching.", logger=self.logger)
+
+        # Connect and get the connected socket.
+        server_socket_for_certificate = self.service_connection()
+        # Get the DER byte certificate from the socket.
+        certificate_from_socket_der_bytes = ssl_base.get_certificate_from_socket(server_socket_for_certificate)
+        print_api('Fetched certificate from socket.', logger=self.logger, **kwargs)
+        # Close the socket.
+        self.close_socket()
+
+        # If "save_as_file" was set to True, and "cert_file_path" was provided, then save the certificate to file.
+        if save_as_file and cert_file_path:
+            # Convert DER certificate from socket to PEM string format.
+            certificate_from_socket_pem_string: str = \
+                ssl_base.convert_der_x509_bytes_to_pem_string(certificate_from_socket_der_bytes)
+
+            # Write PEM certificate to file.
+            file_io.write_file(
+                certificate_from_socket_pem_string, file_path=cert_file_path, logger=self.logger)
+
+        if cert_output_type == 'der':
+            return certificate_from_socket_der_bytes
+        elif cert_output_type == 'cryptography':
+            # Convert DER certificate from socket to X509 cryptography module object.
+            return cryptographyw.convert_der_to_x509_object(certificate_from_socket_der_bytes)
