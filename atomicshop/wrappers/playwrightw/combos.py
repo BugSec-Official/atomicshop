@@ -1,9 +1,15 @@
-from . import locators, base, waits, mouse
+"""
+Combos file contains combined functionality functions of locators and an action to this locator.
+For example: get locator by tag and get text of this locator.
+"""
 
 
-def navigate_to_url___wait_maximum_idle(page, url: str, **kwargs) -> None:
+from . import locators, base, waits, mouse, javascript
+
+
+def navigate_to_url___wait_maximum_idle(page, url: str, print_kwargs: dict = None) -> None:
     base.navigate_to_url(page, url)
-    waits.maximum_idle(page, **kwargs)
+    waits.maximum_idle(page, print_kwargs=print_kwargs)
 
 
 def page_refresh___wait_maximum_idle(page, **kwargs) -> None:
@@ -38,6 +44,11 @@ def get_locator_by_text___is_enabled___is_visible(page_or_locator, text: str) ->
 def get_locator_by_text___click(page_or_locator, text: str) -> None:
     current_locator = locators.get_by_text(page_or_locator, text)
     base.click_locator(current_locator)
+
+
+def get_locator_by_text___get_text(page_or_locator, text: str) -> str:
+    current_locator = locators.get_by_text(page_or_locator, text)
+    return base.get_locator_text(current_locator)
 
 
 def get_locator_by_tag___is_visible(
@@ -147,3 +158,20 @@ def find_position_of_locator___click_mouse(page, locator):
     y_pos: int = element_position_size["y"] + element_position_size["height"] / 2
 
     mouse.click(page, x_pos, y_pos)
+
+
+def scroll_down(page, offset: int, scrolling_method: str = 'mouse') -> None:
+    """
+    Function scrolls down the page.
+
+    :param page: page to scroll down.
+    :param offset: integer offset in pixels to scroll down.
+    :param scrolling_method: method to scroll down. Can be 'mouse' or 'js'.
+    :return: None
+    """
+
+    if scrolling_method == 'mouse':
+        mouse.scroll_down(page, offset)
+    elif scrolling_method == 'js':
+        javascript.scroll_down(page, offset)
+

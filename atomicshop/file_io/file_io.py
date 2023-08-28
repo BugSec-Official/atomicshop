@@ -1,4 +1,3 @@
-# v1.1.3 - 28.03.2023 17:20
 import functools
 
 from ..print_api import print_api

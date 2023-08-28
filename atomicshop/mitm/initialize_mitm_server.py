@@ -46,10 +46,10 @@ def initialize_mitm_server(config_static):
     config = config_importer.config
 
     # Create folders.
-    filesystem.create_folder(config['log']['logs_path'])
-    filesystem.create_folder(config['recorder']['recordings_path'])
+    filesystem.create_directory(config['log']['logs_path'])
+    filesystem.create_directory(config['recorder']['recordings_path'])
     if config['certificates']['sni_get_server_certificate_from_server_socket']:
-        filesystem.create_folder(config['certificates']['sni_server_certificate_from_server_socket_download_directory'])
+        filesystem.create_directory(config['certificates']['sni_server_certificate_from_server_socket_download_directory'])
 
     # Create a logger that will log messages to file, Initiate System logger.
     system_logger = loggingw.get_logger_with_stream_handler_and_timedfilehandler(

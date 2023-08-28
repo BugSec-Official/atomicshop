@@ -6,7 +6,7 @@ from ..print_api import print_api
 from ..tempfiles import TempFile
 from ..github_wrapper import GitHubWrapper
 from ..process import execute_with_live_output
-from ..filesystem import create_folder
+from ..filesystem import create_directory
 
 
 class FFmpegWrapper:
@@ -85,7 +85,7 @@ class FFmpegWrapper:
                     continue
 
                 print_api('Trying to download...', raise_exception=False)
-                create_folder(self.ffmpeg_release_directory_path)
+                create_directory(self.ffmpeg_release_directory_path)
                 self.download_ffmpeg_and_extract()
                 continue
 

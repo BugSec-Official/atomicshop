@@ -5,6 +5,9 @@ from .print_api import print_api
 from .archiver import extract_archive_with_zipfile
 from .filesystem import remove_file
 from .urls import url_parser
+from .file_io import file_io
+from .wrappers.playwrightw import scenarios
+from .basics import threads
 
 
 # https://www.useragents.me/
@@ -40,30 +43,86 @@ def get_filename_from_url(file_url: str):
     return file_name
 
 
-def get_page_bytes(url: str, user_agent: str = str(), default_user_agent: bool = False) -> bytes:
+def get_page_bytes(
+        url: str,
+        user_agent: str = None,
+        chrome_user_agent: bool = False,
+        path: str = None) -> bytes:
     """
     Function returns the page content from the given URL.
     Returns only the byte response.
 
     :param url: string, full URL.
     :param user_agent: string, user agent to use when downloading the page.
-    :param default_user_agent: boolean, if True, the default user agent will be used.
-    :return: string, page content.
+    :param chrome_user_agent: boolean, if True, the Chrome user agent will be used: 'Chrome_111.0.0_Windows_10-11_x64'.
+    :param path: string, path to save the downloaded file to. If None, the file will not be saved to disk.
+    :return: bytes, page content.
     """
 
-    if not default_user_agent and not user_agent:
-        raise ValueError('ERROR: No [user_agent] specified and [default_user_agent] usage is [False].')
+    if chrome_user_agent and user_agent:
+        raise ValueError('ERROR: [user_agent] specified and [chrome_user_agent] usage is [True]. Choose one.')
 
-    if default_user_agent:
+    if chrome_user_agent:
         user_agent = USER_AGENTS['Chrome_111.0.0_Windows_10-11_x64']
 
-    # Create a 'Request' object with the URL and user agent.
-    request = urllib.request.Request(url, headers={'User-Agent': user_agent})
+    if user_agent:
+        # Create a 'Request' object with the URL and user agent.
+        request = urllib.request.Request(url, headers={'User-Agent': user_agent})
+    else:
+        # Create a 'Request' object with the URL only.
+        request = urllib.request.Request(url)
 
     # Open the URL and read the page content.
     response = urllib.request.urlopen(request).read()
 
+    # Save the file to disk, if path was specified.
+    if path:
+        file_io.write_file(content=response, file_path=path, file_mode='wb')
+
     return response
+
+
+def get_page_content(
+        url: str, get_method: str = 'urllib', path: str = None,
+        playwright_pdf_format: str = 'A4',
+        playwright_html_convert_to_bytes: bool = True,
+        print_kwargs: dict = None) -> any:
+    """
+    Function returns the page content from the given URL.
+
+    :param url: string, full URL.
+    :param get_method: string, method to use to get the page content.
+        'urllib': uses requests library. For static HTML pages without JavaScript. Returns HTML bytes.
+        'playwright_*': uses playwright library, headless. For dynamic HTML pages with JavaScript.
+            'playwright_html': For dynamic HTML pages with JavaScript. Returns HTML.
+            'playwright_pdf': For dynamic HTML pages with JavaScript. Returns PDF.
+            'playwright_png': For dynamic HTML pages with JavaScript. Returns PNG.
+            'playwright_jpeg': For dynamic HTML pages with JavaScript. Returns JPEG.
+    :param path: string, path to save the downloaded file to. If None, the file will not be saved to disk.
+    :param playwright_pdf_format: string, pdf format, applicable only if 'get_method=playwright_pdf'. Default is 'A4'.
+    :param playwright_html_convert_to_bytes: boolean, applicable only if 'get_method=playwright_html'. Default is True.
+    :param print_kwargs: dict, that contains all the arguments for 'print_api' function.
+
+    :return: any, type depends on the method, return page content.
+    """
+
+    result = None
+    if get_method == 'urllib':
+        # Get HTML from url, return bytes.
+        result = get_page_bytes(url=url, chrome_user_agent=True, path=path)
+    elif get_method == 'playwright_html':
+        result = scenarios.get_page_content_in_thread(
+            url=url, page_format='html', path=path, html_convert_to_bytes=playwright_html_convert_to_bytes,
+            print_kwargs=print_kwargs)
+    elif get_method == 'playwright_pdf':
+        result = scenarios.get_page_content_in_thread(
+            url=url, page_format='pdf', path=path, pdf_format=playwright_pdf_format, print_kwargs=print_kwargs)
+    elif get_method == 'playwright_png':
+        result = scenarios.get_page_content_in_thread(url=url, page_format='png', path=path, print_kwargs=print_kwargs)
+    elif get_method == 'playwright_jpeg':
+        result = scenarios.get_page_content_in_thread(url=url, page_format='jpeg', path=path, print_kwargs=print_kwargs)
+
+    return result
 
 
 def download(file_url: str, target_directory: str, file_name: str = str(), **kwargs) -> str:

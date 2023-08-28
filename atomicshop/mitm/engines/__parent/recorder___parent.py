@@ -29,7 +29,7 @@ class RecorderParent:
         self.build_record_full_file_path()
 
         # Create folder.
-        filesystem.create_folder(self.engine_record_path)
+        filesystem.create_directory(self.engine_record_path)
 
     # "self.__module__" is fully qualified module name: classes.engines.ENGINE-NAME.MODULE-NAME
     def get_engine_module(self):

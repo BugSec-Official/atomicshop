@@ -1,3 +1,7 @@
+from . import combos, javascript
+from ...file_io import file_io
+
+
 def navigate_to_url(page, url: str):
     page.goto(url)
 
@@ -21,6 +25,148 @@ def get_url(page):
     """
 
     return page.url
+
+
+def set_page_print_emulation(page) -> None:
+    """
+    Emulates 'print' media type screen.
+
+    :param page:
+    :return:
+    """
+
+    page.emulate_media(media="print")
+
+
+def get_page_screenshot(
+        page, img_type: str = 'png', path: str = None, full_page: bool = False, print_emulation: bool = False) -> bytes:
+    """
+    Take a screenshot of the page.
+    The difference between taking screenshot of a page and locator, that locator doesn't have 'full_page' argument.
+    If you don't provide the 'path' argument, the screenshot will be returned as a bytes object anyway.
+
+    :param page:
+    :param img_type: Specify screenshot type, can be either "png" or "jpeg". Defaults to 'png'.
+    :param path: The file path to save the image to.
+    :param full_page: When true, takes a screenshot of the full scrollable page. Defaults to 'False'.
+        This parameter doesn't always work if 'True', it saves screenshot only of the view port.
+        So you can try using different methods, like print to PDF.
+    :param print_emulation: Emulates 'print' media type screen. Defaults to 'False'.
+
+    :return: returns the bytes of the buffer with the captured screenshot.
+    """
+
+    if print_emulation:
+        set_page_print_emulation(page)
+
+    return page.screenshot(full_page=full_page, type=img_type, path=path)
+
+
+def _get_full_page_screenshot_with_pillow(
+        page, path: str = None, scrolling_method: str = 'mouse', manual_scrolling: int = 0) -> any:
+    """
+    This function is for reference purposes only and can be useful in the future for alternative methods for
+    taking full page screenshots, since 'full_page' attribute of 'screenshot' might not always work.
+
+    Take a screenshot of the full page.
+    Aggregate screenshots of the page by scrolling the page and taking screenshots of each viewport, then concatenate
+    them vertically using Pillow library.
+
+    :param page:
+    :param path: The file path to save the image to.
+
+    :return: returns the buffer with the captured screenshot in Pillow format.
+    """
+
+    # Get the total height of the page
+    total_height = javascript.get_page_total_height(page)
+    current_height = javascript.get_page_viewport_height(page)
+
+    # Set the viewport height
+    viewport_height = 900
+    page.set_viewport_size({"width": 1440, "height": viewport_height})
+
+    # Capture the screenshots
+    images = []
+    if manual_scrolling == 0:
+        for offset in range(0, total_height, viewport_height):
+            combos.scroll_down(page, offset=offset, scrolling_method=scrolling_method)
+
+            images.append(get_page_screenshot(page))
+    else:
+        for scroll in range(0, manual_scrolling):
+            combos.scroll_down(page, offset=viewport_height, scrolling_method=scrolling_method)
+
+            images.append(get_page_screenshot(page))
+
+    # Concatenate images vertically
+    from PIL import Image
+    import io
+
+    # final_image = Image.new("RGB", (1440, total_height))
+    final_image = Image.new("RGB", (1440, viewport_height * len(images)))
+    y_offset = 0
+    for image_data in images:
+        image = Image.open(io.BytesIO(image_data))
+        final_image.paste(image, (0, y_offset))
+        y_offset += viewport_height
+
+    # Save the final image
+    final_image.save(path)
+
+    return final_image
+
+
+def get_locator_screenshot(locator, img_type: str = 'png', path: str = None) -> bytes:
+    """
+    Take a screenshot of the locator.
+    The difference between taking screenshot of a page and locator, that locator doesn't have 'full_page' argument.
+    If you don't provide the 'path' argument, the screenshot will be returned as a bytes object anyway.
+
+    :param locator:
+    :param img_type: Specify screenshot type, can be either "png" or "jpeg". Defaults to 'png'.
+    :param path: The file path to save the image to.
+
+    :return: returns the bytes of the buffer with the captured screenshot.
+    """
+
+    return locator.screenshot(type=img_type, path=path)
+
+
+def get_page_pdf(page, path: str = None, print_background: bool = True, print_format: str = 'A4') -> bytes:
+    """
+    Print page as PDF.
+    If you don't provide the 'path' argument, the PDF will be returned as a bytes object anyway.
+
+    :param page:
+    :param path: The file path to save the PDF to.
+    :param print_background: Print background graphics. Defaults to 'True'.
+    :param print_format: Paper format. If set, takes priority over width or height options. Defaults to 'A4'.
+    """
+
+    return page.pdf(path=path, print_background=print_background, format=print_format)
+
+
+def get_page_html(page, path: str = None, convert_to_bytes: bool = False, print_kwargs: dict = None) -> any:
+    """
+    Get the full HTML contents of the page, including the doctype.
+
+    :param page:
+    :param path: The file path to save the HTML to.
+    :param convert_to_bytes: If 'True', converts the HTML string to bytes object.
+    :param print_kwargs: dict, that contains all the arguments for 'print_api' function.
+
+    :return: returns the HTML content.
+    """
+
+    result = page.content()
+    if path:
+        file_io.write_file(content=result, file_path=path, **print_kwargs)
+
+    if convert_to_bytes:
+        result = result.encode('utf-8')
+
+    return result
 
 
 def get_first_locator(locator):

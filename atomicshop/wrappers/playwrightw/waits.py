@@ -102,7 +102,7 @@ def load(page, timeout=30000) -> None:
     page.wait_for_load_state("load", timeout=timeout)
 
 
-def network_fully_idle(page, timeout: int = 2000, **kwargs) -> None:
+def network_fully_idle(page, timeout: int = 2000, print_kwargs: dict = None) -> None:
     """
     Wait for network to be idle - stop loading files.
     Sometimes, this function alone is not enough, since the loading of the page can stop in the middle
@@ -113,6 +113,8 @@ def network_fully_idle(page, timeout: int = 2000, **kwargs) -> None:
     :param timeout: int, the default timeout for 'page.expect_response' is 30000ms (30 seconds), but since we trigger
         it in loop - each event will have timeout of 30000ms, so we set it to 2000ms (2 seconds), which was optimal
         in the testing.
+    :param print_kwargs: dict, keyword arguments for 'print_api' function.
+
     :return: None.
     """
 
@@ -122,12 +124,12 @@ def network_fully_idle(page, timeout: int = 2000, **kwargs) -> None:
             # 'page.expect_response' will wait for the response to be received, and then return the response object.
             # When timeout is reached, it will raise a TimeoutError, which will break the while loop.
             with page.expect_response("**/*", timeout=timeout) as response_info:
-                print_api(response_info.value, **kwargs)
+                print_api(response_info.value, **print_kwargs)
         except PlaywrightTimeoutError:
             break
 
 
-def maximum_idle(page, **kwargs) -> None:
+def maximum_idle(page, print_kwargs: dict = None) -> None:
     """
     Wait for maximum idle.
     1. 'wait_for_load' - 'page.wait_for_load_state("load")', makes sure that 'some' of the scripts executed and
@@ -144,16 +146,18 @@ def maximum_idle(page, **kwargs) -> None:
     'page.wait_for_load_state("load")' as well, before this function to make sure the page is fully loaded.
 
     :param page:
+    :param print_kwargs: dict, of kwargs to be passed to 'print_api' function.
+
     :return: None
     """
 
-    print_api('Before wait_for_load', **kwargs)
+    print_api('Before wait_for_load', **print_kwargs)
     load(page)
-    print_api('After wait_for_load, Before wait_for_domcontentloaded', **kwargs)
+    print_api('After wait_for_load, Before wait_for_domcontentloaded', **print_kwargs)
     domcontentloaded(page)
-    print_api('After wait_for_domcontentloaded', **kwargs)
+    print_api('After wait_for_domcontentloaded', **print_kwargs)
     # For some reason 'networkidle' can result in timeout errors, so currently this is disabled.
     # networkidle(page)
-    print_api('Before wait_for_network_fully_idle', **kwargs)
-    network_fully_idle(page, **kwargs)
-    print_api('After wait_for_network_fully_idle', **kwargs)
+    print_api('Before wait_for_network_fully_idle', **print_kwargs)
+    network_fully_idle(page, print_kwargs=print_kwargs)
+    print_api('After wait_for_network_fully_idle', **print_kwargs)
