@@ -30,6 +30,20 @@ def get_file_directory(file_path: str) -> str:
     return str(Path(file_path).parent)
 
 
+def add_object_to_path(path: str, object_string: str) -> str:
+    """
+    The function will add directory to the path.
+    Example: 'C:/Users/user1' + 'Downloads' = 'C:/Users/user1/Downloads'
+
+    :param path: string, path.
+    :param object_string: string, directory or file.
+
+    :return: string, of the new path.
+    """
+
+    return os.path.join(path, object_string)
+
+
 def get_list_of_directories_in_file_path(
         file_path: str, get_last_part: bool = True, convert_drive_to_string: bool = False) -> list:
     """
@@ -147,17 +161,38 @@ def remove_file(file_path: str, **kwargs) -> bool:
         return False
 
 
-def create_folder(directory_fullpath: str):
-    # Create folder if non-existent.
+def create_directory(directory_fullpath: str):
+    # Create directory if non-existent.
     # The library is used to create folder if it doesn't exist and won't raise exception if it does
     # 'parents=True' will create also the parent folders of the last folder, not used in our case
     # 'exist_ok=True' if the folder exists, then it is ok.
     pathlib.Path(directory_fullpath).mkdir(parents=True, exist_ok=True)
 
 
+def move_file(source_file_path: str, target_file_path: str, no_overwrite: bool = False) -> None:
+    """
+    The function moves file from source to target.
+
+    :param source_file_path: string, full path to source file.
+    :param target_file_path: string, full path to target file.
+    :param no_overwrite: boolean, if 'True', then the function will not overwrite the file if it exists.
+
+    :return: None
+    """
+
+    # Check if 'no_overwrite' is set to 'True' and if the file exists.
+    if no_overwrite:
+        if check_file_existence(target_file_path):
+            raise FileExistsError(f'File already exists: {target_file_path}')
+
+    # Move file.
+    shutil.move(source_file_path, target_file_path)
+
+
 def move_files_from_folder_to_folder(source_directory: str, target_directory: str):
     """
     The function is currently non-recursive and not tested with directories inside the source directories.
+    The function will move all the files from source directory to target directory overwriting existing files.
     """
 
     # Get all file names without full paths in source folder.
@@ -166,7 +201,36 @@ def move_files_from_folder_to_folder(source_directory: str, target_directory: st
     # Iterate through all the files.
     for file_name in file_list_in_source:
         # Move the file from source to target.
-        shutil.move(source_directory + os.sep + file_name, target_directory + os.sep + file_name)
+        move_file(source_directory + os.sep + file_name, target_directory + os.sep + file_name)
+
+
+def copy_file(
+        source_file_path: str,
+        target_file_path: str,
+        no_overwrite: bool = False,
+        preserve_metadata: bool = False
+) -> None:
+    """
+    The function copies file from source to target.
+
+    :param source_file_path: string, full path to source file.
+    :param target_file_path: string, full path to target file.
+    :param no_overwrite: boolean, if 'True', then the function will not overwrite the file if it exists.
+    :param preserve_metadata: boolean, if 'True', then the function will try to preserve the metadata of the file.
+
+    :return: None
+    """
+
+    # Check if 'no_overwrite' is set to 'True' and if the file exists.
+    if no_overwrite:
+        if check_file_existence(target_file_path):
+            raise FileExistsError(f'File already exists: {target_file_path}')
+
+    # Copy file.
+    if preserve_metadata:
+        shutil.copy2(source_file_path, target_file_path)
+    else:
+        shutil.copy(source_file_path, target_file_path)
 
 
 def get_file_names_from_directory(directory_path: str) -> list:
@@ -314,7 +378,7 @@ def _create_relative_output_directory(output_path: str, relative_directory: str)
     """
 
     path_to_create: str = _build_relative_output_path(output_path, relative_directory)
-    create_folder(path_to_create)
+    create_directory(path_to_create)
     return path_to_create
 
 

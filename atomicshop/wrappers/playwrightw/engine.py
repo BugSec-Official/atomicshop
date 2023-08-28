@@ -7,7 +7,7 @@ from tempfile import gettempdir
 
 from ...print_api import print_api
 from ...keyboard_press import send_alt_tab
-from ...filesystem import create_folder
+from ...filesystem import create_directory
 
 # Web automation library.
 from playwright.sync_api import sync_playwright
@@ -22,11 +22,13 @@ class PlaywrightEngine:
 
     def __init__(
             self,
-            browser: str = 'chromium', incognito_mode: bool = True, browser_content_working_directory: str = None):
+            browser: str = 'chromium', headless: bool = False, incognito_mode: bool = True,
+            browser_content_working_directory: str = None):
         """
         :param browser: string, specifies which browser will be executed. Playwright default is 'chromium'.
+        :param headless: boolean, specifies if browser will be executed in headless mode. Default is 'False'.
         :param incognito_mode: boolean,
-            'True': browser will be used in 'Incognito' mode.
+             'True': browser will be used in 'Incognito' mode.
              'False': not be used in incognito mode and 'browser_content' folder will be created to save all
                 the session data. Default 'Playwright' behaviour is 'incognito_mode' set to 'True'.
         :param browser_content_working_directory: string, with full path to directory in which will be created
@@ -45,6 +47,7 @@ class PlaywrightEngine:
         # Variables from input.
         # self.site_instance = site_instance
         self.browser_switch: str = browser
+        self.headless: bool = headless
         self.incognito_mode: bool = incognito_mode
         self.browser_content_working_directory: str = browser_content_working_directory
 
@@ -70,6 +73,9 @@ class PlaywrightEngine:
         self.execute_browser()
 
     def stop(self):
+        # Close browser objects. You can only close browser without stopping playwright.
+        # self.close_browser()
+
         # Finally, 'sync_playwright()' should have '__exit__()' function defined, but '__enter__()' function
         # creates '.stop' attribute for 'playwright' object, which gets the '__exit__' function reference name.
         # playwright.stop = self.__exit__
@@ -96,7 +102,7 @@ class PlaywrightEngine:
         if self.incognito_mode:
             # Executes Chromium browser in regular mode.
             # if set "headless=True" you will not see the browser itself.
-            self.browser = selected_browser.launch(channel=channel, headless=False)
+            self.browser = selected_browser.launch(channel=channel, headless=self.headless)
             # self.browser = selected_browser.launch(channel="chrome", headless=False)
             # You can run several "page" objects under one context, which runs inside a "browser" object.
             self.context = self.browser.new_context()
@@ -118,10 +124,10 @@ class PlaywrightEngine:
                     self.browser_content_working_directory + os.sep + self.browser_content_directory_name
 
             # Create folder for 'self.browser_content_directory_path'.
-            create_folder(self.browser_content_directory_path)
+            create_directory(self.browser_content_directory_path)
 
             self.browser = selected_browser.launch_persistent_context(
-                self.browser_content_directory_path, channel=channel, headless=False
+                self.browser_content_directory_path, channel=channel, headless=self.headless
             )
             # 'launch_persistent_context' doesn't have a 'new_context()' method, so starting page from browser.
             self.open_new_page()
@@ -139,7 +145,9 @@ class PlaywrightEngine:
         self.page.close()
         self.context.close()
         self.browser.close()
-        self.stop()
+
+        # You can stop playwright, without stopping the browser explicitly, which will close all the browsers.
+        # self.stop()
 
     # === Custom functions =============================================================================================
     def delay_random(self):

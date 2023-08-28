@@ -1,4 +1,3 @@
-# v1.0.2 - 27.03.2023 00:10
 import sched
 import threading
 import time
@@ -19,10 +18,7 @@ def threaded_periodic_task(interval, function_ref, args=(), thread_name=None):
     The function executes referenced function 'function_ref' with arguments 'args' each 'interval' in a new thread.
     The old thread is closed, each time the new is executed.
 
-    :param interval: integer, float or tuple.
-        Integer or float: the interval in seconds between function executions.
-        Tuple: contains two variables. The first one is a string that represents the timedelta
-            (eg: 'seconds', 'minutes') and the second variable represents the amount.
+    :param interval: integer or float: the interval in seconds between function executions.
     :param function_ref: name of the referenced function to execute.
     :param args: tuple, of arguments to provide for the 'function_ref' to execute.
     :param thread_name: the name of the thread that will be created:
@@ -45,8 +41,6 @@ def threaded_periodic_task(interval, function_ref, args=(), thread_name=None):
         while True:
             # Execute the referenced function with tuple of provided arguments.
             function_ref(*args)
-            # Convert provided interval to seconds if it's a tuple.
-            interval = convert_delta_string_to_seconds(interval)
             # Sleep for amount of seconds.
             time.sleep(interval)
 

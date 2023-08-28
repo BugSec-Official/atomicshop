@@ -27,6 +27,19 @@ def print_api(
     By default, the 'logger' is 'None', meaning regular 'print' function will be used.
     If it is passed, then it will be used to output messages and not the 'print' function.
 
+    Usage in functions:
+        The parameter to pass all the arguments to this is 'print_kwargs'.
+        Example:
+            def some_function(print_kwargs: dict = None):
+
+        The description of this argument in the function should be:
+            :param print_kwargs: dict, that contains all the arguments for 'print_api' function.
+
+        Then, in the function, you can use it like this:
+            print_api(message, **print_kwargs)
+            print_api(message, print_kwargs=print_kwargs)
+            print_api(message, print_kwargs={'logger': self.logger})
+
     :param message: Message that will be printed to console. Doesn't have to be string - can be 'any'.
     :param color: color of message to print.
     :param print_end: string, that sets 'end' method for print function. Since, this is not available for loggers,

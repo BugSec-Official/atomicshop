@@ -53,10 +53,10 @@ class CreateModuleTemplate:
         print(f"Engine Class Name: {self.engine_class_name}")
 
         # Create the 'engines' directory if it doesn't exist.
-        filesystem.create_folder(self.engines_directory_path)
+        filesystem.create_directory(self.engines_directory_path)
 
         # Create new engines folder.
-        filesystem.create_folder(self.new_engine_directory)
+        filesystem.create_directory(self.new_engine_directory)
 
         module_files_list: list = [self.parser_general_path, self.responder_general_path, self.recorder_general_path]
         for file_path in module_files_list:

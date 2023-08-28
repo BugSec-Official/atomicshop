@@ -1,6 +1,11 @@
 <!-- HISTORY -->
 ## History
 
+* 2.0.0 - 28.08.2023
+  * Overall fixes and improvements.
+  * 'wrappers.playwrightw' - added 'scenarios' module, which is responsible for full scenario execution of playwright.
+  * Added 'monitor.change_monitor' module. Checks for changes in input objects. Types of objects are predefined.
+  * 'diff_check' - Changed functionality of the module. Some functionality moved to 'change_monitor' module.
 * 1.9.1 - 20.07.2023
   * Overall fixes and improvements.
   * 'mitm.engines.create_module_template' - Improvements in engines_directory code.
