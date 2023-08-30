@@ -1,8 +1,6 @@
-from .. import hashing, filesystem, urls
+from .checks import dns, network, hash, process_running
+from .. import filesystem, scheduling
 from ..diff_check import DiffChecker
-from ..print_api import print_api
-from ..etw.dns_trace import DnsTrace
-from ..basics import list_of_dicts
 
 
 class ChangeMonitor:
@@ -124,8 +122,9 @@ class ChangeMonitor:
 
         self.first_cycle = True
 
-        # Initialize objects for DNS monitoring.
+        # Initialize objects for DNS and Network monitoring.
         self.fetch_engine = None
+        self.thread_looper = scheduling.ThreadLooper()
 
     def _set_input_file_path(self, check_object_index: int = 0):
         if self.first_cycle:
@@ -145,60 +144,17 @@ class ChangeMonitor:
         """
 
         return_list = list()
-        # Loop through all the objects to check.
-        for check_object_index, check_object in enumerate(self.check_object_list):
-            if self.object_type == 'file':
-                # Get the hash of the object.
-                self._get_file_hash(check_object_index, check_object, print_kwargs=print_kwargs)
-            elif self.object_type == 'url_urllib' or 'url_playwright' in self.object_type:
-                # Get the hash of the object.
-                self._get_url_hash(check_object_index, check_object, print_kwargs=print_kwargs)
 
-            self._set_input_file_path(check_object_index=check_object_index)
-
-            # Check if the object was updated.
-            result, message = self.diff_check_list[check_object_index].check_string(print_kwargs=print_kwargs)
-
-            # If the object was updated, print the message in yellow color, otherwise print in green color.
-            if result:
-                print_api(message, color='yellow', **print_kwargs)
-                # create_message_file(message, self.__class__.__name__, logger=self.logger)
-            else:
-                print_api(message, color='green', **print_kwargs)
-
-            return_dict = {
-                'result': result,
-                'message': message,
-            }
-
-            return_list.append(return_dict)
-
+        if (
+                self.object_type == 'file' or
+                'url_' in self.object_type):
+            return_list = hash._execute_cycle(self, print_kwargs=print_kwargs)
         if self.object_type == 'dns':
-            self._get_dns_list(print_kwargs=print_kwargs)
-
-            self._set_input_file_path()
-
-            # Check if 'known_domains' list was updated from previous cycle.
-            result, message = self.diff_check_list[0].check_list_of_dicts(print_kwargs=print_kwargs)
-
-            if result:
-                # Get list of new connections only.
-                new_connections_only: list = list_of_dicts.get_difference(result['old'], result['updated'])
-
-                for connection in new_connections_only:
-                    message = \
-                        f"New domain: {connection['name']} | " \
-                        f"{connection['domain']} | {connection['query_type']} | " \
-                        f"{connection['cmdline']}"
-                    # f"{connection['src_ip']}:{connection['src_port']} -> " \
-                    print_api(message, color='yellow', **print_kwargs)
-
-                    return_dict = {
-                        'result': True,
-                        'message': message,
-                    }
-
-                    return_list.append(return_dict)
+            return_list = dns._execute_cycle(self, print_kwargs=print_kwargs)
+        elif self.object_type == 'network':
+            return_list = network._execute_cycle(self, print_kwargs=print_kwargs)
+        elif self.object_type == 'process_running':
+            return_list = process_running._execute_cycle(self, print_kwargs=print_kwargs)
 
         # Set 'first_cycle' to False, since the first cycle is finished.
         if self.first_cycle:
@@ -206,151 +162,9 @@ class ChangeMonitor:
 
         return return_list
 
-    def _get_url_hash(self, check_object_index: int, check_object: str, print_kwargs: dict = None):
-        """
-        The function will get the hash of the URL content.
+    def run_loop(self, interval_seconds=0, print_kwargs: dict = None):
+        self.thread_looper.run_loop(
+            self.check_cycle, kwargs={'print_kwargs': print_kwargs}, interval_seconds=interval_seconds)
 
-        :param check_object_index: integer, index of the object in the 'check_object_list' list.
-        :param check_object: string, full URL to a web page.
-        :param print_kwargs: dict, that contains all the arguments for 'print_api' function.
-        """
-        # Extract the method name from the object type.
-        get_method = self.object_type.split('_', 1)[1]
-
-        # If this is the first cycle, we need to set several things.
-        if self.first_cycle:
-            original_name: str = str()
-
-            # If 'generate_input_file_name' is True, or 'store_original_object' is True, we need to create a
-            # filename without extension.
-            if self.store_original_object or self.generate_input_file_name:
-                # Get the last directory from the url.
-                original_name = urls.url_parser(check_object)['directories'][-1]
-                # Make characters lower case.
-                original_name = original_name.lower()
-
-            # If 'store_original_object' is True, then we need to create a filepath to store.
-            if self.original_object_directory:
-                # Add extension to the file name.
-                original_file_name = f'{original_name}.{get_method.split("_")[1]}'
-
-                # Make path for original object.
-                self.original_object_file_path = filesystem.add_object_to_path(
-                    self.original_object_directory, original_file_name)
-
-            if self.generate_input_file_name:
-                # Make path for 'input_file_name'.
-                self.input_file_name = f'{original_name}.txt'
-
-            # Change settings for the DiffChecker object.
-            self.diff_check_list[check_object_index].return_first_cycle = False
-
-            self.diff_check_list[check_object_index].check_object_display_name = \
-                f'{original_name}|{self.object_type}'
-
-        # Get hash of the url. The hash will be different between direct hash of the URL content and the
-        # hash of the file that was downloaded from the URL. Since the file has headers and other information
-        # that is not part of the URL content. The Original downloaded file is for reference only to see
-        # what was the content of the URL at the time of the download.
-        hash_string = hashing.hash_url(
-            check_object, get_method=get_method, path=self.original_object_file_path,
-            print_kwargs=print_kwargs
-        )
-
-        # Set the hash string to the 'check_object' variable.
-        self.diff_check_list[check_object_index].check_object = hash_string
-
-    def _get_file_hash(self, check_object_index: int, check_object: str, print_kwargs: dict = None):
-        """
-        The function will get the hash of the URL content.
-
-        :param check_object_index: integer, index of the object in the 'check_object_list' list.
-        :param check_object: string, full URL to a web page.
-        :param print_kwargs: dict, that contains all the arguments for 'print_api' function.
-        """
-
-        # If this is the first cycle, we need to set several things.
-        if self.first_cycle:
-            original_name: str = str()
-
-            # If 'generate_input_file_name' is True, or 'store_original_object' is True, we need to create a
-            # filename without extension.
-            if self.store_original_object or self.generate_input_file_name:
-                # Get the last directory from the url.
-                original_name = filesystem.get_file_name(check_object)
-                # Make characters lower case.
-                original_name = original_name.lower()
-
-            # If 'store_original_object' is True, then we need to create a filepath to store.
-            if self.original_object_directory:
-                # Add extension to the file name.
-                original_file_name = original_name
-
-                # Make path for original object.
-                self.original_object_file_path = filesystem.add_object_to_path(
-                    self.original_object_directory, original_file_name)
-
-            if self.generate_input_file_name:
-                # Remove dots from the file name.
-                original_name_no_dots = original_name.replace('.', '-')
-                # Make path for 'input_file_name'.
-                self.input_file_name = f'{original_name_no_dots}.txt'
-
-            # Change settings for the DiffChecker object.
-            self.diff_check_list[check_object_index].return_first_cycle = False
-
-            self.diff_check_list[check_object_index].check_object_display_name = \
-                f'{original_name}|{self.object_type}'
-
-        # Copy the file to the original object directory.
-        if self.original_object_file_path:
-            filesystem.copy_file(check_object, self.original_object_file_path)
-
-        # Get hash of the file.
-        hash_string = hashing.hash_file(check_object)
-
-        # Set the hash string to the 'check_object' variable.
-        self.diff_check_list[check_object_index].check_object = hash_string
-
-    def _get_dns_list(self, print_kwargs: dict = None):
-        """
-        The function will get the list of DNS events and return only the new ones.
-
-        :param print_kwargs: dict, that contains all the arguments for 'print_api' function.
-
-        :return: list of dicts, of new DNS events.
-        """
-
-        if self.first_cycle:
-            original_name: str = str()
-
-            # Initialize objects for DNS monitoring.
-            self.fetch_engine = DnsTrace(enable_process_poller=True, attrs=['name', 'cmdline', 'domain', 'query_type'])
-
-            # Start DNS monitoring.
-            self.fetch_engine.start()
-
-            # Change settings for the DiffChecker object.
-            self.diff_check_list[0].return_first_cycle = True
-
-            if self.generate_input_file_name:
-                original_name = 'known_domains'
-                # Make path for 'input_file_name'.
-                self.input_file_name = f'{original_name}.txt'
-
-            self.diff_check_list[0].check_object_display_name = \
-                f'{original_name}|{self.object_type}'
-
-            # Set the 'check_object' to empty list, since we will append the list of DNS events.
-            self.diff_check_list[0].check_object = list()
-
-        # 'emit()' method is blocking (it uses 'get' of queue instance)
-        # will return a dict with current DNS trace event.
-        event_dict = self.fetch_engine.emit()
-
-        if event_dict not in self.diff_check_list[0].check_object:
-            self.diff_check_list[0].check_object.append(event_dict)
-
-        # Sort list of dicts by process name and then by process cmdline.
-        self.diff_check_list[0].check_object = list_of_dicts.sort_by_keys(
-            self.diff_check_list[0].check_object, ['cmdline', 'name'], case_insensitive=True)
+    def emit_from_loop(self):
+        return self.thread_looper.emit_from_loop()

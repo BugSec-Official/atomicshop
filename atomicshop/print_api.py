@@ -4,7 +4,7 @@ from .basics.ansi_escape_codes import ColorsBasic, get_colors_basic_dict
 from .basics import tracebacks
 
 
-# noinspection PyUnusedLocal
+# noinspection PyUnusedLocal,PyIncorrectDocstring
 def print_api(
         message: any,
         color: any = None,
@@ -31,6 +31,8 @@ def print_api(
         The parameter to pass all the arguments to this is 'print_kwargs'.
         Example:
             def some_function(print_kwargs: dict = None):
+                if not print_kwargs:
+                    print_kwargs = dict()
 
         The description of this argument in the function should be:
             :param print_kwargs: dict, that contains all the arguments for 'print_api' function.
