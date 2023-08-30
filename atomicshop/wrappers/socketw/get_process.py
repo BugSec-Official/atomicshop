@@ -2,12 +2,32 @@
 import io
 from contextlib import redirect_stdout
 
+from . import base
 from ...ssh_remote import SSHRemote
+from ...print_api import print_api
 
 import psutil
 
 
-def get_process_commandline(client_ip: str, username: str, password: str, script_string: str, logger):
+def get_process_name(client_socket, config: dict, ssh_script_processor, print_kwargs: dict = None):
+    # Get client ip and the source port.
+    client_ip, source_port = base.get_source_address_from_socket(client_socket)
+
+    # Put source port variable inside the string script.
+    updated_script_string = ssh_script_processor.put_variable_into_script_string(source_port, print_kwargs=print_kwargs)
+
+    process_name = get_process_commandline(
+        client_ip=client_ip,
+        username=config['ssh']['user'],
+        password=config['ssh']['pass'],
+        script_string=updated_script_string,
+        print_kwargs=print_kwargs)
+
+    return process_name
+
+
+def get_process_commandline(
+        client_ip: str, username: str, password: str, script_string: str, print_kwargs: dict = None):
     execution_output = None
     execution_error = None
 
@@ -16,16 +36,14 @@ def get_process_commandline(client_ip: str, username: str, password: str, script
         # Tried using paramiko SSH concurrently within threads, but with bigger loads it just breaks.
         # So, better using it separately for each thread.
 
-        logger.info(f"Initializing SSH connection to [{client_ip}]")
+        print_api(f"Initializing SSH connection to [{client_ip}]", **print_kwargs)
         # Initializing SSHRemote class.
-        current_ssh_client = SSHRemote(ip_address=client_ip,
-                                       username=username,
-                                       password=password)
+        current_ssh_client = SSHRemote(ip_address=client_ip, username=username, password=password)
 
         execution_output, execution_error = current_ssh_client.connect_get_client_commandline(script_string)
     # Else, if we're on localhost, then execute the script directly without SSH.
     else:
-        logger.info("Executing LOCALHOST command to get the calling process.")
+        print_api(f"Executing LOCALHOST command to get the calling process.", **print_kwargs)
         # Getting the redirection from console print, since that what the 'script_string' does.
         with io.StringIO() as buffer, redirect_stdout(buffer):
             # Executing the script with print to console.
@@ -33,17 +51,22 @@ def get_process_commandline(client_ip: str, username: str, password: str, script
                 exec(script_string)
             except ModuleNotFoundError as function_exception_object:
                 execution_error = f"Module not installed: {function_exception_object}"
-                logger.error_exception_oneliner(execution_error)
+                print_api(
+                    execution_error, error_type=True, logger_method="error", traceback_string=True, oneline=True,
+                    **print_kwargs)
                 pass
             except psutil.AccessDenied:
                 execution_error = f"Access Denied for 'psutil' to read system process command line. " \
                                   f"Run script with Admin Rights."
-                logger.error_exception_oneliner(execution_error)
+                print_api(
+                    execution_error, error_type=True, logger_method="error", traceback_string=True, oneline=True,
+                    **print_kwargs)
                 pass
-            except Exception as function_exception_object:
-                execution_error = function_exception_object
-                logger.error_exception_oneliner(
-                    "There was undocumented exception in localhost script execution.")
+            except Exception:
+                execution_error = "There was undocumented exception in localhost script execution."
+                print_api(
+                    execution_error, error_type=True, logger_method="error", traceback_string=True, oneline=True,
+                    **print_kwargs)
                 pass
 
             if not execution_error:
@@ -51,17 +74,18 @@ def get_process_commandline(client_ip: str, username: str, password: str, script
                 execution_output = buffer.getvalue()
 
     # This section is generic for both remote SSH and localhost executions of the script.
-    process_name = get_commandline_and_error(execution_output, execution_error, logger)
+    process_name = get_commandline_and_error(execution_output, execution_error, print_kwargs=print_kwargs)
 
     return process_name
 
 
-def get_commandline_and_error(execution_output, execution_error, logger):
+def get_commandline_and_error(execution_output, execution_error, print_kwargs: dict = None):
     # If there was known error on localhost / known error on remote or any kind of error on remote, it was
     # already logged, so we'll just put the error into 'process_name'.
     if execution_error:
         process_name = execution_error
-        logger.error(f"Error During Command Execution: {process_name}")
+        print_api(
+            f"Error During Command Execution: {process_name}", error_type=True, logger_method='error', **print_kwargs)
     # If there wasn't any error of above types, then we can put the output from either local or remote script
     # execution into 'process_name' and log it / output to console.
     else:
@@ -74,10 +98,10 @@ def get_commandline_and_error(execution_output, execution_error, logger):
                 execution_output = execution_output.replace('\n', '')
 
             process_name = execution_output
-            logger.info(f"Client Process Command Line: {process_name}")
+            print_api(f"Client Process Command Line: {process_name}", **print_kwargs)
         # Else if the script output came back empty.
         else:
             process_name = "Client Process Command Line came back empty after script execution."
-            logger.error(process_name)
+            print_api(process_name, error_type=True, logger_method='error', **print_kwargs)
 
     return process_name

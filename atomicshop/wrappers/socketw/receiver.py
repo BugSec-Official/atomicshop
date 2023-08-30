@@ -1,7 +1,19 @@
+import socket
 import ssl
 
 from ...print_api import print_api
 from ..loggingw import loggingw
+
+
+def peek_first_byte(client_socket) -> bytes:
+    """
+    Peek first byte from the socket without removing it from the buffer.
+
+    :param client_socket: Socket object.
+    :return: the first byte from the socket buffer.
+    """
+
+    return client_socket.recv(1, socket.MSG_PEEK)
 
 
 class Receiver:

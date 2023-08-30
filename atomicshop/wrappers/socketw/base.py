@@ -1,4 +1,7 @@
 import socket
+import select
+
+from . import receiver
 
 
 def get_local_network_interfaces_ip_address(family_type: str = None, ip_only: bool = False) -> list:
@@ -57,3 +60,23 @@ def get_source_destination(socket_object):
 def set_socket_timeout(socket_object, seconds: int = 1):
     # Setting timeout on the socket before "accept()" drastically slows down connections.
     socket_object.settimeout(seconds)
+
+
+def get_protocol_type(client_socket) -> str:
+    """
+    Return protocol type of the incoming socket after 'accept()'.
+    :param client_socket: incoming socket after 'accept()'.
+    :return: socket type, string.
+    """
+
+    ready_to_read, _, _ = select.select([client_socket], [], [], 0)
+
+    if ready_to_read:
+        first_byte = receiver.peek_first_byte(client_socket)
+
+        if first_byte and first_byte[0] == 0x16:
+            return 'tls'
+        else:
+            return 'non-tls'
+    else:
+        return None

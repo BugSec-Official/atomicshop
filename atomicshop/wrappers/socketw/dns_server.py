@@ -112,18 +112,6 @@ class DnsServer:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as main_socket_object:
             main_socket_object: socket.socket
 
-            # "setsockopt" is a method that can add options to the socket. Not needed for regular connection,
-            # but for some types
-            # of protocols that come after that.
-            # SOL_SOCKET - the "level", constant that contains the "SP_REUSEADDR"
-            # SO_REUSEADDR - permit reuse of local addresses for this socket. If you enable this option,
-            # you can actually have
-            # two sockets with the same Internet port number. Needed for protocols that force you to use the same port.
-            # 1 - Sets this to true
-            # For more options of this constant:
-            # https://www.gnu.org/software/libc/manual/html_node/Socket_002dLevel-Options.html#Socket_002dLevel-Options
-            main_socket_object.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
             # Binding / assigning the port to the server / this script, that is going to be used for
             # receiving connections.
             main_socket_object.bind((self.config['dns']['listening_interface'], self.config['dns']['listening_port']))
@@ -137,8 +125,10 @@ class DnsServer:
                     client_data: bytes
                     client_address: tuple
                 except ConnectionResetError:
+                    # This error happens when the client closes the connection before the server.
+                    # This is not an error for a DNS Server, but we'll log it anyway only with the full DNS logger.
                     message = "Error: to receive DNS request, An existing connection was forcibly closed"
-                    print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
+                    # print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
                     print_api(
                         message, logger=self.dns_full_logger, logger_method='error', traceback_string=True,
                         oneline=True)
@@ -154,8 +144,8 @@ class DnsServer:
                     continue
 
                 try:
-                    # This is the real point when the request received was logged, but since it takes too much place on the
-                    # screen, moved it to full request logging position.
+                    # This is the real point when the request received was logged, but since it takes too much place
+                    # on the screen, moved it to full request logging position.
                     # message = f"Received request from: {client_address}"
                     # self.logger.info(message)
                     # self.dns_full_logger.info(message)

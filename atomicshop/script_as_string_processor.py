@@ -2,6 +2,8 @@
 https://docs.python.org/3/library/importlib.html#module-importlib.resources"""
 import importlib.resources
 
+from .print_api import print_api
+
 
 class ScriptAsStringProcessor:
     def __init__(self):
@@ -18,7 +20,7 @@ class ScriptAsStringProcessor:
 
         return self
 
-    def put_variable_into_script_string(self, input_variable: any, logger):
+    def put_variable_into_script_string(self, input_variable: any, print_kwargs: dict = None):
         # Defining variables
         function_result: str = str()
 
@@ -30,6 +32,7 @@ class ScriptAsStringProcessor:
             # We want to replace our string only one time in the beginning.
             function_result = self.script_string.replace(self.exchange_input_variable_string, str(input_variable), 1)
         else:
-            logger.error(f"The script string provided doesn't contain {self.exchange_input_variable_string}")
+            message = f"The script string provided doesn't contain {self.exchange_input_variable_string}"
+            print_api(message, error_type=True, logger_method='error', **print_kwargs)
 
         return function_result

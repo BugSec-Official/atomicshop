@@ -2,6 +2,7 @@ import socket
 import ssl
 import time
 
+from . import creator
 from .receiver import Receiver
 from .sender import Sender
 from . import ssl_base
@@ -17,8 +18,9 @@ import dns.resolver
 class SocketClient:
     logger = loggingw.get_logger_with_level("network." + __name__.rpartition('.')[2])
 
-    # noinspection GrazieInspection
-    def __init__(self, service_name: str, service_port: int, connection_ip=None, dns_servers_list=None):
+    def __init__(
+            self,
+            service_name: str, service_port: int, tls: bool = False, connection_ip=None, dns_servers_list=None):
         """
         If you have a certificate for domain, but not for the IPv4 address, the SSL Socket context can be created for
         domain and the connection itself (socket.connect()) made for the IP. This way YOU decide to which IPv4 your
@@ -27,6 +29,7 @@ class SocketClient:
         :param service_name: Should be domain, but can be IPv4 address. In this case SSL Socket will be created to
             IPv4 address.
         :param service_port: Destination server port. Example: 443.
+        :param tls: If True, the socket will be created with 'ssl' library wrapper.
         :param connection_ip: (Optional) If specified, the SSL Socket will be created to 'service_name' and
             'socket.connect' will be to specified IPv4 address. If not specified, will be populated from 'socket'
             resolving and available sources. If 'dns_servers_list' specified, will be populated from resolving of the
@@ -38,83 +41,49 @@ class SocketClient:
         """
         self.service_name: str = service_name
         self.service_port: int = service_port
+        self.tls: bool = tls
         self.connection_ip = connection_ip
         self.dns_servers_list = dns_servers_list
 
-        self.ssl_socket = None
+        self.socket_instance = None
 
         # If 'connection_ip' was specified, but no 'dns_servers_list', then this IP will be used for 'socket.connect()'.
         # In any way if 'dns_servers_list' the 'connection_ip' will be populated from there and in this case
         # it doesn't matter if you specify the 'connection_ip' manually or not.
         if self.connection_ip and not self.dns_servers_list:
             self.logger.info(
-                f"Manual IPv4 address specified. SSL Socket will be created to domain [{self.service_name}] and "
+                f"Manual IPv4 address specified. Socket will be created to domain [{self.service_name}] and "
                 f"connected to IPv4 [{self.connection_ip}]")
         # If both 'connection_ip' and 'dns_servers_list' specified, raise an exception.
         elif self.connection_ip and self.dns_servers_list:
             raise ValueError("Both 'connection_ip' and 'dns_servers_list' were specified.")
 
     # Function to create SSL socket to destination service
-    def create_service_ssl_socket(self):
-        self.logger.info(f"Creating SSL socket to [{self.service_name}:{self.service_port}]")
+    def create_service_socket(self):
+        # If TLS is enabled.
+        if not self.tls:
+            self.logger.info(f"Creating non-SSL socket to [{self.service_name}:{self.service_port}]")
+            return creator.create_socket_ipv4_tcp()
+        else:
+            self.logger.info(f"Creating SSL socket to [{self.service_name}:{self.service_port}]")
+            socket_object = creator.create_socket_ipv4_tcp()
+            return creator.wrap_socket_with_ssl_context_client___default_certs___ignore_verification(
+                socket_object, self.service_name)
 
-        # When using with statement, no need to use "socket.close()" method to disconnect when finished
-        # AF_INET - Socket family of IPv4
-        # SOCK_STREAM - Socket type of TCP
-        socket_object: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-        # Create ssl context object
-        ssl_context: ssl.SSLContext = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        # Specifying the minimum TLS version to work with
-        # function_context.minimum_version = ssl.TLSVersion.TLSv1_2
-        # Specifying the maximum TLS version to work with
-        # function_context.maximum_version = ssl.TLSVersion.TLSv1_2
-        # "load_default_certs" method is telling the client to check the local certificate storage on the system for the
-        # needed certificate of the server. Without this line you will get an error from the server that the client
-        # is using self-signed certificate. Which is partly true, since you used the SLL wrapper,
-        # but didn't specify the certificate at all.
-        # The purpose of the certificate is to authenticate on the server
-        # context.load_default_certs(Purpose.SERVER_AUTH)
-        # You don't have to specify the purpose to connect, but if you get a purpose error, you know where to find it
-        ssl_context.load_default_certs()
-
-        # If we want to ignore bad server certificates when connecting as a client, we need to think about security.
-        # If you care, you should not need to do it, for MITM possibilities.
-        # To do this anyway we need first to disable 'check_hostname' and only
-        # then set 'verify_mode' to 'ssl.CERT_NONE'. If we do it in backwards order, when 'verify_mode' comes before
-        # 'check_hostname' then we'll get an exception that 'check_hostname' needs to be False.
-        # This setting should eliminate ssl error on 'SSLSocket.connect()':
-        # ssl.SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED]
-        # certificate verify failed: unable to get local issuer certificate (_ssl.c:997)
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
-
-        # Wrapping the socket with "ssl.SSLContext" object to make "ssl.SSLSocket" object.
-        # With "server_hostname" you don't have to use DNS hostname, you can use the IP, just remember to add
-        # the address to your Certificate under "X509v3 Subject Alternative Name"
-        # SSL wrapping should happen after socket creation and before connection:
-        # https://docs.python.org/3/library/ssl.html
-        self.ssl_socket: ssl.SSLSocket = ssl_context.wrap_socket(sock=socket_object,
-                                                                 server_side=False,
-                                                                 server_hostname=self.service_name)
-
-        return self.ssl_socket
-
-    # noinspection PyBroadException
     def service_connection(self):
         """ Function to establish connection to server """
         # Check if socket to service domain exists.
         # If not
-        if not self.ssl_socket:
+        if not self.socket_instance:
             # Create the socket and connect to it
-            self.ssl_socket = self.create_service_ssl_socket()
+            self.socket_instance = self.create_service_socket()
         # If the socket exists check if it's still connected. socket.fileno() has value of "-1" if socket
         # was disconnected. We can't do this with previous statement like:
-        # if not self.ssl_socket or self.ssl_socket.fileno() == -1:
+        # if not self.socket_instance or self.socket_instance.fileno() == -1:
         # since if "ssl_socket" doesn't exist we'll get an "UnboundError" on checking "fileno" on it.
-        elif self.ssl_socket.fileno() == -1:
+        elif self.socket_instance.fileno() == -1:
             # Create the socket and connect to it
-            self.ssl_socket = self.create_service_ssl_socket()
+            self.socket_instance = self.create_service_socket()
         # If the socket exists and still connected.
         else:
             self.logger.info(
@@ -158,7 +127,7 @@ class SocketClient:
         self.logger.info(f"Connecting to [{destination}]")
         try:
             # "connect()" to the server using address and port
-            self.ssl_socket.connect((destination, self.service_port))
+            self.socket_instance.connect((destination, self.service_port))
         except ConnectionRefusedError:
             message = f"Couldn't connect to: {self.service_name}. The server is unreachable - Connection refused."
             print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
@@ -201,14 +170,14 @@ class SocketClient:
         self.logger.info("Connected...")
 
         # Return the connected socket.
-        return self.ssl_socket
+        return self.socket_instance
 
     def get_socket(self):
-        return self.ssl_socket
+        return self.socket_instance
 
     def close_socket(self):
-        self.ssl_socket.close()
-        self.ssl_socket = None
+        self.socket_instance.close()
+        self.socket_instance = None
         self.logger.info(f"Closed socket to service server [{self.service_name}:{self.service_port}]")
 
     # noinspection PyUnusedLocal
@@ -232,11 +201,12 @@ class SocketClient:
             # that was at hand (local DNS cache).
             # Since at this point the connection to the server's domain address was successful - the IP is
             # connectable.
-            self.connection_ip = self.ssl_socket.getpeername()[0]
-            self.logger.info(f"[{self.service_name}] resolves to ip: [{self.connection_ip}]. Pulled IP from the socket.")
+            self.connection_ip = self.socket_instance.getpeername()[0]
+            self.logger.info(
+                f"[{self.service_name}] resolves to ip: [{self.connection_ip}]. Pulled IP from the socket.")
 
             # Send the data received from the client to the service over socket
-            function_data_sent = Sender(self.ssl_socket, request_bytes).send()
+            function_data_sent = Sender(self.socket_instance, request_bytes).send()
 
             # If the socket disconnected on data send
             if not function_data_sent:
@@ -246,7 +216,7 @@ class SocketClient:
                 self.close_socket()
             # Else if send was successful
             else:
-                function_service_data = Receiver(self.ssl_socket).receive()
+                function_service_data = Receiver(self.socket_instance).receive()
 
                 # If data received is empty meaning the socket was closed on the other side
                 if not function_service_data:
@@ -255,7 +225,7 @@ class SocketClient:
                     # We'll close the socket and nullify the object
                     self.close_socket()
 
-        return function_service_data, error_string, self.connection_ip, self.ssl_socket
+        return function_service_data, error_string, self.connection_ip, self.socket_instance
 
     def send_receive_message_list_with_interval(
             self, requests_bytes_list: list, intervals_list: list, intervals_defaults: int, cycles: int = 1):
@@ -344,7 +314,7 @@ class SocketClient:
                 #     break
 
         # Close the socket when the loop has finished
-        if self.ssl_socket:
+        if self.socket_instance:
             self.close_socket()
 
         return responses_list, errors_list, self.connection_ip

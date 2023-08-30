@@ -70,7 +70,7 @@ class ImportConfig:
             (self.config['certificates']['custom_server_certificate_usage'], 'custom_server_certificate_usage'))
 
         if not self.config['certificates']['default_server_certificate_usage'] and \
-                self.config['sni']['default_server_certificate_addons']:
+                self.config['certificates']['sni_default_server_certificate_addons']:
             print(
                 f"No point setting [default_server_certificate_addons = True]\n"
                 f"If you're not going to use default certificates [default_server_certificate_usage = False]\n"
