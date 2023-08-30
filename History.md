@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.1.0 - 30.08.2023
+  * Overall fixes and improvements.
+  * 'mitm' and 'socketw' undergone massive improvements, now support TLS / Non-TLS connections on the same port.
 * 2.0.0 - 28.08.2023
   * Overall fixes and improvements.
   * 'wrappers.playwrightw' - added 'scenarios' module, which is responsible for full scenario execution of playwright.

@@ -1,4 +1,3 @@
-# v1.0.2 - 21.03.2023 16:40
 import inspect
 
 
@@ -31,7 +30,10 @@ def get_target_function_default_args_and_combine_with_current(function_name, *ar
     args = ()
 
     # Now if we have 'kwargs' passed we need to fetch them too.
-    kwargs.update(kwargs['kwargs'])
+    try:
+        kwargs.update(kwargs['kwargs'])
+    except KeyError:
+        pass
     # We can remove 'kwargs' key inside 'kwargs' dict.
     try:
         del kwargs['kwargs']

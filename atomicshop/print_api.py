@@ -74,6 +74,7 @@ def print_api(
         nonlocal message
         nonlocal color
         nonlocal traceback_string
+        nonlocal error_type
 
         # This section takes care of different types of string manipulations for message.
 
@@ -94,9 +95,11 @@ def print_api(
             # If 'logger.error' should be outputted to console, and 'color' wasn't selected, then set color to 'yellow'.
             if logger_method == 'error' and not color:
                 color = 'yellow'
+                error_type = True
             # If 'logger.critical' should be outputted to console, and 'color' wasn't selected, then set color to 'red'.
             elif logger_method == 'critical' and not color:
                 color = 'red'
+                error_type = True
 
             if color:
                 message = get_colors_basic_dict(color) + message + ColorsBasic.END

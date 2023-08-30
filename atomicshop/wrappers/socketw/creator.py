@@ -1,7 +1,7 @@
 import socket
 import ssl
 
-from . import base
+from . import base, sni, certificator, exception_wrapper
 from ...print_api import print_api
 
 
@@ -33,11 +33,39 @@ def create_ssl_context_for_server():
     return ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
 
 
+def create_ssl_context_for_client():
+    return ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+
+
+def set_client_ssl_context_default_certs(ssl_context):
+    # "load_default_certs" method is telling the client to check the local certificate storage on the system for the
+    # needed certificate of the server. Without this line you will get an error from the server that the client
+    # is using self-signed certificate. Which is partly true, since you used the SLL wrapper,
+    # but didn't specify the certificate at all.
+    # The purpose of the certificate is to authenticate on the server
+    # context.load_default_certs(Purpose.SERVER_AUTH)
+    # You don't have to specify the purpose to connect, but if you get a purpose error, you know where to find it
+    ssl_context.load_default_certs()
+
+
+def set_client_ssl_context_certificate_verification_ignore(ssl_context):
+    # If we want to ignore bad server certificates when connecting as a client, we need to think about security.
+    # If you care, you should not need to do it, for MITM possibilities.
+    # To do this anyway we need first to disable 'check_hostname' and only
+    # then set 'verify_mode' to 'ssl.CERT_NONE'. If we do it in backwards order, when 'verify_mode' comes before
+    # 'check_hostname' then we'll get an exception that 'check_hostname' needs to be False.
+    # This setting should eliminate ssl error on 'SSLSocket.connect()':
+    # ssl.SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED]
+    # certificate verify failed: unable to get local issuer certificate (_ssl.c:997)
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
+
+
 def load_certificate_and_key_into_server_ssl_context(
         ssl_context,
         certificate_file_path: str,
         key_file_path: str = None,
-        **kwargs
+        print_kwargs: dict = None
 ):
     """
 
@@ -45,6 +73,7 @@ def load_certificate_and_key_into_server_ssl_context(
     :param certificate_file_path:
     :param key_file_path: string, full file path for the key file. If the certificate contains both the key and the
         certificate in one file, "keyfile" parameter can be None. Default is None.
+    :param print_kwargs: dictionary, keyword arguments for 'print_api' function.
     :return:
     """
 
@@ -59,7 +88,7 @@ def load_certificate_and_key_into_server_ssl_context(
                 f'Make sure that both are in ".PEM" format\n' \
                 f"Or your certificate contains the key if you didn't specify it.\n" \
                 f'{exception_object}'
-            print_api(message, error_type=True, logger_method="critical", **kwargs)
+            print_api(message, error_type=True, logger_method="critical", **print_kwargs)
 
 
 def create_server_ssl_context___load_certificate_and_key(certificate_file_path: str, key_file_path):
@@ -71,10 +100,44 @@ def create_server_ssl_context___load_certificate_and_key(certificate_file_path: 
     return ssl_context
 
 
-def wrap_socket_with_ssl_context_server(socket_object, ssl_context):
+@exception_wrapper.connection_exception_decorator
+def wrap_socket_with_ssl_context_server(socket_object, ssl_context, dns_domain: str = None, print_kwargs: dict = None):
+    """
+    This function is wrapped with exception wrapper.
+    After you execute the function, you can get the error message if there was any with:
+        error_message = wrap_socket_with_ssl_context_server.message
+
+    :param socket_object:
+    :param ssl_context:
+    :param dns_domain:
+    :param print_kwargs:
+    :return:
+    """
+
     # Wrapping the server socket with SSL context. This should happen right after setting up the raw socket.
-    socket_object = ssl_context.wrap_socket(socket_object, server_side=True)
-    return socket_object
+    # ssl_socket = ssl_context.wrap_socket(socket_object, server_side=True, do_handshake_on_connect=False)
+    # ssl_socket.do_handshake()
+    ssl_socket = ssl_context.wrap_socket(socket_object, server_side=True)
+    return ssl_socket
+
+
+def wrap_socket_with_ssl_context_server_with_error_message(
+        socket_object, ssl_context, dns_domain: str = None, print_kwargs: dict = None):
+
+    ssl_socket = wrap_socket_with_ssl_context_server(
+        socket_object, ssl_context, dns_domain=dns_domain, print_kwargs=print_kwargs)
+    error_message = wrap_socket_with_ssl_context_server.message
+
+    return ssl_socket, error_message
+
+
+def wrap_socket_with_ssl_context_client(socket_object, ssl_context, server_hostname: str = None):
+    # Wrapping the socket with "ssl.SSLContext" object to make "ssl.SSLSocket" object.
+    # With "server_hostname" you don't have to use DNS hostname, you can use the IP, just remember to add
+    # the address to your Certificate under "X509v3 Subject Alternative Name"
+    # SSL wrapping should happen after socket creation and before connection:
+    # https://docs.python.org/3/library/ssl.html
+    return ssl_context.wrap_socket(sock=socket_object, server_side=False, server_hostname=server_hostname)
 
 
 def bind_socket_with_ip_port(socket_object, ip_address: str, port: int, **kwargs):
@@ -113,3 +176,42 @@ def set_listen_on_socket(socket_object, **kwargs):
     ip_address, port = base.get_destination_address_from_socket(socket_object)
 
     print_api(f"Listening for new connections on: {ip_address}:{port}", **kwargs)
+
+
+# ======================================================================================
+# Socket Creator Presets
+
+def wrap_socket_with_ssl_context_client___default_certs___ignore_verification(
+        socket_object, server_hostname: str = None):
+    ssl_context: ssl.SSLContext = create_ssl_context_for_client()
+    set_client_ssl_context_default_certs(ssl_context)
+    set_client_ssl_context_certificate_verification_ignore(ssl_context)
+    ssl_socket: ssl.SSLSocket = wrap_socket_with_ssl_context_client(
+        socket_object, ssl_context, server_hostname=server_hostname)
+
+    return ssl_socket
+
+
+def wrap_socket_with_ssl_context_server_sni_extended(
+        socket_object, config: dict, dns_domain: str = None, print_kwargs: dict = None):
+
+    ssl_context = create_ssl_context_for_server()
+
+    sni.add_sni_callback_function_reference_to_ssl_context(
+        ssl_context=ssl_context, config=config, dns_domain=dns_domain, use_default_sni_function=True,
+        use_sni_extended=True, print_kwargs=print_kwargs)
+
+    server_certificate_file_path, server_private_key_file_path = \
+        certificator.select_server_ssl_context_certificate(config=config, print_kwargs=print_kwargs)
+
+    # If the user chose 'sni_create_server_certificate_for_each_domain = 1' in the configuration file,
+    # it means that 'self.server_certificate_file_path' will be empty, which is OK, since we'll inject
+    # dynamically created certificate from certs folder through SNI.
+    if server_certificate_file_path:
+        load_certificate_and_key_into_server_ssl_context(
+            ssl_context, server_certificate_file_path, server_private_key_file_path,
+            print_kwargs=print_kwargs)
+
+    ssl_socket, error_message = wrap_socket_with_ssl_context_server_with_error_message(
+        socket_object, ssl_context, dns_domain=dns_domain, print_kwargs=print_kwargs)
+    return ssl_socket, error_message

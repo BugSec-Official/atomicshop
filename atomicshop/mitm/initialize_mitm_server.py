@@ -49,7 +49,8 @@ def initialize_mitm_server(config_static):
     filesystem.create_directory(config['log']['logs_path'])
     filesystem.create_directory(config['recorder']['recordings_path'])
     if config['certificates']['sni_get_server_certificate_from_server_socket']:
-        filesystem.create_directory(config['certificates']['sni_server_certificate_from_server_socket_download_directory'])
+        filesystem.create_directory(
+            config['certificates']['sni_server_certificate_from_server_socket_download_directory'])
 
     # Create a logger that will log messages to file, Initiate System logger.
     system_logger = loggingw.get_logger_with_stream_handler_and_timedfilehandler(
