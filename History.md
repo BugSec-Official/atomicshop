@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.1.2 - 31.08.2023
+  * 'mitm.import_config' - bugfix.
 * 2.1.1 - 31.08.2023
   * Overall fixes and improvements.
   * 'monitor.change_monitor' - Undergone major improvements in scalability and features added.

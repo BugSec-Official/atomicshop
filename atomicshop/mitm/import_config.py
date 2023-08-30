@@ -97,7 +97,7 @@ class ImportConfig:
         # executed with administrative privileges.
         # Also, check Admin privileges only if 'config.tcp['get_process_name']' was set to 'True' in 'config.ini' of
         # the script.
-        if self.config['dns']['target_tcp_server_ipv4'] == "127.0.0.1" and self.config['sni']['get_process_name']:
+        if self.config['dns']['target_tcp_server_ipv4'] == "127.0.0.1" and self.config['ssh']['get_process_name']:
             self.admin_rights = is_admin()
 
             # If we're not running with admin rights, prompt to the user and make him decide what to do.
