@@ -1,4 +1,3 @@
-# v1.0.1 - 24.03.2021 - 20:20
 import queue
 
 # Import FireEye Event Tracing library.

@@ -7,7 +7,6 @@ from .filesystem import remove_file
 from .urls import url_parser
 from .file_io import file_io
 from .wrappers.playwrightw import scenarios
-from .basics import threads
 
 
 # https://www.useragents.me/
@@ -47,7 +46,8 @@ def get_page_bytes(
         url: str,
         user_agent: str = None,
         chrome_user_agent: bool = False,
-        path: str = None) -> bytes:
+        path: str = None,
+        print_kwargs: dict = None) -> bytes:
     """
     Function returns the page content from the given URL.
     Returns only the byte response.
@@ -56,8 +56,13 @@ def get_page_bytes(
     :param user_agent: string, user agent to use when downloading the page.
     :param chrome_user_agent: boolean, if True, the Chrome user agent will be used: 'Chrome_111.0.0_Windows_10-11_x64'.
     :param path: string, path to save the downloaded file to. If None, the file will not be saved to disk.
+    :param print_kwargs: dict, that contains all the arguments for 'print_api' function.
+
     :return: bytes, page content.
     """
+
+    if not print_kwargs:
+        print_kwargs = dict()
 
     if chrome_user_agent and user_agent:
         raise ValueError('ERROR: [user_agent] specified and [chrome_user_agent] usage is [True]. Choose one.')
@@ -77,7 +82,7 @@ def get_page_bytes(
 
     # Save the file to disk, if path was specified.
     if path:
-        file_io.write_file(content=response, file_path=path, file_mode='wb')
+        file_io.write_file(content=response, file_path=path, file_mode='wb', **print_kwargs)
 
     return response
 
@@ -109,7 +114,7 @@ def get_page_content(
     result = None
     if get_method == 'urllib':
         # Get HTML from url, return bytes.
-        result = get_page_bytes(url=url, chrome_user_agent=True, path=path)
+        result = get_page_bytes(url=url, chrome_user_agent=True, path=path, print_kwargs=print_kwargs)
     elif get_method == 'playwright_html':
         result = scenarios.get_page_content_in_thread(
             url=url, page_format='html', path=path, html_convert_to_bytes=playwright_html_convert_to_bytes,

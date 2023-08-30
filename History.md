@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.1.1 - 31.08.2023
+  * Overall fixes and improvements.
+  * 'monitor.change_monitor' - Undergone major improvements in scalability and features added.
 * 2.1.0 - 30.08.2023
   * Overall fixes and improvements.
   * 'mitm' and 'socketw' undergone massive improvements, now support TLS / Non-TLS connections on the same port.

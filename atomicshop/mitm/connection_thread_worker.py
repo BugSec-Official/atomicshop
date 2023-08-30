@@ -127,7 +127,8 @@ def thread_worker_main(
         # Loop while received message is not empty, if so, close socket, since other side already closed.
         while client_connection_boolean:
             # Don't forget that 'ClientMessage' object is being reused at this step.
-            # Meaning, that each list / dictionary that is used to update at this loop section needs to be reinitialized.
+            # Meaning, that each list / dictionary that is used to update at
+            # this loop section needs to be reinitialized.
             # Add any variables that need reinitializing in the 'ClientMessage' class 'reinitialize' function.
             client_message.reinitialize()
 
@@ -149,8 +150,8 @@ def thread_worker_main(
             # Getting message from the client over the socket using specific class.
             client_received_raw_data = Receiver(function_client_socket_object).receive()
 
-            # If the message is empty, then the connection was closed already by the other side, so we can close the socket
-            # as well.
+            # If the message is empty, then the connection was closed already by the other side,
+            # so we can close the socket as well.
             # If the received message from the client is not empty, then continue.
             if client_received_raw_data:
                 # Putting the received message to the aggregating message class.
@@ -158,7 +159,7 @@ def thread_worker_main(
                 # Getting current time of message received from client.
                 client_message.request_time_received = datetime.now()
 
-                # HTTP Parsing section =====================================================================================
+                # HTTP Parsing section =================================================================================
                 # Parsing the raw bytes as HTTP.
                 try:
                     request_decoded = HTTPRequestParse(client_message.request_raw_bytes)
@@ -174,10 +175,10 @@ def thread_worker_main(
                 # Getting the status of http parsing
                 request_is_http, http_parsing_reason, http_parsing_error = request_decoded.check_if_http()
 
-                # Currently, we don't care if it's HTTP or not. If there was no error we can continue. Just log the reason.
+                # Currently, we don't care if it's HTTP. If there was no error we can continue. Just log the reason.
                 if not http_parsing_error:
                     network_logger.info(http_parsing_reason)
-                # If there was error, it means that the request is really HTTP, but there's a problem with its structure.
+                # If there was error - the request is really HTTP, but there's a problem with its structure.
                 # So, we'll stop the loop.
                 else:
                     client_message.error = http_parsing_reason
@@ -190,7 +191,7 @@ def thread_worker_main(
                     network_logger.info(f"Path: {request_decoded.path}")
                     # statistics.dict['path'] = request_decoded.path
                     client_message.request_raw_decoded = request_decoded
-                # HTTP Parsing section EOF =================================================================================
+                # HTTP Parsing section EOF =============================================================================
 
                 # Catching exceptions in the parser
                 try:
@@ -313,7 +314,8 @@ def thread_worker_main(
                     # If there is a response, then send it.
                     if response_raw_bytes:
                         # Sending response/s to client no matter if in record mode or not.
-                        network_logger.info(f"Sending messages to client: {len(client_message.response_list_of_raw_bytes)}")
+                        network_logger.info(
+                            f"Sending messages to client: {len(client_message.response_list_of_raw_bytes)}")
                         function_data_sent = None
 
                         # Iterate through the list of byte responses.
@@ -346,7 +348,7 @@ def thread_worker_main(
                 # We don't need to record empty message so setting the recorder state to recorded
                 function_recorded = True
 
-        # === At this point while loop of 'client_connection_boolean' was broken ===========================================
+        # === At this point while loop of 'client_connection_boolean' was broken =======================================
         # If recorder wasn't executed before, then execute it now
         if not function_recorded:
             try:
