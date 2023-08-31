@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.1.3 - 31.08.2023
+  * 'etw.dns_trace' - added more cycles to ProcessPoller.
 * 2.1.2 - 31.08.2023
   * 'mitm.import_config' - bugfix.
 * 2.1.1 - 31.08.2023
