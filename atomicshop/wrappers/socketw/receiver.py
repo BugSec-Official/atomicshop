@@ -5,15 +5,17 @@ from ...print_api import print_api
 from ..loggingw import loggingw
 
 
-def peek_first_byte(client_socket) -> bytes:
+def peek_first_bytes(client_socket, bytes_amount: int = 1) -> bytes:
     """
     Peek first byte from the socket without removing it from the buffer.
 
     :param client_socket: Socket object.
-    :return: the first byte from the socket buffer.
+    :param bytes_amount: Amount of bytes to peek.
+
+    :return: the first X bytes from the socket buffer.
     """
 
-    return client_socket.recv(1, socket.MSG_PEEK)
+    return client_socket.recv(bytes_amount, socket.MSG_PEEK)
 
 
 class Receiver:

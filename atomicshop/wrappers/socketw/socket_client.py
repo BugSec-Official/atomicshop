@@ -87,7 +87,7 @@ class SocketClient:
         # If the socket exists and still connected.
         else:
             self.logger.info(
-                f"SSL Socket already defined to [{self.service_name}:{self.service_port}]. "
+                f"Socket already defined to [{self.service_name}:{self.service_port}]. "
                 f"Should be connected - Reusing.")
             # Since, restart the function each send_receive iteration, and there's still a connection we need to
             # set it True, or the socket object will be nullified in the next step.

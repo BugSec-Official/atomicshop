@@ -102,8 +102,8 @@ def thread_worker_main(
         # Only protocols that are encrypted with TLS have the server name attribute.
         if protocol_type == "tls":
             # Get current destination domain
-            # client_message.server_name = function_client_socket_object.server_hostname
-            client_message.server_name = domain_from_dns
+            client_message.server_name = function_client_socket_object.server_hostname
+            # client_message.server_name = domain_from_dns
 
             tls_enabled = True
         # If the protocol is not TLS, then we'll use the domain from the DNS.
