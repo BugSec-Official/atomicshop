@@ -29,8 +29,8 @@ def create_ssl_context_for_server():
     # https://docs.python.org/3/library/ssl.html
     # Creating context for SSL wrapper, specifying "PROTOCOL_TLS_SERVER" will pick the best TLS version protocol for
     # the server.
-    # return ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-    return ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    return ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    # return ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
 
 
 def create_ssl_context_for_client():

@@ -1,7 +1,7 @@
 import threading
 import select
 
-from . import base, creator, get_process, accepter, statistics_csv
+from . import base, creator, get_process, accepter, statistics_csv, ssl_base
 from ...script_as_string_processor import ScriptAsStringProcessor
 from ... import queues
 from ...print_api import print_api
@@ -60,6 +60,9 @@ class SocketWrapper:
         creator.add_reusable_address_option(self.socket_object)
         creator.bind_socket_with_ip_port(self.socket_object, ip_address, port, logger=self.logger)
         creator.set_listen_on_socket(self.socket_object, logger=self.logger)
+
+        # self.socket_object, accept_error_message = creator.wrap_socket_with_ssl_context_server_sni_extended(
+        #     self.socket_object, config=self.config, print_kwargs={'logger': self.logger})
 
         return self.socket_object
 
@@ -150,13 +153,15 @@ class SocketWrapper:
                 # If 'accept()' function worked well, SSL worked well, then 'client_socket' won't be empty.
                 if client_socket:
                     # Get the protocol type from the socket.
-                    protocol_type = base.get_protocol_type(client_socket)
+                    protocol_type, _ = ssl_base.get_protocol_type(client_socket)
 
                     # If 'protocol_type' was set to 'ssl'.
+                    ssl_client_socket = None
                     if protocol_type == 'tls':
-                        client_socket, accept_error_message = creator.wrap_socket_with_ssl_context_server_sni_extended(
-                            client_socket, config=self.config, dns_domain=domain_from_dns_server,
-                            print_kwargs={'logger': self.logger})
+                        ssl_client_socket, accept_error_message = \
+                            creator.wrap_socket_with_ssl_context_server_sni_extended(
+                                client_socket, config=self.config, dns_domain=domain_from_dns_server,
+                                print_kwargs={'logger': self.logger})
 
                         if accept_error_message:
                             # Write statistics after wrap is there was an error.
@@ -177,7 +182,14 @@ class SocketWrapper:
 
                     # Create new arguments tuple that will be passed, since client socket and process_name
                     # are gathered from SocketWrapper.
-                    thread_args = (client_socket, process_name, protocol_type, domain_from_dns_server) + reference_args
+                    if ssl_client_socket:
+                        # In order to use the same object, it needs to get nullified first, since the old instance
+                        # will not get overwritten. Though it still will show in the memory as SSLSocket, it will not
+                        # be handled as such, but as regular raw socket.
+                        client_socket = None
+                        client_socket = ssl_client_socket
+                    thread_args = \
+                        (client_socket, process_name, protocol_type, domain_from_dns_server) + reference_args
                     # If 'pass_function_reference_to_thread' was set to 'False', execute the callable passed function
                     # as is.
                     if not pass_function_reference_to_thread:
