@@ -14,7 +14,7 @@ from ..print_api import print_api
 def thread_worker_main(
         function_client_socket_object,
         process_commandline: str,
-        protocol_type,
+        is_tls: bool,
         domain_from_dns,
         network_logger,
         statistics_logger,
@@ -88,7 +88,6 @@ def thread_worker_main(
         client_message: ClientMessage = ClientMessage()
         request_decoded = None
         service_client = None
-        # tls_enabled: bool = False
 
         # Getting thread ID of the current thread and putting to the client message class
         client_message.thread_id = current_thread_id()
@@ -100,16 +99,13 @@ def thread_worker_main(
         client_message.process_name = process_commandline
 
         # Only protocols that are encrypted with TLS have the server name attribute.
-        if protocol_type == "tls":
+        if is_tls:
             # Get current destination domain
             client_message.server_name = function_client_socket_object.server_hostname
             # client_message.server_name = domain_from_dns
-
-            tls_enabled = True
         # If the protocol is not TLS, then we'll use the domain from the DNS.
         else:
             client_message.server_name = domain_from_dns
-            tls_enabled = False
 
         network_logger.info(f"Thread Created - Client [{client_message.client_ip}:{client_message.source_port}] | "
                             f"Destination service: [{client_message.server_name}:{client_message.destination_port}]")
@@ -259,13 +255,13 @@ def thread_worker_main(
                         if client_message.client_ip == "127.0.0.1":
                             service_client = SocketClient(
                                 service_name=client_message.server_name, service_port=client_message.destination_port,
-                                tls=tls_enabled,
+                                tls=is_tls,
                                 dns_servers_list=config['tcp']['forwarding_dns_service_ipv4_list___only_for_localhost'])
                         # If we're not on localhost, then connect to domain directly.
                         else:
                             service_client = SocketClient(
                                 service_name=client_message.server_name, service_port=client_message.destination_port,
-                                tls=tls_enabled)
+                                tls=is_tls)
 
                     # Sending current client message and receiving a response.
                     # If there was an error it will be passed to "client_message" object class and if not, "None" will

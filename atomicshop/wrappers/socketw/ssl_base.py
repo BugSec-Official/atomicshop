@@ -1,5 +1,5 @@
 import ssl
-from typing import Union, Tuple, Optional
+from typing import Tuple, Optional
 
 from . import receiver
 
@@ -24,18 +24,19 @@ def convert_der_x509_bytes_to_pem_string(certificate) -> str:
     return ssl.DER_cert_to_PEM_cert(certificate)
 
 
-def get_protocol_type(client_socket) -> Union[Tuple[Optional[str], Optional[Tuple[str, str]]], Tuple[None, None]]:
+def is_tls(client_socket) -> Optional[Tuple[str, str]]:
     """
     Return protocol type of the incoming socket after 'accept()'.
     :param client_socket: incoming socket after 'accept()'.
-    :return: string with protocol type, (tuple with content type, protocol type + version).
+    :return: tuple with content type, protocol type + version.
+        If the length of the first bytes is less than 3, return None.
     """
 
     first_bytes = receiver.peek_first_bytes(client_socket, bytes_amount=3)
 
     # Ensure we got enough data.
     if len(first_bytes) < 3:
-        return None, None
+        return None
 
     # Extract the content type and version
     content_type, version_major, version_minor = first_bytes
@@ -64,6 +65,6 @@ def get_protocol_type(client_socket) -> Union[Tuple[Optional[str], Optional[Tupl
 
     # If both parts of the tuple are not None, return the protocol type.
     if tls_content_and_version_tuple[0] and tls_content_and_version_tuple[1]:
-        return 'tls', tls_content_and_version_tuple
+        return tls_content_and_version_tuple
     else:
-        return None, None
+        return None

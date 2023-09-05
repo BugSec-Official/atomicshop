@@ -436,7 +436,13 @@ def cross_single_connection_with_processes(connection: dict, processes: dict) ->
 
     # Get the 'name' and 'cmdline' by 'pid' to dict. 'connection' is current iteration, where 'pid' is not
     # removed.
+    # try:
     connection_process_dict = processes[connection['pid']].copy()
+    # except KeyError:
+    #     connection_process_dict = {
+    #         'name': str(connection['pid']),
+    #         'cmdline': str()
+    #     }
 
     # We want 'name' and 'cmdline' to be first in the dict, so we'll append what is left of current iteration.
     connection_process_dict.update(connection)

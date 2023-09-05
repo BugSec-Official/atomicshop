@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.1.5 - 05.09.2023
+  * 'etw.dns_trace' - changed cycles in ProcessPoller.
+  * pywintrace - added latest WHL from GitHub Releases.
 * 2.1.4 - 03.09.2023
   * 'socketsw' - fixed bug in tls / non-tls connection handling.
 * 2.1.3 - 31.08.2023
