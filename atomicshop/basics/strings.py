@@ -218,6 +218,14 @@ def is_alphanumeric_only(string: str) -> bool:
     return string.isalnum()
 
 
+def is_numeric_only(string: str) -> bool:
+    """
+    Function to check if string contains only numeric characters.
+    """
+
+    return string.isdigit()
+
+
 def replace_words_with_values_from_dict(
         sentence: str, dictionary: dict, contains: bool = False, case_insensitive: bool = False) -> str:
     """
