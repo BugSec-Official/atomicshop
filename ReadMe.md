@@ -82,6 +82,16 @@ To get a local copy up and running follow these simple steps.
    ```
    If you're on windows you can use the 'Setup.cmd' provided in the repo.
 
+3. To install the latest version of 'pywintrace' you can use pip:
+   ```sh
+   pip install https://github.com/fireeye/pywintrace/releases/download/v0.3.0/pywintrace-0.3.0-py3-none-any.whl
+   ```
+
+   The latest version on PyPI is 0.2, so you will need to install from GitHub.
+   Alternatively, you can use a cmd file in the addon folder after 'atomicshop' installation:
+   ```sh
+   "\Lib\site-packages\atomicshop\addons\pywintrace\install_pywintrace_0.3.cmd"
+   ```
 
 
 <!-- USAGE EXAMPLES -->
