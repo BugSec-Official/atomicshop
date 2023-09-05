@@ -7,6 +7,20 @@ from ..print_api import print_api
 import psutil
 
 
+def get_process_name_by_pid(pid: int) -> str:
+    """
+    The function will return process name by pid.
+
+    Exceptions:
+        psutil.NoSuchProcess: if the process is already dead.
+
+    :param pid: int, pid of the process.
+    :return: string.
+    """
+
+    return psutil.Process(pid).name()
+
+
 def get_network_interfaces() -> list:
     """
     The function will return list of all network interfaces.
@@ -269,8 +283,8 @@ def convert_single_connection_to_dict(connection, attrs: list = None) -> dict:
         pass
 
     connection_dict.update({
-        'family': str(connection.family),
-        'type': str(connection.type),
+        'family': str(connection.family.name),
+        'type': str(connection.type.name),
         'status': str(connection.status),
         'src_ip': src_dict['src_ip'],
         'src_port': src_dict['src_port'],
@@ -436,13 +450,15 @@ def cross_single_connection_with_processes(connection: dict, processes: dict) ->
 
     # Get the 'name' and 'cmdline' by 'pid' to dict. 'connection' is current iteration, where 'pid' is not
     # removed.
-    # try:
-    connection_process_dict = processes[connection['pid']].copy()
-    # except KeyError:
-    #     connection_process_dict = {
-    #         'name': str(connection['pid']),
-    #         'cmdline': str()
-    #     }
+    try:
+        connection_process_dict = processes[connection['pid']].copy()
+    # If the PID is not available in current run, it means that the process is already dead.
+    # return only the PID.
+    except KeyError:
+        connection_process_dict = {
+            'name': str(connection['pid']),
+            'cmdline': str()
+        }
 
     # We want 'name' and 'cmdline' to be first in the dict, so we'll append what is left of current iteration.
     connection_process_dict.update(connection)

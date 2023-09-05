@@ -4,6 +4,8 @@ from ..wrappers import psutilw
 from ..basics import dicts
 from ..process_poller import ProcessPollerPool
 
+import psutil
+
 
 class DnsTrace:
     def __init__(self, enable_process_poller: bool = False, attrs: list = None):
@@ -26,7 +28,7 @@ class DnsTrace:
         )
 
         if self.enable_process_poller:
-            self.process_poller = ProcessPollerPool(store_cycles=300, interval_seconds=0.01)
+            self.process_poller = ProcessPollerPool(store_cycles=400, interval_seconds=0.01, operation='process')
 
     def start(self):
         if self.enable_process_poller:
@@ -62,6 +64,12 @@ class DnsTrace:
             'query_type_id': str(event[1]['QueryType']),
             'query_type': dns.TYPES_DICT[str(event[1]['QueryType'])]
         }
+
+        # Get process name only from psutil, just in case.
+        try:
+            process_name = psutilw.get_process_name_by_pid(event_dict['pid'])
+        except psutil.NoSuchProcess:
+            process_name = str(event_dict['pid'])
 
         # Defining list if ips and other answers, which aren't IPs.
         list_of_ips = list()
@@ -101,6 +109,9 @@ class DnsTrace:
 
         if self.enable_process_poller:
             event_dict = psutilw.cross_single_connection_with_processes(event_dict, self.process_poller.processes)
+            # If it was impossible to get the process name from the process poller, get it from psutil.
+            if event_dict['name'].isnumeric():
+                event_dict['name'] = process_name
 
         if self.attrs:
             event_dict = dicts.reorder_keys(

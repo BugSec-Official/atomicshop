@@ -1,6 +1,10 @@
 <!-- HISTORY -->
 ## History
 
+* 2.1.7 - 05.09.2023
+  * 'etw.dns_trace' - fixes in ProcessPoller.
+  * 'basics.strings' - added 'is_numeric_only' function.
+  * 'basics' - added 'multiprocesses' module.
 * 2.1.6 - 05.09.2023
   * pywintrace - added instructions how to install the WHL file.
 * 2.1.5 - 05.09.2023

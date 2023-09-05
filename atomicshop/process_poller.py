@@ -107,6 +107,11 @@ class ProcessPollerPool:
 
                 current_processes = converted_process_dict
 
+            # Remove Command lines that contains only numbers, since they are useless.
+            for pid, process_info in current_processes.items():
+                if process_info['cmdline'].isnumeric():
+                    current_processes[pid]['cmdline'] = str()
+
             # Append the current processes to the list.
             list_of_processes.append(current_processes)
 

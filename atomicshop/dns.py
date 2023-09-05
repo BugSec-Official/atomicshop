@@ -5,7 +5,8 @@ TYPES_DICT = {
     '5': 'CNAME',
     '12': 'PTR',
     '28': 'AAAA',
-    '33': 'SRV'
+    '33': 'SRV',
+    '255': 'ANY'
 }
 
 # Event Tracing DNS info.
