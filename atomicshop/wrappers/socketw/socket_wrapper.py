@@ -153,11 +153,14 @@ class SocketWrapper:
                 # If 'accept()' function worked well, SSL worked well, then 'client_socket' won't be empty.
                 if client_socket:
                     # Get the protocol type from the socket.
-                    protocol_type, _ = ssl_base.get_protocol_type(client_socket)
+                    is_tls: bool = False
+                    tls_properties = ssl_base.is_tls(client_socket)
+                    if tls_properties:
+                        is_tls = True
 
-                    # If 'protocol_type' was set to 'ssl'.
+                    # If 'is_tls' is True.
                     ssl_client_socket = None
-                    if protocol_type == 'tls':
+                    if is_tls:
                         ssl_client_socket, accept_error_message = \
                             creator.wrap_socket_with_ssl_context_server_sni_extended(
                                 client_socket, config=self.config, dns_domain=domain_from_dns_server,
@@ -189,7 +192,7 @@ class SocketWrapper:
                         client_socket = None
                         client_socket = ssl_client_socket
                     thread_args = \
-                        (client_socket, process_name, protocol_type, domain_from_dns_server) + reference_args
+                        (client_socket, process_name, is_tls, domain_from_dns_server) + reference_args
                     # If 'pass_function_reference_to_thread' was set to 'False', execute the callable passed function
                     # as is.
                     if not pass_function_reference_to_thread:

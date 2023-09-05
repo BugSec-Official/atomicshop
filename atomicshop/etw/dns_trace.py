@@ -26,7 +26,7 @@ class DnsTrace:
         )
 
         if self.enable_process_poller:
-            self.process_poller = ProcessPollerPool(store_cycles=20, interval_seconds=0.1)
+            self.process_poller = ProcessPollerPool(store_cycles=300, interval_seconds=0.01)
 
     def start(self):
         if self.enable_process_poller:
@@ -59,8 +59,8 @@ class DnsTrace:
             'pid': event[1]['EventHeader']['ProcessId'],
             'etw_id': event[0],
             'domain': event[1]['QueryName'],
-            'query_type_id': event[1]['QueryType'],
-            'query_type': dns.TYPES_DICT[event[1]['QueryType']],
+            'query_type_id': str(event[1]['QueryType']),
+            'query_type': dns.TYPES_DICT[str(event[1]['QueryType'])]
         }
 
         # Defining list if ips and other answers, which aren't IPs.
