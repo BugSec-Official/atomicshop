@@ -409,6 +409,10 @@ class PsutilConnections:
                 # Get the 'name' and 'cmdline' by 'pid' to dict.
                 connection_dict = convert_single_connection_to_dict(connection)
 
+                # If cmdline is a number, we can remove it, since it is not a command line, which isn't helping us.
+                if process['cmdline'].isdigit():
+                    process['cmdline'] = str()
+
                 # Create new dict with 'name', 'cmdline' and 'pid' to the connection dict.
                 connection_dict_with_process: dict = {
                     'name': process['name'],

@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.1.8 - 06.09.2023
+  * 'etw.dns_trace' - fixes in ProcessPoller.
 * 2.1.7 - 05.09.2023
   * 'etw.dns_trace' - fixes in ProcessPoller.
   * 'basics.strings' - added 'is_numeric_only' function.
