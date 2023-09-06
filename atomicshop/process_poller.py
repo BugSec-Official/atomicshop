@@ -15,17 +15,26 @@ class ProcessPollerPool:
     Later, I'll find a solution to make it more efficient.
     """
     def __init__(
-            self, store_cycles: int = 1, interval_seconds: float = 0, operation: str = 'thread',
+            self, store_cycles: int = 500, interval_seconds: float = 0, operation: str = 'process',
             poller_method: str = 'pywin32'):
         """
         :param store_cycles: int, how many cycles to store. Each cycle is polling processes.
             Example: Specifying 3 will store last 3 polled cycles of processes.
-            Default is 1, which means that only the last cycle will be stored.
+
+            Default is 500, which means that 500 latest cycles original PIDs and their process names will be stored.
         :param interval_seconds: float, how many seconds to wait between each cycle.
             Default is 0, which means that the polling will be as fast as possible.
+
+            Basically, you want it to be '0' if you want to get the most recent processes.
+            Any polling by itself takes time, so if you want to get the most recent processes, you want to do it as fast
+            as possible.
         :param operation: str, 'thread' or 'process'. Default is 'process'.
-            'thread': The polling will be done in a new thread.
             'process': The polling will be done in a new process.
+            'thread': The polling will be done in a new thread.
+
+            Python is slow, if you are going to use 'thread' all other operations inside this thread will be very slow.
+            You can even get exceptions, if you're using process polling for correlations of PIDs and process names.
+            It is advised to use the 'process' operation, which will not affect other operations in the thread.
         :param poller_method: str. Default is 'pywin32'. Available:
             'psutil': Process Polling done by 'psutil', very slow and inefficient, if you're doing more stuff with
                 'psutil' - it will be slow.
