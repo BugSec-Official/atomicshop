@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.2.0 - 10.09.2023
+  * Created DLL for ProcessPoller that fetches Process Name and Command Line of a PID. Now loads by default to the poller.
 * 2.1.8 - 06.09.2023
   * 'etw.dns_trace' - fixes in ProcessPoller.
 * 2.1.7 - 05.09.2023

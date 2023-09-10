@@ -1,10 +1,40 @@
 import threading
 import multiprocessing
 import time
+from typing import Literal, Union
 
 from .wrappers.pywin32w import wmi_win32process
 from .wrappers import psutilw
 from .basics import list_of_dicts, dicts
+from .process_name_cmd import ProcessNameCmdline
+
+
+def get_process_list(
+        get_method: Literal['psutil', 'pywin32', 'process_dll'] = 'process_dll',
+        sort_by: Literal['pid', 'name', 'cmdline', None] = None
+) -> list:
+    """
+    The function will get the list of opened processes and return it as a list of dicts.
+
+    :param get_method: str, The method to get the list of processes. Default is 'process_list_dll'.
+        'psutil': Get the list of processes by 'psutil' library. Resource intensive and slow.
+        'pywin32': Get the list of processes by 'pywin32' library, using WMI. Not resource intensive, but slow.
+        'process_dll'. Not resource intensive and fast. Probably works only in Windows 10 x64
+    :param sort_by: str, the key to sort the list of processes by. Default is None - Not to sort.
+
+    :return: list of dicts, of opened processes.
+    """
+
+    # Get the list of processes.
+    process_list = psutilw.PsutilProcesses().get_processes_as_dict(
+        attrs=['pid', 'name', 'cmdline'], cmdline_to_string=True)
+
+    # Remove Command lines that contains only numbers, since they are useless.
+    for pid, process_info in process_list.items():
+        if process_info['cmdline'].isnumeric():
+            process_list[pid]['cmdline'] = str()
+
+    return list_of_dicts.sort_by_keys(process_list, key_list=['pid'])
 
 
 class ProcessPollerPool:
@@ -15,8 +45,10 @@ class ProcessPollerPool:
     Later, I'll find a solution to make it more efficient.
     """
     def __init__(
-            self, store_cycles: int = 500, interval_seconds: float = 0, operation: str = 'process',
-            poller_method: str = 'pywin32'):
+            self, store_cycles: int = 500,
+            interval_seconds: Union[int, float] = 0,
+            operation: Literal['thread', 'process'] = 'thread',
+            poller_method: Literal['psutil', 'pywin32', 'process_dll'] = 'process_dll'):
         """
         :param store_cycles: int, how many cycles to store. Each cycle is polling processes.
             Example: Specifying 3 will store last 3 polled cycles of processes.
@@ -35,10 +67,10 @@ class ProcessPollerPool:
             Python is slow, if you are going to use 'thread' all other operations inside this thread will be very slow.
             You can even get exceptions, if you're using process polling for correlations of PIDs and process names.
             It is advised to use the 'process' operation, which will not affect other operations in the thread.
-        :param poller_method: str. Default is 'pywin32'. Available:
-            'psutil': Process Polling done by 'psutil', very slow and inefficient, if you're doing more stuff with
-                'psutil' - it will be slow.
-            'pywin32': Process Polling done by 'pywin32', querying WMI, which is twice faster than psutil.
+        :param poller_method: str. Default is 'process_dll'. Available:
+            'psutil': Get the list of processes by 'psutil' library. Resource intensive and slow.
+            'pywin32': Get the list of processes by 'pywin32' library, using WMI. Not resource intensive, but slow.
+            'process_dll'. Not resource intensive and fast. Probably works only in Windows 10 x64.
         """
 
         self.store_cycles: int = store_cycles
@@ -50,6 +82,8 @@ class ProcessPollerPool:
             self.process_polling_instance = psutilw.PsutilProcesses()
         elif self.poller_method == 'pywin32':
             self.process_polling_instance = wmi_win32process.Pywin32Processes()
+        elif self.poller_method == 'process_dll':
+            self.process_polling_instance = ProcessNameCmdline()
 
         # Current process pool.
         self.processes: dict = dict()
@@ -88,6 +122,9 @@ class ProcessPollerPool:
         if self.poller_method == 'pywin32':
             # We must initiate the connection inside the thread/process, because it is not thread-safe.
             self.process_polling_instance.connect()
+        elif self.poller_method == 'process_dll':
+            # We must initiate the dll load inside the thread/process, because it is not thread-safe.
+            self.process_polling_instance.load()
 
         list_of_processes: list = list()
         while self.running:
@@ -115,10 +152,15 @@ class ProcessPollerPool:
                         process_info, {'Name': 'name', 'CommandLine': 'cmdline'})
 
                 current_processes = converted_process_dict
+            elif self.poller_method == 'process_dll':
+                # Get the list of dicts of processes.
+                current_processes = self.process_polling_instance.get_process_details(sort_by='pid', as_dict=True)
 
             # Remove Command lines that contains only numbers, since they are useless.
             for pid, process_info in current_processes.items():
                 if process_info['cmdline'].isnumeric():
+                    current_processes[pid]['cmdline'] = str()
+                elif process_info['cmdline'] == 'Error':
                     current_processes[pid]['cmdline'] = str()
 
             # Append the current processes to the list.

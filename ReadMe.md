@@ -90,7 +90,7 @@ To get a local copy up and running follow these simple steps.
    The latest version on PyPI is 0.2, so you will need to install from GitHub.
    Alternatively, you can use a cmd file in the addon folder after 'atomicshop' installation:
    ```sh
-   "\Lib\site-packages\atomicshop\addons\pywintrace\install_pywintrace_0.3.cmd"
+   "\Lib\site-packages\atomicshop\addons\post_install\install_pywintrace_0.3.cmd"
    ```
 
 
