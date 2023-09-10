@@ -53,6 +53,9 @@ class ProcessNameCmdline:
 
         processes = self.callback_output.data
 
+        # Clear the callback output list, or it will be appended each time.
+        self.callback_output.data = list()
+
         if sort_by:
             processes = list_of_dicts.sort_by_keys(processes, key_list=[sort_by])
 

@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.2.1 - 19.09.2023
+  * Bugfixes in ProcessPoller logic.
 * 2.2.0 - 10.09.2023
   * Created DLL for ProcessPoller that fetches Process Name and Command Line of a PID. Now loads by default to the poller.
 * 2.1.8 - 06.09.2023
