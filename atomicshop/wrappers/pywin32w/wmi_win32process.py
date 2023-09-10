@@ -21,6 +21,7 @@ while True:
     time.sleep(0.1)
 """
 
+
 def convert_single_process_to_dict(process, attrs: list = None) -> dict:
     """
     The function will convert pywin32 WMI COM object of Win32_Process to dict.

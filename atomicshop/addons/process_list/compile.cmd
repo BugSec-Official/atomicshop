@@ -1,0 +1,2 @@
+"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.37.32822\bin\Hostx64\x64\cl.exe" /LD /EHsc c:\compile\process_list.cpp /Fo:c:\compile /Fe:c:\compile\process_list.dll /I c:\compile\inc\ /link /LIBPATH:c:\compile\lib\ Advapi32.lib ntdll.lib Psapi.lib
+pause
