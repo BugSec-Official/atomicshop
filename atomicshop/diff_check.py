@@ -118,7 +118,7 @@ class DiffChecker:
 
         return self._handle_input_file(sort_by_keys, print_kwargs=print_kwargs)
 
-    def _handle_input_file(self, sort_by_keys, print_kwargs: dict = None):
+    def _handle_input_file(self, sort_by_keys=None, print_kwargs: dict = None):
         # If 'input_file_path' was specified, this means that the input file will be created for storing
         # content of the function to compare.
         if self.input_file_path:
@@ -139,7 +139,11 @@ class DiffChecker:
                     print_api(message, color='yellow', **print_kwargs)
                     pass
 
-        current_content = list(self.check_object)
+            # get the content of current function.
+            if isinstance(self.check_object, list):
+                current_content = list(self.check_object)
+            else:
+                current_content = self.check_object
 
         # If known content differs from just taken content.
         result = None
@@ -150,7 +154,7 @@ class DiffChecker:
         else:
             return self._non_aggregation_handling(current_content, result, message, print_kwargs=print_kwargs)
 
-    def _aggregation_handling(self, current_content, result, message, sort_by_keys, print_kwargs):
+    def _aggregation_handling(self, current_content, result, message, sort_by_keys, print_kwargs: dict = None):
         if current_content[0] not in self.previous_content:
             # If known content is not empty (if it is, it means it is the first iteration, and we don't have the input
             # file, so we don't need to update the 'result', since there is nothing to compare yet).

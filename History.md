@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.2.3 - 11.09.2023
+  * Bugfixes in DiffCheck.
 * 2.2.2 - 11.09.2023
   * Added aggregation function to DiffCheck.
 * 2.2.1 - 10.09.2023
