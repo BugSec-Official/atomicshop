@@ -26,6 +26,7 @@ class ProcessNameCmdline:
         self.dll = ctypes.windll.LoadLibrary(self.dll_path)
         self.callback_output = OutputList()
         self.CALLBACKFUNC = ctypes.WINFUNCTYPE(None, wintypes.DWORD, wintypes.LPWSTR, wintypes.LPWSTR)
+        self.dll.GetProcessDetails.argtypes = [self.CALLBACKFUNC]
 
     def get_process_details(
             self,
@@ -48,7 +49,6 @@ class ProcessNameCmdline:
                 }
         """
 
-        self.dll.GetProcessDetails.argtypes = [self.CALLBACKFUNC]
         self.dll.GetProcessDetails(self.CALLBACKFUNC(self.callback_output.callback))
 
         processes = self.callback_output.data

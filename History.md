@@ -1,7 +1,9 @@
 <!-- HISTORY -->
 ## History
 
-* 2.2.1 - 19.09.2023
+* 2.2.2 - 11.09.2023
+  * Added aggregation function to DiffCheck.
+* 2.2.1 - 10.09.2023
   * Bugfixes in ProcessPoller logic.
 * 2.2.0 - 10.09.2023
   * Created DLL for ProcessPoller that fetches Process Name and Command Line of a PID. Now loads by default to the poller.
