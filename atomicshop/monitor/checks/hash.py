@@ -24,7 +24,9 @@ def _execute_cycle(change_monitor_instance, print_kwargs: dict = None):
             # Get the hash of the object.
             url.get_hash(change_monitor_instance, check_object_index, check_object, print_kwargs=print_kwargs)
 
-        change_monitor_instance._set_input_file_path(check_object_index=check_object_index)
+        if change_monitor_instance.first_cycle:
+            # Set the input file path.
+            change_monitor_instance._set_input_file_path(check_object_index=check_object_index)
 
         # Check if the object was updated.
         result, message = change_monitor_instance.diff_check_list[check_object_index].check_string(
