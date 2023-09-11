@@ -1,7 +1,9 @@
 from pathlib import Path
+from typing import Union
 
 from .file_io import file_io, jsons
 from .print_api import print_api
+from .basics import list_of_dicts
 
 
 class DiffChecker:
@@ -23,9 +25,11 @@ class DiffChecker:
             self,
             check_object: any = None,
             check_object_display_name: str = None,
+            aggregation: bool = False,
             input_file_path: str = None,
             input_file_write_only: bool = True,
-            return_first_cycle: bool = True):
+            return_first_cycle: bool = True
+    ):
         """
         :param check_object: any, object to check if it changed.
             You will need to execute appropriate function to check the object.
@@ -35,6 +39,9 @@ class DiffChecker:
             function input for that object. So, not always you know what your object type during class initialization.
         :param check_object_display_name: string, name of the object to display in the message.
             If not specified, the 'check_object' will be displayed.
+        :param aggregation: boolean, if True, the object will be aggregated with other objects in the list of objects.
+            Meaning, that the object will be checked against the existing objects in the list, and if it is not
+            in the list, it will be added to the list. If it is in the list, it will be ignored.
         :param input_file_path: string, full file path for storing input file for current state of objects,
             to check later if this state isn't updated. If this variable is left empty, all the content will be saved
             in memory and input file will not be used.
@@ -63,6 +70,7 @@ class DiffChecker:
 
         self.check_object = check_object
         self.check_object_display_name = check_object_display_name
+        self.aggregation: bool = aggregation
         self.input_file_path: str = input_file_path
         self.input_file_write_only: bool = input_file_write_only
         self.return_first_cycle: bool = return_first_cycle
@@ -71,7 +79,7 @@ class DiffChecker:
             self.check_object_display_name = self.check_object
 
         # Previous content.
-        self.previous_content = None
+        self.previous_content: Union['list', 'str', None] = None
         # The format the file will be saved as (not used as extension): txt, json.
         self.save_as: str = str()
 
@@ -91,9 +99,12 @@ class DiffChecker:
 
         return self._handle_input_file(print_kwargs=print_kwargs)
 
-    def check_list_of_dicts(self, print_kwargs: dict = None):
+    def check_list_of_dicts(self, sort_by_keys: list = None, print_kwargs: dict = None):
         """
         The function will check list of dicts for change, while saving it to combined json file.
+
+        :param sort_by_keys: list, of keys to sort the list of dicts by.
+        :param print_kwargs: dict, of kwargs to pass to 'print_api' function.
         """
 
         if not isinstance(self.check_object, list):
@@ -105,9 +116,9 @@ class DiffChecker:
         if not self.previous_content:
             self.previous_content = list()
 
-        return self._handle_input_file(print_kwargs=print_kwargs)
+        return self._handle_input_file(sort_by_keys, print_kwargs=print_kwargs)
 
-    def _handle_input_file(self, print_kwargs: dict = None):
+    def _handle_input_file(self, sort_by_keys, print_kwargs: dict = None):
         # If 'input_file_path' was specified, this means that the input file will be created for storing
         # content of the function to compare.
         if self.input_file_path:
@@ -128,15 +139,55 @@ class DiffChecker:
                     print_api(message, color='yellow', **print_kwargs)
                     pass
 
-        # get the content of current function.
-        if isinstance(self.check_object, list):
-            current_content = list(self.check_object)
-        else:
-            current_content = self.check_object
+        current_content = list(self.check_object)
 
         # If known content differs from just taken content.
         result = None
         message = f'First Cycle on Object: {self.check_object_display_name}'
+
+        if self.aggregation:
+            return self._aggregation_handling(current_content, result, message, sort_by_keys=sort_by_keys, print_kwargs=print_kwargs)
+        else:
+            return self._non_aggregation_handling(current_content, result, message, print_kwargs=print_kwargs)
+
+    def _aggregation_handling(self, current_content, result, message, sort_by_keys, print_kwargs):
+        if current_content[0] not in self.previous_content:
+            # If known content is not empty (if it is, it means it is the first iteration, and we don't have the input
+            # file, so we don't need to update the 'result', since there is nothing to compare yet).
+            if self.previous_content or (not self.previous_content and self.return_first_cycle):
+                result = {
+                    'object': self.check_object_display_name,
+                    'old': list(self.previous_content),
+                    'updated': current_content
+                    # 'type': self.object_type
+                }
+
+                # f"Type: {result['type']} | "
+                message = f"Object: {result['object']} | Old: {result['old']} | Updated: {result['updated']}"
+
+            # Make known content the current, since it is updated.
+            self.previous_content.extend(current_content)
+
+            # Sort list of dicts by specified list of keys.
+            if sort_by_keys:
+                self.previous_content = list_of_dicts.sort_by_keys(
+                    self.previous_content, sort_by_keys, case_insensitive=True)
+
+            # If 'input_file_path' was specified by the user, it means that we will use the input file to save
+            # our known content there for next iterations to compare.
+            if self.input_file_path:
+                if self.save_as == 'txt':
+                    # noinspection PyTypeChecker
+                    file_io.write_file(self.previous_content, self.input_file_path, **print_kwargs)
+                elif self.save_as == 'json':
+                    jsons.write_json_file(
+                        self.previous_content, self.input_file_path, use_default_indent=True, **print_kwargs)
+        else:
+            message = f"Object didn't change: {self.check_object_display_name}"
+
+        return result, message
+
+    def _non_aggregation_handling(self, current_content, result, message, print_kwargs):
         if self.previous_content != current_content:
             # If known content is not empty (if it is, it means it is the first iteration, and we don't have the input
             # file, so we don't need to update the 'result', since there is nothing to compare yet).
@@ -153,10 +204,12 @@ class DiffChecker:
 
             # Make known content the current, since it is updated.
             self.previous_content = current_content
+
             # If 'input_file_path' was specified by the user, it means that we will use the input file to save
             # our known content there for next iterations to compare.
             if self.input_file_path:
                 if self.save_as == 'txt':
+                    # noinspection PyTypeChecker
                     file_io.write_file(self.previous_content, self.input_file_path, **print_kwargs)
                 elif self.save_as == 'json':
                     jsons.write_json_file(

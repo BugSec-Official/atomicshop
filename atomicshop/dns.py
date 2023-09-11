@@ -1,11 +1,15 @@
 # Defining Dictionary of Numeric to String DNS Query Types.
+# https://en.wikipedia.org/wiki/List_of_DNS_record_types
 TYPES_DICT = {
     '1': 'A',
     '2': 'NS',
     '5': 'CNAME',
+    '6': 'SOA',
     '12': 'PTR',
+    '15': 'MX',
     '28': 'AAAA',
     '33': 'SRV',
+    '65': 'HTTPS',
     '255': 'ANY'
 }
 

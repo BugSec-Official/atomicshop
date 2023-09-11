@@ -14,7 +14,7 @@ def get_process_time_tester(
         times_to_test: int = 50
 ):
     """
-    The function will test the time it takes to get the list of processes.
+    The function will test the time it takes to get the list of processes with different methods and cycles.
 
     :param get_method: str, The method to get the list of processes. Default is 'process_list_dll'.
         'psutil': Get the list of processes by 'psutil' library. Resource intensive and slow.
@@ -82,14 +82,9 @@ class GetProcessList:
                 self.process_polling_instance.load()
                 self.connected = True
 
-    def get_processes(
-            self,
-            sort_by: Literal['pid', 'name', 'cmdline', None] = None
-    ) -> Union[list, dict]:
+    def get_processes(self) -> Union[list, dict]:
         """
         The function will get the list of opened processes and return it as a list of dicts.
-
-        :param sort_by: str, the key to sort the list of processes by. Default is None - Not to sort.
 
         :return: list of dicts, of opened processes.
         """
@@ -109,7 +104,7 @@ class GetProcessList:
 
             return converted_process_dict
         elif self.get_method == 'process_dll':
-            return self.process_polling_instance.get_process_details(sort_by=sort_by, as_dict=True)
+            return self.process_polling_instance.get_process_details(as_dict=True)
 
 
 class ProcessPollerPool:
@@ -130,6 +125,9 @@ class ProcessPollerPool:
             Example: Specifying 3 will store last 3 polled cycles of processes.
 
             Default is 200, which means that 200 latest cycles original PIDs and their process names will be stored.
+
+            You can execute the 'get_process_time_tester' function in order to find the optimal number of cycles
+            and how much time it will take.
         :param interval_seconds: float, how many seconds to wait between each cycle.
             Default is 0, which means that the polling will be as fast as possible.
 

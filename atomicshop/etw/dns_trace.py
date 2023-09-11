@@ -28,7 +28,7 @@ class DnsTrace:
         )
 
         if self.enable_process_poller:
-            self.process_poller = ProcessPollerPool(store_cycles=30, operation='process', poller_method='process_dll')
+            self.process_poller = ProcessPollerPool(store_cycles=200, operation='process', poller_method='process_dll')
 
     def start(self):
         if self.enable_process_poller:
