@@ -5,6 +5,7 @@ from subprocess import Popen, PIPE, STDOUT, CREATE_NEW_CONSOLE
 from .print_api import print_api
 from .inspect_wrapper import get_target_function_default_args_and_combine_with_current
 from .basics.strings import match_pattern_against_string
+from .process_poller import GetProcessList
 
 import psutil
 
@@ -124,7 +125,7 @@ def safe_terminate(popen_process):
     popen_process.wait()
 
 
-def match_pattern_against_current_processes_cmdlines(pattern: str, first: bool = False, prefix_suffix: bool = False):
+def match_pattern_against_running_processes_cmdlines(pattern: str, first: bool = False, prefix_suffix: bool = False):
     """
     The function matches specified string pattern including wildcards against all the currently running processes'
     command lines.
@@ -135,14 +136,18 @@ def match_pattern_against_current_processes_cmdlines(pattern: str, first: bool =
     :param prefix_suffix: boolean. Check the description in 'match_pattern_against_string' function.
     """
 
+    # Get the list of all the currently running processes.
+    get_process_list = GetProcessList(get_method='pywin32', connect_on_init=True)
+    processes = get_process_list.get_processes(as_dict=False)
+
     # Iterate through all the current process, while fetching executable file 'name' and the command line.
     # Name is always populated, while command line is not.
     matched_cmdlines: list = list()
-    for process in psutil.process_iter(['name', 'cmdline']):
+    for process in processes:
         # Check if command line isn't empty and that string pattern is matched against command line.
-        if process.info['cmdline'] and \
-                match_pattern_against_string(pattern, shlex.join(process.info['cmdline']), prefix_suffix):
-            matched_cmdlines.append(process.info['cmdline'])
+        if process['cmdline'] and \
+                match_pattern_against_string(pattern, process['cmdline'], prefix_suffix):
+            matched_cmdlines.append(process['cmdline'])
             # If 'first' was set to 'True' we will stop, since we found the first match.
             if first:
                 break

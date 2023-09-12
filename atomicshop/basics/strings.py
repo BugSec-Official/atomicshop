@@ -86,6 +86,25 @@ def split_at_string_and_return_after(input_string: str, split_string: str):
     return parts[1]
 
 
+def is_any_string_from_list_in_string(string_list: list, check_string: str) -> bool:
+    """
+    Function checks if any string from 'string_list' is in 'check_string'.
+
+    Example:
+        string_list = ['123', '456', '789']
+        check_string = '123456789'
+        is_any_string_from_list_in_string(string_list, check_string)
+    Result:
+        True
+
+    :param string_list: list, of strings to check against.
+    :param check_string: string, to check against.
+    :return: boolean.
+    """
+
+    return any(test_string in check_string for test_string in string_list)
+
+
 def match_pattern_against_string(pattern: str, check_string: str, prefix_suffix: bool = False) -> bool:
     """
     Function checks the 'pattern' against 'check_string' and returns 'True' if pattern matches and 'False' if not.
@@ -173,6 +192,29 @@ def match_pattern_against_string(pattern: str, check_string: str, prefix_suffix:
             # Remove wildcard from the beginning and the end of the pattern and try matching again.
             if search_pattern(pattern_re.removeprefix(wildcard_re).removesuffix(wildcard_re)):
                 return True
+
+    return False
+
+
+def match_list_of_patterns_against_string(patterns: list, check_string: str, prefix_suffix: bool = False) -> bool:
+    """
+    Function checks each pattern in 'patterns' list against 'check_string' and returns 'True' if any pattern matches
+    and 'False' if not.
+
+    :param patterns: list, of string patterns to check against. May include wildcards.
+    :param check_string: string, to check the pattern against.
+    :param prefix_suffix: boolean, that sets if the function should return 'True' also for all the cases that wildcard
+        in the beginning of the pattern and in the end of the pattern, since the default behavior of regex to return
+        'False' on these cases.
+
+    :return: boolean.
+
+    Check for all the examples the 'match_pattern_against_string' function.
+    """
+
+    for pattern in patterns:
+        if match_pattern_against_string(pattern, check_string, prefix_suffix=prefix_suffix):
+            return True
 
     return False
 

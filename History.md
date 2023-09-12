@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.2.4 - 12.09.2023
+  * Added 'wrappers.loggingw.reading' module to read rotated logs.
+  * Added to 'basics.strings' several new pattern matching functions.
 * 2.2.3 - 11.09.2023
   * Bugfixes in DiffCheck.
 * 2.2.2 - 11.09.2023

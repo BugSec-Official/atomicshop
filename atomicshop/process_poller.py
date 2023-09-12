@@ -82,29 +82,46 @@ class GetProcessList:
                 self.process_polling_instance.load()
                 self.connected = True
 
-    def get_processes(self) -> Union[list, dict]:
+    def get_processes(self, as_dict: bool = True) -> Union[list, dict]:
         """
         The function will get the list of opened processes and return it as a list of dicts.
 
         :return: list of dicts, of opened processes.
         """
 
-        if self.get_method == 'psutil':
-            return self.process_polling_instance.get_processes_as_dict(
-                attrs=['pid', 'name', 'cmdline'], cmdline_to_string=True)
-        elif self.get_method == 'pywin32':
-            processes = self.process_polling_instance.get_processes_as_dict(
-                attrs=['ProcessId', 'Name', 'CommandLine'])
+        if as_dict:
+            if self.get_method == 'psutil':
+                return self.process_polling_instance.get_processes_as_dict(
+                    attrs=['pid', 'name', 'cmdline'], cmdline_to_string=True)
+            elif self.get_method == 'pywin32':
+                processes = self.process_polling_instance.get_processes_as_dict(
+                    attrs=['ProcessId', 'Name', 'CommandLine'])
 
-            # Convert the keys from WMI to the keys that are used in 'psutil'.
-            converted_process_dict = dict()
-            for pid, process_info in processes.items():
-                converted_process_dict[pid] = dicts.convert_key_names(
-                    process_info, {'Name': 'name', 'CommandLine': 'cmdline'})
+                # Convert the keys from WMI to the keys that are used in 'psutil'.
+                converted_process_dict = dict()
+                for pid, process_info in processes.items():
+                    converted_process_dict[pid] = dicts.convert_key_names(
+                        process_info, {'Name': 'name', 'CommandLine': 'cmdline'})
 
-            return converted_process_dict
-        elif self.get_method == 'process_dll':
-            return self.process_polling_instance.get_process_details(as_dict=True)
+                return converted_process_dict
+            elif self.get_method == 'process_dll':
+                return self.process_polling_instance.get_process_details(as_dict=True)
+        else:
+            if self.get_method == 'psutil':
+                return self.process_polling_instance.get_processes_as_list_of_dicts(
+                    attrs=['pid', 'name', 'cmdline'], cmdline_to_string=True)
+            elif self.get_method == 'pywin32':
+                processes = self.process_polling_instance.get_processes_as_list_of_dicts(
+                    attrs=['ProcessId', 'Name', 'CommandLine'])
+
+                # Convert the keys from WMI to the keys that are used in 'psutil'.
+                for process_index, process_info in enumerate(processes):
+                    processes[process_index] = dicts.convert_key_names(
+                        process_info, {'ProcessId': 'pid', 'Name': 'name', 'CommandLine': 'cmdline'})
+
+                return processes
+            elif self.get_method == 'process_dll':
+                return self.process_polling_instance.get_process_details(as_dict=as_dict)
 
 
 class ProcessPollerPool:
