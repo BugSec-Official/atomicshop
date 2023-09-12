@@ -36,9 +36,9 @@ def _execute_cycle(change_monitor_instance, print_kwargs: dict = None):
         if result:
             print_api(message, color='yellow', **print_kwargs)
             # create_message_file(message, self.__class__.__name__, logger=self.logger)
+
+            return_list.append(message)
         else:
             print_api(message, color='green', **print_kwargs)
-
-        return_list.append(message)
 
     return return_list
