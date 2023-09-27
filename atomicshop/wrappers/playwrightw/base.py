@@ -1,3 +1,5 @@
+import time
+
 from . import combos, javascript
 from ...file_io import file_io
 
@@ -59,7 +61,16 @@ def get_page_screenshot(
     if print_emulation:
         set_page_print_emulation(page)
 
-    return page.screenshot(full_page=full_page, type=img_type, path=path)
+    result_bytes = page.screenshot(full_page=full_page, type=img_type)
+
+    # Save the file.
+    # "page.screenshot" has an attribute "path", which saves the bytes to file, but it doesn't work in thread.
+    # page.screenshot(full_page=full_page, type=img_type, path=path)
+    # So we do it manually.
+    if path:
+        file_io.write_file(content=result_bytes, file_path=path, file_mode='wb')
+
+    return result_bytes
 
 
 def _get_full_page_screenshot_with_pillow(
@@ -144,7 +155,16 @@ def get_page_pdf(page, path: str = None, print_background: bool = True, print_fo
     :param print_format: Paper format. If set, takes priority over width or height options. Defaults to 'A4'.
     """
 
-    return page.pdf(path=path, print_background=print_background, format=print_format)
+    result_bytes = page.pdf(print_background=print_background, format=print_format)
+
+    # Save the PDF to file.
+    # "page.pdf" has an attribute "path", which saves the bytes to file, but it doesn't work in thread.
+    # page.pdf(path=path, print_background=print_background, format=print_format)
+    # So we do it manually.
+    if path:
+        file_io.write_file(content=result_bytes, file_path=path, file_mode='wb')
+
+    return result_bytes
 
 
 def get_page_html(page, path: str = None, convert_to_bytes: bool = False, print_kwargs: dict = None) -> any:
@@ -160,6 +180,29 @@ def get_page_html(page, path: str = None, convert_to_bytes: bool = False, print_
     """
 
     result = page.content()
+    if path:
+        file_io.write_file(content=result, file_path=path, **print_kwargs)
+
+    if convert_to_bytes:
+        result = result.encode('utf-8')
+
+    return result
+
+
+def get_page_txt(page, path: str = None, convert_to_bytes: bool = False, print_kwargs: dict = None) -> any:
+    """
+    Get the full text contents of the page.
+
+    :param page:
+    :param path: The file path to save the txt to.
+    :param convert_to_bytes: If 'True', converts the text string to bytes object.
+    :param print_kwargs: dict, that contains all the arguments for 'print_api' function.
+
+    :return: returns the text content.
+    """
+
+    result = javascript.get_page_text_content(page)
+
     if path:
         file_io.write_file(content=result, file_path=path, **print_kwargs)
 

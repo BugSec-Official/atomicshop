@@ -1,4 +1,3 @@
-# v1.0.2 - 21.03.2023 18:00
 import csv
 
 from .file_io import read_file_decorator
