@@ -37,8 +37,11 @@ def hash_url(
     # Get page content from URL.
     response = web.get_page_content(url, get_method=get_method, path=path, print_kwargs=print_kwargs)
 
-    # Hash the content.
-    return hash_bytes(response, hash_algo)
+    if response:
+        # Hash the content.
+        return hash_bytes(response, hash_algo)
+    else:
+        raise ValueError(f'Response returned empty from URL, nothing to hash')
 
 
 def hash_file(file_path: str, hash_algo: str = 'sha256', block_size: int = 1024):

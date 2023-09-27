@@ -34,3 +34,18 @@ def get_page_viewport_height(page) -> int:
     """
 
     return page.evaluate("window.innerHeight")
+
+
+def get_page_text_content(page) -> str:
+    """
+    Get text content of the page.
+
+    :param page: Playwright page.
+    :return: string, text content of the page.
+    """
+
+    text_content: str = page.evaluate('''() => {
+        return document.body.innerText;
+    }''')
+
+    return text_content

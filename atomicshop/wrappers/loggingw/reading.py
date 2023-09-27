@@ -9,6 +9,7 @@ def get_logs(
         pattern: str = '*.*',
         log_type: Literal['csv'] = 'csv',
         remove_logs: bool = False,
+        print_kwargs: dict = None
 ):
     """
     This function gets the logs from the log files. Supports rotating files to get the logs by time.
@@ -18,6 +19,7 @@ def get_logs(
         Default pattern will match all the files.
     :param log_type: Type of log to get.
     :param remove_logs: Boolean, if True, the logs will be removed after getting them.
+    :param print_kwargs: Keyword arguments dict for 'print_api' function.
     """
 
     logs_files: list = filesystem.get_files_and_folders(
@@ -32,7 +34,7 @@ def get_logs(
     logs_content: list = list()
     for single_file in logs_files:
         if log_type == 'csv':
-            logs_content.extend(csvs.read_csv_to_list(single_file))
+            logs_content.extend(csvs.read_csv_to_list(single_file, **print_kwargs))
 
     if remove_logs:
         # Remove the statistics files.

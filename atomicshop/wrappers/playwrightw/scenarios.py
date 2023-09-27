@@ -4,7 +4,7 @@ For example: run playwright, navigate to URL, get text from a locator.
 """
 
 from . import engine, base, combos
-from ...basics import threads
+from ...basics import threads, multiprocesses
 
 
 def get_text_from_html_tag(url: str, tag_name: str, attribute: str, value: str) -> str:
@@ -44,7 +44,7 @@ def get_text_from_html_tag(url: str, tag_name: str, attribute: str, value: str) 
 
 def get_page_content(
         url: str, page_format: str = 'html', path: str = None, print_kwargs: dict = None, pdf_format: str = 'A4',
-        html_convert_to_bytes: bool = True
+        html_txt_convert_to_bytes: bool = True
 ) -> any:
     """
     The function receives playwright engine and page object, navigates to URL, gets page content in specified format,
@@ -59,7 +59,8 @@ def get_page_content(
     :param path: string of path to save the file to. Default is None.
     :param print_kwargs: dict, that contains all the arguments for 'print_api' function.
     :param pdf_format: string of pdf format, applicable only if 'page_format=pdf'. Default is 'A4'.
-    :param html_convert_to_bytes: boolean, applicable only if 'page_format=html'. Default is True.
+    :param html_txt_convert_to_bytes: boolean, applicable only if 'page_format=html' or 'page_format=txt'.
+        Default is True.
 
     :return: any page content in specified format.
     """
@@ -75,7 +76,10 @@ def get_page_content(
     result = None
     if page_format == 'html':
         result = base.get_page_html(
-            playwright_engine.page, path=path, convert_to_bytes=html_convert_to_bytes, print_kwargs=print_kwargs)
+            playwright_engine.page, path=path, convert_to_bytes=html_txt_convert_to_bytes, print_kwargs=print_kwargs)
+    if page_format == 'txt':
+        result = base.get_page_txt(
+            playwright_engine.page, path=path, convert_to_bytes=html_txt_convert_to_bytes, print_kwargs=print_kwargs)
     elif page_format == 'pdf':
         result = base.get_page_pdf(playwright_engine.page, path=path, print_format=pdf_format)
     elif page_format == 'png':
@@ -92,7 +96,7 @@ def get_page_content(
 
 def get_page_content_in_thread(
         url: str, page_format: str = 'html', path: str = None, print_kwargs: dict = None, pdf_format: str = 'A4',
-        html_convert_to_bytes: bool = True):
+        html_txt_convert_to_bytes: bool = True):
     """
     The function uses 'threads.thread_wrap_var' function in order to wrap the function 'get_page_content' and
     execute it in a thread with arguments and return the result.
@@ -104,6 +108,25 @@ def get_page_content_in_thread(
             page_format=page_format,
             path=path,
             pdf_format=pdf_format,
-            html_convert_to_bytes=html_convert_to_bytes,
+            html_txt_convert_to_bytes=html_txt_convert_to_bytes,
+            print_kwargs=print_kwargs
+        )
+
+
+def _get_page_content_in_process(
+        url: str, page_format: str = 'html', path: str = None, print_kwargs: dict = None, pdf_format: str = 'A4',
+        html_txt_convert_to_bytes: bool = True):
+    """
+    The function uses 'threads.thread_wrap_var' function in order to wrap the function 'get_page_content' and
+    execute it in a thread with arguments and return the result.
+    """
+
+    return multiprocesses.process_wrap_queue(
+            function_reference=get_page_content,
+            url=url,
+            page_format=page_format,
+            path=path,
+            pdf_format=pdf_format,
+            html_txt_convert_to_bytes=html_txt_convert_to_bytes,
             print_kwargs=print_kwargs
         )

@@ -90,7 +90,7 @@ def get_page_bytes(
 def get_page_content(
         url: str, get_method: str = 'urllib', path: str = None,
         playwright_pdf_format: str = 'A4',
-        playwright_html_convert_to_bytes: bool = True,
+        playwright_html_txt_convert_to_bytes: bool = True,
         print_kwargs: dict = None) -> any:
     """
     Function returns the page content from the given URL.
@@ -100,12 +100,16 @@ def get_page_content(
         'urllib': uses requests library. For static HTML pages without JavaScript. Returns HTML bytes.
         'playwright_*': uses playwright library, headless. For dynamic HTML pages with JavaScript.
             'playwright_html': For dynamic HTML pages with JavaScript. Returns HTML.
+            'playwright_txt': For dynamic HTML pages with JavaScript. Returns Text from the above fetched HTML.
             'playwright_pdf': For dynamic HTML pages with JavaScript. Returns PDF.
+            'playwright_pdf_*': For dynamic HTML pages with JavaScript. Returns PDF.
+                Example: 'playwright_pdf_A0'.
             'playwright_png': For dynamic HTML pages with JavaScript. Returns PNG.
             'playwright_jpeg': For dynamic HTML pages with JavaScript. Returns JPEG.
     :param path: string, path to save the downloaded file to. If None, the file will not be saved to disk.
     :param playwright_pdf_format: string, pdf format, applicable only if 'get_method=playwright_pdf'. Default is 'A4'.
-    :param playwright_html_convert_to_bytes: boolean, applicable only if 'get_method=playwright_html'. Default is True.
+    :param playwright_html_txt_convert_to_bytes: boolean, applicable only if 'get_method=playwright_html'
+        or 'get_method=playwright_txt'. Default is True.
     :param print_kwargs: dict, that contains all the arguments for 'print_api' function.
 
     :return: any, type depends on the method, return page content.
@@ -117,9 +121,19 @@ def get_page_content(
         result = get_page_bytes(url=url, chrome_user_agent=True, path=path, print_kwargs=print_kwargs)
     elif get_method == 'playwright_html':
         result = scenarios.get_page_content_in_thread(
-            url=url, page_format='html', path=path, html_convert_to_bytes=playwright_html_convert_to_bytes,
+            url=url, page_format='html', path=path, html_txt_convert_to_bytes=playwright_html_txt_convert_to_bytes,
             print_kwargs=print_kwargs)
-    elif get_method == 'playwright_pdf':
+    elif get_method == 'playwright_txt':
+        result = scenarios.get_page_content_in_thread(
+            url=url, page_format='txt', path=path, html_txt_convert_to_bytes=playwright_html_txt_convert_to_bytes,
+            print_kwargs=print_kwargs)
+    elif 'playwright_pdf' in get_method:
+        # Get all the parts of the method in case there is a Page Layout passed.
+        string_parts = get_method.split('_')
+        # If there is a Page Layout passed, get it.
+        # Example: 'playwright_pdf_A0'.
+        if len(string_parts) > 2:
+            playwright_pdf_format = string_parts[2]
         result = scenarios.get_page_content_in_thread(
             url=url, page_format='pdf', path=path, pdf_format=playwright_pdf_format, print_kwargs=print_kwargs)
     elif get_method == 'playwright_png':
