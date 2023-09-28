@@ -39,6 +39,9 @@ def resolve_dns_localhost(domain_name: str, dns_servers_list: list = None, print
     :return: the first result of the DNS query.
     """
 
+    if not print_kwargs:
+        print_kwargs = dict()
+
     # If 'dns_servers_list' is empty, assign Google DNS server by default.
     if not dns_servers_list:
         dns_servers_list = ['8.8.8.8']
