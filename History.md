@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.2.6 - 28.09.2023
+  * Added a function to resolve DNS name to IP address to 'dns' module.
 * 2.2.5 - 27.09.2023
   * Fixes in 'wrappers.playwrightw' module.
 * 2.2.4 - 12.09.2023
