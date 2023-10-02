@@ -1,3 +1,4 @@
+from typing import Union
 import functools
 
 from ..print_api import print_api
@@ -96,8 +97,9 @@ def write_file(content: str,
 def read_file(file_path: str,
               file_mode: str = 'r',
               encoding=None,
+              read_to_list: bool = False,
               file_object=None,
-              **kwargs) -> str:
+              **kwargs) -> Union[str, list]:
     """
     Read file and return its content as string.
 
@@ -105,10 +107,18 @@ def read_file(file_path: str,
     :param file_mode: string, file reading mode. Examples: 'r', 'rb'. Default is 'r'.
     :param encoding: string, read the file with encoding. Example: 'utf-8'. 'None' is default, since it is default
         in 'open()' function.
+    :param read_to_list: Boolean, if True, the file will be read to list of strings, each string is a line.
     :param file_object: file object of the 'open()' function in the decorator. Decorator executes the 'with open()'
         statement and passes to this function. That's why the default is 'None', since we get it from the decorator.
-    :return: string.
+    :return: string or list of strings.
     """
 
     # Read the file to variable.
-    return file_object.read()
+    if read_to_list:
+        # This method avoids creating an intermediary list by directly reading and processing the file within the list
+        # comprehension.
+        result = [line.rstrip() for line in file_object]
+    else:
+        result = file_object.read()
+
+    return result

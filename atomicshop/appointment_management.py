@@ -38,7 +38,7 @@ class AppointmentManager:
     def read_latest_date_csv(self):
         try:
             # Read the csv to list of dicts.
-            csv_list = read_csv_to_list(file_path=self.latest_date_to_check_filepath, raise_exception=True)
+            csv_list, _ = read_csv_to_list(file_path=self.latest_date_to_check_filepath, raise_exception=True)
             # It has only 1 line, so get it to dict.
             latest_date_dict = csv_list[0]
 
@@ -100,7 +100,7 @@ class BlacklistEngine:
     def read_blacklist_csv(self) -> None:
         try:
             # Read the csv to list of dicts.
-            csv_list = read_csv_to_list(file_path=self.blacklist_dates_filepath, raise_exception=True)
+            csv_list, _ = read_csv_to_list(file_path=self.blacklist_dates_filepath, raise_exception=True)
 
             daterange = None
             # Iterate through all the rows.
