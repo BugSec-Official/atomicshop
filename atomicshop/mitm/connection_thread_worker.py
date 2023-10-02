@@ -79,7 +79,7 @@ def thread_worker_main(
                                # f"{statistics_dict['response_hex']},"
                                f"\"{statistics_dict['file_path']}\","
                                f"\"{statistics_dict['process_cmd']}\","
-                               f"{statistics_dict['error']},"
+                               f"{statistics_dict['error']}"
                                )
 
     try:

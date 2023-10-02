@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.2.8 - 02.10.2023
+  * Numerous fixes in several modules.
 * 2.2.7 - 28.09.2023
   * Fix in 'dns' module.
 * 2.2.6 - 28.09.2023

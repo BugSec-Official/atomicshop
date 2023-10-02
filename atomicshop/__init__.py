@@ -1,4 +1,4 @@
 """Atomic Basic functions and classes to make developer life easier"""
 
 __author__ = "Den Kras"
-__version__ = '2.2.7'
+__version__ = '2.2.8'
