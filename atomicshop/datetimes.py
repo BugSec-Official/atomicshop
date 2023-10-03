@@ -1,4 +1,3 @@
-# v1.0.2 - 21.03.2023 18:00
 import datetime
 from datetime import timedelta
 import time

@@ -1,6 +1,10 @@
 <!-- HISTORY -->
 ## History
 
+* 2.2.9 - 03.10.2023
+  * Added functions to 'file_io.csvs' module.
+  * Added functions to 'filesystem' module.
+  * Added functionality to 'wrappers.loggingw.reading' module.
 * 2.2.8 - 02.10.2023
   * Numerous fixes in several modules.
 * 2.2.7 - 28.09.2023

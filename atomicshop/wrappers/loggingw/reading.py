@@ -1,7 +1,8 @@
+import os
 from typing import Literal
 
-from ... import filesystem
-from ...file_io import csvs, file_io
+from ... import filesystem, datetimes
+from ...file_io import csvs
 
 
 def get_logs(
@@ -10,6 +11,7 @@ def get_logs(
         log_type: Literal['csv'] = 'csv',
         header_type_of_files: Literal['first', 'all'] = 'first',
         remove_logs: bool = False,
+        move_to_path: str = None,
         print_kwargs: dict = None
 ):
     """
@@ -23,11 +25,15 @@ def get_logs(
         'first' - Only the first file has a header for CSV. This header will be used for the rest of the files.
         'all' - Each CSV file has a header. Get the header from each file.
     :param remove_logs: Boolean, if True, the logs will be removed after getting them.
+    :param move_to_path: Path to move the logs to.
     :param print_kwargs: Keyword arguments dict for 'print_api' function.
     """
 
     if not print_kwargs:
         print_kwargs = dict()
+
+    if remove_logs and move_to_path:
+        raise ValueError('Both "remove_logs" and "move_to_path" cannot be True/specified at the same time.')
 
     logs_files: list = filesystem.get_files_and_folders(
         path, string_contains=pattern)
@@ -54,13 +60,26 @@ def get_logs(
 
                 # if not header:
                 #     # Get the first line of the file as text, which is the header.
-                #     header = file_io.read_file(single_file, read_to_list=True, **print_kwargs)[0]
-                #     # Split the header to list of keys.
-                #     header = header.split(',')
+                #     header = csvs.get_header(single_file, **print_kwargs)
 
     if remove_logs:
         # Remove the statistics files.
         for single_file in logs_files:
             filesystem.remove_file(single_file)
+
+    if move_to_path:
+        # Get formatted time stamp for file name.
+        time_stamp = datetimes.TimeFormats().get_current_formatted_time_filename_stamp()
+        # Remove last separator from path if it exists.
+        move_to_path_with_timestamp = filesystem.remove_last_separator(move_to_path)
+        # Add time stamp to path.
+        move_to_path_with_timestamp = f'{move_to_path_with_timestamp}{os.sep}{time_stamp}'
+        # Create the path.
+        filesystem.create_directory(move_to_path_with_timestamp)
+        # Move the statistics files.
+        for single_file in logs_files:
+            single_file_name = filesystem.get_file_name(single_file)
+            move_to_path_with_file = f'{move_to_path_with_timestamp}{os.sep}{single_file_name}'
+            filesystem.move_file(single_file, move_to_path_with_file)
 
     return logs_content

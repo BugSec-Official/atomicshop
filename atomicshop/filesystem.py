@@ -44,6 +44,16 @@ def add_object_to_path(path: str, object_string: str) -> str:
     return os.path.join(path, object_string)
 
 
+def get_file_name_with_extension(file_path: str) -> str:
+    """
+    The function will return file name with extension of the file.
+
+    :param file_path: string, full file path.
+    :return: string.
+    """
+    return str(Path(file_path).name)
+
+
 def get_list_of_directories_in_file_path(
         file_path: str, get_last_part: bool = True, convert_drive_to_string: bool = False) -> list:
     """
