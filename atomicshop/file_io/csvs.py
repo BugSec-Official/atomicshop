@@ -2,6 +2,7 @@ import csv
 from typing import Tuple, List
 
 from .file_io import read_file_decorator
+from . import file_io
 
 
 @read_file_decorator
@@ -57,3 +58,23 @@ def write_list_to_csv(csv_list: list, csv_filepath: str) -> None:
         writer.writeheader()
         # Write list of dits as rows.
         writer.writerows(csv_list)
+
+
+def get_header(file_path: str, print_kwargs: dict = None) -> list:
+    """
+    Function to get header from CSV file.
+
+    :param file_path: Full file path to CSV file.
+    :param print_kwargs: Keyword arguments dict for 'print_api' function.
+
+    :return: list of strings, each string is a header field.
+    """
+
+    if not print_kwargs:
+        print_kwargs = dict()
+
+    # Get the first line of the file as text, which is the header.
+    header = file_io.read_file(file_path, read_to_list=True, **print_kwargs)[0]
+    # Split the header to list of keys.
+    header = header.split(',')
+    return header
