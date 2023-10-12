@@ -183,6 +183,42 @@ def create_date_range_for_year_month(
     return create_date_range(first_date, last_date)
 
 
+def get_difference_between_dates_in_days(first_datetime, reference_datetime) -> int:
+    """
+    Get the difference between two dates in days.
+    The first day is '0'.
+
+    :param first_datetime: datetime.datetime object.
+    :param reference_datetime: datetime.datetime object.
+
+    :return: integer, the difference between the two dates in days.
+    """
+
+    # Get the difference between the two dates.
+    difference = reference_datetime - first_datetime
+
+    # Get the difference in days.
+    return difference.days
+
+
+def get_difference_between_dates_in_hours(first_datetime, reference_datetime) -> int:
+    """
+    Get the difference between two dates in hours.
+    The first hour is '0'.
+
+    :param first_datetime: datetime.datetime object.
+    :param reference_datetime: datetime.datetime object.
+
+    :return: integer, the difference between the two dates in hours.
+    """
+
+    # Get the difference between the two dates.
+    difference = first_datetime - reference_datetime
+
+    # Get the difference in hours.
+    return difference.days * 24 + difference.seconds // (60 * 60)
+
+
 def get_seconds_random(minimum_seconds, maximum_seconds):
     return random.randint(minimum_seconds, maximum_seconds)
 

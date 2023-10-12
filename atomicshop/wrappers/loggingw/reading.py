@@ -2,6 +2,7 @@ import os
 from typing import Literal
 
 from ... import filesystem, datetimes
+from ...basics import list_of_dicts
 from ...file_io import csvs
 
 
@@ -26,6 +27,7 @@ def get_logs(
         'all' - Each CSV file has a header. Get the header from each file.
     :param remove_logs: Boolean, if True, the logs will be removed after getting them.
     :param move_to_path: Path to move the logs to.
+
     :param print_kwargs: Keyword arguments dict for 'print_api' function.
     """
 
@@ -35,13 +37,9 @@ def get_logs(
     if remove_logs and move_to_path:
         raise ValueError('Both "remove_logs" and "move_to_path" cannot be True/specified at the same time.')
 
-    logs_files: list = filesystem.get_files_and_folders(
-        path, string_contains=pattern)
-
-    # If there's more than 1 file, it means that the latest file is 'statistics.csv' and it is the first in
-    # The found list, so we need to move it to the last place.
-    if len(logs_files) > 1:
-        logs_files = list(logs_files[1:] + [logs_files[0]])
+    logs_files: list = filesystem.get_file_paths_and_relative_directories(
+        path, file_name_check_pattern=pattern,
+        add_last_modified_time=True, sort_by_last_modified_time=True)
 
     # Read all the logs.
     logs_content: list = list()
@@ -49,12 +47,12 @@ def get_logs(
     for single_file in logs_files:
         if log_type == 'csv':
             if header_type_of_files == 'all':
-                csv_content, _ = csvs.read_csv_to_list(single_file, **print_kwargs)
+                csv_content, _ = csvs.read_csv_to_list(single_file['path'], **print_kwargs)
                 logs_content.extend(csv_content)
             elif header_type_of_files == 'first':
                 # The function gets empty header to read it from the CSV file, the returns the header that it read.
                 # Then each time the header is fed once again to the function.
-                csv_content, header = csvs.read_csv_to_list(single_file, header=header, **print_kwargs)
+                csv_content, header = csvs.read_csv_to_list(single_file['path'], header=header, **print_kwargs)
                 # Any way the first file will be read with header.
                 logs_content.extend(csv_content)
 
@@ -65,7 +63,7 @@ def get_logs(
     if remove_logs:
         # Remove the statistics files.
         for single_file in logs_files:
-            filesystem.remove_file(single_file)
+            filesystem.remove_file(single_file['path'])
 
     if move_to_path:
         # Get formatted time stamp for file name.
@@ -78,8 +76,8 @@ def get_logs(
         filesystem.create_directory(move_to_path_with_timestamp)
         # Move the statistics files.
         for single_file in logs_files:
-            single_file_name = filesystem.get_file_name(single_file)
+            single_file_name = filesystem.get_file_name(single_file['path'])
             move_to_path_with_file = f'{move_to_path_with_timestamp}{os.sep}{single_file_name}'
-            filesystem.move_file(single_file, move_to_path_with_file)
+            filesystem.move_file(single_file['path'], move_to_path_with_file)
 
     return logs_content

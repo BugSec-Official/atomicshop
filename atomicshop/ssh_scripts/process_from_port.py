@@ -17,6 +17,11 @@ for connection in psutil.net_connections():
         command_line = psutil.Process(connection.pid).cmdline()
         # Command line object is returned as list of parameters. We need 'shlex.join' to join the iterables
         # to regular, readable string.
-        print(shlex.join(command_line))
+        result = shlex.join(command_line)
+        # If the result is still a PID, we'll try to get process name.
+        if result.isnumeric():
+            # Get the process name from the connection PID.
+            result = psutil.Process(connection.pid).name()
+        print(result)
         # Break the loop, when first match is found.
         break

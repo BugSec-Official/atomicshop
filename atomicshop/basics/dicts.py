@@ -118,3 +118,38 @@ def merge(dict1, dict2) -> dict:
 def find_key_by_value(input_dict, value):
     # This will return set of keys. If non found, will return empty set.
     return {k for k, v in input_dict.items() if v == value}
+
+
+def sort_by_values(input_dict: dict, reverse: bool = False) -> dict:
+    """
+    The function will sort a dictionary by its values.
+    Example:
+        # Define dictionary.
+        test = {
+            'key1': '1',
+            'key2': '2',
+            'key3': '8',
+            'key4': '37',
+            'key5': '5',
+            'key6': '23'
+        }
+
+        # Sort dictionary.
+        sorted_dict = sort_by_values(test, reverse=True)
+
+        # Result:
+        # {
+        #     'key4': '37',
+        #     'key6': '23',
+        #     'key3': '8',
+        #     'key5': '5',
+        #     'key2': '2',
+        #     'key1': '1'
+        # }
+
+    :param input_dict: dict, the dictionary to sort.
+    :param reverse: bool, if True, the dictionary will be sorted in reverse order.
+    :return: dict, the sorted dictionary.
+    """
+
+    return dict(sorted(input_dict.items(), key=lambda item: item[1], reverse=reverse))

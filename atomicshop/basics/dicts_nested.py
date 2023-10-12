@@ -70,3 +70,33 @@ def find_key_by_value(input_dict: dict, string1: str, string2: str = str(), key_
                 final_key_list.append(temp_list)
 
     return final_key_list
+
+
+def find_key_of_last_nest(input_dict: dict) -> list:
+    """
+    Returns list of keys of the last nest in the dictionary.
+    :param input_dict: dict, the dictionary to search.
+    :return: list of keys in order.
+    """
+
+    for key, value in input_dict.items():
+        if isinstance(value, dict):
+            return [key] + find_key_of_last_nest(value)
+        elif isinstance(value, list):
+            return [key] + find_key_of_last_nest(value[0])
+        else:
+            return [key]
+
+
+def find_key_of_last_dict(input_dict: dict) -> list:
+    """
+    Returns list of keys of the last dictionary in the dict.
+    :param input_dict: dict, the dictionary to search.
+    :return: list of keys in order.
+    """
+
+    for key, value in input_dict.items():
+        if isinstance(value, dict):
+            return [key] + find_key_of_last_dict(value)
+        else:
+            return []

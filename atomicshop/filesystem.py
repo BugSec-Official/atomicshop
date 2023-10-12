@@ -3,10 +3,9 @@ import pathlib
 from pathlib import Path, PurePath, PureWindowsPath
 import glob
 import shutil
-from enum import Enum
 
 from .print_api import print_api
-from .basics import strings
+from .basics import strings, list_of_dicts
 
 
 def get_working_directory() -> str:
@@ -258,33 +257,35 @@ def get_file_names_from_directory(directory_path: str) -> list:
     return file_list
 
 
-class ComparisonOperator(Enum):
+def get_file_paths_and_relative_directories(
+        directory_fullpath: str,
+        recursive: bool = True,
+        file_name_check_pattern: str = '*',
+        relative_file_name_as_directory: bool = False,
+        add_last_modified_time: bool = False,
+        sort_by_last_modified_time: bool = False
+):
     """
-    Enum class that was created for 'scan_directory_and_return_list' function.
-    Specifically for 'file_name_check_tuple[1]' - second entry.
-    """
-    EQ = '__eq__'
-    CONTAINS = '__contains__'
-
-
-def get_file_paths_and_relative_directories(directory_fullpath: str,
-                                            file_name_check_tuple: tuple = tuple(),
-                                            relative_file_name_as_directory: bool = False):
-    """
+    Recursive, by option.
     The function receives a filesystem directory as string, scans it recursively for files and returns list of
     full paths to that file (including).
     If 'file_name_check_tuple' specified, the function will return only list of files that answer to the input
     of that tuple.
-    Recursive.
 
     :param directory_fullpath: string to full path to directory on the filesystem to scan.
-    :param file_name_check_tuple: tuple that should contain 2 entries:
-        file_name_check_tuple[0]: string that will contain part of file name to check or full file name with extension.
-        file_name_check_tuple[1]: 'ComparisonOperator' object to test against found file name with extension.
-            'ComparisonOperator.EQ' will check for specific file name (eg: 'config_file.ini').
-            'ComparisonOperator.CONTAINS' will check if file name contains part of the string (eg: 'config')(eg: '.ini')
+    :param recursive: boolean.
+        'True', then the function will scan recursively in subdirectories.
+        'False', then the function will scan only in the directory that was passed.
+    :param file_name_check_pattern: string, if specified, the function will return only files that match the pattern.
+        The string can contain part of file name to check or full file name with extension.
+        Can contain wildcards.
     :param relative_file_name_as_directory: boolean that will set if 'relative_directory_list' should contain
         file name with extension for each entry.
+    :param add_last_modified_time: boolean, if 'True', then the function will add last modified time of the file
+        to the output list.
+    :param sort_by_last_modified_time: boolean, if 'True', then the function will sort the output list by last
+        modified time of the file.
+
     :return: list of all found filenames with full file paths, list with relative folders to file excluding the
         main folder.
     """
@@ -294,59 +295,57 @@ def get_file_paths_and_relative_directories(directory_fullpath: str,
         Function gets the full file path, adds it to the found 'object_list' and gets the relative path to that
         file, against the main path to directory that was passed to the parent function.
         """
+
+        file_result: dict = dict()
+
         # Get full file path of the file.
-        file_path = os.path.join(dirpath, file)
-        object_list.append(file_path)
+        file_result['path'] = os.path.join(dirpath, file)
 
         # if 'relative_file_name_as_directory' was passed.
         if relative_file_name_as_directory:
             # Output the path with filename.
-            relative_directory = _get_relative_output_path_from_input_path(directory_fullpath, dirpath, file)
+            file_result['relative_dir'] = _get_relative_output_path_from_input_path(directory_fullpath, dirpath, file)
         # if 'relative_file_name_as_directory' wasn't passed.
         else:
             # Output the path without filename.
-            relative_directory = _get_relative_output_path_from_input_path(directory_fullpath, dirpath)
+            file_result['relative_dir'] = _get_relative_output_path_from_input_path(directory_fullpath, dirpath)
 
         # Remove separator from the beginning if exists.
-        relative_directory = relative_directory.removeprefix(os.sep)
+        file_result['relative_dir'] = file_result['relative_dir'].removeprefix(os.sep)
 
-        relative_paths_list.append(relative_directory)
+        # If 'add_last_modified_time' was passed.
+        if add_last_modified_time:
+            # Get last modified time of the file.
+            file_result['last_modified'] = get_file_modified_time(file_result['path'])
 
-    # Type checking.
-    if file_name_check_tuple:
-        if not isinstance(file_name_check_tuple[1], ComparisonOperator):
-            raise TypeError(f'Second entry of tuple "file_name_check_tuple" is not of "ComparisonOperator" type.')
+        object_list.append(file_result)
+
+    if sort_by_last_modified_time and not add_last_modified_time:
+        raise ValueError('Parameter "sort_by_last_modified_time" cannot be "True" if parameter '
+                         '"add_last_modified_time" is not "True".')
 
     # === Function main ================
     # Define locals.
     object_list: list = list()
-    relative_paths_list: list = list()
 
     # "Walk" over all the directories and subdirectories - make list of full file paths inside the directory
     # recursively.
     for dirpath, subdirs, files in os.walk(directory_fullpath):
         # Iterate through all the file names that were found in the folder.
         for file in files:
-            # If 'file_name_check_tuple' was passed.
-            if file_name_check_tuple:
-                # Get separate variables from the tuple.
-                # 'check_string' is a string that will be checked against 'file' iteration, which also a string.
-                # 'comparison_operator' is 'ComparisonOperator' Enum object, that contains the string method
-                # operator that will be used against the 'check_string'.
-                check_string, comparison_operator = file_name_check_tuple
-                # 'getattr' adds the string comparison method to the 'file' string. Example:
-                # file.__eq__
-                # 'comparison_operator' is the Enum class representation and '.value' method is the string
-                # representation of '__eq__'.
-                # and after that comes the check string to check against:
-                # file.__eq__(check_string)
-                if getattr(file, comparison_operator.value)(check_string):
-                    get_file()
-            # If 'file_name_check_tuple' wasn't passed, then get all the files.
-            else:
+            # If 'file_name_check_pattern' was passed.
+            if strings.match_pattern_against_string(file_name_check_pattern, file):
                 get_file()
 
-    return object_list, relative_paths_list
+        if not recursive:
+            break
+
+    # If 'sort_by_last_modified_time' was passed.
+    if sort_by_last_modified_time:
+        # Sort the list by last modified time.
+        object_list = list_of_dicts.sort_by_keys(object_list, key_list=['last_modified'])
+
+    return object_list
 
 
 def _get_relative_output_path_from_input_path(main_directory: str, file_directory: str, file_name: str = str()):
@@ -434,3 +433,32 @@ def get_files_and_folders(directory_path: str, string_contains: str = str()):
     """
     files_folders_list: list = glob.glob(f'{directory_path}{os.sep}*{string_contains}')
     return files_folders_list
+
+
+def get_file_modified_time(file_path: str) -> float:
+    """
+    The function returns the time of last modification of the file in seconds since the epoch.
+
+    :param file_path: string, full path to file.
+    :return: float, time of last modification of the file in seconds since the epoch.
+    """
+    return os.path.getmtime(file_path)
+
+
+def change_last_modified_date_of_file(file_path: str, new_date: float) -> None:
+    """
+    The function changes the last modified date of the file.
+
+    Example:
+    import os
+    import time
+    file_path = "C:\\Users\\file.txt"
+    new_timestamp = time.mktime(time.strptime('2023-10-03 12:00:00', '%Y-%m-%d %H:%M:%S'))
+    os.utime(file_path, (new_timestamp, new_timestamp))
+
+    :param file_path: string, full path to file.
+    :param new_date: float, time of last modification of the file in seconds since the epoch.
+    :return: None.
+    """
+
+    os.utime(file_path, (new_date, new_date))
