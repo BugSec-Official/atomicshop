@@ -57,14 +57,14 @@ def execute_test(config_static):
     loggingw.get_logger_with_stream_handler("network")
 
     # Get all the files in requests folder recursively.
-    request_file_list, _ = get_file_paths_and_relative_directories(config['requests_directory'])
+    request_file_list = get_file_paths_and_relative_directories(config['requests_directory'])
     print(f"Found request files: {len(request_file_list)}")
 
     # Get contents of all request files to list of contents.
     requests_bytes_list: list = list()
     for request_file_path in request_file_list:
         if config['request_type'] == 'json':
-            request_file_content = jsons.read_json_file(request_file_path)
+            request_file_content = jsons.read_json_file(request_file_path['path'])
 
             # If imported json is regular and not combined json.
             if isinstance(request_file_content, dict):
@@ -79,13 +79,13 @@ def execute_test(config_static):
                     requests_bytes_list.extend(
                         get_key_values_from_json(json_dict, config['request_json_hex_key_list']))
         elif config['request_type'] == 'string':
-            request_file_content = file_io.read_file(request_file_path)
+            request_file_content = file_io.read_file(request_file_path['path'])
             # Convert string content to bytes and append to list.
             requests_bytes_list.append(request_file_content.encode())
             print(f"Extracted 1 request.")
         elif config['request_type'] == 'binary':
             # The content is already in bytes, so just appending.
-            requests_bytes_list.append(file_io.read_file(request_file_path, 'rb'))
+            requests_bytes_list.append(file_io.read_file(request_file_path['path'], 'rb'))
             print(f"Extracted 1 request.")
 
     print(f"Finished parsing. Parsed requests: {len(requests_bytes_list)}")

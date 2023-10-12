@@ -104,7 +104,7 @@ def initialize_mitm_server(config_static):
     system_logger.info("Importing engine modules.")
 
     # Get full paths of all the 'engine_config.ini' files.
-    engine_config_path_list, _ = get_file_paths_and_relative_directories(
+    engine_config_path_list = get_file_paths_and_relative_directories(
         directory_fullpath=config_static.ENGINES_DIRECTORY_PATH,
         file_name_check_tuple=(config_static.ENGINE_CONFIG_FILE_NAME, ComparisonOperator.EQ))
 
@@ -114,7 +114,7 @@ def initialize_mitm_server(config_static):
     for engine_config_path in engine_config_path_list:
         # Initialize engine.
         current_module = ModuleCategory(config_static.WORKING_DIRECTORY)
-        current_module.fill_engine_fields_from_config(engine_config_path)
+        current_module.fill_engine_fields_from_config(engine_config_path['path'])
         current_module.initialize_engine(logs_path=config['log']['logs_path'],
                                          logger=system_logger)
 

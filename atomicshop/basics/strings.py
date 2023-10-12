@@ -159,9 +159,14 @@ def match_pattern_against_string(pattern: str, check_string: str, prefix_suffix:
     # Replace the wildcard string '*' with regex wildcard string '.+'.
     # In regex '.' is a wildcard, but only for 1 character, if you need more than 1 character you should add '+'.
     pattern_re = pattern.replace(wildcard_str, wildcard_re)
+    pattern_no_wildcard = pattern.replace(wildcard_str, '')
 
     # Search for pattern, if found, return 'True'.
     if search_pattern(pattern_re):
+        return True
+
+    # 'regex' doesn't think that '.*' is a match for 'test', so we'll check for this case separately.
+    if search_pattern(pattern_no_wildcard):
         return True
 
     # If it wasn't found in previous check,
@@ -268,6 +273,14 @@ def is_numeric_only(string: str) -> bool:
     return string.isdigit()
 
 
+def is_alphabetic_only(string: str) -> bool:
+    """
+    Function to check if string contains only alphabetic characters.
+    """
+
+    return string.isalpha()
+
+
 def replace_words_with_values_from_dict(
         sentence: str, dictionary: dict, contains: bool = False, case_insensitive: bool = False) -> str:
     """
@@ -305,3 +318,40 @@ def replace_words_with_values_from_dict(
     joined_sentence: str = ' '.join(sentence_parts)
 
     return joined_sentence
+
+
+def multiple_splits_by_delimiters(full_string: str, delimiters: list) -> list[str]:
+    """
+    Function splits the string by multiple delimiters.
+    :param full_string: string, to split.
+    :param delimiters: list, of delimiters.
+    :return: list of strings.
+    """
+
+    # Base case: no more delimiters, return the string itself in a list.
+    if not delimiters:
+        return [full_string]
+
+    # Take the first delimiter.
+    delimiter = delimiters[0]
+    # Split the string on the current delimiter.
+    split_strings = full_string.split(delimiter)
+    # Get the remaining delimiters.
+    remaining_delimiters = delimiters[1:]
+
+    result = []
+    for substring in split_strings:
+        # Recursively call the whole function with each substring and the remaining delimiters.
+        result.extend(multiple_splits_by_delimiters(substring, remaining_delimiters))
+    return result
+
+
+def check_if_suffix_is_in_string(string: str, suffix: str) -> bool:
+    """
+    Function checks if 'suffix' is in the end of 'string'.
+    :param string: string, to check.
+    :param suffix: string, to check.
+    :return: boolean.
+    """
+
+    return string.endswith(suffix)

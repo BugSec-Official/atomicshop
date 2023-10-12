@@ -56,11 +56,16 @@ def get_registered_domain(domain: str) -> str:
     :return: string of main registered domain with tld only.
     """
     # Extract all the parts from domain with 'tldextract'.
-    extracted_domain_parts = tldextract.TLDExtract(suffix_list_urls=str())(domain)
+    # By default, TLD Extract will use the online database, to use the offline database empty Sequence[str] must be
+    # passed to 'suffix_list_urls' option.
+    # Empty sequence in TLDExtract itself is defined as '()'.
+    # extracted_domain_parts = tldextract.TLDExtract(suffix_list_urls=str())(domain)
+    extracted_domain_parts = tldextract.TLDExtract(suffix_list_urls=())(domain)
 
     # If 'suffix' is empty, it means that the tld is not in 'tldextract' offline database or there is no tld at all,
     # for example: some-domain-without-tld
     if not extracted_domain_parts.suffix:
         return domain
     else:
-        return f'{extracted_domain_parts.registered_domain}.{extracted_domain_parts.suffix}'
+        # return f'{extracted_domain_parts.registered_domain}.{extracted_domain_parts.suffix}'
+        return extracted_domain_parts.registered_domain

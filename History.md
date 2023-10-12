@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.3.0 - 12.10.2023
+  * Added 'mitm.statistic_analyzer' module.
+  * Numerous fixes and new functions in modules.
 * 2.2.9 - 03.10.2023
   * Added functions to 'file_io.csvs' module.
   * Added functions to 'filesystem' module.
