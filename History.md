@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.3.1 - 16.10.2023
+  * Fixed prerequisites on linux.
 * 2.3.0 - 12.10.2023
   * Added 'mitm.statistic_analyzer' module.
   * Numerous fixes and new functions in modules.
