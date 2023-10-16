@@ -54,7 +54,7 @@ dependencies = [
     "pyautogui",
     "pyopenssl",
     "python-bidi",
-    "pywin32",
+    "pywin32; platform_system == 'Windows'",
     "SoundCard",
     "soundfile",
     "SpeechRecognition",
