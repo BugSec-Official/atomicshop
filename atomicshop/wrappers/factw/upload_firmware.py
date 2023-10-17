@@ -47,7 +47,7 @@ def upload_firmware(firmware_file_path: str, params: dict, use_all_analysis_syst
     :return: None.
     """
 
-    url: str = f'{fact_config.FACT_ADDRESS}/{fact_config.FIRMWARE_ENDPOINT}'
+    url: str = f'{fact_config.FACT_ADDRESS}{fact_config.FIRMWARE_ENDPOINT}'
 
     # Add all analysis systems to the list.
     if use_all_analysis_systems:
@@ -65,6 +65,7 @@ def upload_firmware(firmware_file_path: str, params: dict, use_all_analysis_syst
     # Encode firmware file to base64.
     params['binary'] = base64.b64encode(firmware_binary_content)
 
+    print_api(f'Uploading: {firmware_file_path}')
     # Send firmware file to the server.
     response = requests.put(
         url,
@@ -78,3 +79,5 @@ def upload_firmware(firmware_file_path: str, params: dict, use_all_analysis_syst
     else:
         # Print error.
         print_api('Error: ' + str(response.status_code), error_type=True, logger_method='critical')
+
+    return response
