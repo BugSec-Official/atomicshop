@@ -1,4 +1,3 @@
-# v1.0.1 - 21.02.2023 15:30
 def convert_hex_string_to_bytes(hex_string: str):
     """
     Example of hex:
