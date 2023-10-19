@@ -4,15 +4,16 @@ import base64
 from . import fact_config
 from ... print_api import print_api
 from ... file_io import file_io
+from ... import filesystem
 
 
-def upload_firmware(firmware_file_path: str, params: dict, use_all_analysis_systems: bool = False):
+def upload_firmware(firmware_file_path: str, json_data: dict, use_all_analysis_systems: bool = False):
     """
     Upload firmware binary file to the server.
 
     :param firmware_file_path: Path to firmware file.
     :param use_all_analysis_systems: Use all analysis systems.
-    :param params: Parameters:
+    :param json_data: dict, of Parameters to pass for REST API:
         {
             "device_name": <string>,
             "device_part": <string>,           # new in FACT 2.5
@@ -49,9 +50,12 @@ def upload_firmware(firmware_file_path: str, params: dict, use_all_analysis_syst
 
     url: str = f'{fact_config.FACT_ADDRESS}{fact_config.FIRMWARE_ENDPOINT}'
 
+    if 'release_date' not in json_data:
+        json_data['release_date'] = '1970-01-01'
+
     # Add all analysis systems to the list.
     if use_all_analysis_systems:
-        params['requested_analysis_systems'] = [
+        json_data['requested_analysis_systems'] = [
             'binwalk', 'cpu_architecture', 'crypto_hints', 'crypto_material', 'cve_lookup', 'cwe_checker',
             'device_tree', 'elf_analysis', 'exploit_mitigations', 'file_hashes', 'file_system_metadata',
             'file_type', 'hardware_analysis', 'hashlookup', 'information_leaks', 'init_systems', 'input_vectors',
@@ -63,13 +67,13 @@ def upload_firmware(firmware_file_path: str, params: dict, use_all_analysis_syst
     # Open firmware file.
     firmware_binary_content = file_io.read_file(firmware_file_path, file_mode='rb')
     # Encode firmware file to base64.
-    params['binary'] = base64.b64encode(firmware_binary_content)
+    json_data['binary'] = base64.b64encode(firmware_binary_content).decode()
 
     print_api(f'Uploading: {firmware_file_path}')
     # Send firmware file to the server.
     response = requests.put(
         url,
-        params=params,
+        json=json_data
     )
 
     # Check response status code.
@@ -81,3 +85,34 @@ def upload_firmware(firmware_file_path: str, params: dict, use_all_analysis_syst
         print_api('Error: ' + str(response.status_code), error_type=True, logger_method='critical')
 
     return response
+
+
+def upload_files(directory_path: str, params: dict):
+    """
+    Upload Siemens firmware binary files from specified directory to the server.
+    :param directory_path: string, path to directory with firmware binary files.
+    :param params: dict of REST params.
+    :return:
+    """
+
+    # Get all the UPD files.
+    file_paths_list = filesystem.get_file_paths_and_relative_directories(directory_path, recursive=False)
+
+    firmwares: list = list()
+    for file_path in file_paths_list:
+        firmware_info: dict = dict()
+        firmware_info['file_path'] = file_path['path']
+        firmware_info['file_name'] = filesystem.get_file_name_with_extension(file_path['path'])
+        firmwares.append(firmware_info)
+
+    use_all_analysis_systems: bool = False
+    for firmware in firmwares:
+        params['file_name'] = firmware['file_name']
+
+        if params['requested_analysis_systems'] == 'all' and not use_all_analysis_systems:
+            use_all_analysis_systems = True
+
+        upload_firmware(
+            firmware['file_path'], params, use_all_analysis_systems=use_all_analysis_systems)
+
+    return None

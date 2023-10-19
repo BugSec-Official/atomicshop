@@ -1,8 +1,10 @@
 <!-- HISTORY -->
 ## History
 
+* 2.3.3 - 19.10.2023
+  * Fixes in 'wrappers.factw' functions.
 * 2.3.2 - 17.10.2023
-  * Added more 'wrappers.factw' functions
+  * Added more 'wrappers.factw' functions.
 * 2.3.1 - 16.10.2023
   * Fixed prerequisites on linux.
 * 2.3.0 - 12.10.2023
