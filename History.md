@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.3.4 - 22.10.2023
+  * Fixes and new functions in 'wrappers.factw'.
+  * Global fixes in several modules.
 * 2.3.3 - 19.10.2023
   * Fixes in 'wrappers.factw' functions.
 * 2.3.2 - 17.10.2023

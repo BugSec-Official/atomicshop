@@ -163,26 +163,33 @@ def print_api(
     #     sys.exit()
 
 
-def print_status(same_line: bool, prefix_string: str, current_state, final_state, suffix_string: str = str(), **kwargs):
+def print_status(
+        prefix_string: str,
+        current_state,
+        final_state=None,
+        suffix_string: str = str(),
+        same_line: bool = True,
+        **kwargs):
     """
     The function will print specified variables in a specific format on the same line, based on 'same_line' parameter.
 
-    :param same_line: Boolean, if True, the lines will be printed on the same line, otherwise on different lines.
     :param prefix_string: string, will be printed before the status.
     :param current_state: numeric representation of current state.
-    :param final_state: numeric representation of final state.
+    :param final_state: numeric representation of final state. Can be None. If so, the function will print only
+        current state.
         Example: current_state / final_state, 1 / 10, 2 / 10, 3 / 10, etc.
     :param suffix_string: string, since the lines are printed on the same line, it can happen that one line can be
         longer than the other. If shorter line come after the longer one, it will align on top of the longer line.
+    :param same_line: Boolean, if True, the lines will be printed on the same line, otherwise on different lines.
 
-        Example:
+    Example:
         Line 1: 'Downloaded bytes: 100 / 1000'
         Line 2: 'Skipped Empty bytes: 200 / 1000'
         Line 3: 'Downloaded bytes: 300 / 1000000'
         Since line 3 is shorter than line 2, it will align on top of line 2.
         So, to avoid this, we can add a suffix string with empty spaces to line 3:
         print_status(
-            same_line=True, prefix_string='Downloaded bytes', current_state=300, final_state=1000, suffix_string='    ')
+            prefix_string='Downloaded bytes', current_state=300, final_state=1000, suffix_string='    ', same_line=True)
         This will add 4 empty spaces to the end of line 3:
         Line 2: 'Skipped Empty bytes: 200 / 1000'
         Line 3: 'Downloaded bytes: 300 / 1000    '
@@ -199,3 +206,37 @@ def print_status(same_line: bool, prefix_string: str, current_state, final_state
         print_api(message, print_end='\r', **kwargs)
     else:
         print_api(message, **kwargs)
+
+
+def print_status_of_list(
+        list_instance: list, prefix_string: str, current_state, suffix_string: str = str(), **kwargs):
+    """
+    The function will print specified variables in a specific format on the same line, based on 'same_line' parameter.
+
+    :param list_instance: list, the list that will be used to get the final state. Since we want last item in the list,
+        to be printed with regular 'print_end' parameter and not '\r', we need to get the last item in the list.
+    :param prefix_string: string, will be printed before the status.
+    :param current_state: numeric representation of current state.
+    :param suffix_string: string, since the lines are printed on the same line, it can happen that one line can be
+        longer than the other. If shorter line come after the longer one, it will align on top of the longer line.
+
+    For example check the 'print_status' function.
+
+    :param kwargs: keyword arguments to pass to 'print_api' function.
+    :return: None
+    """
+
+    final_state = len(list_instance)
+
+    if final_state:
+        message = f'{prefix_string}{current_state} / {final_state}{suffix_string}'
+    else:
+        message = f'{prefix_string}{current_state}{suffix_string}'
+
+    if current_state != final_state:
+        same_line = True
+    else:
+        same_line = False
+
+    print_status(prefix_string=prefix_string, current_state=current_state, final_state=final_state,
+                 suffix_string=suffix_string, same_line=same_line, **kwargs)

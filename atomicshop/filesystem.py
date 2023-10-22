@@ -4,8 +4,10 @@ from pathlib import Path, PurePath, PureWindowsPath
 import glob
 import shutil
 
-from .print_api import print_api
+from .print_api import print_api, print_status_of_list
 from .basics import strings, list_of_dicts
+from .file_io import file_io
+from . import hashing
 
 
 def get_working_directory() -> str:
@@ -462,3 +464,65 @@ def change_last_modified_date_of_file(file_path: str, new_date: float) -> None:
     """
 
     os.utime(file_path, (new_date, new_date))
+
+
+def find_duplicates_by_hash(directory_path: str, add_binary: bool = False) -> tuple[list, list]:
+    """
+    The function will find duplicates in a directory by hash of the file.
+    The function is not recursive.
+
+    :param directory_path: string, full path to directory to search for duplicates.
+    :param add_binary: boolean, if 'True', then the function will add the binary of the file to the output list.
+
+    :return: list of duplicates, list of all files.
+    """
+
+    # Get all the files.
+    file_paths_list = get_file_paths_and_relative_directories(directory_path, recursive=False)
+
+    # Create a list of dictionaries, each dictionary is a file with its hash.
+    files: list = list()
+    for file_index, file_path in enumerate(file_paths_list):
+        print_status_of_list(
+            list_instance=file_paths_list, prefix_string=f'Reading File: ', current_state=(file_index + 1))
+
+        file_info: dict = dict()
+        file_info['file_path'] = file_path['path']
+
+        if add_binary:
+            file_info['binary'] = file_io.read_file(file_path['path'], file_mode='rb', stdout=False)
+            file_info['file_hash'] = hashing.hash_bytes(file_info['binary'])
+        else:
+            file_info['file_hash'] = hashing.hash_file(file_path['path'])
+
+        files.append(file_info)
+
+    same_hash_files: list = list()
+    # Check if there are files that have exactly the same hash.
+    for file_dict in files:
+        # Create a list of files that have the same hash for current 'firmware'.
+        current_run_list: list = list()
+        for file_dict_compare in files:
+            # Add all the 'firmware_compare' that have the same hash to the list.
+            if (file_dict['file_hash'] == file_dict_compare['file_hash'] and
+                    file_dict['file_path'] != file_dict_compare['file_path']):
+                # Check if current 'firmware' is already in the 'same_hash_files' list. If not, add 'firmware_compare'
+                # to the 'current_run_list'.
+                if not any(list_of_dicts.is_value_exist_in_key(
+                        list_of_dicts=test_hash, key='file_path', value_to_match=file_dict['file_path']) for
+                           test_hash in same_hash_files):
+                    current_run_list.append({
+                        'file_path': file_dict_compare['file_path'],
+                        'file_hash': file_dict_compare['file_hash']
+                    })
+
+        if current_run_list:
+            # After the iteration of the 'firmware_compare' finished and the list is not empty, add the 'firmware'
+            # to the list.
+            current_run_list.append({
+                'file_path': file_dict['file_path'],
+                'file_hash': file_dict['file_hash']
+            })
+            same_hash_files.append(current_run_list)
+
+    return same_hash_files, files

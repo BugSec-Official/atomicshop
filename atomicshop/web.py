@@ -3,10 +3,10 @@ import urllib.request
 
 from .print_api import print_api
 from .archiver import extract_archive_with_zipfile
-from .filesystem import remove_file
 from .urls import url_parser
 from .file_io import file_io
 from .wrappers.playwrightw import scenarios
+from . import filesystem
 
 
 # https://www.useragents.me/
@@ -242,4 +242,4 @@ def download_and_extract_file(
         remove_first_directory=archive_remove_first_directory, **kwargs)
 
     # Remove the archive file.
-    remove_file(file_path=f'{file_path}', **kwargs)
+    filesystem.remove_file(file_path=f'{file_path}', **kwargs)
