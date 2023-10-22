@@ -7,7 +7,7 @@ from tempfile import gettempdir
 
 from ...print_api import print_api
 from ...keyboard_press import send_alt_tab
-from ...filesystem import create_directory
+from ... import filesystem
 
 # Web automation library.
 from playwright.sync_api import sync_playwright
@@ -124,7 +124,7 @@ class PlaywrightEngine:
                     self.browser_content_working_directory + os.sep + self.browser_content_directory_name
 
             # Create folder for 'self.browser_content_directory_path'.
-            create_directory(self.browser_content_directory_path)
+            filesystem.create_directory(self.browser_content_directory_path)
 
             self.browser = selected_browser.launch_persistent_context(
                 self.browser_content_directory_path, channel=channel, headless=self.headless
