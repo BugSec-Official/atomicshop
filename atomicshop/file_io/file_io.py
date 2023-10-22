@@ -99,7 +99,7 @@ def read_file(file_path: str,
               encoding=None,
               read_to_list: bool = False,
               file_object=None,
-              **kwargs) -> Union[str, list]:
+              **kwargs) -> Union[str, bytes, list]:
     """
     Read file and return its content as string.
 

@@ -1,4 +1,9 @@
-import tomllib
+try:
+    # This is a library in python 3.11 and above.
+    import tomllib
+except ModuleNotFoundError:
+    # This is library from pypi.
+    import tomli as tomllib
 
 from .file_io import read_file_decorator
 

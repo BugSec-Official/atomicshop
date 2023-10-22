@@ -4,7 +4,7 @@ from . import fact_config
 from ... print_api import print_api
 
 
-def get_status():
+def get_global_status():
     """
     Get status of the FACT service.
     :return:
@@ -22,3 +22,20 @@ def get_status():
         print_api('Error: ' + str(response.status_code), error_type=True, logger_method='critical')
 
     return response
+
+
+def is_uid_exist(uid: str):
+    """
+    Check if the specified FACT UID exists in the database.
+    :param uid: string, FACT UID.
+    :return: boolean, True if exists, False if not.
+    """
+
+    url: str = f'{fact_config.FACT_ADDRESS}{fact_config.FIRMWARE_ENDPOINT}/{uid}'
+    response: requests.Response = requests.get(url)
+
+    # Check response status code.
+    if response.status_code == 200:
+        return True
+    else:
+        return False
