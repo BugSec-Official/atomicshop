@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.3.6 - 23.10.2023
+  * Global fixes in several modules.
 * 2.3.5 - 22.10.2023
   * Fixes in 'wrappers.playwrightw'.
 * 2.3.4 - 22.10.2023
