@@ -1,33 +1,12 @@
+# noinspection PyPackageRequirements
 import requests
 import base64
 import time
 
-from . import fact_config, get_status
+from . import fact_config, get_file_data, rest_file_object
 from ... print_api import print_api, print_status_of_list
 from ... file_io import file_io
-from ... import filesystem, hashing
-
-
-def get_fact_uid(file_binary: bytes = None, file_path: str = None, sha256_hash: str = None) -> str:
-    """
-    Get FACT UID from firmware binary file.
-    :param file_binary: bytes, firmware binary file.
-    :param file_path: string, path to firmware binary file.
-    :param sha256_hash: string, sha256 hash of firmware binary file. If not specified, it will be calculated.
-    :return: string, FACT UID.
-    """
-
-    if file_binary is None and file_path is None:
-        raise ValueError('Either file_binary or file_path must be specified.')
-
-    if file_path:
-        file_binary = file_io.read_file(file_path, file_mode='rb')
-
-    if sha256_hash is None:
-        sha256_hash = hashing.hash_bytes(file_binary, hash_algo='sha256')
-
-    binary_length: str = str(len(file_binary))
-    return f'{sha256_hash}_{binary_length}'
+from ... import filesystem
 
 
 def is_analysis_finished(uid: str) -> bool:
@@ -54,11 +33,12 @@ def wait_for_analysis(uid: str):
     :return: None.
     """
 
+    print_api(f'Waiting for analysis to finish: {uid}')
     time.sleep(30)
     while not is_analysis_finished(uid):
         time.sleep(30)
 
-    print_api(f'Analysis finished: {uid}')
+    print_api(f'Analysis finished: {uid}', color='green')
 
 
 def upload_firmware(
@@ -144,7 +124,6 @@ def upload_firmware(
     try:
         uid = response.json()['uid']
     except KeyError:
-        uid = None
         raise requests.exceptions.HTTPError(f'Error: {response.json()}')
 
     # Check response status code.
@@ -177,7 +156,8 @@ def upload_files(directory_path: str, json_data: dict):
         firmware['file_name'] = filesystem.get_file_name_with_extension(firmware['path'])
 
     # Check if UID is already in the database.
-    firmwares = is_exist(directory_path=directory_path, firmwares=firmwares)
+    is_firmware_exist(directory_path=directory_path, firmwares=firmwares)
+    rest_file_object.is_file_object_exist(directory_path=directory_path, firmwares=firmwares)
 
     use_all_analysis_systems: bool = False
     for firmware in firmwares:
@@ -194,46 +174,54 @@ def upload_files(directory_path: str, json_data: dict):
     return None
 
 
-def is_exist(directory_path: str, firmwares: list = None, print_kwargs: dict = None) -> list:
+def is_uid_exist(uid: str):
     """
-    Check if there are files that have exactly the same hash, then check if the files already exist in the database.
-    :param directory_path: string, path to directory with firmware binary files.
-    :param firmwares: list, list of dictionaries with firmware file paths and hashes.
-        Example:
-        [
-            {
-                'path': 'C:\\Users\\user\\Desktop\\firmware.bin',
-                'hash': 'SHA256_HASH',
-                'binary': b'FIRMWARE_BINARY'
-            },
-            {
-                'path': 'C:\\Users\\user\\Desktop\\firmware2.bin',
-                'hash': 'SHA256_HASH2',
-                'binary': b'FIRMWARE_BINARY2'
-            }
-        ]
-
-    :param print_kwargs: dict, kwargs for print_api.
-
-    :return:
+    Check if the specified FACT UID exists in the FIRMWARE database.
+    :param uid: string, FACT UID.
+    :return: boolean, True if exists, False if not.
     """
 
-    if print_kwargs is None:
-        print_kwargs = dict()
+    url: str = f'{fact_config.FACT_ADDRESS}{fact_config.FIRMWARE_ENDPOINT}/{uid}'
+    response: requests.Response = requests.get(url)
 
-    if not firmwares:
-        firmwares: list = filesystem.get_file_hashes_from_directory(directory_path, recursive=False, add_binary=True)
+    # Check response status code.
+    if response.status_code == 200:
+        return True
+    else:
+        return False
 
-    # Add UIDs to the list.
-    for firmware in firmwares:
-        firmware['uid'] = get_fact_uid(file_binary=firmware['binary'], sha256_hash=firmware['hash'])
+
+def is_firmware_exist(directory_path: str, firmwares: list = None) -> list:
+    # noinspection GrazieInspection
+    """
+        Check if there are files that have exactly the same hash, then check if the files already exist in the database.
+        :param directory_path: string, path to directory with firmware binary files.
+        :param firmwares: list, list of dictionaries with firmware file paths and hashes.
+            Example:
+            [
+                {
+                    'path': 'C:\\Users\\user\\Desktop\\firmware.bin',
+                    'hash': 'SHA256_HASH',
+                    'binary': b'FIRMWARE_BINARY'
+                },
+                {
+                    'path': 'C:\\Users\\user\\Desktop\\firmware2.bin',
+                    'hash': 'SHA256_HASH2',
+                    'binary': b'FIRMWARE_BINARY2'
+                }
+            ]
+
+        :return:
+        """
+
+    firmwares = get_file_data.get_file_data(directory_path, firmwares)
 
     uid_exist_list: list = list()
     # Check if the files already exist in the database.
     for file_index, firmware in enumerate(firmwares):
         print_status_of_list(
-            list_instance=firmwares, prefix_string='Checking UID in DB: ', current_state=(file_index + 1))
-        if get_status.is_uid_exist(firmware['uid']):
+            list_instance=firmwares, prefix_string='Checking UID in FIRMWARE DB: ', current_state=(file_index + 1))
+        if is_uid_exist(firmware['uid']):
             uid_exist_list.append(firmware)
 
     # If there are files that already exist in the database, print them and raise an exception.

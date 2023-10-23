@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.3.8 - 23.10.2023
+  * Fixes and improvements in 'factw'.
 * 2.3.7 - 23.10.2023
   * Fixes in 'factw' and 'filesystem'.
 * 2.3.6 - 23.10.2023
