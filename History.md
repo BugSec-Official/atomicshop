@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.3.11 - 23.10.2023
+  * Fixes and improvements in 'print_api'.
 * 2.3.10 - 23.10.2023
   * Fixes and improvements in 'factw'.
 * 2.3.9 - 23.10.2023

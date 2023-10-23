@@ -209,7 +209,12 @@ def print_status(
 
 
 def print_status_of_list(
-        list_instance: list, prefix_string: str, current_state, suffix_string: str = str(), **kwargs):
+        list_instance: list,
+        prefix_string: str,
+        current_state,
+        suffix_string: str = str(),
+        same_line: bool = True,
+        **kwargs):
     """
     The function will print specified variables in a specific format on the same line, based on 'same_line' parameter.
 
@@ -219,6 +224,8 @@ def print_status_of_list(
     :param current_state: numeric representation of current state.
     :param suffix_string: string, since the lines are printed on the same line, it can happen that one line can be
         longer than the other. If shorter line come after the longer one, it will align on top of the longer line.
+    :param same_line: Boolean, if True, the lines will be printed on the same line (but not the last line),
+        otherwise on different lines.
 
     For example check the 'print_status' function.
 
@@ -228,15 +235,11 @@ def print_status_of_list(
 
     final_state = len(list_instance)
 
-    if final_state:
-        message = f'{prefix_string}{current_state} / {final_state}{suffix_string}'
-    else:
-        message = f'{prefix_string}{current_state}{suffix_string}'
-
-    if current_state != final_state:
-        same_line = True
-    else:
-        same_line = False
+    if same_line:
+        if current_state != final_state:
+            same_line = True
+        else:
+            same_line = False
 
     print_status(prefix_string=prefix_string, current_state=current_state, final_state=final_state,
                  suffix_string=suffix_string, same_line=same_line, **kwargs)
