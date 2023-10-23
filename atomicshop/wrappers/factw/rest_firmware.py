@@ -235,7 +235,7 @@ def is_firmware_exist(directory_path: str, firmwares: list = None) -> list:
             })
 
         # Raise exception for the list of lists.
-        message = f'Files that already exist in the database were found:\n'
+        message = f'Files already exist in the FIRMWARE database:\n'
         for entry in list_to_print:
             message += f'{entry}\n'
 
