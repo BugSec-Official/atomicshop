@@ -168,10 +168,16 @@ def upload_files(directory_path: str, json_data: dict):
     :return:
     """
 
-    firmwares: list = check_file_similarities_and_is_exist(directory_path)
+    # Get firmwares and check for duplicate files.
+    firmwares, _ = filesystem.find_duplicates_by_hash(
+        directory_path, recursive=False, add_binary=True, raise_on_found=True)
 
+    # Get filenames of firmwares.
     for firmware in firmwares:
         firmware['file_name'] = filesystem.get_file_name_with_extension(firmware['path'])
+
+    # Check if UID is already in the database.
+    firmwares = is_exist(directory_path=directory_path, firmwares=firmwares)
 
     use_all_analysis_systems: bool = False
     for firmware in firmwares:
@@ -188,10 +194,25 @@ def upload_files(directory_path: str, json_data: dict):
     return None
 
 
-def check_file_similarities_and_is_exist(directory_path: str, print_kwargs: dict = None) -> list:
+def is_exist(directory_path: str, firmwares: list = None, print_kwargs: dict = None) -> list:
     """
     Check if there are files that have exactly the same hash, then check if the files already exist in the database.
     :param directory_path: string, path to directory with firmware binary files.
+    :param firmwares: list, list of dictionaries with firmware file paths and hashes.
+        Example:
+        [
+            {
+                'path': 'C:\\Users\\user\\Desktop\\firmware.bin',
+                'hash': 'SHA256_HASH',
+                'binary': b'FIRMWARE_BINARY'
+            },
+            {
+                'path': 'C:\\Users\\user\\Desktop\\firmware2.bin',
+                'hash': 'SHA256_HASH2',
+                'binary': b'FIRMWARE_BINARY2'
+            }
+        ]
+
     :param print_kwargs: dict, kwargs for print_api.
 
     :return:
@@ -200,17 +221,8 @@ def check_file_similarities_and_is_exist(directory_path: str, print_kwargs: dict
     if print_kwargs is None:
         print_kwargs = dict()
 
-    # Get all the files and duplicates if exists.
-    duplicates, firmwares = filesystem.find_duplicates_by_hash(directory_path, add_binary=True)
-
-    # If there are files with the same hash, print them and raise an exception.
-    if duplicates:
-        # Raise exception for the list of lists.
-        message = f'Files with the same hash were found:\n'
-        for duplicate in duplicates:
-            message += f'{duplicate}\n'
-
-        raise ValueError(message)
+    if not firmwares:
+        firmwares: list = filesystem.get_file_hashes_from_directory(directory_path, recursive=False, add_binary=True)
 
     # Add UIDs to the list.
     for firmware in firmwares:
