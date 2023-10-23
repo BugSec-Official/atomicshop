@@ -181,7 +181,7 @@ def upload_files(directory_path: str, json_data: dict):
             use_all_analysis_systems = True
 
         upload_firmware(
-            firmware['file_path'], json_data=json_data, use_all_analysis_systems=use_all_analysis_systems,
+            firmware['path'], json_data=json_data, use_all_analysis_systems=use_all_analysis_systems,
             firmware_binary=firmware['binary']
         )
 
@@ -214,7 +214,7 @@ def check_file_similarities_and_is_exist(directory_path: str, print_kwargs: dict
 
     # Add UIDs to the list.
     for firmware in firmwares:
-        firmware['uid'] = get_fact_uid(file_binary=firmware['binary'], sha256_hash=firmware['file_hash'])
+        firmware['uid'] = get_fact_uid(file_binary=firmware['binary'], sha256_hash=firmware['hash'])
 
     uid_exist_list: list = list()
     # Check if the files already exist in the database.
@@ -230,7 +230,7 @@ def check_file_similarities_and_is_exist(directory_path: str, print_kwargs: dict
         list_to_print: list = list()
         for firmware in uid_exist_list:
             list_to_print.append({
-                'file_path': firmware['file_path'],
+                'path': firmware['path'],
                 'uid': firmware['uid']
             })
 

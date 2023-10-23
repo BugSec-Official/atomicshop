@@ -55,6 +55,16 @@ def get_file_name_with_extension(file_path: str) -> str:
     return str(Path(file_path).name)
 
 
+def get_file_name_without_extension(file_path: str) -> str:
+    """
+    The function will return file name without extension of the file.
+
+    :param file_path: string, full file path.
+    :return: string.
+    """
+    return str(Path(file_path).stem)
+
+
 def get_list_of_directories_in_file_path(
         file_path: str, get_last_part: bool = True, convert_drive_to_string: bool = False) -> list:
     """
@@ -169,6 +179,30 @@ def remove_file(file_path: str, **kwargs) -> bool:
     except FileNotFoundError:
         message = f'File Removal Failed, File non-existent: {file_path}'
         print_api(message, error_type=True, logger_method='critical', **kwargs)
+        return False
+
+
+def remove_directory(directory_path: str, print_kwargs: dict = None) -> bool:
+    """
+    Remove directory if it exists.
+
+    :param directory_path: string to full directory path.
+    :param print_kwargs: dict, kwargs for print_api.
+
+    :return: return 'True' if directory removal succeeded, and 'False' if not.
+    """
+
+    if print_kwargs is None:
+        print_kwargs = dict()
+
+    try:
+        shutil.rmtree(directory_path)
+        print_api(f'Directory Removed: {directory_path}', **print_kwargs)
+        return True
+    # Since the directory doesn't exist, we actually don't care, since we want to remove it anyway.
+    except FileNotFoundError:
+        message = f'Directory Removal Failed, Directory non-existent: {directory_path}'
+        print_api(message, error_type=True, logger_method='critical', **print_kwargs)
         return False
 
 
