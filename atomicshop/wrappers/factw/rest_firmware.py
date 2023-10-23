@@ -160,7 +160,10 @@ def upload_files(directory_path: str, json_data: dict):
     rest_file_object.is_file_object_exist(directory_path=directory_path, firmwares=firmwares)
 
     use_all_analysis_systems: bool = False
-    for firmware in firmwares:
+    for file_index, firmware in enumerate(firmwares):
+        print_status_of_list(
+            list_instance=firmwares, prefix_string=f'Uploading File: ', current_state=(file_index + 1), same_line=False)
+
         json_data['file_name'] = firmware['file_name']
 
         if json_data['requested_analysis_systems'] == 'all' and not use_all_analysis_systems:
