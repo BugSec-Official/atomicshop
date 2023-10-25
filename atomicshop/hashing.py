@@ -1,10 +1,19 @@
 import hashlib
 import sys
+from typing import Literal, Union
 
 from . import web
 
 
-def hash_bytes(bytes_object: bytes, hash_algo: str = 'sha256'):
+# def hash_bytes(bytes_object: bytes, hash_algo: Union[Literal['sha256', 'md5', 'sha1'], str] = 'sha256') -> str:
+def hash_bytes(bytes_object: bytes, hash_algo: str = 'sha256') -> str:
+    """
+    The function will return hash of the bytes object with specified algorithm.
+    :param bytes_object: bytes object to hash.
+    :param hash_algo: string, file hashing algorithm. Default is 'sha256'. Basically the string can be any algorithm
+        that hashlib supports. Example: hashlib.sha256(), hashlib.md5(), hashlib.sha1()
+    :return: string, hash of the bytes object.
+    """
     # Equivalent to sha256 example: hashlib.sha256(bytes_object).hexdigest()
     return getattr(hashlib, hash_algo)(bytes_object).hexdigest()
 
