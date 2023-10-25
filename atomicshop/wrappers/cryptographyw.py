@@ -1,6 +1,11 @@
+from typing import Union
+import os
+
 from ..print_api import print_api
+from ..file_io import file_io
 
 from cryptography import x509
+from cryptography.x509 import Certificate
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives import hashes
@@ -17,7 +22,50 @@ OID_TO_BUILDER_CLASS_EXTENSION_NAME: dict = {
 }
 
 
-def convert_pem_to_x509_object(certificate):
+def convert_object_to_x509(certificate):
+    """Convert certificate to x509 object.
+
+    :param certificate: any object that can be converted to x509 object.
+        Supported types:
+            string that is path to file will be imported as bytes object abd converted to x509.Certificate
+                After check if it's PEM or DER format.
+            string that is PEM certificate will be converted to bytes, then x509.Certificate
+            bytes of PEM or DER will be converted to x509.Certificate.
+            x509.Certificate will be returned as is.
+    :return: certificate in x509 object of 'cryptography' module.
+    """
+
+    # Check if 'certificate' is a string and a path.
+    if isinstance(certificate, str) and os.path.isfile(certificate):
+        # Import the certificate from the path.
+        certificate = file_io.read_file(certificate, file_mode='rb')
+
+    # Check if 'certificate' is a bytes object and PEM format.
+    # We're checking if it starts with '-----BEGIN ' since the pem certificate can include PRIVATE KEY and will be
+    # in the beginning of the file.
+    if (isinstance(certificate, bytes) and certificate.startswith(b'-----BEGIN ') and
+            b'-----BEGIN CERTIFICATE-----' in certificate):
+        # Convert the PEM certificate to x509 object.
+        certificate = convert_pem_to_x509_object(certificate)
+    # Check if 'certificate' is a bytes object and DER format.
+    elif isinstance(certificate, bytes) and certificate.startswith(b'\x30'):
+        # Convert the DER certificate to x509 object.
+        certificate = convert_der_to_x509_object(certificate)
+    # Check if 'certificate' is a string object and PEM format.
+    elif (isinstance(certificate, str) and certificate.startswith('-----BEGIN ') and
+          '-----BEGIN CERTIFICATE-----' in certificate):
+        # Convert the PEM certificate to x509 object.
+        certificate = convert_pem_to_x509_object(certificate)
+    # Check if 'certificate' is a x509 object.
+    elif isinstance(certificate, Certificate):
+        pass
+    else:
+        raise ValueError(f'Unsupported certificate type: {type(certificate)}')
+
+    return certificate
+
+
+def convert_pem_to_x509_object(certificate: Union[str, bytes]) -> x509.Certificate:
     """Convert PEM certificate to x509 object.
 
     :param certificate: string or bytes - certificate to convert.
@@ -49,6 +97,16 @@ def convert_x509_object_to_pem_bytes(certificate) -> bytes:
     """
 
     return certificate.public_bytes(serialization.Encoding.PEM)
+
+
+def convert_x509_object_to_der_bytes(certificate) -> bytes:
+    """Convert x509 object to DER certificate.
+
+    :param certificate: certificate in x509 object of 'cryptography' module.
+    :return: bytes of certificate in DER byte string format.
+    """
+
+    return certificate.public_bytes(serialization.Encoding.DER)
 
 
 def generate_private_key(public_exponent: int = 65537, bits: int = 2048):
@@ -186,3 +244,41 @@ def _get_extensions_properties(certificate):
             sub_keys = vars(ext._value)
 
         print(f'{ext.oid._name}: {sub_keys}')
+
+
+def get_sha1_thumbprint_from_x509(certificate) -> str:
+    """Get SHA1 thumbprint of the certificate.
+
+    :param certificate: certificate in x509 object of cryptography module.
+    :return: string, SHA1 thumbprint of the certificate.
+    """
+
+    return certificate.fingerprint(hashes.SHA1()).hex()
+
+
+def get_sha1_thumbprint_from_pem(pem_certificate: bytes) -> str:
+    """Get SHA1 thumbprint of the certificate.
+
+    :param pem_certificate: bytes of PEM certificate.
+    :return: string, SHA1 thumbprint of the certificate.
+    """
+
+    # Convert PEM certificate to x509 object.
+    certificate = convert_pem_to_x509_object(pem_certificate)
+
+    return get_sha1_thumbprint_from_x509(certificate)
+
+
+def get_issuer_common_name_from_x509(certificate) -> str:
+    """Get issuer common name from x509 certificate.
+
+    :param certificate: certificate in x509 object of cryptography module.
+    :return: string, issuer common name.
+    """
+
+    try:
+        issuer = certificate.issuer.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value
+    except IndexError:
+        issuer = certificate.issuer.get_attributes_for_oid(x509.NameOID.ORGANIZATION_NAME)[0].value
+
+    return issuer

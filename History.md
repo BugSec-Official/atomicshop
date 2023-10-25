@@ -1,6 +1,10 @@
 <!-- HISTORY -->
 ## History
 
+* 2.4.0 - 25.10.2023
+  * New functionality in 'factw'.
+  * New functionality in 'certificates'.
+  * New functionality in 'cryptographyw'.
 * 2.3.11 - 23.10.2023
   * Fixes and improvements in 'print_api'.
 * 2.3.10 - 23.10.2023

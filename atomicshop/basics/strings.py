@@ -355,3 +355,20 @@ def check_if_suffix_is_in_string(string: str, suffix: str) -> bool:
     """
 
     return string.endswith(suffix)
+
+
+def convert_string_to_colon_separated(string: str, number_of_characters: int = 2) -> str:
+    """
+    Function converts string to colon separated string.
+    :param string: string, to convert.
+    :param number_of_characters: integer, number of characters to separate.
+
+    Example:
+        convert_string_to_colon_separated('1234567890', 2)
+    Result:
+        '12:34:56:78:90'
+
+    :return: string.
+    """
+
+    return ':'.join([string[i:i+number_of_characters] for i in range(0, len(string), number_of_characters)])
