@@ -2,11 +2,112 @@
 import requests
 import base64
 import time
+from typing import Union
+import os
 
 from . import fact_config, get_file_data, rest_file_object
-from ... print_api import print_api, print_status_of_list
-from ... file_io import file_io
-from ... import filesystem
+from ...print_api import print_api, print_status_of_list
+from ...file_io import file_io, jsons, csvs
+from ...basics import dicts
+from ... import filesystem, ip_addresses
+
+
+def get_uid_list(
+        config_data: dict,
+        query: Union[dict, str] = None,
+        url_parameters: dict = None,
+        fetch_uid_data: bool = False
+):
+    """
+    Get firmware UIDs by query.
+    :param config_data: dict, of Parameters to pass for REST API.
+        If query is specified, this parameter is ignored.
+    :param query: string, query.
+        Example:
+            {$and: [{"device_name": "test"}, {"device_name": "test222"}]}
+        Info:
+            Return UIDs of all firmwares with device_name "test" and device_name "test222".
+
+        Example2:
+            {"vendor": "AVM"}
+        Info:
+            Return UIDs of all firmwares with vendor "AVM".
+
+        Operators:
+            $and: AND operator.
+            $or: OR operator.
+            $ne: NOT EQUAL operator.
+            $like: LIKE operator.
+            $in: IN operator.
+            &lt: LESS THAN operator.
+            $gt: GREATER THAN operator.
+            $exists: EXISTS operator.
+            $regex: REGEX operator.
+            $contains: CONTAINS operator.
+            Basically all the operators that are supported by the MongoDB.
+
+    :param url_parameters: dict, of URL parameters. Available parameters:
+        {
+            'limit': int - limit of results,
+            'offset': int - offset of results (paging),
+            'recursive': boolean - recursive search - only with query,
+            'inverted': boolean - inverted search - only with query and recursive
+        }
+
+    :param fetch_uid_data: boolean, get data of the UIDs. This can take time, since each UID will be queried against the
+        database. Default is False.
+    :return: list, list of UIDs.
+    """
+
+    url: str = f'{fact_config.FACT_ADDRESS}{fact_config.FIRMWARE_ENDPOINT}'
+
+    if query is None:
+        if 'requested_analysis_systems' in config_data:
+            dicts.remove_keys(config_data, ['requested_analysis_systems'])
+
+        query = config_data
+
+    if isinstance(query, dict):
+        query = jsons.convert_dict_to_json_string(query)
+    elif isinstance(query, str):
+        pass
+    else:
+        raise TypeError(f'Query must be dict or string, not {type(query)}')
+
+    # If there are parameters to add to the URL, add the '?' to the URL.
+    if url_parameters or query:
+        url = f'{url}?'
+
+    # Add parameters to the URL.
+    if url_parameters and query:
+        for key, value in url_parameters.items():
+            url = f'{url}{key}={str(value)}&'
+            url = f'{url}query={query}'
+    if url_parameters and not query:
+        for parameter_index, (key, value) in enumerate(url_parameters.items()):
+            url = f'{url}{key}={str(value)}'
+            if parameter_index < len(url_parameters) - 1:
+                url = f'{url}&'
+    elif query and not url_parameters:
+        url = f'{url}query={query}'
+
+    response: requests.Response = requests.get(url)
+
+    uids: list = list()
+    # Check response status code.
+    if response.status_code == 200:
+        uids: list = response.json()['uids']
+        # Print response.
+        # print_api(response.json())
+        print_api(f'Found {len(uids)} UIDs.')
+    else:
+        # Print error.
+        print_api('Error: ' + str(response.status_code), error_type=True, logger_method='critical')
+
+    if fetch_uid_data:
+        return get_uid_list_data(uids)
+    else:
+        return uids
 
 
 def is_analysis_finished(uid: str) -> bool:
@@ -177,11 +278,11 @@ def upload_files(directory_path: str, json_data: dict):
     return None
 
 
-def is_uid_exist(uid: str):
+def get_uid_data(uid: str):
     """
-    Check if the specified FACT UID exists in the FIRMWARE database.
+    Get firmware data by UID.
     :param uid: string, FACT UID.
-    :return: boolean, True if exists, False if not.
+    :return:
     """
 
     url: str = f'{fact_config.FACT_ADDRESS}{fact_config.FIRMWARE_ENDPOINT}/{uid}'
@@ -189,6 +290,35 @@ def is_uid_exist(uid: str):
 
     # Check response status code.
     if response.status_code == 200:
+        return response.json()
+    else:
+        return None
+
+
+def get_uid_list_data(uid_list: list):
+    """
+    Get firmware data for each UID in the list.
+    :param uid_list: list, list of FACT UIDs.
+    :return:
+    """
+
+    uid_data_list: list = list()
+    for uid_index, uid in enumerate(uid_list):
+        print_status_of_list(
+            list_instance=uid_list, prefix_string='Getting UID Data: ', current_state=(uid_index + 1))
+        uid_data_list.append(get_uid_data(uid))
+
+    return uid_data_list
+
+
+def is_uid_exist(uid: str):
+    """
+    Check if the specified FACT UID exists in the FIRMWARE database.
+    :param uid: string, FACT UID.
+    :return: boolean, True if exists, False if not.
+    """
+
+    if get_uid_data(uid):
         return True
     else:
         return False
@@ -245,3 +375,141 @@ def is_firmware_exist(directory_path: str, firmwares: list = None) -> list:
         raise ValueError(message)
 
     return firmwares
+
+
+def find_analysis_recursively(uid: str, object_path: str = str()):
+    """
+    The function will find the analysis information like cve, OS type, etc. recursively and return it to
+    the asker firmware.
+
+    :param uid: string of the uid of the file_object.
+    :param object_path: string of the path of the file_object. Can be empty on the first iteration since it's the same
+        UID as the first asker function.
+    :return:
+    """
+
+    found_info: dict = dict()
+
+    # Get the data of the firmware.
+    file_data: dict = rest_file_object.get_uid_data(uid)
+
+    # Add current path to the object path to create a full path of the current object.
+    current_path: str = object_path + file_data['file_object']['meta_data']['hid']
+    print_api(f"Current File: {current_path}", print_end='\r')
+
+    cve_lookup_result: dict = file_data['file_object']['analysis']['cve_lookup']['result']
+    ip_and_uri_finder_result: dict = file_data['file_object']['analysis']['ip_and_uri_finder']['result']
+    software_components_result: dict = file_data['file_object']['analysis']['software_components']['result']
+
+    if cve_lookup_result and 'skipped' not in cve_lookup_result.keys():
+        if cve_lookup_result['cve_results']:
+            found_info['cve_lookup'] = file_data['file_object']['analysis']['cve_lookup']['result']
+    if ip_and_uri_finder_result and 'skipped' not in ip_and_uri_finder_result.keys():
+        if ip_and_uri_finder_result['ips_v4'] or ip_and_uri_finder_result['ips_v6'] or ip_and_uri_finder_result['uris']:
+            found_info['ip_and_uri_finder'] = file_data['file_object']['analysis']['ip_and_uri_finder']['result']
+    if software_components_result and 'skipped' not in software_components_result.keys():
+        found_info['software_components'] = file_data['file_object']['analysis']['software_components']['result']
+
+    if found_info:
+        found_info['path'] = current_path
+        found_files: list = [found_info]
+    else:
+        found_files: list = list()
+
+    for included_file_uid in file_data['file_object']['meta_data']['included_files']:
+        # Get the data of the included file.
+        included_found_files = find_analysis_recursively(included_file_uid, (
+                object_path + file_data['file_object']['meta_data']['hid']))
+
+        if included_found_files:
+            found_files.extend(included_found_files)
+
+    return found_files
+
+
+def save_firmware_uids_as_csv(
+        directory_path: str,
+        config_data: dict = None,
+        query: Union[dict, str] = None,
+        url_parameters: dict = None,
+        get_analysis_data: bool = False
+):
+    """
+    Save firmware UIDs as CSV file.
+    :param directory_path: string, path to save the CSV file.
+    :param config_data: check get_uid_list() for more info.
+    :param query: check get_uid_list() for more info.
+    :param url_parameters: check get_uid_list() for more info.
+    :param get_analysis_data: boolean. If 'True', the function will get the analysis data of each file that is found
+        in the firmware results. This is needed in order to determine if the firmware is vulnerable to CVEs, OS type,
+        etc. Default is 'False'.
+        NOTE: This can take a lot of time, since each internal file will be queried against the database.
+
+    :return:
+    """
+
+    uids: list = get_uid_list(
+        config_data=config_data, query=query, url_parameters=url_parameters, fetch_uid_data=True)
+
+    export_list: list = list()
+    for uid_index, uid in enumerate(uids):
+        print_status_of_list(
+            list_instance=uids, prefix_string='Checking UID for analysis items: ', current_state=(uid_index + 1),
+            same_line=False)
+        export_entry: dict = dict()
+        for key, value in uid['firmware']['meta_data'].items():
+            if key == 'included_files' or key == 'total_files_in_firmware':
+                continue
+            export_entry[key] = value
+
+        export_entry['mime'] = uid['firmware']['analysis']['file_type']['result']['mime']
+        export_entry['sha256'] = uid['firmware']['analysis']['file_hashes']['result']['sha256']
+        export_entry['uid'] = uid['request']['uid']
+
+        # Check for CVEs and other info recursively.
+        if get_analysis_data:
+            analysis_data_list = find_analysis_recursively(uid['request']['uid'])
+        else:
+            analysis_data_list = list()
+
+        export_entry['urls_ips']: list = list()
+        export_entry['cves']: list = list()
+        export_entry['software']: list = list()
+
+        for analysis_data in analysis_data_list:
+            if 'cve_lookup' in analysis_data:
+                for key, value in analysis_data['cve_lookup']['cve_results'].items():
+                    export_entry['cves'] = [key, jsons.convert_dict_to_json_string(value)]
+            if 'software_components' in analysis_data:
+                for key, value in analysis_data['software_components'].items():
+                    export_entry['software'] = [key, jsons.convert_dict_to_json_string(value['meta'])]
+            if 'ip_and_uri_finder' in analysis_data:
+                for key, value in analysis_data['ip_and_uri_finder'].items():
+                    if not value:
+                        continue
+
+                    if key == 'ips_v4':
+                        for ipv4s in analysis_data['ip_and_uri_finder']['ips_v4']:
+                            for ip_address in ipv4s:
+                                if ip_addresses.is_ip_address(ip_address, ip_type='ipv4'):
+                                    if ip_address not in export_entry['urls_ips']:
+                                        export_entry['urls_ips'].append(ip_address)
+                    elif key == 'ips_v6':
+                        for ipv6s in analysis_data['ip_and_uri_finder']['ips_v6']:
+                            for ip_address in ipv6s:
+                                if ip_addresses.is_ip_address(ip_address, ip_type='ipv6'):
+                                    if ip_address not in export_entry['urls_ips']:
+                                        export_entry['urls_ips'].append(ip_address)
+                    elif key == 'uris':
+                        for address in value:
+                            if address not in export_entry['urls_ips']:
+                                export_entry['urls_ips'].append(address)
+
+        export_list.append(export_entry)
+        # break
+
+    # Save UIDs as CSV file.
+    file_path = directory_path + os.sep + 'uids.csv'
+    csvs.write_list_to_csv(export_list, file_path)
+
+    return None

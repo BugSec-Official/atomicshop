@@ -1,5 +1,3 @@
-# v1.0.0
-# Basic imports.
 from urllib.parse import urlparse
 
 

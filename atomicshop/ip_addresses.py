@@ -1,7 +1,8 @@
 import ipaddress
+from typing import Union, Literal
 
 
-def is_ip_address(string_value: str, ip_type: str = None) -> bool:
+def is_ip_address(string_value: str, ip_type: Union[Literal['ipv4', 'ipv6'], None] = None) -> bool:
     """
     The function checks if the string is an IPv4 or IPv6 address.
 

@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.4.1 - 26.10.2023
+  * Fixes and new functionality in 'factw'.
 * 2.4.0 - 25.10.2023
   * New functionality in 'factw'.
   * New functionality in 'certificates'.
