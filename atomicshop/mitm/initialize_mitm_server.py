@@ -6,7 +6,7 @@ from atomicshop.print_api import print_api
 from .import_config import ImportConfig
 from .initialize_engines import ModuleCategory
 from .connection_thread_worker import thread_worker_main
-from ..filesystem import get_file_paths_and_relative_directories, ComparisonOperator
+from ..filesystem import get_file_paths_and_relative_directories
 from .. import filesystem, queues
 from ..python_functions import get_current_python_version_string, check_python_version_compliance
 from ..wrappers.socketw.socket_wrapper import SocketWrapper
@@ -106,7 +106,7 @@ def initialize_mitm_server(config_static):
     # Get full paths of all the 'engine_config.ini' files.
     engine_config_path_list = get_file_paths_and_relative_directories(
         directory_fullpath=config_static.ENGINES_DIRECTORY_PATH,
-        file_name_check_tuple=(config_static.ENGINE_CONFIG_FILE_NAME, ComparisonOperator.EQ))
+        file_name_check_pattern=config_static.ENGINE_CONFIG_FILE_NAME)
 
     # Iterate through all the 'engine_config.ini' file paths.
     domains_engine_list_full: list = list()

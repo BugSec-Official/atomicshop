@@ -5,11 +5,12 @@ import time
 from typing import Union
 import os
 
-from . import fact_config, get_file_data, rest_file_object
-from ...print_api import print_api, print_status_of_list
-from ...file_io import file_io, jsons, csvs
-from ...basics import dicts
-from ... import filesystem, ip_addresses
+from .. import fact_config, get_file_data
+from . import file_object
+from ....print_api import print_api, print_status_of_list
+from ....file_io import file_io, jsons, csvs
+from ....basics import dicts
+from .... import filesystem, ip_addresses
 
 
 def get_uid_list(
@@ -258,7 +259,7 @@ def upload_files(directory_path: str, json_data: dict):
 
     # Check if UID is already in the database.
     is_firmware_exist(directory_path=directory_path, firmwares=firmwares)
-    rest_file_object.is_file_object_exist(directory_path=directory_path, firmwares=firmwares)
+    file_object.is_file_object_exist(directory_path=directory_path, firmwares=firmwares)
 
     use_all_analysis_systems: bool = False
     for file_index, firmware in enumerate(firmwares):
@@ -391,7 +392,7 @@ def find_analysis_recursively(uid: str, object_path: str = str()):
     found_info: dict = dict()
 
     # Get the data of the firmware.
-    file_data: dict = rest_file_object.get_uid_data(uid)
+    file_data: dict = file_object.get_uid_data(uid)
 
     # Add current path to the object path to create a full path of the current object.
     current_path: str = object_path + file_data['file_object']['meta_data']['hid']

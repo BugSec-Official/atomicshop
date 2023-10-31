@@ -450,6 +450,20 @@ def remove_first_separator(filesystem_path: str) -> str:
     return filesystem_path.removesuffix(os.sep)
 
 
+def add_last_separator(filesystem_path: str) -> str:
+    """
+    The function adds a separator to the end of the path if it doesn't exist.
+
+    :param filesystem_path: string, path to add separator to.
+    :return: string, path with separator at the end.
+    """
+
+    if not filesystem_path.endswith(os.sep):
+        return filesystem_path + os.sep
+    else:
+        return filesystem_path
+
+
 def get_files_and_folders(directory_path: str, string_contains: str = str()):
     """
     The function is not recursive.
