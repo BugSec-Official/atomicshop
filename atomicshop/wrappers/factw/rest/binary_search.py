@@ -1,8 +1,8 @@
 # noinspection PyPackageRequirements
 import requests
 
-from . import fact_config
-from ... print_api import print_api
+from .. import fact_config
+from .... print_api import print_api
 
 
 def search_string(string_to_search: str):

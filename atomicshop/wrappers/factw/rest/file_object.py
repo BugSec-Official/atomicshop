@@ -1,8 +1,8 @@
 # noinspection PyPackageRequirements
 import requests
 
-from . import fact_config, get_file_data
-from ... print_api import print_status_of_list, print_api
+from .. import fact_config, get_file_data
+from .... print_api import print_status_of_list, print_api
 
 
 def get_all_file_objects():

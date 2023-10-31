@@ -93,6 +93,11 @@ To get a local copy up and running follow these simple steps.
    "\Lib\site-packages\atomicshop\addons\post_install\install_pywintrace_0.3.cmd"
    ```
 
+4. If you get an exception while installing the 'psycopg2' package on ubuntu, install this binary:
+    ```sh
+    sudo apt-get install libpq-dev
+    ```
+
 
 <!-- USAGE EXAMPLES -->
 ## Usage

@@ -1,17 +1,17 @@
 # noinspection PyPackageRequirements
 import requests
 
-from . import fact_config
-from ... print_api import print_api
+from .. import fact_config
+from .... print_api import print_api
 
 
-def get_status():
+def get_statistics():
     """
-    Get status of the FACT service.
+    Get statistics of the FACT service.
     :return:
     """
 
-    url: str = f'{fact_config.FACT_ADDRESS}{fact_config.STATUS_ENDPOINT}'
+    url: str = f'{fact_config.FACT_ADDRESS}{fact_config.STATISTICS_ENDPOINT}'
     response: requests.Response = requests.get(url)
 
     # Check response status code.
