@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.5.4 - 16.11.1023
+  * 'wrappers.dockerw' - initial version.
 * 2.5.3 - 16.11.1023
   * 'factw.fact_extractor' - bugfixes.
 * 2.5.2 - 16.11.1023
