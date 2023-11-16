@@ -1,7 +1,6 @@
 import functools
 from typing import Union
 import shlex
-from subprocess import Popen, PIPE, STDOUT, CREATE_NEW_CONSOLE
 import subprocess
 
 from .print_api import print_api
@@ -28,9 +27,6 @@ def process_execution_decorator(function_name):
             return None
 
     return wrapper_process_execution_decorator
-
-
-
 
 
 @process_execution_decorator
@@ -71,7 +67,7 @@ def execute_with_live_output(
     #   output all the error output to 'stdout' variable as well. This way when you output new lines
     #   in a loop, you don't need to worry about checking 'stderr' buffer.
     # text=True: by default the output is binary, this option sets the output to text / string.
-    with Popen(cmd, stdout=PIPE, stderr=STDOUT, bufsize=1, text=True) as process:
+    with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=1, text=True) as process:
         # We'll count the number of lines from 'process.stdout'.
         counter: int = 0
         # And also get list of all the lines.
@@ -133,7 +129,7 @@ def execute_in_new_window(
 
     cmd = _execution_parameters_processing(cmd, wsl)
 
-    executed_process = Popen(cmd, shell=shell, creationflags=CREATE_NEW_CONSOLE)
+    executed_process = subprocess.Popen(cmd, shell=shell, creationflags=subprocess.CREATE_NEW_CONSOLE)
     return executed_process
 
 
@@ -185,7 +181,7 @@ def _execution_parameters_processing(cmd: Union[list, str], wsl: bool = False):
     return cmd
 
 
-def safe_terminate(popen_process: Popen):
+def safe_terminate(popen_process: subprocess.Popen):
     # Terminate the process with 'Popen' api.
     popen_process.terminate()
     # And wait for it to close.

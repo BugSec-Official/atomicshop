@@ -1,7 +1,9 @@
 <!-- HISTORY -->
 ## History
 
-* 2.4.3 - 16.11.1023
+* 2.5.1 - 16.11.1023
+  * 'process' - bugfixes.
+* 2.5.0 - 16.11.1023
   * 'process' - added functionality.
   * 'wrappers.configparserw' - added functionality and fixes.
   * 'wrappers.factw.fact_extractor' - added functionality.
