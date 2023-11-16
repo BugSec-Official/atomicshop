@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.5.3 - 16.11.1023
+  * 'factw.fact_extractor' - bugfixes.
 * 2.5.2 - 16.11.1023
   * 'process' - bugfixes.
   * added 'install_psycopg2_ubuntu.sh' script to 'addons\a_setup_scripts' folder.
