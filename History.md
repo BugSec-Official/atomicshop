@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.5.2 - 16.11.1023
+  * 'process' - bugfixes.
+  * added 'install_psycopg2_ubuntu.sh' script to 'addons\a_setup_scripts' folder.
 * 2.5.1 - 16.11.1023
   * 'process' - bugfixes.
 * 2.5.0 - 16.11.1023

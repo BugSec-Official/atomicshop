@@ -90,13 +90,24 @@ To get a local copy up and running follow these simple steps.
    The latest version on PyPI is 0.2, so you will need to install from GitHub.
    Alternatively, you can use a cmd file in the addon folder after 'atomicshop' installation:
    ```sh
-   "\Lib\site-packages\atomicshop\addons\post_install\install_pywintrace_0.3.cmd"
+   "\Lib\site-packages\atomicshop\addons\a_setup_scripts\install_pywintrace_0.3.cmd"
    ```
 
 4. If you get an exception while installing the 'psycopg2' package on ubuntu, install this binary:
     ```sh
     sudo apt-get install libpq-dev
     ```
+    Then install the package:
+    ```sh
+    pip install psycopg2-binary
+    pip install psycopg2
+    ```
+   Alternatively, you can use a cmd file in the addon folder after 'atomicshop' installation:
+    ```sh
+    "\Lib\site-packages\atomicshop\addons\a_setup_scripts\install_psycopg2_ubuntu.sh"
+    ```
+   Note: 'psycopg2' package is not in prerequisites because of this issue.
+   
 
 
 <!-- USAGE EXAMPLES -->
