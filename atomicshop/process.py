@@ -70,6 +70,15 @@ def execute_with_live_output(
     #   output all the error output to 'stdout' variable as well. This way when you output new lines
     #   in a loop, you don't need to worry about checking 'stderr' buffer.
     # text=True: by default the output is binary, this option sets the output to text / string.
+    # bufsize=1: When you set bufsize=1, it means line buffering is enabled. In this mode, the output is buffered
+    #   line by line. Each time a line is completed (typically ending with a newline character), it is flushed
+    #   from the buffer. This is particularly useful when you want to read output from the subprocess in real-time
+    #   or line by line, such as in a logging or monitoring scenario.
+    #   bufsize=-1 or bufsize=subprocess.PIPE: This is the default setting.
+    #   It enables full buffering, which means data is buffered until the buffer is full.
+    #   The buffer size is system-dependent and usually chosen by the underlying implementation to optimize performance.
+    #   # bufsize=0: This means no buffering.
+    #   The I/O is unbuffered, and data is written or read from the stream immediately.
     with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=1, text=True) as process:
         # We'll count the number of lines from 'process.stdout'.
         counter: int = 0
@@ -136,9 +145,9 @@ def execute_in_new_window(
     return executed_process
 
 
-def execute_script_ubuntu(script: str, check: bool = True, shell: bool = False):
+def execute_script(script: str, check: bool = True, shell: bool = False):
     """
-    The function executes terminal bash script in Ubuntu.
+    The function executes a batch script bash on Linux or CMD.exe on Windows.
     :param script: string, script to execute.
     :param check: check=True: When this is set, if the command executed with subprocess.run() returns a non-zero
         exit status (which usually indicates an error), a subprocess.CalledProcessError exception will be raised.
@@ -159,8 +168,16 @@ def execute_script_ubuntu(script: str, check: bool = True, shell: bool = False):
         not an executable but a shell built-in command.
     :return: None if execution was successful, subprocess.CalledProcessError string if not.
     """
+
+    if os.name == 'nt':
+        executable = 'cmd.exe'
+    elif os.name == 'posix':
+        executable = '/bin/bash'
+    else:
+        raise OSError(f'OS not supported: {os.name}')
+
     try:
-        subprocess.run(script, check=check, shell=shell, executable='/bin/bash')
+        subprocess.run(script, check=check, shell=shell, executable=executable)
         return None
     except subprocess.CalledProcessError as e:
         return e
@@ -219,3 +236,44 @@ def match_pattern_against_running_processes_cmdlines(pattern: str, first: bool =
                 break
 
     return matched_cmdlines
+
+
+"""
+subprocess.Popen and subprocess.run are both functions in Python's subprocess module used for executing shell commands, 
+but they serve different purposes and offer different levels of control over command execution.
+
+subprocess.Popen:
+Flexibility and Control: Popen is more flexible and provides more control over how a command is executed. 
+It is used for more complex subprocess management.
+Asynchronous Execution: When you use Popen, it does not wait for the command to complete; instead, it starts 
+the process and moves on to the next line of code. 
+This is useful for running a process in the background while your Python script does other things.
+I/O Streams: It gives you the ability to interact with the standard input (stdin), standard output (stdout), 
+and standard error (stderr) streams of the command.
+Manual Management: With Popen, you need to manage the process' termination (using process.wait() or 
+process.communicate()), which gives you the ability to handle the process's output and errors in a more 
+controlled manner.
+
+Example Usage:
+import subprocess
+process = subprocess.Popen(['ls', '-l'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+stdout, stderr = process.communicate()
+
+subprocess.run:
+Simplicity and Convenience: run is a simpler and more convenient interface for basic subprocess management. 
+It is suitable for more straightforward use cases where you just want to execute a command and wait for it to finish.
+Synchronous Execution: It waits for the command to complete and then returns a CompletedProcess instance. 
+This instance contains information like the command's output, error message, and return code.
+Less Control: run does not give direct access to the command's I/O streams while it is running.
+Automatic Management: It automatically waits for the command to complete and provides the output/error after 
+completion, simplifying error handling and output retrieval.
+
+Example Usage:
+import subprocess
+result = subprocess.run(['ls', '-l'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+print(result.stdout)
+
+In summary, subprocess.Popen is more suitable for complex scenarios where you need more control over subprocess 
+execution and interaction. In contrast, subprocess.run is designed for simpler use cases where you just want to 
+run a command, wait for it to complete, and maybe get its output.
+"""

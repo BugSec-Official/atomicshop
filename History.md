@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.5.5 - 16.11.1023
+  * 'wrappers.dockerw' - fixes and improvements.
 * 2.5.4 - 16.11.1023
   * 'wrappers.dockerw' - initial version.
 * 2.5.3 - 16.11.1023

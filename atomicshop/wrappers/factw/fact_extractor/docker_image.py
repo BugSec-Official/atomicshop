@@ -1,4 +1,5 @@
 from ....import process
+from ...dockerw import install_docker
 
 
 def create_docker_image_ubuntu(directory_path: str):
@@ -26,20 +27,27 @@ def create_docker_image_ubuntu(directory_path: str):
             main()
     """
 
-    """
-    # batch commands explanations:
+    # Check if docker is installed.
+    if not install_docker.is_docker_installed():
+        install_docker.install_docker_ubuntu()
+
+    # Create the script to execute.
+    script = f"""
     #!/bin/bash
 
     # Run this script with sudo
     
-    # If you get an error on excution use dos2unix to convert windows style file to linux.
+    # If you get an error on execution use dos2unix to convert windows style file to linux.
     # -bash: ./install_fact_extractor_docker.sh: /bin/bash^M: bad interpreter: No such file or directory
     # sudo apt-get install dos2unix
     # dos2unix ./install_fact_extractor_docker.sh
 
     # Pull docker image from the repo.
     docker pull fkiecad/fact_extractor
-
+    
+    # Navigate to specified directory to download the repo and create the docker image.
+    cd "{directory_path}"
+    
     # Start from the directory you want the git repo to be downloaded.
     # Clone the repository
     git clone https://github.com/fkie-cad/fact_extractor.git
@@ -54,13 +62,5 @@ def create_docker_image_ubuntu(directory_path: str):
     sudo docker build -t fact_extractor .
     """
 
-    script = f"""
-    docker pull fkiecad/fact_extractor
-    cd "{directory_path}"
-    git clone https://github.com/fkie-cad/fact_extractor.git
-    cd fact_extractor
-    sudo service docker start
-    sudo docker build -t fact_extractor .
-    """
-
-    process.execute_script_ubuntu(script, shell=True)
+    # Execute the script.
+    process.execute_script(script, shell=True)
