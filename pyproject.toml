@@ -51,8 +51,6 @@ dependencies = [
     "playwright-stealth",
     "protobuf",
     "psutil",
-    "psycopg2-binary",
-    "psycopg2",
     "pyautogui",
     "pyopenssl",
     "python-bidi",

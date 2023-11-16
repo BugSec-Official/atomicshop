@@ -1,3 +1,4 @@
+import os
 import functools
 from typing import Union
 import shlex
@@ -6,7 +7,9 @@ import subprocess
 from .print_api import print_api
 from .inspect_wrapper import get_target_function_default_args_and_combine_with_current
 from .basics.strings import match_pattern_against_string
-from .process_poller import GetProcessList
+
+if os.name == 'nt':
+    from .process_poller import GetProcessList
 
 
 def process_execution_decorator(function_name):
