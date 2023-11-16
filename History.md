@@ -1,6 +1,14 @@
 <!-- HISTORY -->
 ## History
 
+* 2.4.3 - 16.11.1023
+  * 'process' - added functionality.
+  * 'wrappers.configparserw' - added functionality and fixes.
+  * 'wrappers.factw.fact_extractor' - added functionality.
+  * 'filesystem' - added functionality.
+  * 'config_init' - added functionality.
+  * 'file_io.docxs' - added functionality.
+  * 'file_io.tomls' - added functionality.
 * 2.4.3 - 29.10.2023
   * Fixes and new functionality in 'factw' and 'psycopgw'.
 * 2.4.2 - 29.10.2023

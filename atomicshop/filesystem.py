@@ -1,6 +1,6 @@
 import os
 import pathlib
-from pathlib import Path, PurePath, PureWindowsPath
+from pathlib import Path, PurePath, PureWindowsPath, PurePosixPath
 import glob
 import shutil
 
@@ -8,6 +8,9 @@ from .print_api import print_api, print_status_of_list
 from .basics import strings, list_of_dicts
 from .file_io import file_io
 from . import hashing
+
+
+WINDOWS_DIRECTORY_SPECIAL_CHARACTERS = ['<', '>', ':', '"', '/', '\\', '|', '?', '*']
 
 
 def get_working_directory() -> str:
@@ -609,3 +612,48 @@ def find_duplicates_by_hash(
         raise ValueError(message)
 
     return files, same_hash_files
+
+
+def convert_windows_to_linux_path(
+        windows_path: str,
+        convert_drive: bool = True,
+        add_wsl_mnt: bool = False
+) -> str:
+    """
+    Convert a Windows file path to Linux file path. Add WSL "/mnt/" if specified.
+
+    :param windows_path: The Windows path to convert.
+    :param convert_drive: boolean, if 'True', then the function will convert the drive letter to lowercase and
+        remove the colon.
+    :param add_wsl_mnt: boolean, if 'True', then the function will add '/mnt/' to the beginning of the path.
+    :return: The converted WSL file path as a string.
+
+    Usage to convert to WSL path:
+        convert_windows_to_linux_path('C:\\Users\\user1\\Downloads\\file.txt', convert_drive=True, add_wsl_mnt=True)
+        '/mnt/c/Users/user1/Downloads/file.txt'
+    """
+
+    if not convert_drive and add_wsl_mnt:
+        raise ValueError('Cannot add WSL mnt without converting drive.')
+
+    # Convert the Windows path to a PurePath object
+    windows_path_obj = PureWindowsPath(windows_path)
+
+    if convert_drive:
+        # Get drive letter and convert it to lowercase.
+        drive = windows_path_obj.drive.lower().replace(':', '')
+
+        # Convert Windows path to Linux path without drive.
+        linux_path = PurePosixPath(*windows_path_obj.parts[1:])
+
+        # Add drive to Linux path.
+        linux_path = drive / linux_path
+
+        if add_wsl_mnt:
+            # Construct WSL path
+            linux_path = PurePosixPath('/mnt') / linux_path
+    else:
+        # Convert Windows path to Linux path
+        linux_path = windows_path_obj.as_posix()
+
+    return str(linux_path)
