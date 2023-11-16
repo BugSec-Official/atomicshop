@@ -1,13 +1,13 @@
 import functools
+from typing import Union
 import shlex
 from subprocess import Popen, PIPE, STDOUT, CREATE_NEW_CONSOLE
+import subprocess
 
 from .print_api import print_api
 from .inspect_wrapper import get_target_function_default_args_and_combine_with_current
 from .basics.strings import match_pattern_against_string
 from .process_poller import GetProcessList
-
-import psutil
 
 
 def process_execution_decorator(function_name):
@@ -30,25 +30,36 @@ def process_execution_decorator(function_name):
     return wrapper_process_execution_decorator
 
 
+
+
+
 @process_execution_decorator
 def execute_with_live_output(
-        cmd: list, print_empty_lines: bool = False, verbose: bool = False, output_strings: list = None,
-        **kwargs) -> list:
+        cmd: Union[list, str],
+        print_empty_lines: bool = False,
+        verbose: bool = False,
+        output_strings: list = None,
+        wsl: bool = False,
+        **kwargs
+) -> list:
     """
     There are processes that print live, new lines of output. We need to make sure that the script does the same.
     'subprocess.Popen' in its default configuration waits for the process to finish, before you can get the output.
     It's problematic in our case, since we need real time output.
     If execution was successful, return True, if not - False.
 
-    :param cmd: List of commands.
+    :param cmd: List of commands. Can be string (full command line), that will be converted to list.
     :param print_empty_lines: Boolean that sets if the program should print empty lines or not.
         In case of True, 'print_output' setting should be 'Ture' also.
     :param verbose: boolean.
         'True': Print all output lines of the process.
         'False': Don't print any lines of output.
     :param output_strings: list, of strings. If output line contains any of the strings it will be outputted to console.
+    :param wsl: boolean, that sets if the command is executed with WSL.
     :return: Boolean, If execution was successful, return True, if not - False.
     """
+
+    cmd = _execution_parameters_processing(cmd, wsl)
 
     # Needed imports:
     # from subprocess import Popen, PIPE, STDOUT
@@ -104,21 +115,77 @@ def execute_with_live_output(
 
 
 @process_execution_decorator
-def execute_in_new_window(cmd: list, shell: bool = False, **kwargs):
+def execute_in_new_window(
+        cmd: Union[list, str],
+        shell: bool = False,
+        wsl: bool = False,
+        **kwargs
+):
     """
     The function executes list of arguments 'cmd' including the process in a new terminal window.
     Non-Blocking.
 
-    :param cmd: List of commands.
+    :param cmd: List of commands. Can be string (full command line), that will be converted to list.
     :param shell: boolean, that sets if cmd will be used to execute the command.
+    :param wsl: boolean, that sets if the command is executed with WSL.
     :return: Popen object of opened process.
     """
+
+    cmd = _execution_parameters_processing(cmd, wsl)
 
     executed_process = Popen(cmd, shell=shell, creationflags=CREATE_NEW_CONSOLE)
     return executed_process
 
 
-def safe_terminate(popen_process):
+def execute_script_ubuntu(script: str, check: bool = True, shell: bool = False):
+    """
+    The function executes terminal bash script in Ubuntu.
+    :param script: string, script to execute.
+    :param check: check=True: When this is set, if the command executed with subprocess.run() returns a non-zero
+        exit status (which usually indicates an error), a subprocess.CalledProcessError exception will be raised.
+        This is useful for error handling, as it lets you know if something went wrong with the command's execution.
+        Without check=True, subprocess.run() will not raise an exception for non-zero exit codes, and you would have
+        to check the return code manually if you want to handle errors.
+    :param shell: shell=True: This parameter allows you to pass a string command
+        (just as you would type it in the shell) directly to subprocess.run().
+        When shell=True, the specified command will be executed through the shell, giving you access to shell features
+        like shell pipes, filename wildcards, environment variable expansion, and expansion of ~ to a user's
+        home directory. However, using shell=True can be a security hazard, especially when combining it with
+        untrusted input, as it makes the code susceptible to shell injection attacks.
+        It's generally safer to use shell=False (the default) and pass your arguments as a list of strings.
+        shell=True allows you to execute complex shell commands, including those with multiple statements,
+        directly in Python, just as you would in a bash script.
+        'cd' is shell-specific functionality.
+        Without shell=True, the Python subprocess module would not understand the command "cd <directory>" as it's
+        not an executable but a shell built-in command.
+    :return: None if execution was successful, subprocess.CalledProcessError string if not.
+    """
+    try:
+        subprocess.run(script, check=check, shell=shell, executable='/bin/bash')
+        return None
+    except subprocess.CalledProcessError as e:
+        return e
+
+
+def _execution_parameters_processing(cmd: Union[list, str], wsl: bool = False):
+    """
+    The function processes the execution parameters for the 'execute_' functions.
+
+    :param cmd: List of commands. Can be string (full command line), that will be converted to list.
+    :param wsl: boolean, that sets if the command is executed with WSL.
+    :return: list, of commands, that will be passed to 'subprocess.Popen' function.
+    """
+
+    if isinstance(cmd, str):
+        cmd = shlex.split(cmd)
+
+    if wsl:
+        cmd = ['wsl'] + cmd
+
+    return cmd
+
+
+def safe_terminate(popen_process: Popen):
     # Terminate the process with 'Popen' api.
     popen_process.terminate()
     # And wait for it to close.

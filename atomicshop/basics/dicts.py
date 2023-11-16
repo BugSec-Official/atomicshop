@@ -1,3 +1,6 @@
+import datetime
+
+
 def remove_keys(input_dict: dict, key_list: list) -> None:
     """
     The function will remove a key from dictionary without raising an exception if it doesn't exist.
@@ -153,3 +156,63 @@ def sort_by_values(input_dict: dict, reverse: bool = False) -> dict:
     """
 
     return dict(sorted(input_dict.items(), key=lambda item: item[1], reverse=reverse))
+
+
+def convert_object_with_attributes_to_dict(
+        obj, include_private_1: bool = False,
+        include_private_2: bool = False,
+        skip_attributes: list = None,
+        recursion_level: int = 0
+) -> dict:
+    """
+    The function will convert an object with attributes to a dictionary. Each attribute will be a key in the dictionary
+    and the value will be the attribute value.
+    :param obj: object, the object to convert.
+    :param include_private_1: bool, if True, the private attributes that start with one underscore will be included.
+    :param include_private_2: bool, if True, the private attributes that start with two underscores will be included.
+    :param skip_attributes: list of strings, each entry will contain the name of the attribute to skip.
+    :param recursion_level: int, the current recursion level. Used to prevent infinite recursion.
+    :return:
+    """
+
+    if skip_attributes is None:
+        skip_attributes = list()
+
+    obj_dict = {}
+    for attr_name in dir(obj):
+        # Skip over any attributes that are in the skip_attributes list
+        if attr_name in skip_attributes:
+            continue
+        # Filter out callable attributes (methods, etc.). We only want attributes.
+        if callable(getattr(obj, attr_name)):
+            continue
+
+        # Check for private attributes with one underscore.
+        if attr_name.startswith("_") and not attr_name.startswith("__"):
+            if not include_private_1:
+                continue
+        # Check for private attributes with two underscores (dunder methods).
+        elif attr_name.startswith("__"):
+            if not include_private_2:
+                continue
+
+        attr_value = getattr(obj, attr_name)
+
+        # If recursion level is greater than 0, recurse into attribute values if possible
+        if recursion_level > 0:
+            # If the attribute is a non-string.
+            if not isinstance(attr_value, (str, int, bytes, float, datetime.datetime, datetime.date, datetime.time)):
+                # If the value is not iterable, convert its items
+                if hasattr(attr_value, '__iter__'):
+                    attr_value = [convert_object_with_attributes_to_dict(
+                        item, include_private_1, include_private_2, skip_attributes, recursion_level - 1
+                    ) for item in attr_value]
+                # Otherwise, if it's an object with attributes, convert it to a dictionary
+                elif hasattr(attr_value, '__dict__') or hasattr(attr_value, '__slots__') or isinstance(attr_value, object):
+                    attr_value = convert_object_with_attributes_to_dict(
+                        attr_value, include_private_1, include_private_2, skip_attributes, recursion_level - 1
+                    )
+
+        obj_dict[attr_name] = attr_value
+
+    return obj_dict

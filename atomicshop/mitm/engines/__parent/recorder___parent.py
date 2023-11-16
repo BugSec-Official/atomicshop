@@ -1,4 +1,3 @@
-# v1.0.1 - 27.03.2023 12:10
 import os
 from datetime import datetime
 

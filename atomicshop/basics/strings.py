@@ -285,10 +285,12 @@ def replace_words_with_values_from_dict(
         sentence: str, dictionary: dict, contains: bool = False, case_insensitive: bool = False) -> str:
     """
     Function replaces words, which are keys with values from dictionary.
+    The sentence is divided to list of words by spaces " ", and then each word is checked against the dictionary.
+    So, your word in dictionary should not contain spaces " ".
 
     Example:
-        sentence = 'Hello, my name is name, and I am age years old.'
-        dictionary = {'name': 'John', 'age': '30'}
+        sentence = 'Hello, my name is name1, and I am age years old.'
+        dictionary = {'name1': 'John', 'age': '30'}
         replace_words_with_values_from_dict(sentence, dictionary)
     Result:
         'Hello, my name is John, and I am 30 years old.'
@@ -318,6 +320,28 @@ def replace_words_with_values_from_dict(
     joined_sentence: str = ' '.join(sentence_parts)
 
     return joined_sentence
+
+
+def replace_strings_with_values_from_dict(string_to_replace: str, dictionary: dict) -> str:
+    """
+    Function replaces strings, which are keys with values from dictionary.
+
+    :param string_to_replace: string, to replace words in.
+    :param dictionary: dictionary, with words to replace and values to replace with.
+    :return: string, with replaced words.
+
+    Usage:
+        sentence = 'test test'
+        dictionary = {' ': '\ '}
+        replace_words_with_values_from_dict(sentence, dictionary, contains=True)
+    Result:
+        'test\\ test'
+    """
+
+    for old, new in dictionary.items():
+        string_to_replace = string_to_replace.replace(old, new)
+
+    return string_to_replace
 
 
 def multiple_splits_by_delimiters(full_string: str, delimiters: list) -> list[str]:

@@ -12,39 +12,38 @@ class ConfigParserWrapper:
     ImportConfig class is responsible for importing 'config.ini' file and its variables.
     """
 
-    def __init__(self, file_name: str = str(), directory_path: str = str(), file_path: str = str()):
+    def __init__(self, file_name: str = 'config.ini', directory_path: str = None, file_path: str = None):
         """
-        :param file_name:
+        The function will initialize the 'ImportConfig' object.
+        You can specify either full 'file_path' or 'directory_path' and 'file_name'.
+        You can specify only 'directory_path' and 'config.ini' will be used as default file name.
+
+        :param file_name: The name of the file to be imported. Default is 'config.ini'.
         :param directory_path: The directory that 'config.ini' file is in.
-        :param file_path:
+        :param file_path: sting, the full path to the file.
         """
-        self.file_name: str = str()
-        self.directory_path: str = str()
-        self.file_path: str = str()
+
+        if not directory_path and not file_path:
+            raise ValueError("You must specify either 'directory_path' or 'file_path'.")
+        elif directory_path and file_path:
+            raise ValueError("You can't specify both 'directory_path' and 'file_path'.")
+
+        self.file_name: str = file_name
+        self.directory_path: str = directory_path
+        self.file_path: str = file_path
 
         self.config_parser = None
         # Final configuration dictionary.
         self.config = dict()
 
-        if not file_name and not file_path:
-            self.file_name = "config.ini"
-        elif file_name and not file_path:
-            self.file_name = file_name
-
-        if directory_path and not file_path:
-            self.directory_path = directory_path
-
         if file_path:
             self.file_path: str = file_path
-        elif self.file_name and self.directory_path and not file_path:
+        else:
             self.file_path: str = self.directory_path + os.sep + self.file_name
-
-        # Read the file to 'self.config' as dictionary.
-        # self.read_to_dict()
 
         # After that you can use 'convert_string_values' function to convert certain key values to other types.
 
-    def read_to_dict(self, unicode_encoding: bool = False, **kwargs) -> dict[Any, Any]:
+    def read_to_dict(self, unicode_encoding: bool = False) -> dict[Any, Any]:
         """
         Usage Example:
             # If 'config.ini' in current working directory of the script.
@@ -58,10 +57,111 @@ class ConfigParserWrapper:
         """
 
         # Reading "config.ini".
-        self.initialize_config_parser()
-        self.read_config_file(unicode_encoding=unicode_encoding, **kwargs)
+        if not self.config_parser:
+            self.initialize_config_parser()
+        self.read_config_file(unicode_encoding=unicode_encoding)
         self.convert_config_to_dict()
         return self.config
+
+    def write_to_file(self, config_dict: dict = None, file_path: str = None, **kwargs):
+        """
+        The function will write the 'config_dict' to file.
+        :param config_dict: dictionary to write to file.
+            If specified, the configparser object will import the 'config_dict' and write to file.
+            If not specified, the existing configparser object will be written to file.
+        :param file_path: string, full path to file. If 'file_path' is not specified, the 'file_path' of the object
+            will be used.
+        :param kwargs:
+        :return:
+        """
+
+        if not file_path:
+            file_path = self.file_path
+
+        if config_dict:
+            self.update_config(config_dict=config_dict, overwrite_all=True, **kwargs)
+
+        # Writing to file.
+        with open(file_path, 'w') as config_file:
+            self.config_parser.write(config_file)
+
+    def update_config(
+            self,
+            config_dict: dict,
+            overwrite_all: bool = False,
+            overwrite_section_only: bool = False
+    ):
+        """
+        The function will update the 'config_dict' to the existing 'config' dict.
+        :param config_dict: dictionary to update to the existing 'config' dict and ConfigParser object.
+        :param overwrite_all: boolean, that sets if the existing 'config' dict and ConfigParser will be overwritten.
+            If 'True' the existing 'config' dict and ConfigParser will be overwritten.
+        :param overwrite_section_only: boolean, that sets if the specific 'config' dict and ConfigParser section
+            will be overwritten, but not the whole configuration.
+        :return:
+        """
+
+        if overwrite_all and overwrite_section_only:
+            raise ValueError("You can't specify both 'overwrite_all' and 'overwrite_section_only'.")
+
+        if not self.config_parser or overwrite_all:
+            self.initialize_config_parser()
+
+        if overwrite_all:
+            self.config = config_dict
+
+            # Add sections and values from the dictionary
+            for section, section_dict in self.config.items():
+                # self.config_parser.add_section(section)
+                for key, value in section_dict.items():
+                    self.config_parser.set(section, key, value)
+        elif overwrite_section_only:
+            # Setting the 'config' dict to 'configparser' object.
+            for section, section_dict in config_dict.items():
+                if self.config and section not in self.config:
+                    self.config[section] = section_dict
+
+                for key, value in section_dict.items():
+                    self.config_parser.set(section, key, value)
+        else:
+            # Updating the 'configparser' object and 'config' dict if exists.
+            for section, section_dict in config_dict.items():
+                if self.config:
+                    if section not in self.config:
+                        self.config[section] = section_dict
+                    else:
+                        self.config[section].update(section_dict)
+
+                if section not in self.config_parser:
+                    self.config_parser[section] = section_dict
+                else:
+                    self.config_parser[section].update(section_dict)
+
+    def read_file_overwrite_with_update(
+            self,
+            config_dict: dict,
+            overwrite_all: bool = False,
+            overwrite_section_only: bool = False
+    ):
+        """
+        The function will read the file and update the 'config' dict and 'configparser' object and overwrite the
+        config file.
+        :param config_dict: dictionary to update to the existing 'config' dict and ConfigParser object.
+        :param overwrite_all: boolean, that sets if the existing 'config' dict and ConfigParser will be overwritten.
+            If 'True' the existing 'config' dict and ConfigParser will be overwritten.
+        :param overwrite_section_only: boolean, that sets if the specific 'config' dict and ConfigParser section
+            will be overwritten, but not the whole configuration.
+        :return:
+
+        Usage Example:
+        configparserw.ConfigParserWrapper(file_path=config_file_path).read_file_overwrite_with_update(
+            config_dict=config_update_dict, overwrite_section_only=True)
+        """
+
+        self.initialize_config_parser()
+        self.read_config_file()
+        self.update_config(config_dict, overwrite_all=overwrite_all, overwrite_section_only=overwrite_section_only)
+        self.write_to_file()
 
     def initialize_config_parser(self, include_getlist_method: bool = False):
         """
@@ -95,7 +195,7 @@ class ConfigParserWrapper:
             # returning:
             # ['a', 'list', 'of', 'and', '1', '2', '3', 'numbers']
 
-    def read_config_file(self, unicode_encoding: bool = False, **kwargs):
+    def read_config_file(self, unicode_encoding: bool = False):
         """
         The function will use 'read()' method on config parser object to read the file from filesystem.
         :param unicode_encoding: boolean, that sets if "encoding='utf-8'" should be used to read files that contain
@@ -104,6 +204,9 @@ class ConfigParserWrapper:
         """
         # When using the "read()" method it gets the values of INI files to a dict type object.
         # When you initialize a "get()" method on a value that is non-existent, you will get an exception.
+
+        if not self.config_parser:
+            self.initialize_config_parser()
 
         if not unicode_encoding:
             self.config_parser.read(self.file_path)
@@ -116,7 +219,7 @@ class ConfigParserWrapper:
         if not self.config_parser.sections():
             message = f'No sections in config file: {self.file_path}\n' \
                       f'Check if file exists.'
-            print_api(message, error_type=True, color="red", **kwargs)
+            raise FileNotFoundError(message)
 
     def convert_config_to_dict(self):
         """
@@ -303,7 +406,7 @@ class ConfigParserWrapper:
                 # If key and section are in the list conversion list.
                 if (section, key) in convert_section_key_list_to_list:
                     # If the function did changes to the key, we can skip to next key.
-                    if self.convert_string_values((section, key), "list"):
+                    if self.convert_string_values([(section, key)], "list"):
                         continue
 
                 # If we should convert string value to boolean python object and also
@@ -314,7 +417,7 @@ class ConfigParserWrapper:
                 if booleans and section not in skip_sections_list and key not in skip_keys_list:
                     if (value == '1' or value == '0') and convert_01_to_bool:
                         # If the function did changes to the key, we can skip to next key.
-                        if self.convert_string_values((section, key), "bool"):
+                        if self.convert_string_values([(section, key)], "bool"):
                             continue
 
                 # If we should convert string value to integer python object and also
