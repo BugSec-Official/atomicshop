@@ -28,7 +28,7 @@ def create_docker_image_ubuntu(directory_path: str):
 
     script = f"""
     docker pull fkiecad/fact_extractor
-    cd {directory_path}
+    cd "{directory_path}"
     git clone https://github.com/fkie-cad/fact_extractor.git
     cd fact_extractor
     sudo service docker start
