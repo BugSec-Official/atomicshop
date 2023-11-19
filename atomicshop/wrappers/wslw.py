@@ -78,7 +78,7 @@ def install_wsl(directory_path: str, enable_virtual_machine_platform: bool = Tru
         # Enable WSL
         print_api("Enabling Windows Subsystem for Linux...")
         process.run_powershell_command(
-            "Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux")
+            "Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux -NoRestart")
 
         # Check if the system needs a reboot
         if "You must restart your computer" in process.run_powershell_command(
@@ -93,7 +93,7 @@ def install_wsl(directory_path: str, enable_virtual_machine_platform: bool = Tru
             print_api("Hyper-V is enabled")
         else:
             # Command to enable Virtual Machine Platform
-            command = "Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All"
+            command = "Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All -NoRestart"
 
             print_api("Enabling Virtual Machine Platform...")
             process.run_powershell_command(command)
