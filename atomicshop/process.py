@@ -1,4 +1,5 @@
 import os
+import sys
 import functools
 from typing import Union
 import shlex
@@ -236,6 +237,16 @@ def match_pattern_against_running_processes_cmdlines(pattern: str, first: bool =
                 break
 
     return matched_cmdlines
+
+
+def run_powershell_command(command):
+    try:
+        result = subprocess.run(["powershell", "-Command", command], capture_output=True, text=True, check=True)
+        print_api(result.stdout)
+        return result.stdout
+    except subprocess.CalledProcessError as e:
+        print_api(f"An error occurred: {e}", color='red', error_type=True)
+        return e
 
 
 """

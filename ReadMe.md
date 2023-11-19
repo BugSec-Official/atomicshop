@@ -114,6 +114,7 @@ To get a local copy up and running follow these simple steps.
 ## Usage
 
 To follow. For now, check the files in the library. I tried my best with understandable naming and grouping convention.
+There are some ready to use scripts in the 'addons/mains' folder. You can use them as a reference.
 
 
 

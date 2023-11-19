@@ -70,11 +70,12 @@ def install_docker_ubuntu():
     # Verify the installation.
     result: list = process.execute_with_live_output('sudo docker run hello-world')
 
+    print_api('\n'.join(result))
+
     if 'Hello from Docker!' in '\n'.join(result):
         print_api('Docker installed successfully.', color='green')
         return True
     else:
         print_api('Docker installation failed.', color='red')
-        print_api(result, color='red')
         print_api('Please check the logs above for more information.', color='red')
         return False
