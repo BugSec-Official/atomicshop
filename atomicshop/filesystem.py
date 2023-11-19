@@ -3,6 +3,7 @@ import pathlib
 from pathlib import Path, PurePath, PureWindowsPath, PurePosixPath
 import glob
 import shutil
+from contextlib import contextmanager
 
 from .print_api import print_api, print_status_of_list
 from .basics import strings, list_of_dicts
@@ -11,6 +12,51 @@ from . import hashing
 
 
 WINDOWS_DIRECTORY_SPECIAL_CHARACTERS = ['<', '>', ':', '"', '/', '\\', '|', '?', '*']
+FILE_NAME_REPLACEMENT_DICT: dict = {
+    '$': '_',
+    ' ': '_',
+    '(': '_',
+    ')': '_',
+    '[': '_',
+    ']': '_',
+    '{': '_',
+    '}': '_',
+    "'": "_",
+    '"': '_',
+    '`': '_',
+    ';': '_',
+    '&': '_',
+    '|': '_',
+    '*': '_',
+    '?': '_',
+    '~': '_',
+    '#': '_',
+    '=': '_',
+    '+': '_',
+    '%': '_',
+    ',': '_',
+    '^': '_',
+    ':': '_',
+    '@': '_',
+    '!': '_',
+    '°': '_',
+    '§': '_',
+    '²': '_',
+    '³': '_',
+    'µ': '_',
+    '€': '_',
+    '£': '_',
+    '¥': '_',
+    '¢': '_',
+    '©': '_',
+    '®': '_',
+    '™': '_',
+    '×': '_',
+    '÷': '_',
+    '¶': '_',
+    '·': '_',
+    '¹': '_'
+}
 
 
 def get_working_directory() -> str:
@@ -215,6 +261,52 @@ def create_directory(directory_fullpath: str):
     # 'parents=True' will create also the parent folders of the last folder, not used in our case
     # 'exist_ok=True' if the folder exists, then it is ok.
     pathlib.Path(directory_fullpath).mkdir(parents=True, exist_ok=True)
+
+
+def rename_file(source_file_path: str, target_file_path: str) -> None:
+    """
+    The function renames file from source to target.
+
+    :param source_file_path: string, full path to source file.
+    :param target_file_path: string, full path to target file.
+
+    :return: None
+    """
+
+    # Rename file.
+    os.rename(source_file_path, target_file_path)
+
+
+@contextmanager
+def temporary_rename(file_path: str, temp_file_path) -> None:
+    """
+    The function will rename the file to temporary name and then rename it back to original name.
+
+    :param file_path: string, full path to file.
+    :param temp_file_path: string, temporary name to rename the file to.
+    :return: None.
+
+    Usage:
+        original_file = 'example.txt'
+        temporary_file = 'temp_example.txt'
+
+        with temporary_rename(original_file, temporary_file):
+            # Inside this block, the file exists as 'temp_example.txt'
+            print(f"File is temporarily renamed to {temporary_file}")
+            # Perform operations with the temporarily named file here
+
+        # Outside the block, it's back to 'example.txt'
+        print(f"File is renamed back to {original_file}")
+    """
+
+    original_name = file_path
+    try:
+        # Rename the file to the temporary name
+        os.rename(original_name, temp_file_path)
+        yield
+    finally:
+        # Rename the file back to its original name
+        os.rename(temp_file_path, original_name)
 
 
 def move_file(source_file_path: str, target_file_path: str, no_overwrite: bool = False) -> None:
