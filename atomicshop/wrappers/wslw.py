@@ -47,11 +47,11 @@ def is_ubuntu_version_installed(version: str = "22.04") -> bool:
     command = f"wsl -d Ubuntu lsb_release -a"
 
     # Execute the command
-    result = process.run_powershell_command(command)
+    result = process.execute_with_live_output(command)
 
     is_version_installed: bool = False
     # Parse the output for the version number
-    for line in result.splitlines():
+    for line in result:
         if "Release" in line and version in line:
             is_version_installed = True
             break
@@ -101,7 +101,7 @@ def install_wsl(directory_path: str, enable_virtual_machine_platform: bool = Tru
     # Set WSL version 2 as default
     if set_default_version_2:
         print_api("Setting WSL version 2 as default...")
-        process.run_powershell_command("wsl --set-default-version 2")
+        process.execute_with_live_output("wsl --set-default-version 2")
 
     # Check if Ubuntu is already installed. If so, exit with a message.
     if is_ubuntu_version_installed():
