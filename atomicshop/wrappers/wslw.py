@@ -59,11 +59,12 @@ def is_ubuntu_version_installed(version: str = "22.04") -> bool:
     return is_version_installed
 
 
-def install_wsl(directory_path: str, enable_virtual_machine_platform: bool = False):
+def install_wsl(directory_path: str, enable_virtual_machine_platform: bool = True, set_default_version_2: bool = True):
     """
     Install WSL on Windows 10.
     :param directory_path: string, directory path to save Ubuntu package.
     :param enable_virtual_machine_platform: bool, True to enable Virtual Machine Platform feature.
+    :param set_default_version_2: bool, True to set WSL version 2 as default.
     """
 
     # Check for admin privileges
@@ -96,6 +97,11 @@ def install_wsl(directory_path: str, enable_virtual_machine_platform: bool = Fal
 
             print_api("Enabling Virtual Machine Platform...")
             process.run_powershell_command(command)
+
+    # Set WSL version 2 as default
+    if set_default_version_2:
+        print_api("Setting WSL version 2 as default...")
+        process.run_powershell_command("wsl --set-default-version 2")
 
     # Check if Ubuntu is already installed. If so, exit with a message.
     if is_ubuntu_version_installed():
