@@ -1,6 +1,10 @@
 <!-- HISTORY -->
 ## History
 
+* 2.5.9 - 19.11.1023
+  * 'wrappers.wslw' - fixes and improvements.
+* 2.5.8 - 19.11.1023
+  * 'wrappers.wslw' - fixes and improvements.
 * 2.5.7 - 19.11.1023
   * 'wrappers.wslw' - fixes and improvements.
 * 2.5.6 - 19.11.1023
