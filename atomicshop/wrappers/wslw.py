@@ -28,7 +28,7 @@ def is_ubuntu_installed() -> bool:
 
     is_ubuntu_exists: bool = False
     # Check each distribution for being Ubuntu 22.04
-    for distro in process.run_powershell_command(command).splitlines():
+    for distro in process.run_powershell_command(command):
         if "ubuntu" in distro.lower():
             is_ubuntu_exists = True
             break
