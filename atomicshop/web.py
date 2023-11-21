@@ -144,7 +144,7 @@ def get_page_content(
     return result
 
 
-def download(file_url: str, target_directory: str, file_name: str = str(), **kwargs) -> str:
+def download(file_url: str, target_directory: str, file_name: str = None, **kwargs) -> str:
     """
     The function receives url and target filesystem directory to download the file.
 
@@ -183,8 +183,10 @@ def download(file_url: str, target_directory: str, file_name: str = str(), **kwa
     if not is_status_ok(status_code=file_to_download.status, **kwargs):
         return None
 
+    file_size_bytes_int: int = None
     # Get file size. For some reason doesn't show for GitHub branch downloads.
-    file_size_bytes_int: int = int(file_to_download.headers['Content-Length'])
+    if file_to_download.headers['Content-Length']:
+        file_size_bytes_int = int(file_to_download.headers['Content-Length'])
 
     # Open the target file for writing in binary mode.
     with open(file_path, 'wb') as output:

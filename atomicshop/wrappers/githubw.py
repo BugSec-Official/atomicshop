@@ -1,10 +1,9 @@
-# v1.0.6 - 26.03.2023 23:30
 import requests
 import fnmatch
 
-from .web import download_and_extract_file
-from .print_api import print_api
-from .urls import url_parser
+from ..web import download_and_extract_file
+from ..print_api import print_api
+from ..urls import url_parser
 
 
 class GitHubWrapper:
@@ -45,9 +44,9 @@ class GitHubWrapper:
             print_api(message, color="red", error_type=True, **kwargs)
 
         repo_url_parsed = url_parser(self.repo_url)
-        self.check_github_domain(repo_url_parsed.netloc)
-        self.user_name = repo_url_parsed.directories[0]
-        self.repo_name = repo_url_parsed.directories[1]
+        self.check_github_domain(repo_url_parsed['netloc'])
+        self.user_name = repo_url_parsed['directories'][0]
+        self.repo_name = repo_url_parsed['directories'][1]
 
         self.build_links_from_user_and_repo()
 
@@ -56,17 +55,29 @@ class GitHubWrapper:
             print_api(
                 f'This is not [{self.domain}] domain.', color="red", error_type=True)
 
-    def download_and_extract_branch(self, target_directory: str, **kwargs):
+    def download_and_extract_branch(
+            self,
+            target_directory: str,
+            archive_remove_first_directory: bool = False,
+            **kwargs
+    ):
         """
         This function will download the branch file from GitHub, extract the file and remove the file, leaving
         only the extracted folder.
 
         :param target_directory:
+        :param archive_remove_first_directory: boolean, sets if archive extract function will extract the archive
+            without first directory in the archive. Check reference in the 'archiver.extract_archive_with_zipfile'
+            function.
         :return:
         """
 
         # Download the repo to current working directory, extract and remove the archive.
-        download_and_extract_file(file_url=self.branch_download_link, target_directory=target_directory, **kwargs)
+        download_and_extract_file(
+            file_url=self.branch_download_link,
+            target_directory=target_directory,
+            archive_remove_first_directory=archive_remove_first_directory,
+            **kwargs)
 
     def download_and_extract_latest_release(
             self, target_directory: str, string_pattern: str,

@@ -7,6 +7,45 @@ from .print_api import print_api
 from . import filesystem
 
 
+def is_zip_zipfile(file_path: str) -> bool:
+    """
+    Function checks if the file is a zip file.
+    :param file_path: string, full path to the file.
+    :return: boolean.
+    """
+
+    try:
+        with zipfile.ZipFile(file_path) as zip_object:
+            zip_object.testzip()
+            return True
+    except zipfile.BadZipFile:
+        return False
+
+
+def is_zip_magic_number(file_path: str) -> bool:
+    """
+    Function checks if the file is a zip file using magic number.
+    :param file_path: string, full path to the file.
+    :return: boolean.
+
+    50 4B 03 04: This is the most common signature, found at the beginning of a ZIP file.
+        It signifies the start of a file within the ZIP archive and is present in almost all ZIP files.
+        Each file within the ZIP archive starts with this signature.
+    50 4B 05 06: This is the end of central directory record signature.
+        It's found at the end of a ZIP file and is essential for identifying the structure of the ZIP archive,
+        especially in cases where the file is split or is a multi-part archive.
+    50 4B 07 08: This signature is used for spanned ZIP archives (also known as split or multi-volume ZIP archives).
+        It's found in the end of central directory locator for ZIP files that are split across multiple volumes.
+    """
+
+    with open(file_path, 'rb') as file:
+        # Read the first 4 bytes of the file
+        signature = file.read(4)
+
+    # Check if the signature matches any of the ZIP signatures
+    return signature in [b'PK\x03\x04', b'PK\x05\x06', b'PK\x07\x08']
+
+
 def extract_archive_with_shutil(file_path: str, target_directory: str, **kwargs) -> str:
     """
     Function extracts the archive to target directory.
