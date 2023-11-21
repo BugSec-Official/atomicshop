@@ -309,6 +309,43 @@ def temporary_rename(file_path: str, temp_file_path) -> None:
         os.rename(temp_file_path, original_name)
 
 
+@contextmanager
+def temporary_copy(file_path: str, temp_file_path) -> None:
+    """
+    The function will copy the file temporarily and then delete it.
+    :param file_path: string, full path to file.
+    :param temp_file_path: string, temporary path to copy the file to.
+    :return:
+    """
+
+    original_name = file_path
+    try:
+        # Copy the file to the temporary path
+        shutil.copy2(original_name, temp_file_path)
+        yield
+    finally:
+        # Delete the file
+        os.remove(temp_file_path)
+
+
+@contextmanager
+def temporary_change_working_directory(new_working_directory: str) -> None:
+    """
+    The function will change the working directory temporarily and then change it back.
+    :param new_working_directory: string, new working directory.
+    :return:
+    """
+
+    original_working_directory = get_working_directory()
+    try:
+        # Change the working directory to the temporary path
+        os.chdir(new_working_directory)
+        yield
+    finally:
+        # Change the working directory back to the original working directory
+        os.chdir(original_working_directory)
+
+
 def move_file(source_file_path: str, target_file_path: str, no_overwrite: bool = False) -> None:
     """
     The function moves file from source to target.
@@ -335,13 +372,26 @@ def move_files_from_folder_to_folder(source_directory: str, target_directory: st
     The function will move all the files from source directory to target directory overwriting existing files.
     """
 
-    # Get all file names without full paths in source folder.
-    file_list_in_source: list = get_file_names_from_directory(source_directory)
+    # Iterate over each item in the source directory
+    for item in os.listdir(source_directory):
+        # Construct full file path
+        source_item = os.path.join(source_directory, item)
+        destination_item = os.path.join(target_directory, item)
 
-    # Iterate through all the files.
-    for file_name in file_list_in_source:
-        # Move the file from source to target.
-        move_file(source_directory + os.sep + file_name, target_directory + os.sep + file_name)
+        # Move each item to the destination directory
+        shutil.move(source_item, destination_item)
+    # # Get all file names without full paths in source folder.
+    # file_list_in_source: list = get_file_paths_and_relative_directories(source_directory)
+    #
+    # # Iterate through all the files.
+    # for file_path in file_list_in_source:
+    #     # Move the file from source to target.
+    #     if file_path['relative_dir']:
+    #         create_directory(target_directory + os.sep + file_path['relative_dir'])
+    #         relative_file_path: str = file_path['relative_dir'] + os.sep + Path(file_path['path']).name
+    #     else:
+    #         relative_file_path: str = Path(file_path['path']).name
+    #     move_file(file_path['path'], target_directory + os.sep + relative_file_path)
 
 
 def copy_file(

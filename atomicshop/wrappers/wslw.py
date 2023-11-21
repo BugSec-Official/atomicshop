@@ -188,4 +188,4 @@ def install_wsl(distro: str = "Ubuntu-22.04"):
         print_api("WSL is not installed, installing WSL and Ubuntu")
 
     command = f"wsl --install -d {distro}"
-    process.execute_with_live_output(command)
+    process.execute_with_live_output(command, verbose=True)

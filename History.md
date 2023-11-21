@@ -1,6 +1,11 @@
 <!-- HISTORY -->
 ## History
 
+* 2.5.13 - 21.11.1023
+  * 'wrappers.githubw' - moved from 'github_wrapper'.
+  * 'web' - fixes and improvements.
+  * 'archiver' - fixes and improvements.
+  * 'filesystem' - fixes and improvements.
 * 2.5.12 - 19.11.1023
   * 'wrappers.wslw' - fixes and improvements.
 * 2.5.11 - 19.11.1023
