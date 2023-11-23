@@ -78,6 +78,7 @@ def write_file(
         file_path: str,
         file_mode: str = 'w',
         encoding: str = None,
+        convert_list_to_string: bool = False,
         file_object=None,
         **kwargs) -> None:
     """
@@ -89,14 +90,20 @@ def write_file(
         Default is 'w'.
     :param encoding: string, write the file with encoding. Example: 'utf-8'. 'None' is default, since it is default
         in 'open()' function.
+    :param convert_list_to_string: Boolean, if True, the list of strings will be converted to one string with '\n'
+        separator between the lines.
     :param file_object: file object of the 'open()' function in the decorator. Decorator executes the 'with open()'
         statement and passes to this function. That's why the default is 'None', since we get it from the decorator.
     :return:
     """
 
     if isinstance(content, list):
-        file_object.writelines(content)
-    elif isinstance(content, str):
+        if convert_list_to_string:
+            content = '\n'.join(content)
+        else:
+            file_object.writelines(content)
+
+    if isinstance(content, str):
         file_object.write(content)
     else:
         raise TypeError(f"Content type is not supported: {type(content)}")
@@ -168,4 +175,4 @@ def find_and_replace_in_file(
                 raise LookupError(f"More than one string instance was found in the file: {file_path}\n"
                                   f"Nothing was changed.")
 
-    write_file(content=file_data, file_path=file_path, encoding=encoding)
+    write_file(content=file_data, file_path=file_path, encoding=encoding, convert_list_to_string=True)
