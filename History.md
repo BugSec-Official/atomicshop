@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.5.15 - 23.11.2023
+  * 'permissions' - added 'temporary_regular_permissions' function.
 * 2.5.14 - 23.11.2023
   * 'file_io.file_io' - added 'find_and_replace_in_file' function.
 * 2.5.13 - 21.11.2023
