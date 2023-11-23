@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.5.16 - 23.11.2023
+  * 'file_io.file_io' - fixes and improvements.
 * 2.5.15 - 23.11.2023
   * 'permissions' - added 'temporary_regular_permissions' function.
 * 2.5.14 - 23.11.2023
