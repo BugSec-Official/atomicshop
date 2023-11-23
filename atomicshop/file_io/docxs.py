@@ -33,32 +33,35 @@ def get_hyperlinks(docx_path):
 
 
 def search_for_hyperlink_in_files(directory_path: str, hyperlink: str, relative_paths: bool = False):
+    # noinspection GrazieInspection
     """
-    Search for a hyperlink in all the docx files in the specified directory.
-    :param directory_path: string, path to the directory with docx files.
-    :param hyperlink: string, hyperlink to search for.
-    :param relative_paths: boolean, if True, the function will return relative paths to the files and not the full
-        file paths. Example: 'content\file.docx' instead of 'D:/content/file.docx' if you specified 'D:/' as
-        'directory_path'.
-    :return:
+        Search for a hyperlink in all the docx files in the specified directory.
+        :param directory_path: string, path to the directory with docx files.
+        :param hyperlink: string, hyperlink to search for.
+        :param relative_paths: boolean, if True, the function will return relative paths to the files and not the full
+            file paths. Example: 'content\file.docx' instead of 'D:/content/file.docx' if you specified 'D:/' as
+            'directory_path'.
+        :return:
 
-    Main function example:
-        from atomicshop import filesystem
-        from atomicshop.file_io import docxs
-        from atomicshop import file_io
+        Main function example:
+            import os
+            from atomicshop import filesystem
+            from atomicshop.file_io import docxs, file_io
 
-        directory_path = r"D:/directory_with_docx_files"
-        script_directory: str = filesystem.get_file_directory(__file__)
-        string_file_path: str = script_directory + r"/hyperlink.txt"
-        hyperlink: str = file_io.read_file(string_file_path)
 
-        found_in_files = docxs.search_for_hyperlink_in_files(directory_path, hyperlink, relative_paths=True)
+            # Usage
+            directory_path = r"D:/directory_with_docx_files"
+            script_directory: str = filesystem.get_file_directory(__file__)
+            string_file_path: str = script_directory + os.sep + r"hyperlink.txt"
+            hyperlink: str = file_io.read_file(string_file_path)
 
-        for found_file in found_in_files:
-            print(found_file)
+            found_in_files = docxs.search_for_hyperlink_in_files(directory_path, hyperlink, relative_paths=True)
 
-        input('press Enter')
-    """
+            for found_file in found_in_files:
+                print(found_file)
+
+            input('press Enter')
+        """
 
     if not filesystem.check_directory_existence(directory_path):
         raise NotADirectoryError(f"Directory doesn't exist: {directory_path}")
