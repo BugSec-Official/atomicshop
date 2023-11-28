@@ -231,3 +231,21 @@ def start_queue_listener_for_file_handler_and_get_queue_handler(file_handler):
     handlers.start_queue_listener_for_file_handler(file_handler, queue_object)
 
     return handlers.get_queue_handler(queue_object)
+
+
+def disable_default_logger():
+    """
+    Function to disable default logger.
+    """
+
+    # # Get the default logger.
+    # logger = logging.getLogger()
+    # # Remove all handlers from the logger.
+    # logger.handlers.clear()
+    # # Set the logger level to 'NOTSET'.
+    # logger.setLevel(logging.NOTSET)
+    # # Disable propagation from the 'root' logger, so we will not see the messages twice.
+    # loggers.set_propagation(logger)
+
+    # Disabling the default logger in Python
+    logging.disable(logging.CRITICAL)

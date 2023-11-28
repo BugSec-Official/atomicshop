@@ -1,6 +1,10 @@
 <!-- HISTORY -->
 ## History
 
+* 2.6.0 - 28.11.2023
+  * 'basic.multiprocesses' - added 'MultiProcessorRecursive' class.
+  * 'system_resources' - initial release.
+  * Overall fixes and improvements.
 * 2.5.16 - 23.11.2023
   * 'file_io.file_io' - fixes and improvements.
 * 2.5.15 - 23.11.2023
