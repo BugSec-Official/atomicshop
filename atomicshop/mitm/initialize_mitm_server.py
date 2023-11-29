@@ -6,7 +6,6 @@ from atomicshop.print_api import print_api
 from .import_config import ImportConfig
 from .initialize_engines import ModuleCategory
 from .connection_thread_worker import thread_worker_main
-from ..filesystem import get_file_paths_and_relative_directories
 from .. import filesystem, queues
 from ..python_functions import get_current_python_version_string, check_python_version_compliance
 from ..wrappers.socketw.socket_wrapper import SocketWrapper
@@ -104,8 +103,8 @@ def initialize_mitm_server(config_static):
     system_logger.info("Importing engine modules.")
 
     # Get full paths of all the 'engine_config.ini' files.
-    engine_config_path_list = get_file_paths_and_relative_directories(
-        directory_fullpath=config_static.ENGINES_DIRECTORY_PATH,
+    engine_config_path_list = filesystem.get_file_paths_from_directory(
+        directory_path=config_static.ENGINES_DIRECTORY_PATH,
         file_name_check_pattern=config_static.ENGINE_CONFIG_FILE_NAME)
 
     # Iterate through all the 'engine_config.ini' file paths.
@@ -114,7 +113,7 @@ def initialize_mitm_server(config_static):
     for engine_config_path in engine_config_path_list:
         # Initialize engine.
         current_module = ModuleCategory(config_static.WORKING_DIRECTORY)
-        current_module.fill_engine_fields_from_config(engine_config_path['path'])
+        current_module.fill_engine_fields_from_config(engine_config_path)
         current_module.initialize_engine(logs_path=config['log']['logs_path'],
                                          logger=system_logger)
 

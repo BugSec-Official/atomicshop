@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.6.1 - 29.11.2023
+  * 'filesystem' - minor api changes.
 * 2.6.0 - 28.11.2023
   * 'basic.multiprocesses' - added 'MultiProcessorRecursive' class.
   * 'system_resources' - initial release.

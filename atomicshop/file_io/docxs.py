@@ -2,7 +2,6 @@ from docx import Document
 from docx.opc.exceptions import PackageNotFoundError
 
 from .. import filesystem, config_init
-from . import file_io
 from ..print_api import print_api
 
 
@@ -67,12 +66,13 @@ def search_for_hyperlink_in_files(directory_path: str, hyperlink: str, relative_
         raise NotADirectoryError(f"Directory doesn't exist: {directory_path}")
 
     # Get all the docx files in the specified directory.
-    files = filesystem.get_file_paths_and_relative_directories(
-        directory_path, file_name_check_pattern="*.docx", relative_file_name_as_directory=True)
+    files = filesystem.get_file_paths_from_directory(
+        directory_path, file_name_check_pattern="*.docx",
+        add_relative_directory=True, relative_file_name_as_directory=True)
 
     found_in_files: list = list()
     for file_path in files:
-        hyperlinks = get_hyperlinks(file_path['path'])
+        hyperlinks = get_hyperlinks(file_path['file_path'])
         if hyperlink in hyperlinks:
             found_in_files.append(file_path)
 
