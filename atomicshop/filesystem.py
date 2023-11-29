@@ -381,7 +381,7 @@ def move_files_from_folder_to_folder(source_directory: str, target_directory: st
         # Move each item to the destination directory
         shutil.move(source_item, destination_item)
     # # Get all file names without full paths in source folder.
-    # file_list_in_source: list = get_file_paths_and_relative_directories(source_directory)
+    # file_list_in_source: list = get_file_paths_from_directory(source_directory)
     #
     # # Iterate through all the files.
     # for file_path in file_list_in_source:
@@ -438,10 +438,11 @@ def get_file_names_from_directory(directory_path: str) -> list:
     return file_list
 
 
-def get_file_paths_and_relative_directories(
-        directory_fullpath: str,
+def get_file_paths_from_directory(
+        directory_path: str,
         recursive: bool = True,
         file_name_check_pattern: str = '*',
+        add_relative_directory: bool = False,
         relative_file_name_as_directory: bool = False,
         add_last_modified_time: bool = False,
         sort_by_last_modified_time: bool = False
@@ -453,13 +454,18 @@ def get_file_paths_and_relative_directories(
     If 'file_name_check_tuple' specified, the function will return only list of files that answer to the input
     of that tuple.
 
-    :param directory_fullpath: string to full path to directory on the filesystem to scan.
+    :param directory_path: string to full path to directory on the filesystem to scan.
     :param recursive: boolean.
         'True', then the function will scan recursively in subdirectories.
         'False', then the function will scan only in the directory that was passed.
     :param file_name_check_pattern: string, if specified, the function will return only files that match the pattern.
         The string can contain part of file name to check or full file name with extension.
         Can contain wildcards.
+    :param add_relative_directory: boolean, if
+        'True', then the function will add relative directory to the output list.
+            In this case the output list will contain dictionaries with keys 'path' and 'relative_dir'.
+        'False', then the function will not add relative directory to the output list.
+            And the output list will contain only full file paths.
     :param relative_file_name_as_directory: boolean that will set if 'relative_directory_list' should contain
         file name with extension for each entry.
     :param add_last_modified_time: boolean, if 'True', then the function will add last modified time of the file
@@ -477,33 +483,43 @@ def get_file_paths_and_relative_directories(
         file, against the main path to directory that was passed to the parent function.
         """
 
-        file_result: dict = dict()
+        file_path: str = os.path.join(dirpath, file)
 
-        # Get full file path of the file.
-        file_result['path'] = os.path.join(dirpath, file)
-
-        # if 'relative_file_name_as_directory' was passed.
-        if relative_file_name_as_directory:
-            # Output the path with filename.
-            file_result['relative_dir'] = _get_relative_output_path_from_input_path(directory_fullpath, dirpath, file)
-        # if 'relative_file_name_as_directory' wasn't passed.
+        if not add_relative_directory and not add_last_modified_time:
+            file_result: str = file_path
         else:
-            # Output the path without filename.
-            file_result['relative_dir'] = _get_relative_output_path_from_input_path(directory_fullpath, dirpath)
+            file_result: dict = dict()
 
-        # Remove separator from the beginning if exists.
-        file_result['relative_dir'] = file_result['relative_dir'].removeprefix(os.sep)
+            # Get full file path of the file.
+            file_result['file_path'] = file_path
 
-        # If 'add_last_modified_time' was passed.
-        if add_last_modified_time:
-            # Get last modified time of the file.
-            file_result['last_modified'] = get_file_modified_time(file_result['path'])
+            if add_relative_directory:
+                # if 'relative_file_name_as_directory' was passed.
+                if relative_file_name_as_directory:
+                    # Output the path with filename.
+                    file_result['relative_dir'] = _get_relative_output_path_from_input_path(
+                        directory_path, dirpath, file)
+                # if 'relative_file_name_as_directory' wasn't passed.
+                else:
+                    # Output the path without filename.
+                    file_result['relative_dir'] = _get_relative_output_path_from_input_path(directory_path, dirpath)
+
+                # Remove separator from the beginning if exists.
+                file_result['relative_dir'] = file_result['relative_dir'].removeprefix(os.sep)
+
+            # If 'add_last_modified_time' was passed.
+            if add_last_modified_time:
+                # Get last modified time of the file.
+                file_result['last_modified'] = get_file_modified_time(file_result['path'])
 
         object_list.append(file_result)
 
     if sort_by_last_modified_time and not add_last_modified_time:
         raise ValueError('Parameter "sort_by_last_modified_time" cannot be "True" if parameter '
                          '"add_last_modified_time" is not "True".')
+    if relative_file_name_as_directory and not add_relative_directory:
+        raise ValueError('Parameter "relative_file_name_as_directory" cannot be "True" if parameter '
+                         '"add_relative_directory" is not "True".')
 
     # === Function main ================
     # Define locals.
@@ -511,7 +527,7 @@ def get_file_paths_and_relative_directories(
 
     # "Walk" over all the directories and subdirectories - make list of full file paths inside the directory
     # recursively.
-    for dirpath, subdirs, files in os.walk(directory_fullpath):
+    for dirpath, subdirs, files in os.walk(directory_path):
         # Iterate through all the file names that were found in the folder.
         for file in files:
             # If 'file_name_check_pattern' was passed.
@@ -674,7 +690,7 @@ def get_file_hashes_from_directory(directory_path: str, recursive: bool = False,
     """
 
     # Get all the files.
-    file_paths_list = get_file_paths_and_relative_directories(directory_path, recursive=recursive)
+    file_paths_list = get_file_paths_from_directory(directory_path, recursive=recursive)
 
     # Create a list of dictionaries, each dictionary is a file with its hash.
     files: list = list()

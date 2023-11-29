@@ -20,7 +20,7 @@ def wait_for_resource_availability(cpu_percent_max: int = 80, memory_percent_max
     """
     while True:
         cpu, memory = check_system_resources()
-        if cpu < cpu_percent_max or memory < memory_percent_max:
+        if cpu < cpu_percent_max and memory < memory_percent_max:
             break
         print_api(f"Waiting for resources to be available... CPU: {cpu}%, Memory: {memory}%", color='yellow')
         time.sleep(wait_time)  # Wait for 'wait_time' seconds before checking again

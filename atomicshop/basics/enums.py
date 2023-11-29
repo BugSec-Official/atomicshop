@@ -32,10 +32,10 @@ def __comparison_usage_example(
         main folder.
 
     Usage:
-        from atomicshop.filesystem import get_file_paths_and_relative_directories, ComparisonOperator
+        from atomicshop.filesystem import get_file_paths_from_directory, ComparisonOperator
 
         # Get full paths of all the 'engine_config.ini' files.
-        engine_config_path_list = get_file_paths_and_relative_directories(
+        engine_config_path_list = get_file_paths_from_directory(
             directory_fullpath=some_directory_path,
             file_name_check_tuple=(config_file_name, ComparisonOperator.EQ))
     """

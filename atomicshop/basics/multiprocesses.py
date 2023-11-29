@@ -89,17 +89,38 @@ class MultiProcessorRecursive:
 
     def run_process(self):
         with multiprocessing.Pool(processes=self.max_workers) as pool:
+            # Keep track of the async results
+            async_results = []
+
             while self.input_list:
-                system_resources.wait_for_resource_availability(
-                    cpu_percent_max=self.cpu_percent_max,
-                    memory_percent_max=self.memory_percent_max,
-                    wait_time=self.wait_time)
+                new_input_list = []
+                for item in self.input_list:
+                    # Check system resources before processing each item
+                    system_resources.wait_for_resource_availability(
+                        cpu_percent_max=self.cpu_percent_max,
+                        memory_percent_max=self.memory_percent_max,
+                        wait_time=self.wait_time)
 
-                # Apply the provided function to the items in the input list
-                results = pool.map(self.process_function, self.input_list)
+                    # Process the item
+                    async_result = pool.apply_async(self.process_function, (item,))
+                    async_results.append(async_result)
 
-                # Flatten list of lists and update the queue
-                self.input_list = [item for sublist in results for item in sublist]
+                # Reset input_list for next round of processing
+                self.input_list = []
+
+                # Collect results as they complete
+                for async_result in async_results:
+                    try:
+                        result = async_result.get()
+                        # Assuming process_function returns a list, extend new_input_list
+                        new_input_list.extend(result)
+                    except Exception as e:
+                        print(f"An error occurred: {e}")
+
+                # Update the input_list for the next iteration
+                self.input_list = new_input_list
+                # Clear the async_results for the next iteration
+                async_results.clear()
 
 
 class _MultiProcessorTest:
