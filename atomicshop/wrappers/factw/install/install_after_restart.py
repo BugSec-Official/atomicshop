@@ -1,8 +1,7 @@
 from typing import Union, Literal
 from pathlib import Path
-import subprocess
 
-from .... import permissions
+from .... import permissions, process, filesystem
 from .. import config_install
 
 
@@ -23,16 +22,14 @@ def install_after_restart(
         --db: Distributed setup, Install the FACT_core database.
     :return:
     """
-    if not permissions.is_admin():
-        print("This script requires root privileges. Please enter your password for sudo access.")
-        permissions.run_as_root(['-v'])
 
-    install_command: str = 'python3 ' + str(Path(installation_directory, config_install.INSTALL_FILE_PATH))
+    install_command: str = 'python3 "' + str(Path(installation_directory, config_install.INSTALL_FILE_PATH)) + '"'
 
     if install_type:
         install_command = install_command + ' --' + install_type
 
     # Install the FACT_core repo.
-    subprocess.run(install_command)
+    process.execute_with_live_output(cmd=install_command, verbose=True)
     # Remove the FACT_core installation log.
-    # filesystem.remove_file(config_static_install.FACT_CORE_INSTALL_LOG_FILE_PATH)
+    working_directory_path: str = filesystem.get_working_directory()
+    filesystem.remove_file(str(Path(working_directory_path, config_install.INSTALL_LOG_FILE_NAME)))

@@ -36,8 +36,8 @@ def process_execution_decorator(function_name):
 @process_execution_decorator
 def execute_with_live_output(
         cmd: Union[list, str],
-        print_empty_lines: bool = False,
-        verbose: bool = False,
+        print_empty_lines: bool = True,
+        verbose: bool = True,
         output_strings: list = None,
         wsl: bool = False,
         **kwargs
@@ -54,7 +54,7 @@ def execute_with_live_output(
     :param verbose: boolean.
         'True': Print all output lines of the process.
         'False': Don't print any lines of output.
-    :param output_strings: list, of strings. If output line contains any of the strings it will be outputted to console.
+    :param output_strings: list, of strings. Only lines that contain any of the strings in this list will be printed.
     :param wsl: boolean, that sets if the command is executed with WSL.
     :return: Boolean, If execution was successful, return True, if not - False.
     """

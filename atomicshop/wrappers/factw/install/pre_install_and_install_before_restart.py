@@ -1,9 +1,11 @@
 import subprocess
 from pathlib import Path
+import sys
 
-from .... import permissions, filesystem
+from .... import permissions, filesystem, process
 from ... import githubw
 from .. import config_install
+
 
 
 def install_before_restart(installation_directory: str):
@@ -14,14 +16,16 @@ def install_before_restart(installation_directory: str):
     """
 
     if not permissions.is_admin():
-        print("This script requires root privileges. Please enter your password for sudo access.")
-        permissions.run_as_root(['-v'])
+        print("This script requires root privileges...")
+        sys.exit(0)
 
     docker_keyring_file_path: str = "/etc/apt/keyrings/docker.gpg"
+    nodesource_keyring_file_path: str = "/etc/apt/keyrings/nodesource.gpg"
     fact_core_pre_install_file_path = str(Path(installation_directory, config_install.PRE_INSTALL_FILE_PATH))
 
-    # Remove the docker keyring, so we will not be asked to overwrite it if it exists.
+    # Remove the existing keyrings, so we will not be asked to overwrite it if it exists.
     filesystem.remove_file(docker_keyring_file_path)
+    filesystem.remove_file(nodesource_keyring_file_path)
 
     with permissions.temporary_regular_permissions():
         # Create the FACT_core directory.
@@ -40,4 +44,3 @@ def install_before_restart(installation_directory: str):
 
     # Run the shell script
     subprocess.run(['bash', fact_core_pre_install_file_path])
-
