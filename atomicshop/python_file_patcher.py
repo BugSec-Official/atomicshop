@@ -35,7 +35,7 @@ def find_and_replace_in_file(
 
     if file_sha256 is not None:
         file_hash: str = hashing.hash_file(file_path)
-        if file_hash != file_sha256:
+        if file_hash.lower() != file_sha256.lower():
             raise ResourceWarning(
                 f"File's SHA256 hash is not the same as specified. Nothing was changed.\n"
                 f"File path: {file_path}\n"
