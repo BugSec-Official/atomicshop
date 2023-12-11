@@ -1,5 +1,6 @@
 import multiprocessing
 import queue
+import concurrent.futures
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from ..import system_resources
@@ -123,6 +124,92 @@ class MultiProcessorRecursive:
                 async_results.clear()
 
 
+class ConcurrentProcessorRecursive:
+    def __init__(
+            self,
+            process_function,
+            input_list: list,
+            max_workers: int = None,
+            cpu_percent_max: int = 80,
+            memory_percent_max: int = 80,
+            wait_time: float = 5
+    ):
+        """
+        Exactly the same as MultiProcessorRecursive, but uses the ProcessPoolExecutor of concurrent.futures module
+        instead of multiprocessing.Pool.
+        MultiProcessor class. Used to execute functions in parallel. The result of each execution is feeded back
+            to the provided function. Making it sort of recursive execution.
+        :param process_function: function, function to execute on the input list.
+        :param input_list: list, list of inputs to process.
+        :param max_workers: integer, number of workers to execute functions in parallel. Default is None, which
+            is the number of CPUs.
+        :param cpu_percent_max: integer, maximum CPU percentage. Above that usage, we will wait before starting new
+            execution.
+        :param memory_percent_max: integer, maximum memory percentage. Above that usage, we will wait, before starting
+            new execution.
+        :param wait_time: float, time to wait if the CPU or memory usage is above the maximum percentage.
+
+        Usage:
+            def unpack_file(file_path):
+                # Process the file at file_path and unpack it.
+                # Return a list of new file paths that were extracted from the provided path.
+                return [new_file_path1, new_file_path2]  # Example return value
+
+            # List of file paths to process
+            file_paths = ["path1", "path2", "path3"]
+
+            # Create an instance of MultiProcessor
+            # Note: unpacking.unpack_file is passed without parentheses
+            processor = MultiProcessor(
+                process_function=unpack_file,
+                input_list=file_paths,
+                max_workers=4,  # Number of parallel workers
+                cpu_percent_max=80,  # Max CPU usage percentage
+                memory_percent_max=80,  # Max memory usage percentage
+                wait_time=5  # Time to wait if resources are overused
+            )
+
+            # Run the processing
+            processor.run_process()
+        """
+
+        self.process_function = process_function
+        self.input_list: list = input_list
+        self.max_workers: int = max_workers
+        self.cpu_percent_max: int = cpu_percent_max
+        self.memory_percent_max: int = memory_percent_max
+        self.wait_time: float = wait_time
+
+    def run_process(self):
+        with ProcessPoolExecutor(max_workers=self.max_workers) as executor:
+            futures = {executor.submit(self.process_function, item): item for item in self.input_list}
+            self.input_list = []
+
+            while futures:
+                # Wait for the next future to complete
+                done, _ = concurrent.futures.wait(futures.keys(), return_when=concurrent.futures.FIRST_COMPLETED)
+
+                for future in done:
+                    item = futures.pop(future)
+                    try:
+                        result = future.result()
+                        # Extend new_input_list with the result
+                        self.input_list.extend(result)
+                    except Exception as e:
+                        print(f"An error occurred while processing {item}: {e}")
+
+                    while self.input_list:
+                        # Check system resources and start new tasks if resources are available
+                        system_resources.wait_for_resource_availability(
+                            cpu_percent_max=self.cpu_percent_max,
+                            memory_percent_max=self.memory_percent_max,
+                            wait_time=self.wait_time)
+
+                        new_item = self.input_list.pop(0)
+                        new_future = executor.submit(self.process_function, new_item)
+                        futures[new_future] = new_item
+
+
 class _MultiProcessorTest:
     def __init__(self, worker_count: int = 8, initialize_at_start: bool = True):
         """
@@ -214,17 +301,17 @@ class _MultiProcessorTest:
             p.join()
 
 
-class _MultiConcuratorTest:
+class _ConcurrentProcessorTest:
     def __init__(self, max_workers: int = 2, initialize_at_start: bool = False):
         """
-        MultiConcurator class. Used to execute functions in parallel with the ProcessPoolExecutor.
+        ConcurrentProcessorTest class. Used to execute functions in parallel with the ProcessPoolExecutor.
 
         :param max_workers: integer, number of workers to execute functions in parallel.
         :param initialize_at_start: boolean, if True, the workers will be initialized at the start of the class.
 
         Usage 1:
             if __name__ == "__main__":
-            concurator = MultiConcurator(max_workers=4, initialize_at_start=True)
+            concurator = ConcurrentProcessorTest(max_workers=4, initialize_at_start=True)
 
             # ... add tasks to concurator ...
 

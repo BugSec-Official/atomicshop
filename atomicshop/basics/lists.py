@@ -68,3 +68,34 @@ def replace_elements_with_values_from_dict(
         converted_list.append(word)
 
     return converted_list
+
+
+def sort_list_by_another_list(list_of_strings_to_sort, list_of_strings_to_sort_by):
+    """
+    This function will sort the list of strings by order another list of strings.
+    :param list_of_strings_to_sort:
+    :param list_of_strings_to_sort_by:
+    :return:
+
+    Usage example:
+        file_paths = [
+            "/home/user/documents/report.docx",
+            "/home/user/music/song.mp3",
+            "/home/user/pictures/photo.jpg"
+        ]
+
+        sort_strings = ["pictures", "documents"]
+
+        sorted_paths = sort_list_by_another_list(file_paths, sort_strings)
+        print(sorted_paths)
+    """
+
+    def sort_key(path):
+        # For each path, find the first index of any matching string in sort_strings
+        # If no match is found, return a high index to sort it at the end
+        for sort_string in list_of_strings_to_sort_by:
+            if sort_string in path:
+                return list_of_strings_to_sort_by.index(sort_string)
+        return len(list_of_strings_to_sort_by)
+
+    return sorted(list_of_strings_to_sort, key=sort_key)

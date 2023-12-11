@@ -3,7 +3,7 @@ from typing import Union
 import os
 
 from . import included_files, fw_files, virtual_file_path, file_object, analysis
-from .. import fact_config, get_file_data
+from .. import config_fact, get_file_data
 from ....print_api import print_api, print_status_of_list
 from ....file_io import file_io, jsons, csvs
 from ....basics import dicts
@@ -227,7 +227,7 @@ def save_firmware_uids_as_csv(
     """
 
     # Get fact config data.
-    fact_config_data: dict = fact_config.get_config_data(fact_path)
+    fact_config_data: dict = config_fact.get_config_data(fact_path)
 
     # Get firmwares by config or query.
     uids: list = get_firmwares(config_db=fact_config_data['common']['postgres'], config_data=config_data, query=query)

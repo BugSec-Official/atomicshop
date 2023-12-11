@@ -5,8 +5,7 @@ from typing import Literal, Union
 from . import web
 
 
-# def hash_bytes(bytes_object: bytes, hash_algo: Union[Literal['sha256', 'md5', 'sha1'], str] = 'sha256') -> str:
-def hash_bytes(bytes_object: bytes, hash_algo: str = 'sha256') -> str:
+def hash_bytes(bytes_object: bytes, hash_algo: Union[Literal['sha256', 'md5', 'sha1'], str] = 'sha256') -> str:
     """
     The function will return hash of the bytes object with specified algorithm.
     :param bytes_object: bytes object to hash.

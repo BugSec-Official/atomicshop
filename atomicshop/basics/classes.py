@@ -1,6 +1,7 @@
 import os
 import ast
 import importlib
+from pathlib import Path
 
 from ..file_io.file_io import read_file
 
@@ -49,7 +50,7 @@ def get_module_name_from_file_path(file_directory_path: str, file_path: str) -> 
     """
 
     # Removing suffix.
-    file_path_no_suffix = file_path.rsplit('.', maxsplit=1)[0]
+    file_path_no_suffix = Path(file_path).stem
     # Removing the script directory.
     path_without_script_directory = file_path_no_suffix.replace(file_directory_path + os.sep, '')
     # Changing slashes to dots.
@@ -173,3 +174,33 @@ def import_first_class_name_from_file_path(script_directory: str, file_path: str
     imported_class = import_first_class_name_from_module_name(module_name, **kwargs)
 
     return imported_class
+
+
+def get_attributes(
+        obj,
+        include_private_1: bool = False,
+        include_private_2: bool = False
+) -> list[str]:
+    """
+    Function returns all attributes of the object.
+    :param obj: object, the object to get attributes from.
+    :param include_private_1: bool, if True, the private attributes that start with one underscore will be included.
+    :param include_private_2: bool, if True, the private attributes that start with two underscores will be included.
+    :return: list, of attributes.
+    """
+
+    attributes = []
+    # Get all attributes of obj
+    for attr_name in dir(obj):
+        # Check for private attributes with one underscore.
+        if attr_name.startswith("_") and not attr_name.startswith("__"):
+            if not include_private_1:
+                continue
+        # Check for private attributes with two underscores (dunder methods).
+        elif attr_name.startswith("__"):
+            if not include_private_2:
+                continue
+
+        attributes.append(attr_name)
+
+    return attributes

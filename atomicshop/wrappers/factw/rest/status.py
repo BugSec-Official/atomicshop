@@ -1,7 +1,7 @@
 # noinspection PyPackageRequirements
 import requests
 
-from .. import fact_config
+from .. import config_fact
 from .... print_api import print_api
 
 
@@ -11,7 +11,7 @@ def get_status():
     :return:
     """
 
-    url: str = f'{fact_config.FACT_ADDRESS}{fact_config.STATUS_ENDPOINT}'
+    url: str = f'{config_fact.FACT_ADDRESS}{config_fact.STATUS_ENDPOINT}'
     response: requests.Response = requests.get(url)
 
     # Check response status code.
