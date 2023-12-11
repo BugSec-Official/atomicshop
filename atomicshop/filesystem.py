@@ -423,19 +423,38 @@ def copy_file(
         shutil.copy(source_file_path, target_file_path)
 
 
-def get_file_names_from_directory(directory_path: str) -> list:
+def get_directory_paths_from_directory(
+        directory_path: str,
+        recursive: bool = True
+) -> list:
     """
-    The function is non-recursive, returns only file names inside directory.
+    Recursive, by option.
+    The function receives a filesystem directory as string, scans it recursively for directories and returns list of
+    full paths to that directory (including).
 
-    :param directory_path: string, of full path to directory you want to return file names of.
+    :param directory_path: string to full path to directory on the filesystem to scan.
+    :param recursive: boolean.
+        'True', then the function will scan recursively in subdirectories.
+        'False', then the function will scan only in the directory that was passed.
+
+    :return: list of all found directory names with full paths.
     """
 
-    file_list: list = list()
-    for (dir_path, sub_dirs, filenames) in os.walk(directory_path):
-        file_list.extend(filenames)
-        break
+    # Define locals.
+    directory_list: list = list()
 
-    return file_list
+    # "Walk" over all the directories and subdirectories - make list of full directory paths inside the directory
+    # recursively.
+    for dirpath, subdirs, files in os.walk(directory_path):
+        # Iterate through all the directory names that were found in the folder.
+        for directory in subdirs:
+            # Get full directory path.
+            directory_list.append(os.path.join(dirpath, directory))
+
+        if not recursive:
+            break
+
+    return directory_list
 
 
 def get_file_paths_from_directory(
@@ -586,6 +605,21 @@ def _create_relative_output_directory(output_path: str, relative_directory: str)
     path_to_create: str = _build_relative_output_path(output_path, relative_directory)
     create_directory(path_to_create)
     return path_to_create
+
+
+def get_file_names_from_directory(directory_path: str) -> list:
+    """
+    The function is non-recursive, returns only file names inside directory.
+
+    :param directory_path: string, of full path to directory you want to return file names of.
+    """
+
+    file_list: list = list()
+    for (dir_path, sub_dirs, filenames) in os.walk(directory_path):
+        file_list.extend(filenames)
+        break
+
+    return file_list
 
 
 def remove_last_separator(directory_path: str) -> str:

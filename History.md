@@ -1,6 +1,16 @@
 <!-- HISTORY -->
 ## History
 
+* 2.6.2 - 11.12.2023
+  * python_file_patcher - initial release.
+  * permissions - added 'set_executable_permission' function.
+  * filesystem - added 'get_directory_paths_from_directory' function.
+  * wrappers - added 'ubuntu_terminal' module.
+  * wrappers - added 'astw' module.
+  * wrappers.factw - added 'install' module.
+  * basics - added 'enumerations' module.
+  * basics.multiprocesses - added several classes.
+  * basics.classes - added 'get_attributes' function.
 * 2.6.1 - 29.11.2023
   * 'filesystem' - minor api changes.
 * 2.6.0 - 28.11.2023

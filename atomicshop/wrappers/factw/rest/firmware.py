@@ -5,7 +5,7 @@ import time
 from typing import Union
 import os
 
-from .. import fact_config, get_file_data
+from .. import config_fact, get_file_data
 from . import file_object
 from ....print_api import print_api, print_status_of_list
 from ....file_io import file_io, jsons, csvs
@@ -60,7 +60,7 @@ def get_uid_list(
     :return: list, list of UIDs.
     """
 
-    url: str = f'{fact_config.FACT_ADDRESS}{fact_config.FIRMWARE_ENDPOINT}'
+    url: str = f'{config_fact.FACT_ADDRESS}{config_fact.FIRMWARE_ENDPOINT}'
 
     if query is None:
         if 'requested_analysis_systems' in config_data:
@@ -118,7 +118,7 @@ def is_analysis_finished(uid: str) -> bool:
     :return: boolean, True if finished, False if not.
     """
 
-    url: str = f'{fact_config.FACT_ADDRESS}{fact_config.STATUS_ENDPOINT}'
+    url: str = f'{config_fact.FACT_ADDRESS}{config_fact.STATUS_ENDPOINT}'
 
     # Check if currently running analysis is finished
     response = requests.get(url)
@@ -194,7 +194,7 @@ def upload_firmware(
     :return: None.
     """
 
-    url: str = f'{fact_config.FACT_ADDRESS}{fact_config.FIRMWARE_ENDPOINT}'
+    url: str = f'{config_fact.FACT_ADDRESS}{config_fact.FIRMWARE_ENDPOINT}'
 
     if 'release_date' not in json_data:
         json_data['release_date'] = '1970-01-01'
@@ -286,7 +286,7 @@ def get_uid_data(uid: str):
     :return:
     """
 
-    url: str = f'{fact_config.FACT_ADDRESS}{fact_config.FIRMWARE_ENDPOINT}/{uid}'
+    url: str = f'{config_fact.FACT_ADDRESS}{config_fact.FIRMWARE_ENDPOINT}/{uid}'
     response: requests.Response = requests.get(url)
 
     # Check response status code.

@@ -1,4 +1,3 @@
-# v1.0.4 - 21.03.2023 18:10
 import os
 import sys
 import configparser

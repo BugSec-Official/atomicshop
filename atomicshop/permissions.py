@@ -1,6 +1,7 @@
 import os
 import ctypes
 import contextlib
+import subprocess
 
 
 def is_admin() -> bool:
@@ -21,6 +22,22 @@ def is_admin() -> bool:
             result = False
 
     return result
+
+
+def set_executable_permission(file_path: str):
+    """
+    Function sets the executable permission on a file.
+    Equivalent to: chmod +x <file_path>
+
+    :param file_path: str, path to the file.
+    :return:
+    """
+
+    os.chmod(file_path, os.stat(file_path).st_mode | 0o111)
+
+
+def run_as_root(command):
+    subprocess.check_call(['sudo'] + command)
 
 
 @contextlib.contextmanager

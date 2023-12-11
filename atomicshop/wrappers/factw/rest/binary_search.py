@@ -1,7 +1,7 @@
 # noinspection PyPackageRequirements
 import requests
 
-from .. import fact_config
+from .. import config_fact
 from .... print_api import print_api
 
 
@@ -15,7 +15,7 @@ def search_string(string_to_search: str):
         "rule_file": "rule rulename {strings: $a = \"" + string_to_search + "\" condition: $a }"
     }
 
-    url: str = f'{fact_config.FACT_ADDRESS}{fact_config.BINARY_SEARCH_ENDPOINT}'
+    url: str = f'{config_fact.FACT_ADDRESS}{config_fact.BINARY_SEARCH_ENDPOINT}'
     response: requests.Response = requests.get(url, json=yara_rule)
 
     # Check response status code.

@@ -1,7 +1,7 @@
 # noinspection PyPackageRequirements
 import requests
 
-from .. import fact_config, get_file_data
+from .. import config_fact, get_file_data
 from .... print_api import print_status_of_list, print_api
 
 
@@ -11,7 +11,7 @@ def get_all_file_objects():
     :return:
     """
 
-    url: str = f'{fact_config.FACT_ADDRESS}{fact_config.FILE_OBJECT_ENDPOINT}'
+    url: str = f'{config_fact.FACT_ADDRESS}{config_fact.FILE_OBJECT_ENDPOINT}'
     response: requests.Response = requests.get(url)
 
     # Check response status code.
@@ -32,7 +32,7 @@ def get_uid_data(uid: str):
     :return:
     """
 
-    url: str = f'{fact_config.FACT_ADDRESS}{fact_config.FILE_OBJECT_ENDPOINT}/{uid}'
+    url: str = f'{config_fact.FACT_ADDRESS}{config_fact.FILE_OBJECT_ENDPOINT}/{uid}'
     response: requests.Response = requests.get(url)
 
     # Check response status code.

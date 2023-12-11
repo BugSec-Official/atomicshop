@@ -159,7 +159,8 @@ def sort_by_values(input_dict: dict, reverse: bool = False) -> dict:
 
 
 def convert_object_with_attributes_to_dict(
-        obj, include_private_1: bool = False,
+        obj,
+        include_private_1: bool = False,
         include_private_2: bool = False,
         skip_attributes: list = None,
         recursion_level: int = 0
@@ -208,7 +209,9 @@ def convert_object_with_attributes_to_dict(
                         item, include_private_1, include_private_2, skip_attributes, recursion_level - 1
                     ) for item in attr_value]
                 # Otherwise, if it's an object with attributes, convert it to a dictionary
-                elif hasattr(attr_value, '__dict__') or hasattr(attr_value, '__slots__') or isinstance(attr_value, object):
+                elif (hasattr(attr_value, '__dict__') or
+                      hasattr(attr_value, '__slots__') or
+                      isinstance(attr_value, object)):
                     attr_value = convert_object_with_attributes_to_dict(
                         attr_value, include_private_1, include_private_2, skip_attributes, recursion_level - 1
                     )

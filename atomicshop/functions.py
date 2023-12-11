@@ -1,4 +1,3 @@
-# v1.0.0
 def put_args_to_kwargs(source_function_name, *args, **kwargs):
     # If this function is executed against class function that belongs to that class, first entry of
     # 'source_function_name.__code__.co_varnames' will be 'self'.
