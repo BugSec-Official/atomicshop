@@ -32,4 +32,4 @@ def remove_image(image_id_or_tag: str, print_kwargs: dict = None):
     client = docker.from_env()
 
     client.images.remove(image_id_or_tag)
-    print_api(f"Image {image_id_or_tag} removed successfully.", **print_kwargs)
+    print_api(f"Removed Image {image_id_or_tag} successfully.", color='green', **print_kwargs)
