@@ -1,8 +1,10 @@
 <!-- HISTORY -->
 ## History
 
+* 2.6.4 - 12.12.2023
+  * filesystem - fixes and improvements.
 * 2.6.3 - 11.12.2023
-  * wrappers.factw.install - Improvements and fixes.
+  * wrappers.factw.install - fixes and improvements.
 * 2.6.2 - 11.12.2023
   * python_file_patcher - initial release.
   * permissions - added 'set_executable_permission' function.
