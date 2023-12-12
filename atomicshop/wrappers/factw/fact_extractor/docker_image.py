@@ -34,8 +34,10 @@ def create_docker_image_ubuntu(directory_path: str):
     # Remove the image if exists.
     images = dockerw.get_images()
     for image in images:
-        # There is also 'fkiecad/fact_extractor:latest' image, which is a part of FACT_core backend.
-        if image.tags == ['fact_extractor:latest']:
+        # There are 2 images:
+        # 'fkiecad/fact_extractor:latest' - The image that is downloaded.
+        # 'fact_extractor:latest' - The image that is built.
+        if 'fact_extractor' in image.tags:
             dockerw.remove_image(image_id_or_tag=image.id)
 
     # Create the script to execute.

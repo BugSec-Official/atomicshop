@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.6.6 - 12.12.2023
+  * wrappers.dockerw.dockerw - fixes and improvements.
 * 2.6.5 - 12.12.2023
   * wrappers.dockerw.dockerw - initial release.
 * 2.6.4 - 12.12.2023
