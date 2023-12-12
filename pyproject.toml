@@ -21,6 +21,10 @@ include = ["atomicshop*"]
 version = {attr = "atomicshop.__version__"}
 
 # While building, installing package add all non-python files from folder inside package: 'addons'. Workls recursively.
+# Usage:
+# import pkg_resources
+# file_path = pkg_resources.resource_filename("atomicshop.addons", "folder_name/file_name.py")
+# file_path = pkg_resources.resource_filename('atomicshop', 'addons/folder_name/file_name.py')
 [tool.setuptools.package-data]
 "atomicshop.addons" = ["**"]
 
@@ -43,6 +47,7 @@ dependencies = [
     "cryptography",
     "dnslib",
     "dnspython",
+    "docker",
     "numpy",
     "openpyxl",
     "pandas",
