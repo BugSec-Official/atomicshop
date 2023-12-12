@@ -59,6 +59,28 @@ FILE_NAME_REPLACEMENT_DICT: dict = {
 }
 
 
+def get_linux_home() -> str:
+    """
+    The function will return the home directory of the user on Linux.
+
+    :return: string, home directory of the user on Linux.
+    """
+
+    return os.path.expanduser('~')
+
+
+def create_empty_file(file_path: str) -> None:
+    """
+    The function creates an empty file.
+
+    :param file_path: string, full path to file.
+    :return: None.
+    """
+
+    # Create empty file.
+    Path(file_path).touch()
+
+
 def get_working_directory() -> str:
     """
     The function returns working directory of called script file.
