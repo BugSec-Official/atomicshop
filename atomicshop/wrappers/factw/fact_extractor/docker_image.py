@@ -1,5 +1,5 @@
 from ....import process
-from ...dockerw import install_docker
+from ...dockerw import install_docker, dockerw
 
 
 def create_docker_image_ubuntu(directory_path: str):
@@ -30,6 +30,13 @@ def create_docker_image_ubuntu(directory_path: str):
     # Check if docker is installed.
     if not install_docker.is_docker_installed():
         install_docker.install_docker_ubuntu()
+
+    # Remove the image if exists.
+    images = dockerw.get_images()
+    for image in images:
+        # There is also 'fkiecad/fact_extractor:latest' image, which is a part of FACT_core backend.
+        if image.tags == ['fact_extractor:latest']:
+            dockerw.remove_image(image_id_or_tag=image.id)
 
     # Create the script to execute.
     script = f"""
