@@ -1,6 +1,29 @@
 import datetime
 
 
+def get_first_key_name(input_dict: dict) -> str:
+    """
+    The function will return the first key name in a dictionary.
+
+    :param input_dict: dict, the dictionary to get the first key name.
+    :return: str, the first key name in the dictionary.
+    """
+
+    return next(iter(input_dict))
+
+
+def get_first_key_and_value_dict(input_dict: dict) -> dict:
+    """
+    The function will return the first key and value in a dictionary.
+
+    :param input_dict: dict, the dictionary to get the first key and value.
+    :return: dict, the first key and value in the dictionary.
+    """
+
+    first_key = get_first_key_name(input_dict)
+    return {first_key: input_dict[first_key]}
+
+
 def remove_keys(input_dict: dict, key_list: list) -> None:
     """
     The function will remove a key from dictionary without raising an exception if it doesn't exist.

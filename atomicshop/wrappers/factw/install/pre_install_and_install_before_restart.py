@@ -2,16 +2,19 @@ import subprocess
 from pathlib import Path
 import sys
 
-from .... import permissions, filesystem, process
+from .... import permissions, filesystem
 from ... import githubw
 from .. import config_install
 
 
-
-def install_before_restart(installation_directory: str):
+def install_before_restart(installation_directory: str, remove_existing_installation_directory: bool = True):
     """
     This function will install the FACT_core before the restart of the computer.
     :param installation_directory: string, the directory to install the FACT_core to.
+    :param remove_existing_installation_directory: bool,
+        if True, the existing installation directory will be removed.
+        if False, the existing installation directory will not be removed and FACT installation scripts will do their
+            best to install the FACT_core to the existing installation directory.
     :return:
     """
 
@@ -26,6 +29,10 @@ def install_before_restart(installation_directory: str):
     # Remove the existing keyrings, so we will not be asked to overwrite it if it exists.
     filesystem.remove_file(docker_keyring_file_path)
     filesystem.remove_file(nodesource_keyring_file_path)
+
+    # Remove the existing installation directory.
+    if remove_existing_installation_directory:
+        filesystem.remove_directory(installation_directory)
 
     with permissions.temporary_regular_permissions():
         # Create the FACT_core directory.

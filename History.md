@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.6.8 - 17.12.2023
+  * wrappers.factw.install - fixes and improvements.
 * 2.6.7 - 12.12.2023
   * wrappers.dockerw.dockerw - fixes and improvements.
 * 2.6.6 - 12.12.2023

@@ -23,16 +23,11 @@ version = {attr = "atomicshop.__version__"}
 # While building, installing package add all non-python files from folder inside package: 'addons'. Workls recursively.
 # Usage:
 # import importlib.resources
-# package_name = 'atomicshop'
-# resource = 'addons/folder_name/file_name.py'
+# package_name = 'atomicshop.addons.folder_name'
+# resource = 'file_name.py'
 # destination = 'path/to/your/destination/folder/test.py'
-# with importlib.resources.path(package_name, resource) as resource_path:
-#    shutil.copy(resource_path, destination)
-# importlib.resources.path provides a context manager that temporarily extracts the resource
-# to the filesystem and gives you a path to it. Once you exit the with block, any temporary
-# file created is cleaned up (deleted). If you try to use pkg_resources.path outside a
-# with statement, you won't get a straightforward file path; instead, you'll get a context
-# manager object, which isn't what shutil.copy expects.
+# The 'resource_path' is a Path object.
+# resource_path = importlib.resources.files(package_name) / resource
 [tool.setuptools.package-data]
 "atomicshop.addons" = ["**"]
 
