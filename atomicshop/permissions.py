@@ -1,4 +1,5 @@
 import os
+import stat
 import ctypes
 import contextlib
 import subprocess
@@ -33,7 +34,20 @@ def set_executable_permission(file_path: str):
     :return:
     """
 
-    os.chmod(file_path, os.stat(file_path).st_mode | 0o111)
+    # os.chmod(file_path, os.stat(file_path).st_mode | 0o111)
+    os.chmod(file_path, os.stat(file_path).st_mode | stat.S_IXUSR)
+
+
+def is_executable_permission(file_path: str) -> bool:
+    """
+    Function checks if the file has the executable permission.
+    Equivalent to: stat -c "%a %n" <file_path>
+
+    :param file_path: str, path to the file.
+    :return: bool, True / False.
+    """
+
+    return bool(os.stat(file_path).st_mode & stat.S_IXUSR)
 
 
 def run_as_root(command):
