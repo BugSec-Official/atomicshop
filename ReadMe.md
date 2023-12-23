@@ -57,7 +57,7 @@ Currently, the library is being developed on Windows 10 and python 3.11. No othe
 This means that the official support of the library is mainly for python 3.11 under Windows 10.
 Most of the features will work, but some require at least version 3.10, like SocketWrapper. Since, some features in it are 3.10 specific.
 
-The library and its features will evolve based on my curiosity and needs. But as of now, the updates to features list are almost on daily basis.
+The library and its features will evolve based on my curiosity and needs. But as of now, the updates to features list are relatively frequent.
 
 
 <!-- GETTING STARTED -->

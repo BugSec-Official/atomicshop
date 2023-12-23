@@ -96,3 +96,14 @@ def convert_dict_to_json_string(
         indent = 2
 
     return json.dumps(dict_or_list, indent=indent)
+
+
+def convert_json_string_to_dict(json_string: str) -> dict:
+    """
+    Convert json formatted string to dictionary.
+
+    :param json_string: json formatted string.
+    :return: dictionary.
+    """
+
+    return json.loads(json_string)

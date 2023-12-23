@@ -1,6 +1,7 @@
 import os
 import configparser
 from typing import Any
+import io
 
 from ..print_api import print_api
 from ..basics import lists
@@ -12,7 +13,13 @@ class ConfigParserWrapper:
     ImportConfig class is responsible for importing 'config.ini' file and its variables.
     """
 
-    def __init__(self, file_name: str = 'config.ini', directory_path: str = None, file_path: str = None):
+    def __init__(
+            self,
+            file_name: str = 'config.ini',
+            directory_path: str = None,
+            file_path: str = None,
+            config_content: str = None
+    ):
         """
         The function will initialize the 'ImportConfig' object.
         You can specify either full 'file_path' or 'directory_path' and 'file_name'.
@@ -21,16 +28,18 @@ class ConfigParserWrapper:
         :param file_name: The name of the file to be imported. Default is 'config.ini'.
         :param directory_path: The directory that 'config.ini' file is in.
         :param file_path: sting, the full path to the file.
+        :param config_content: string, the content of the config file. If specified, the 'file_path' will be ignored.
         """
 
-        if not directory_path and not file_path:
-            raise ValueError("You must specify either 'directory_path' or 'file_path'.")
-        elif directory_path and file_path:
-            raise ValueError("You can't specify both 'directory_path' and 'file_path'.")
+        if not directory_path and not file_path and not config_content:
+            raise ValueError("You must specify either 'directory_path' or 'file_path' or 'config_content'.")
+        elif (directory_path and file_path) or (directory_path and config_content) or (file_path and config_content):
+            raise ValueError("You can't specify both 'directory_path' and 'file_path' or 'config_content'.")
 
         self.file_name: str = file_name
         self.directory_path: str = directory_path
         self.file_path: str = file_path
+        self.config_content: str = config_content
 
         self.config_parser = None
         # Final configuration dictionary.
@@ -38,7 +47,7 @@ class ConfigParserWrapper:
 
         if file_path:
             self.file_path: str = file_path
-        else:
+        elif directory_path:
             self.file_path: str = self.directory_path + os.sep + self.file_name
 
         # After that you can use 'convert_string_values' function to convert certain key values to other types.
@@ -208,11 +217,15 @@ class ConfigParserWrapper:
         if not self.config_parser:
             self.initialize_config_parser()
 
-        if not unicode_encoding:
-            self.config_parser.read(self.file_path)
-        else:
-            # Reading with 'utf-8' (non ansi languages):
-            self.config_parser.read(self.file_path, encoding='utf-8')
+        if self.file_path:
+            if not unicode_encoding:
+                self.config_parser.read(self.file_path)
+            else:
+                # Reading with 'utf-8' (non ansi languages):
+                self.config_parser.read(self.file_path, encoding='utf-8')
+        elif self.config_content:
+            config_io = io.StringIO(self.config_content)
+            self.config_parser.read_file(config_io)
 
         # If there are no sections in the configparser object, that means there really no sections, or the file
         # doesn't exist. ConfigParser doesn't check the file for existence.

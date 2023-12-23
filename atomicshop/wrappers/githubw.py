@@ -67,8 +67,8 @@ class GitHubWrapper:
 
         :param target_directory:
         :param archive_remove_first_directory: boolean, sets if archive extract function will extract the archive
-            without first directory in the archive. Check reference in the 'archiver.extract_archive_with_zipfile'
-            function.
+            without first directory in the archive. Check reference in the
+            'archiver.zip.extract_archive_with_zipfile' function.
         :return:
         """
 
