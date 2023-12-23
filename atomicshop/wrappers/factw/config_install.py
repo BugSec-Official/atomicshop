@@ -10,3 +10,5 @@ PRE_INSTALL_FILE_PATH: str = SRC_DIRECTORY_PATH + os.sep + 'install' + os.sep + 
 # After restart.
 INSTALL_LOG_FILE_NAME: str = 'install.log'
 INSTALL_FILE_PATH: str = SRC_DIRECTORY_PATH + os.sep + 'install.py'
+
+FACT_EXTRACTOR_FILE_NAME: str = 'extractor.py'

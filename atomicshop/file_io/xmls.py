@@ -1,14 +1,15 @@
 import xml.etree.ElementTree as ET
 
 
-def read_xml_file(
-        file_path: str,
-        **kwargs):
+def read_xml(
+        file_path: str = None,
+        xml_bytes: bytes = None,
+):
     """
-    Read the xml file and return its content as dictionary.
-    :param file_path: string, full path to xml file.
-    :param kwargs: dict, keyword arguments for print_api function.
-    :return:
+    Read XML from a file or bytes and return its content as a dictionary.
+    :param file_path: Optional string, full path to xml file.
+    :param xml_bytes: Optional bytes, XML data as bytes.
+    :return: Tuple containing the XML dictionary, the ElementTree, and the root element.
     """
 
     def xml_to_dict(element):
@@ -40,8 +41,18 @@ def read_xml_file(
 
         return element_dict
 
-    tree = ET.parse(file_path)
-    root = tree.getroot()
+    # Determine source of XML data
+    if xml_bytes is not None:
+        # Parse XML from bytes object
+        root = ET.fromstring(xml_bytes)
+        tree = ET.ElementTree(root)
+    elif file_path is not None:
+        # Parse XML from file
+        tree = ET.parse(file_path)
+        root = tree.getroot()
+    else:
+        raise ValueError("Either file_path or xml_bytes must be provided")
+
     result_xml_dict: dict = xml_to_dict(root)
 
     return result_xml_dict, tree, root

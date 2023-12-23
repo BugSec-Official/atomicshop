@@ -59,6 +59,7 @@ dependencies = [
     "playwright-stealth",
     "protobuf",
     "psutil",
+    "py7zr",
     "pyautogui",
     "pyopenssl",
     "python-bidi",
