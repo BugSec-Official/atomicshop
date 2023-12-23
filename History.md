@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.6.10 - 23.12.2023
+  * wrappers.factw - fixes and improvements.
 * 2.6.9 - 23.12.2023
   * wrappers.factw - fixes and improvements.
   * archiver - fixes and improvements.
