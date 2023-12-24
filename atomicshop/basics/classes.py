@@ -25,7 +25,7 @@ def create_empty_class():
     return dynamic_class
 
 
-def get_module_name_from_file_path(file_directory_path: str, file_path: str) -> str:
+def get_module_name_from_file_path(working_directory_path: str, file_path: str) -> str:
     """
     Function that extracts module name string from file path.
 
@@ -43,16 +43,18 @@ def get_module_name_from_file_path(file_directory_path: str, file_path: str) -> 
     Returns:
         'modules.classes.filesystem'
 
-    :param file_directory_path: string, of file full path to working directory of the main script that need
+    :param working_directory_path: string, of file full path to working directory of the main script that need
         to call the import.
     :param file_path: string, of full file path to the module that needs ot be imported.
     :return: string, of module name.
     """
 
     # Removing suffix.
-    file_path_no_suffix = Path(file_path).stem
+    file_name_no_suffix = Path(file_path).stem
+    file_directory = str(Path(file_path).parent)
+    file_path_no_suffix = file_directory + os.sep + file_name_no_suffix
     # Removing the script directory.
-    path_without_script_directory = file_path_no_suffix.replace(file_directory_path + os.sep, '')
+    path_without_script_directory = file_path_no_suffix.replace(working_directory_path + os.sep, '')
     # Changing slashes to dots.
     module_name_string = path_without_script_directory.replace(os.sep, '.')
 
