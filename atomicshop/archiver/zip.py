@@ -1,20 +1,27 @@
 import os
 import time
 import zipfile
+from io import BytesIO
+from typing import Union
 
 from .. import filesystem
 from ..print_api import print_api
 
 
-def is_zip_zipfile(file_path: str) -> bool:
+def is_zip_zipfile(file_object: Union[str, Union[bytes, BytesIO]]) -> bool:
     """
     Function checks if the file is a zip file.
-    :param file_path: string, full path to the file.
+    :param file_object: can be two types:
+        string, full path to the file.
+        bytes or BytesIO, the bytes of the file.
     :return: boolean.
     """
 
+    if isinstance(file_object, bytes):
+        file_object = BytesIO(file_object)
+
     try:
-        with zipfile.ZipFile(file_path) as zip_object:
+        with zipfile.ZipFile(file_object) as zip_object:
             zip_object.testzip()
             return True
     except zipfile.BadZipFile:

@@ -1,10 +1,17 @@
 import os
 import zipfile
 from io import BytesIO
+from typing import Union
 
 from . import zip, sevenz
+from ..print_api import print_api
 
 import py7zr
+
+
+# Custom exception if the file is not known archive type.
+class UnknownArchiveType(Exception):
+    pass
 
 
 def _get_unique_filename(directory, filename):
@@ -21,14 +28,15 @@ def _get_unique_filename(directory, filename):
 
 
 def _is_zip_file(file, zip_obj):
-    try:
-        with zip_obj.open(file) as file_data:
-            with zipfile.ZipFile(BytesIO(file_data.read())) as zip_file:
-                if zip_file.testzip() is None:  # No errors found
-                    return True
-    except zipfile.BadZipFile:
-        return False
-    return False
+    with zip_obj.open(file) as file_data:
+        with BytesIO(file_data.read()) as file_data_bytes_io:
+            return zip.is_zip_zipfile(file_data_bytes_io)
+
+
+def _is_7z_file(file, sevenz_obj):
+    with sevenz_obj.open(file) as file_data:
+        with BytesIO(file_data.read()) as file_data_bytes_io:
+            return sevenz.is_7z(file_data_bytes_io)
 
 
 def _match_file_name(target, current, case_sensitive):
@@ -36,18 +44,6 @@ def _match_file_name(target, current, case_sensitive):
         return current.endswith(target)
     else:
         return current.lower().endswith(target.lower())
-
-
-def _handle_nested_zip(
-        zip_obj, item, archived_file_bytes, file_names, results, found_set, recursive, return_first_only,
-        case_sensitive, callback_functions, extract_file_to_path):
-
-    if recursive and _is_zip_file(item.filename, zip_obj):
-        nested_zip_bytes = BytesIO(archived_file_bytes)
-        with zipfile.ZipFile(nested_zip_bytes) as nested_zip:
-            _search_in_archive(
-                nested_zip, file_names, results, found_set, case_sensitive, return_first_only, recursive,
-                callback_functions, extract_file_to_path)
 
 
 def _handle_file_extraction(item, extract_file_to_path, archived_file_bytes):
@@ -113,7 +109,9 @@ def _search_in_archive(
     elif archive_type == '7z':
         file_info_list = arch_obj.list()
 
-    for item in file_info_list:
+    for item_index, item in enumerate(file_info_list):
+        if item_index == 16:
+            pass
         if item.filename.endswith('/'):  # Skip directories
             continue
 
@@ -133,9 +131,10 @@ def _search_in_archive(
         if callback_matched:
             _handle_file_extraction(item, extract_file_to_path, archived_file_bytes)
         else:
-            _handle_nested_zip(
-                arch_obj, item, archived_file_bytes, file_names, results, found_set, recursive, return_first_only,
-                case_sensitive, callback_functions, extract_file_to_path)
+            if recursive and (_is_zip_file(item.filename, arch_obj) or _is_7z_file(item.filename, arch_obj)):
+                _search_archive_content(
+                    archived_file_bytes, file_names, results, found_set, case_sensitive, return_first_only,
+                    recursive, callback_functions, extract_file_to_path)
             if file_names and not callback_matched:
                 _handle_name_matching(
                     item, archived_file_bytes, file_names, case_sensitive, results, found_set, return_first_only)
@@ -151,45 +150,51 @@ def _initialize_results(callback_functions):
         return {}
 
 
-def _open_archive(archive_type, file_like_object):
-    if archive_type == 'zip':
-        return zipfile.ZipFile(file_like_object, 'r')
-    elif archive_type == '7z':
-        return py7zr.SevenZipFile(file_like_object, 'r')
+def _get_archive_type(file_object) -> Union[str, None]:
+    if zip.is_zip_zipfile(file_object):
+        return 'zip'
+    elif sevenz.is_7z(file_object):
+        return '7z'
     else:
-        raise ValueError("Unsupported archive format.")
-
-
-def _get_archive_type(file_path, file_bytes) -> tuple:
-    if file_bytes is not None:
-        file_like_object = BytesIO(file_bytes)
-    elif file_path is not None:
-        file_like_object = file_path
-    else:
-        raise ValueError("Either file_path or file_bytes must be provided.")
-
-    if zip.is_zip_zipfile(file_path=file_like_object):
-        return 'zip', file_like_object
-    elif sevenz.is_7z(file_path=file_like_object):
-        return '7z', file_like_object
-    else:
-        raise ValueError("Unsupported archive format.")
+        raise UnknownArchiveType(f"{file_object[:10]} is not a known archive type.")
+        # print_api(f"{file_object[:10]} is not a known archive type.", color='yellow')
+        # return None
 
 
 def _search_archive_content(
-        file_path, file_bytes, file_names_to_search, results, found_set, case_sensitive, return_first_only, recursive,
+        file_object, file_names_to_search, results, found_set, case_sensitive, return_first_only, recursive,
         callback_functions, extract_file_to_path):
 
-    archive_type, file_like_object = _get_archive_type(file_path, file_bytes)
+    archive_type = _get_archive_type(file_object)
 
-    with _open_archive(archive_type, file_like_object) as archive_ref:
-        _search_in_archive(archive_ref, archive_type, file_names_to_search, results, found_set, case_sensitive, return_first_only,
-                           recursive, callback_functions, extract_file_to_path)
+    if isinstance(file_object, str):
+        if archive_type == 'zip':
+            with zipfile.ZipFile(file_object, 'r') as archive_ref:
+                _search_in_archive(
+                    archive_ref, archive_type, file_names_to_search, results, found_set, case_sensitive,
+                    return_first_only, recursive, callback_functions, extract_file_to_path)
+        elif archive_type == '7z':
+            with py7zr.SevenZipFile(file_object, 'r') as archive_ref:
+                _search_in_archive(
+                    archive_ref, archive_type, file_names_to_search, results, found_set, case_sensitive,
+                    return_first_only, recursive, callback_functions, extract_file_to_path)
+    elif isinstance(file_object, bytes):
+        if archive_type == 'zip':
+            with BytesIO(file_object) as file_like_object:
+                with zipfile.ZipFile(file_like_object, 'r') as archive_ref:
+                    _search_in_archive(
+                        archive_ref, archive_type, file_names_to_search, results, found_set, case_sensitive,
+                        return_first_only, recursive, callback_functions, extract_file_to_path)
+        elif archive_type == '7z':
+            with BytesIO(file_object) as file_like_object:
+                with py7zr.SevenZipFile(file_like_object, 'r') as archive_ref:
+                    _search_in_archive(
+                        archive_ref, archive_type, file_names_to_search, results, found_set, case_sensitive,
+                        return_first_only, recursive, callback_functions, extract_file_to_path)
 
 
 def search_file_in_archive(
-        file_path: str = None,
-        file_bytes: bytes = None,
+        file_object: Union[str, bytes] = None,
         file_names_to_search: list[str] = None,
         case_sensitive: bool = True,
         return_first_only: bool = False,
@@ -201,8 +206,9 @@ def search_file_in_archive(
     """
     Function searches for the file names inside the zip file and returns a dictionary where the keys are the
     names of the callback functions and the values are lists of found file bytes.
-    :param file_path: string, full path to the zip file.
-    :param file_bytes: bytes, the bytes of the zip file.
+    :param file_object: it can be two types:
+        string, full path to the zip file.
+        bytes, the bytes of the zip file.
     :param file_names_to_search: list of strings, the names of the files to search.
     :param case_sensitive: boolean, default is 'True'. Determines if file name search should be case sensitive.
     :param return_first_only: boolean, default is 'False'. Return only the first found file for each file name.
@@ -224,7 +230,7 @@ def search_file_in_archive(
     found_set = set()
 
     _search_archive_content(
-        file_path, file_bytes, file_names_to_search, results, found_set, case_sensitive, return_first_only, recursive,
+        file_object, file_names_to_search, results, found_set, case_sensitive, return_first_only, recursive,
         callback_functions, extract_file_to_path)
 
     if not return_empty_list_per_file_name:

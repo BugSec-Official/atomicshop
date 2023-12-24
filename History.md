@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.6.12 - 23.12.2023
+  * archiver - fixes and improvements.
+  * basics.classes - bug fix.
 * 2.6.11 - 23.12.2023
   * permissions - fixes and improvements.
 * 2.6.10 - 23.12.2023
