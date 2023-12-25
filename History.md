@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.6.13 - 23.12.2023
+  * archiver.search_in_archive - bug fix.
 * 2.6.12 - 23.12.2023
   * archiver - fixes and improvements.
   * basics.classes - bug fix.

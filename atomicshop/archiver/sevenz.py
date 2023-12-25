@@ -4,7 +4,7 @@ from typing import Union
 import py7zr
 
 
-def is_7z(file_object: Union[str, Union[bytes, BytesIO]]) -> bool:
+def is_7z(file_object: Union[str, bytes]) -> bool:
     """
     Function checks if the file is a 7z file.
     :param file_object: can be two types:
@@ -13,18 +13,21 @@ def is_7z(file_object: Union[str, Union[bytes, BytesIO]]) -> bool:
     :return: boolean.
     """
 
-    if isinstance(file_object, (str, BytesIO)):
-        try:
+    try:
+        if isinstance(file_object, bytes):
+            with BytesIO(file_object) as file_object:
+                with py7zr.SevenZipFile(file_object) as archive:
+                    archive.testzip()
+                    return True
+        elif isinstance(file_object, str):
             with py7zr.SevenZipFile(file_object) as archive:
                 archive.testzip()
                 return True
-        except py7zr.Bad7zFile:
-            return False
-    elif isinstance(file_object, bytes):
-        return is_7z(BytesIO(file_object))
+    except py7zr.Bad7zFile:
+        return False
 
 
-def is_7z_magic_number(data):
+def _is_7z_magic_number(data):
     # Check if the data is at least 6 bytes long
     if len(data) < 6:
         return False

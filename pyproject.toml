@@ -64,6 +64,7 @@ dependencies = [
     "pyopenssl",
     "python-bidi",
     "python-docx",
+    "python-magic",
     "pywin32; platform_system == 'Windows'",
     "SoundCard",
     "soundfile",
