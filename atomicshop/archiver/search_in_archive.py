@@ -4,9 +4,17 @@ from io import BytesIO
 from typing import Union
 
 from . import zip, sevenz
-from ..print_api import print_api
+from .. import file_types
 
 import py7zr
+
+
+SUPPORTED_ARCHIVE_MIMES: list = [
+    'application/x-7z-compressed',
+    'application/zip',
+    'application/x-dosexec',      # SFX zip files.
+    'application/octet-stream'    # There are some non-standard zip files that are not recognized by magic.
+]
 
 
 # Custom exception if the file is not known archive type.
@@ -29,14 +37,12 @@ def _get_unique_filename(directory, filename):
 
 def _is_zip_file(file, zip_obj):
     with zip_obj.open(file) as file_data:
-        with BytesIO(file_data.read()) as file_data_bytes_io:
-            return zip.is_zip_zipfile(file_data_bytes_io)
+        return zip.is_zip_zipfile(file_data.read())
 
 
 def _is_7z_file(file, sevenz_obj):
     with sevenz_obj.open(file) as file_data:
-        with BytesIO(file_data.read()) as file_data_bytes_io:
-            return sevenz.is_7z(file_data_bytes_io)
+        return sevenz.is_7z(file_data.read())
 
 
 def _match_file_name(target, current, case_sensitive):
@@ -55,7 +61,6 @@ def _handle_file_extraction(item, extract_file_to_path, archived_file_bytes):
 
 def _handle_callback_matching(
         item, archive_type, archived_file_bytes, callback_functions, results, found_set, return_first_only):
-
     for callback in callback_functions:
         callback_result = callback(archived_file_bytes)
         if callback_result:
@@ -102,7 +107,6 @@ def _handle_name_matching(item, archived_file_bytes, file_names, case_sensitive,
 def _search_in_archive(
         arch_obj, archive_type, file_names, results, found_set, case_sensitive, return_first_only, recursive,
         callback_functions, extract_file_to_path):
-
     file_info_list = None
     if archive_type == 'zip':
         file_info_list = arch_obj.infolist()
@@ -110,8 +114,6 @@ def _search_in_archive(
         file_info_list = arch_obj.list()
 
     for item_index, item in enumerate(file_info_list):
-        if item_index == 16:
-            pass
         if item.filename.endswith('/'):  # Skip directories
             continue
 
@@ -151,6 +153,11 @@ def _initialize_results(callback_functions):
 
 
 def _get_archive_type(file_object) -> Union[str, None]:
+    file_mime: str = file_types.get_mime_type(file_object)
+
+    if file_mime not in SUPPORTED_ARCHIVE_MIMES:
+        return None
+
     if zip.is_zip_zipfile(file_object):
         return 'zip'
     elif sevenz.is_7z(file_object):
@@ -164,7 +171,6 @@ def _get_archive_type(file_object) -> Union[str, None]:
 def _search_archive_content(
         file_object, file_names_to_search, results, found_set, case_sensitive, return_first_only, recursive,
         callback_functions, extract_file_to_path):
-
     archive_type = _get_archive_type(file_object)
 
     if isinstance(file_object, str):

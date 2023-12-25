@@ -8,7 +8,7 @@ from .. import filesystem
 from ..print_api import print_api
 
 
-def is_zip_zipfile(file_object: Union[str, Union[bytes, BytesIO]]) -> bool:
+def is_zip_zipfile(file_object: Union[str, bytes]) -> bool:
     """
     Function checks if the file is a zip file.
     :param file_object: can be two types:
@@ -17,13 +17,16 @@ def is_zip_zipfile(file_object: Union[str, Union[bytes, BytesIO]]) -> bool:
     :return: boolean.
     """
 
-    if isinstance(file_object, bytes):
-        file_object = BytesIO(file_object)
-
     try:
-        with zipfile.ZipFile(file_object) as zip_object:
-            zip_object.testzip()
-            return True
+        if isinstance(file_object, bytes):
+            with BytesIO(file_object) as file_object:
+                with zipfile.ZipFile(file_object) as zip_object:
+                    zip_object.testzip()
+                    return True
+        elif isinstance(file_object, str):
+            with zipfile.ZipFile(file_object) as zip_object:
+                zip_object.testzip()
+                return True
     except zipfile.BadZipFile:
         return False
 
