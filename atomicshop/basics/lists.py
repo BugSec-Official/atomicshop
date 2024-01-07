@@ -99,3 +99,13 @@ def sort_list_by_another_list(list_of_strings_to_sort, list_of_strings_to_sort_b
         return len(list_of_strings_to_sort_by)
 
     return sorted(list_of_strings_to_sort, key=sort_key)
+
+
+def get_the_most_frequent_element_from_list(list_instance: list[str]) -> str:
+    """
+    This function will return the most frequent element from the list.
+    :param list_instance: list.
+    :return: string.
+    """
+
+    return max(set(list_instance), key=list_instance.count)

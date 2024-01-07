@@ -107,3 +107,27 @@ def convert_json_string_to_dict(json_string: str) -> dict:
     """
 
     return json.loads(json_string)
+
+
+def is_dict_json_serializable(
+        dict_to_check: dict,
+        raise_exception: bool = False
+) -> tuple[bool, Union[str, None]]:
+    """
+    Check if dictionary is json serializable.
+
+    :param dict_to_check: dictionary to check.
+    :param raise_exception: boolean, if True, raise exception if dictionary is not json serializable.
+    :return:
+        boolean, True if dictionary is json serializable, False otherwise.
+        string, error message if dictionary is not json serializable, None otherwise.
+    """
+
+    try:
+        json.dumps(dict_to_check)
+        return True, None
+    except TypeError as e:
+        if raise_exception:
+            raise e
+        else:
+            return False, str(e)

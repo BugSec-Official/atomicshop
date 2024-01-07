@@ -242,3 +242,45 @@ def convert_object_with_attributes_to_dict(
         obj_dict[attr_name] = attr_value
 
     return obj_dict
+
+
+def convert_tuples_to_lists(obj):
+    """
+    Convert all tuples in object to lists. The first  input 'obj' can be a dictionary, list or tuple.
+    :param obj: dict, list, tuple, the object to convert.
+    :return:
+    """
+    if isinstance(obj, dict):
+        return {k: convert_tuples_to_lists(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_tuples_to_lists(element) for element in obj]
+    elif isinstance(obj, tuple):
+        return list(obj)
+    return obj
+
+
+def convert_int_to_str_in_mixed_lists(item):
+    """
+    Recursively traverse an item (which can be a dictionary, list, tuple, or a basic data type).
+    If a list or a tuple contains both integers and strings, convert all integers to strings.
+    This is useful when converting indexing a dictionary with mixed lists into Elasticsearch.
+    Since Elasticsearch doesn't support mixed lists, we need to convert integers to strings.
+    """
+
+    if isinstance(item, dict):
+        # If the item is a dictionary, apply the function to each value.
+        return {key: convert_int_to_str_in_mixed_lists(value) for key, value in item.items()}
+    elif isinstance(item, (list, tuple)):
+        # If the item is a list or a tuple, check if it contains both integers and strings.
+        contains_int = any(isinstance(elem, int) for elem in item)
+        contains_str = any(isinstance(elem, str) for elem in item)
+
+        if contains_int and contains_str:
+            # If both integers and strings are present, convert integers to strings.
+            return type(item)(str(elem) if isinstance(elem, int) else elem for elem in item)
+        else:
+            # Otherwise, apply the function to each element.
+            return type(item)(convert_int_to_str_in_mixed_lists(elem) for elem in item)
+    else:
+        # If the item is neither a dictionary, list, nor tuple, return it as is.
+        return item

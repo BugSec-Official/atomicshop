@@ -51,6 +51,7 @@ dependencies = [
     "dnslib",
     "dnspython",
     "docker",
+    "elasticsearch",
     "numpy",
     "openpyxl",
     "pandas",
