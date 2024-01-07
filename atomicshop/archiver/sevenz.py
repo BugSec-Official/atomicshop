@@ -25,6 +25,10 @@ def is_7z(file_object: Union[str, bytes]) -> bool:
                 return True
     except py7zr.Bad7zFile:
         return False
+    # For some reason there are files that return this exception instead of Bad7zFile.
+    except OSError as e:
+        if e.args[0] == 22:
+            return False
 
 
 def _is_7z_magic_number(data):

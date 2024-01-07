@@ -1,6 +1,12 @@
 <!-- HISTORY -->
 ## History
 
+* 2.7.0 - 08.01.2024
+  * wrappers.elasticsearchw - initial release.
+  * basics.lists - added 'get_the_most_frequent_element_from_list' function.
+  * console_output - added 'capture_console_output_without_outputting' function.
+  * basics.dicts - added 'convert_tuples_to_lists' function.
+  * file_io.jsons - added 'is_dict_json_serializable' function.
 * 2.6.13 - 23.12.2023
   * archiver.search_in_archive - bug fix.
 * 2.6.12 - 23.12.2023
