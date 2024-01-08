@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.7.2 - 08.01.2024
+  * wrappers.dockerw.dockerw - added new functionality.
+  * wrappers.factw.fact_extractor - added new functionality.
 * 2.7.1 - 08.01.2024
   * python_file_patcher - added new data class.
   * wrappers.dockerw.dockerw - added new functionality.

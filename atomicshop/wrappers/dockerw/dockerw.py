@@ -18,10 +18,11 @@ def get_images():
     return images
 
 
-def remove_image(image_id_or_tag: str, print_kwargs: dict = None):
+def remove_image(image_id_or_tag: str, force: bool = False, print_kwargs: dict = None):
     """
     Remove an image from the local registry by providing the image id or tag.
     :param image_id_or_tag: string, the image id or tag.
+    :param force: bool, force remove the image.
     :param print_kwargs: dict, the print arguments.
     :return:
     """
@@ -31,7 +32,7 @@ def remove_image(image_id_or_tag: str, print_kwargs: dict = None):
 
     client = docker.from_env()
 
-    client.images.remove(image_id_or_tag)
+    client.images.remove(image_id_or_tag, force=force)
     print_api(f"Removed Image {image_id_or_tag} successfully.", color='green', **print_kwargs)
 
 
