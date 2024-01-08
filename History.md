@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.7.3 - 08.01.2024
+  * wrappers.factw.fact_extractor - added new functionality.
 * 2.7.2 - 08.01.2024
   * wrappers.dockerw.dockerw - added new functionality.
   * wrappers.factw.fact_extractor - added new functionality.

@@ -39,7 +39,7 @@ def create_docker_image_ubuntu(directory_path: str):
         # 'fact_extractor:latest' - The image that is built.
         for tag in image.tags:
             if 'fact_extractor' in tag:
-                dockerw.remove_image(image_id_or_tag=image.id)
+                dockerw.remove_image(image_id_or_tag=image.id, force=True)
 
     # Create the script to execute.
     script = f"""
