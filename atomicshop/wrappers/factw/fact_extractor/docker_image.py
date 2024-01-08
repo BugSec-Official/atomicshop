@@ -37,7 +37,6 @@ def create_docker_image_ubuntu(directory_path: str):
         # There are 2 images:
         # 'fkiecad/fact_extractor:latest' - The image that is downloaded.
         # 'fact_extractor:latest' - The image that is built.
-        test = image.tags
         for tag in image.tags:
             if 'fact_extractor' in tag:
                 dockerw.remove_image(image_id_or_tag=image.id)
