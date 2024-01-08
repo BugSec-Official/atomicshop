@@ -7,5 +7,4 @@ python -m twine check dist/*
 pause
 REM Upload the package.
 python -m twine upload dist/*
-REM python -m twine upload dist/* -u %PYPI_USER% -p %PYPI_PASSWORD% --verbose
 pause

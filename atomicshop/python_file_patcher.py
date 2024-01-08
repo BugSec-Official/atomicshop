@@ -4,9 +4,35 @@ from .file_io import file_io
 from . import hashing
 
 
+class FindAndReplaceInfo:
+    """
+    This class is used to store information about the find and replace operation.
+    """
+    def __init__(
+            self,
+            find_what: str,
+            replace_to: str,
+            class_name: str = None,
+            function_name: str = None,
+    ):
+        """
+        :param find_what: string to find.
+        :param replace_to: string, replace to this string.
+        :param class_name: string name of the class to search in,
+            if the string to replace is not in a class, put 'None'.
+        :param function_name: string of the function name to search in,
+            if the string to replace is not in a function, put 'None'.
+            Also, if Class name and Function Name are both 'None', then it will search for the string in the whole file.
+        """
+        self.find_what: str = find_what
+        self.replace_to: str = replace_to
+        self.class_name: str = class_name
+        self.function_name: str = function_name
+
+
 def find_and_replace_in_file(
         file_path: str,
-        find_and_replace_list: list[tuple[str, str, str, str]],
+        find_and_replace_list: list[FindAndReplaceInfo],
         encoding: str = None,
         raise_if_more_than_one_string_found: bool = False,
         raise_if_more_than_one_class_or_function_found: bool = False,
@@ -16,12 +42,7 @@ def find_and_replace_in_file(
     Find and replace string in file.
 
     :param file_path: String with full file path to read.
-    :param find_and_replace_list: list of tuples. Each tuple has 4 strings.
-        1: Class name, if the string to replace is not in a class, put 'None'.
-        2: Function name, if the string to replace is not in a function, put 'None'.
-            Also, if Class name and Function Name are both 'None', then it will search for the string in the whole file.
-        3: String to find.
-        4: String to replace to.
+    :param find_and_replace_list: list of FindAndReplaceInfo instances.
     :param encoding: string, read the file with encoding. Example: 'utf-8'. 'None' is default, since it is default
         in 'open()' function.
     :param raise_if_more_than_one_string_found: Boolean, if True, the function will raise an error if more than one
@@ -48,22 +69,16 @@ def find_and_replace_in_file(
     # Initialize the cache dictionary
     block_lines_cache: dict = {}
 
-    for single_find_replace in find_and_replace_list:
-        find_class_name: str = single_find_replace[0]
-        find_function_name: str = single_find_replace[1]
-        find_what_string: str = single_find_replace[2]
-        replace_to: str = single_find_replace[3]
-
-        # list_of_blocks: list[tuple[int, int]] = list()
-        cache_key = (find_class_name, find_function_name)
+    for single_find in find_and_replace_list:
+        cache_key = (single_find.class_name, single_find.function_name)
         if cache_key in block_lines_cache:
             # Retrieve from cache
             list_of_blocks = block_lines_cache[cache_key]
         else:
             # Use AST to find the start and end lines of the class or function.
-            if find_class_name is not None or find_function_name is not None:
+            if single_find.class_name is not None or single_find.function_name is not None:
                 list_of_blocks = astw.find_code_block(
-                    file_path, class_name=find_class_name, function_name=find_function_name)
+                    file_path, class_name=single_find.class_name, function_name=single_find.function_name)
                 if raise_if_more_than_one_class_or_function_found and len(list_of_blocks) > 1:
                     raise LookupError(f"More than one class or function was found in the file: {file_path}\n"
                                       f"Nothing was changed.")
@@ -82,7 +97,7 @@ def find_and_replace_in_file(
             found_string_indexes: list = list()
             # for string_index, line in enumerate(file_data, start=start_line):
             for string_index, line in enumerations.enumerate_from_start_to_end_index(file_data, start_line, end_line):
-                if find_what_string in line:
+                if single_find.find_what in line:
                     found_string_indexes.append(string_index)
 
                     if raise_if_more_than_one_string_found and len(found_string_indexes) > 1:
@@ -96,6 +111,6 @@ def find_and_replace_in_file(
 
             # Replace the string.
             for index in found_string_indexes:
-                file_data[index] = file_data[index].replace(find_what_string, replace_to)
+                file_data[index] = file_data[index].replace(single_find.find_what, single_find.replace_to)
 
     file_io.write_file(content=file_data, file_path=file_path, encoding=encoding, convert_list_to_string=True)

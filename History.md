@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.7.1 - 08.01.2024
+  * python_file_patcher - added new data class.
+  * wrappers.dockerw.dockerw - added new functionality.
 * 2.7.0 - 08.01.2024
   * wrappers.elasticsearchw - initial release.
   * basics.lists - added 'get_the_most_frequent_element_from_list' function.
