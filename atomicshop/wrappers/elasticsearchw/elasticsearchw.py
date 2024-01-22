@@ -99,3 +99,73 @@ def index(
     res = elastic_wrapper.index(index=index_name, body=doc, id=doc_id)
 
     return res
+
+
+def search(index_name: str, query: dict, elastic_wrapper: Elasticsearch = None, get_hits_only: bool = True):
+    """
+    The function searches for documents in the Elasticsearch server.
+
+    :param index_name: str, the name of the index.
+    :param query: dict, the query to be used for searching the documents.
+    :param elastic_wrapper: Elasticsearch, the Elasticsearch wrapper.
+    :param get_hits_only: bool, if True, only the hits are returned.
+    :return: dict, the result of the search operation.
+
+    Usage:
+        query = {
+            "query": {
+                "match_all": {}
+            }
+        }
+        res = search(index_name="test_index", query=query)
+    """
+
+    if elastic_wrapper is None:
+        elastic_wrapper = get_elastic_wrapper()
+
+    res = elastic_wrapper.search(index=index_name, body=query)
+
+    if get_hits_only:
+        return get_response_hits(res)
+    else:
+        return res
+
+
+def count(index_name: str, query: dict, elastic_wrapper: Elasticsearch = None):
+    """
+    The function counts the number of documents in the index that match the query.
+
+    :param index_name: str, the name of the index.
+    :param query: dict, the query to be used for counting the documents.
+    :param elastic_wrapper: Elasticsearch, the Elasticsearch wrapper.
+    :return: int, the number of documents that match the query.
+
+    Usage:
+        query = {
+            "query": {
+                "match_all": {}
+            }
+        }
+        res = count(index_name="test_index", query=query)
+    """
+
+    if elastic_wrapper is None:
+        elastic_wrapper = get_elastic_wrapper()
+
+    res = elastic_wrapper.count(index=index_name, body=query)
+
+    return res['count']
+
+
+def get_response_hits(response: dict):
+    """
+    The function returns the 'hits' from the response.
+
+    :param response: dict, the response from the Elasticsearch server.
+    :return: list, the hits from the response.
+
+    Usage:
+        res = get_response_hits(response)
+    """
+
+    return [hit['_source'] for hit in response['hits']['hits']]

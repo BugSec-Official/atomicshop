@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.7.4 - 22.01.2024
+  * ipaddresses - added 'get_ip_type' function.
+  * wrappers.elasticsearchw - improvements.
 * 2.7.3 - 08.01.2024
   * wrappers.factw.fact_extractor - added new functionality.
 * 2.7.2 - 08.01.2024
