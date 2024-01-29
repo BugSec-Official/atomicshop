@@ -1,6 +1,10 @@
 <!-- HISTORY -->
 ## History
 
+* 2.7.5 - 29.01.2024
+  * wrappers.elasticsearchw.queries - bug fixes and improvements.
+  * wrappers.elasticsearchw.elasticsearchw - improvements.
+  * filesystem - improvements.
 * 2.7.4 - 22.01.2024
   * ipaddresses - added 'get_ip_type' function.
   * wrappers.elasticsearchw - improvements.
