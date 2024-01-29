@@ -59,6 +59,28 @@ def test_connection(elastic_wrapper: Elasticsearch = None):
         return False
 
 
+def get_stats_db_size(elastic_wrapper: Elasticsearch = None):
+    """
+    The function returns the size of the Elasticsearch database.
+
+    :param elastic_wrapper: Elasticsearch, the Elasticsearch wrapper.
+    :return: int, the size of the Elasticsearch database in bytes.
+
+    Usage:
+        res = get_stats_db_size()
+    """
+
+    if elastic_wrapper is None:
+        elastic_wrapper = get_elastic_wrapper()
+
+    # Get stats for all indices
+    stats = elastic_wrapper.indices.stats()
+
+    total_size_in_bytes = stats['_all']['total']['store']['size_in_bytes']
+
+    return total_size_in_bytes
+
+
 def index(
         index_name: str,
         doc: dict,
@@ -101,14 +123,17 @@ def index(
     return res
 
 
-def search(index_name: str, query: dict, elastic_wrapper: Elasticsearch = None, get_hits_only: bool = True):
+def search(
+        index_name: str,
+        query: dict,
+        elastic_wrapper: Elasticsearch = None,
+):
     """
     The function searches for documents in the Elasticsearch server.
 
     :param index_name: str, the name of the index.
     :param query: dict, the query to be used for searching the documents.
     :param elastic_wrapper: Elasticsearch, the Elasticsearch wrapper.
-    :param get_hits_only: bool, if True, only the hits are returned.
     :return: dict, the result of the search operation.
 
     Usage:
@@ -125,10 +150,13 @@ def search(index_name: str, query: dict, elastic_wrapper: Elasticsearch = None, 
 
     res = elastic_wrapper.search(index=index_name, body=query)
 
-    if get_hits_only:
-        return get_response_hits(res)
-    else:
-        return res
+    hits_only: list = get_response_hits(res)
+
+    aggregations: dict = dict()
+    if 'aggregations' in res:
+        aggregations: dict = get_all_aggregation_hits(res)
+
+    return res, hits_only, aggregations
 
 
 def count(index_name: str, query: dict, elastic_wrapper: Elasticsearch = None):
@@ -169,3 +197,37 @@ def get_response_hits(response: dict):
     """
 
     return [hit['_source'] for hit in response['hits']['hits']]
+
+
+def get_specific_aggregation_hits(response: dict, aggregation_name: str):
+    """
+    The function returns the hits of an aggregation from the response.
+
+    :param response: dict, the response from the Elasticsearch server.
+    :param aggregation_name: str, the name of the aggregation.
+    :return: list, the hits of the aggregation from the response.
+
+    Usage:
+        res = get_aggregation_hits(response, aggregation_name)
+    """
+
+    return [bucket['key'] for bucket in response['aggregations'][aggregation_name]['buckets']]
+
+
+def get_all_aggregation_hits(response: dict):
+    """
+    The function returns all the hits of all the aggregations from the response.
+
+    :param response: dict, the response from the Elasticsearch server.
+    :return: dict, the hits of all the aggregations from the response.
+
+    Usage:
+        res = get_all_aggregation_hits(response)
+    """
+
+    all_aggregations = {}
+
+    for agg_name, agg_content in response['aggregations'].items():
+        all_aggregations[agg_name] = [bucket['key'] for bucket in agg_content['buckets']]
+
+    return all_aggregations

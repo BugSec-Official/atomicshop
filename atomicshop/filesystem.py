@@ -871,3 +871,22 @@ def convert_windows_to_linux_path(
         linux_path = windows_path_obj.as_posix()
 
     return str(linux_path)
+
+
+def get_directory_size(directory_path: str):
+    """
+    The function returns the size of the directory in bytes.
+    This is one of the fastest ways to get the size of a directory.
+
+    :param directory_path:
+    :return:
+    """
+
+    total_size = 0
+    with os.scandir(directory_path) as it:
+        for entry in it:
+            if entry.is_file():
+                total_size += entry.stat().st_size
+            elif entry.is_dir():
+                total_size += get_directory_size(entry.path)
+    return total_size
