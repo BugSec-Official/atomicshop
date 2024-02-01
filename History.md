@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.7.6 - 01.02.2024
+  * wrappers.elasticsearchw.queries - improvements.
+  * uuids - initial release.
 * 2.7.5 - 29.01.2024
   * wrappers.elasticsearchw.queries - bug fixes and improvements.
   * wrappers.elasticsearchw.elasticsearchw - improvements.
