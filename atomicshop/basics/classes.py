@@ -1,4 +1,5 @@
 import os
+import sys
 import ast
 import importlib
 from pathlib import Path
@@ -173,7 +174,13 @@ def import_first_class_name_from_file_path(script_directory: str, file_path: str
     module_name: str = get_module_name_from_file_path(script_directory, file_path)
 
     # Import first class from the module.
-    imported_class = import_first_class_name_from_module_name(module_name, **kwargs)
+    try:
+        imported_class = import_first_class_name_from_module_name(module_name, **kwargs)
+    except ModuleNotFoundError:
+        # If the module is not found, we will try to add this path to the system path and try again.
+        sys.path.append(script_directory)
+
+        imported_class = import_first_class_name_from_module_name(module_name, **kwargs)
 
     return imported_class
 

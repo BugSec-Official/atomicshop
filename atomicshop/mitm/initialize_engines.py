@@ -53,11 +53,11 @@ class ModuleCategory:
 
         # Full path to file
         self.parser_file_path = filesystem.get_file_paths_from_directory(
-            engine_directory_path, file_name_check_pattern='parser_*.py')[0]
+            engine_directory_path, file_name_check_pattern=configuration_data['parser_file'])[0]
         self.responder_file_path = filesystem.get_file_paths_from_directory(
-            engine_directory_path, file_name_check_pattern='responder_*.py')[0]
+            engine_directory_path, file_name_check_pattern=configuration_data['responder_file'])[0]
         self.recorder_file_path = filesystem.get_file_paths_from_directory(
-            engine_directory_path, file_name_check_pattern='recorder_*.py')[0]
+            engine_directory_path, file_name_check_pattern=configuration_data['recorder_file'])[0]
 
     def initialize_engine(self, logs_path: str, logger=None, reference_general: bool = False, **kwargs):
         if not reference_general:
