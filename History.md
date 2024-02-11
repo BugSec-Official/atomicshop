@@ -1,8 +1,10 @@
 <!-- HISTORY -->
 ## History
 
+* 2.8.1 - 11.02.2024
+  * 'mitm' - fixes and improvements.
 * 2.8.0 - 11.02.2024
-  * 'mitm' - fixes and improvements. 'engines_config' is now a TOML file.
+  * 'mitm' - fixes and improvements, 'engines_config' is now a TOML file, dynamic engines loading.
   * 'filesystem' - 'remove_directory' function now has 'force_readonly' argument.
 * 2.7.6 - 01.02.2024
   * wrappers.elasticsearchw.queries - improvements.

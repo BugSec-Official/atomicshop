@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import Literal
 
 from ... import filesystem
 from ...basics import strings
@@ -11,9 +12,9 @@ REFERENCE_ENGINE_NAME: str = "__reference_general"
 ENGINES_DIRECTORY_NAME: str = 'engines'
 CONFIG_FILE_NAME: str = "engine_config.toml"
 
-PARSER_FILE_NAME: str = f"parser_{REFERENCE_ENGINE_NAME}.py"
-RESPONDER_FILE_NAME: str = f"responder_{REFERENCE_ENGINE_NAME}.py"
-RECORDER_FILE_NAME: str = f"recorder_{REFERENCE_ENGINE_NAME}.py"
+REFERENCE_PARSER_FILE_NAME: str = f"parser_{REFERENCE_ENGINE_NAME}.py"
+REFERENCE_RESPONDER_FILE_NAME: str = f"responder_{REFERENCE_ENGINE_NAME}.py"
+REFERENCE_RECORDER_FILE_NAME: str = f"recorder_{REFERENCE_ENGINE_NAME}.py"
 
 SCRIPT_DIRECTORY: str = filesystem.get_file_directory(__file__)
 ENGINES_DIRECTORY_PATH: str = filesystem.get_working_directory() + os.sep + ENGINES_DIRECTORY_NAME
@@ -34,9 +35,13 @@ class CreateModuleTemplate:
 
         # === General modules paths. ===
         reference_folder_path: str = SCRIPT_DIRECTORY + os.sep + REFERENCE_ENGINE_NAME
-        self.parser_general_path: str = reference_folder_path + os.sep + PARSER_FILE_NAME
-        self.responder_general_path: str = reference_folder_path + os.sep + RESPONDER_FILE_NAME
-        self.recorder_general_path: str = reference_folder_path + os.sep + RECORDER_FILE_NAME
+        self.parser_general_path: str = reference_folder_path + os.sep + REFERENCE_PARSER_FILE_NAME
+        self.responder_general_path: str = reference_folder_path + os.sep + REFERENCE_RESPONDER_FILE_NAME
+        self.recorder_general_path: str = reference_folder_path + os.sep + REFERENCE_RECORDER_FILE_NAME
+
+        self.parser_file_name: str = f"parser_{self.engine_name}.py"
+        self.responder_file_name: str = f"responder_{self.engine_name}.py"
+        self.recorder_file_name: str = f"recorder_{self.engine_name}.py"
 
         self.create_template()
 
@@ -50,38 +55,11 @@ class CreateModuleTemplate:
         # Create new engines folder.
         filesystem.create_directory(self.new_engine_directory)
 
-        module_files_list: list = [self.parser_general_path, self.responder_general_path, self.recorder_general_path]
-        for file_path in module_files_list:
-            file_name = Path(file_path).name
-            module_prefix = file_name.rsplit('_')[0]
-
-            new_engine_module_file_name, new_engine_module_file_path = \
-                self.create_engine_module_from_reference(module_prefix, file_path)
-            print(f"Converted: {file_path}")
-            print(f"To: {new_engine_module_file_path}")
+        self._create_engine_module_from_reference(file_path=self.parser_general_path, module_type='parser')
+        self._create_engine_module_from_reference(file_path=self.responder_general_path, module_type='responder')
+        self._create_engine_module_from_reference(file_path=self.recorder_general_path, module_type='recorder')
 
         self.create_config_file()
-
-    def create_engine_module_from_reference(self, prefix: str, file_full_path: str):
-        # Defining variables.
-        new_module_file_name: str = str()
-        new_module_full_path: str = str()
-
-        # Reading the module file to string.
-        with open(file_full_path, 'r') as input_file:
-            file_content_string = input_file.read()
-
-        if GENERAL_CLASS_NAME in file_content_string:
-            new_content_string = file_content_string.replace(GENERAL_CLASS_NAME, self.engine_class_name)
-
-            new_module_file_name = prefix + "_" + self.engine_name + '.py'
-
-            new_module_full_path = self.new_engine_directory + os.sep + new_module_file_name
-
-            with open(new_module_full_path, 'w') as output_file:
-                output_file.write(new_content_string)
-
-        return new_module_file_name, new_module_full_path
 
     def create_config_file(self):
         # Defining variables.
@@ -89,7 +67,10 @@ class CreateModuleTemplate:
 
         # Add "" to each domain.
         domains_with_quotes: list = [f'"{domain}"' for domain in self.domains]
-        config_lines_list.append(f'domains = [{", ".join(domains_with_quotes)}]')
+        config_lines_list.append(f'domains = [{", ".join(domains_with_quotes)}]\n')
+        config_lines_list.append(f'parser_file = "{self.parser_file_name}"')
+        config_lines_list.append(f'responder_file = "{self.responder_file_name}"')
+        config_lines_list.append(f'recorder_file = "{self.recorder_file_name}"')
 
         config_file_path = self.new_engine_directory + os.sep + CONFIG_FILE_NAME
 
@@ -97,3 +78,34 @@ class CreateModuleTemplate:
             output_file.write('\n'.join(config_lines_list))
 
         print(f"Config File Created: {config_file_path}")
+
+    def _create_engine_module_from_reference(
+            self,
+            file_path: str,
+            module_type: Literal['parser', 'responder', 'recorder']
+    ):
+
+        if module_type == 'parser':
+            new_module_file_name = self.parser_file_name
+        elif module_type == 'responder':
+            new_module_file_name = self.responder_file_name
+        elif module_type == 'recorder':
+            new_module_file_name = self.recorder_file_name
+        else:
+            raise ValueError(f"Module type is not recognized: {module_type}")
+
+        # Reading the module file to string.
+        with open(file_path, 'r') as input_file:
+            file_content_string = input_file.read()
+
+        new_module_full_path: str = str()
+        if GENERAL_CLASS_NAME in file_content_string:
+            new_content_string = file_content_string.replace(GENERAL_CLASS_NAME, self.engine_class_name)
+
+            new_module_full_path = self.new_engine_directory + os.sep + new_module_file_name
+
+            with open(new_module_full_path, 'w') as output_file:
+                output_file.write(new_content_string)
+
+        print(f"Converted: {file_path}")
+        print(f"To: {new_module_full_path}")
