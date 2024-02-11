@@ -4,7 +4,7 @@ import time
 from typing import Literal, Union
 
 from .wrappers.pywin32w import wmi_win32process
-from .wrappers import psutilw
+from .wrappers.psutilw import psutilw
 from .basics import list_of_dicts, dicts
 from .process_name_cmd import ProcessNameCmdline
 

@@ -6,7 +6,7 @@ from argparse import RawTextHelpFormatter
 class ArgparseWrapper:
     """
     Usage in the main:
-        args = ArgparseWrapper().parser_arguments
+        args = ArgparseWrapper().parsed_arguments
 
     Defining variables to each argument
         input_path: str = args.input

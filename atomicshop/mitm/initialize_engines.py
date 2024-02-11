@@ -1,7 +1,9 @@
 import os
 import sys
-import configparser
+from pathlib import Path
 
+from .. import filesystem
+from ..file_io import tomls
 from ..basics.classes import import_first_class_name_from_file_path
 from ..wrappers.loggingw import loggingw
 from .engines.__reference_general import parser___reference_general, responder___reference_general, \
@@ -35,25 +37,27 @@ class ModuleCategory:
         self.recorder_file_path = reference_folder_path + os.sep + "recorder___reference_general.py"
 
     def fill_engine_fields_from_config(self, engine_config_file_path: str):
-        # Read the configuration "ini" file of the product
-        configuration_object = \
-            configparser.ConfigParser(converters={'list': lambda x: [i.strip() for i in x.split(',')]})
-        configuration_object.read(engine_config_file_path)
+        # Read the configuration file of the engine.
+        configuration_data = tomls.read_toml_file(engine_config_file_path)
+
+        engine_directory_path: str = str(Path(engine_config_file_path).parent)
+        self.engine_name = Path(engine_directory_path).name
 
         # Getting the parameters from engine config file
-        self.domain_list = configuration_object.getlist('engine', 'domains')
+        self.domain_list = configuration_data['domains']
 
         # If there's module configuration file, but no domains in it, there's no point to continue.
         # Since, each engine is based on domains.
         if not self.domain_list or self.domain_list[0] == '':
             raise ValueError(f"Engine Configuration file doesn't contain any domains: {engine_config_file_path}")
 
-        # Getting engine_name from full path to 'engine_config.ini' file.
-        self.engine_name = engine_config_file_path.rsplit(os.sep, maxsplit=2)[1]
         # Full path to file
-        self.parser_file_path = self.script_directory + os.sep + configuration_object.get('engine', 'parser_path')
-        self.responder_file_path = self.script_directory + os.sep + configuration_object.get('engine', 'responder_path')
-        self.recorder_file_path = self.script_directory + os.sep + configuration_object.get('engine', 'recorder_path')
+        self.parser_file_path = filesystem.get_file_paths_from_directory(
+            engine_directory_path, file_name_check_pattern='parser_*.py')[0]
+        self.responder_file_path = filesystem.get_file_paths_from_directory(
+            engine_directory_path, file_name_check_pattern='responder_*.py')[0]
+        self.recorder_file_path = filesystem.get_file_paths_from_directory(
+            engine_directory_path, file_name_check_pattern='recorder_*.py')[0]
 
     def initialize_engine(self, logs_path: str, logger=None, reference_general: bool = False, **kwargs):
         if not reference_general:

@@ -1,10 +1,8 @@
 from . import etw
 from .. import dns
-from ..wrappers import psutilw
+from ..wrappers.psutilw import psutilw
 from ..basics import dicts
 from ..process_poller import ProcessPollerPool
-
-import psutil
 
 
 class DnsTrace:

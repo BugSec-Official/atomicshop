@@ -281,6 +281,19 @@ def is_alphabetic_only(string: str) -> bool:
     return string.isalpha()
 
 
+def capitalize_first_letter(string: str) -> str:
+    """
+    Function capitalizes the first letter of the string.
+    """
+
+    # Take the first letter of the 'string[0]' (0 is the first letter of the 'string') and
+    # capitalize it '.upper()' and add the rest of the letters
+    # as is with 'string[1:]' (1 is the second letter of
+    # the string 'string' and ':' means the rest of the string.
+
+    return string[0].upper() + string[1:]
+
+
 def replace_words_with_values_from_dict(
         sentence: str, dictionary: dict, contains: bool = False, case_insensitive: bool = False) -> str:
     """
@@ -396,3 +409,23 @@ def convert_string_to_colon_separated(string: str, number_of_characters: int = 2
     """
 
     return ':'.join([string[i:i+number_of_characters] for i in range(0, len(string), number_of_characters)])
+
+
+def replace_string_in_file(file_path: str, old_string: str, new_string: str):
+    """
+    Function replaces 'old_string' with 'new_string' in the file.
+    :param file_path: string, path to the file.
+    :param old_string: string, to replace.
+    :param new_string: string, to replace with.
+    """
+
+    # Read in the file
+    with open(file_path, 'r') as file:
+        filedata = file.read()
+
+    # Replace the target string
+    filedata = filedata.replace(old_string, new_string)
+
+    # Write the file out again
+    with open(file_path, 'w') as file:
+        file.write(filedata)
