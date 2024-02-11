@@ -3,6 +3,8 @@ import pathlib
 from pathlib import Path, PurePath, PureWindowsPath, PurePosixPath
 import glob
 import shutil
+import stat
+import errno
 from contextlib import contextmanager
 
 from .print_api import print_api, print_status_of_list
@@ -253,21 +255,38 @@ def remove_file(file_path: str, **kwargs) -> bool:
         return False
 
 
-def remove_directory(directory_path: str, print_kwargs: dict = None) -> bool:
+def remove_directory(directory_path: str, force_readonly: bool = False, print_kwargs: dict = None) -> bool:
     """
     Remove directory if it exists.
 
     :param directory_path: string to full directory path.
+    :param force_readonly: boolean, if 'True', then the function will try to remove the read-only attribute from the
+        directory and its contents.
     :param print_kwargs: dict, kwargs for print_api.
 
     :return: return 'True' if directory removal succeeded, and 'False' if not.
     """
 
+    def remove_readonly(func, path, exc_info):
+        # Catch the exception
+        excvalue = exc_info[1]
+        if excvalue.errno == errno.EACCES:
+            # Change the file or directory to be writable, readable, and executable: 0o777
+            os.chmod(path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)  # 0o777
+            # Retry the removal
+            func(path)
+        else:
+            # Re-raise the exception if it's not a permission error
+            raise
+
     if print_kwargs is None:
         print_kwargs = dict()
 
     try:
-        shutil.rmtree(directory_path)
+        if force_readonly:
+            shutil.rmtree(directory_path, onerror=remove_readonly)
+        else:
+            shutil.rmtree(directory_path)
         print_api(f'Directory Removed: {directory_path}', **print_kwargs)
         return True
     # Since the directory doesn't exist, we actually don't care, since we want to remove it anyway.
@@ -443,6 +462,26 @@ def copy_file(
         shutil.copy2(source_file_path, target_file_path)
     else:
         shutil.copy(source_file_path, target_file_path)
+
+
+def copy_directory(source_directory: str, target_directory: str, overwrite: bool = False) -> None:
+    """
+    The function copies directory from source to target.
+
+    :param source_directory: string, full path to source directory.
+    :param target_directory: string, full path to target directory.
+    :param overwrite: boolean, if 'True', then the function will overwrite the directory if it exists.
+
+    :return: None
+    """
+
+    # Check if 'overwrite' is set to 'True' and if the directory exists.
+    if overwrite:
+        if check_directory_existence(target_directory):
+            remove_directory(target_directory)
+
+    # Copy directory.
+    shutil.copytree(source_directory, target_directory)
 
 
 def get_directory_paths_from_directory(

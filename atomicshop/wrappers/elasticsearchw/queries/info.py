@@ -2,16 +2,23 @@
 Query types:
 
 Term Query
-Usage: The term query is used for exact matches. It looks for the exact term in the inverted index and doesn’t analyze the query string. This is useful for searching on fields that are exact values (like IDs, tags, etc.).
-Example: If your field value is "Quick Brown Fox" and you search with a term query for "quick" or "Quick", it will not match because it looks for the exact term in the field.
+Usage: The term query is used for exact matches. It looks for the exact term in the inverted index and
+doesn’t analyze the query string. This is useful for searching on fields that are exact values (like IDs, tags, etc.).
+If it is not working for regular field, consider using with ".keyword".
+Example: If your field value is "Quick Brown Fox" and you search with a term query for "quick" or "Quick",
+it will not match because it looks for the exact term in the field.
 
 Match Query
-Usage: The match query is more flexible. It analyzes the query string before executing the search. This means it will consider things like tokenization and stemming. It’s suitable for full-text search.
-Example: Using the match query for "quick" or "Quick" on the field with "Quick Brown Fox" will likely return a match because it analyzes and tokenizes the string.
+Usage: The match query is more flexible. It analyzes the query string before executing the search.
+This means it will consider things like tokenization and stemming. It’s suitable for full-text search.
+Example: Using the match query for "quick" or "Quick" on the field with "Quick Brown Fox" will likely
+return a match because it analyzes and tokenizes the string.
 
 Match Phrase Query
-Usage: The match_phrase query is like the match query but it also takes the order of the words into account. It is used when you want to find exact phrases or words in a specific order.
-Example: If you search for "Quick Brown" with a match_phrase query on a field with the value "The Quick Brown Fox", it will match. However, searching for "Brown Quick" won't match.
+Usage: The match_phrase query is like the match query but it also takes the order of the words into account.
+It is used when you want to find exact phrases or words in a specific order.
+Example: If you search for "Quick Brown" with a match_phrase query on a field with the value "The Quick Brown Fox",
+it will match. However, searching for "Brown Quick" won't match.
 
 Additional Query Types
 Bool Query: This allows you to combine multiple queries using boolean logic (like must, should, must_not).

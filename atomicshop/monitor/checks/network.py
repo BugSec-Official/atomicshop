@@ -1,4 +1,4 @@
-from ...wrappers import psutilw
+from ...wrappers.psutilw import psutilw
 from ...basics import list_of_dicts
 from ...print_api import print_api
 
