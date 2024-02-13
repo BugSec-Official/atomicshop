@@ -39,6 +39,8 @@ def print_api(
 
         Then, in the function, you can use it like this:
             print_api(message, **print_kwargs)
+            # If 'print_kwargs' is 'None'.
+            print_api(message, **(print_kwargs or {}))
             print_api(message, print_kwargs=print_kwargs)
             print_api(message, print_kwargs={'logger': self.logger})
 
