@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.9.0 - 13.02.2024
+  * 'system_resources_monitor' - initial release.
+  * 'system_resources' - fixes and improvements.
 * 2.8.1 - 11.02.2024
   * 'mitm' - fixes and improvements.
 * 2.8.0 - 11.02.2024
