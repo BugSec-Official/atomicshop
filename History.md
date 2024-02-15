@@ -1,6 +1,10 @@
 <!-- HISTORY -->
 ## History
 
+* 2.9.1 - 15.02.2024
+  * 'system_resources_monitor' - fixes and improvements.
+  * 'system_resources' - fixes and improvements.
+  * 'wrappers.psutilw.disks' - fixes and improvements.
 * 2.9.0 - 13.02.2024
   * 'system_resources_monitor' - initial release.
   * 'system_resources' - fixes and improvements.
