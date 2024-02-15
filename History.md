@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.9.2 - 15.02.2024
+  * 'system_resources_monitor' - fixes and improvements.
+  * 'system_resources' - fixes and improvements.
 * 2.9.1 - 15.02.2024
   * 'system_resources_monitor' - fixes and improvements.
   * 'system_resources' - fixes and improvements.
