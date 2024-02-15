@@ -6,8 +6,8 @@ from . import system_resources
 
 
 def run_check_system_resources(
-        interval, get_cpu, get_memory, get_disk_io_bytes, get_disk_files_count, get_disk_used_percent,
-        calculate_maximum_changed_disk_io, maximum_disk_io, shared_results, queue=None):
+        interval, get_cpu, get_memory, get_disk_io_bytes, get_disk_files_count, get_disk_busy_time,
+        get_disk_used_percent, calculate_maximum_changed_disk_io, maximum_disk_io, shared_results, queue=None):
     """
     Continuously update the system resources in the shared results dictionary.
     This function runs in a separate process.
@@ -18,7 +18,7 @@ def run_check_system_resources(
         results = system_resources.check_system_resources(
             interval=interval, get_cpu=get_cpu, get_memory=get_memory,
             get_disk_io_bytes=get_disk_io_bytes, get_disk_files_count=get_disk_files_count,
-            get_disk_used_percent=get_disk_used_percent)
+            get_disk_busy_time=get_disk_busy_time, get_disk_used_percent=get_disk_used_percent)
 
         if calculate_maximum_changed_disk_io:
             if results['disk_io_read'] > maximum_disk_io['read_bytes_per_sec']:
@@ -51,6 +51,7 @@ class SystemResourceMonitor:
             get_memory: bool = True,
             get_disk_io_bytes: bool = True,
             get_disk_files_count: bool = True,
+            get_disk_busy_time: bool = False,
             get_disk_used_percent: bool = True,
             calculate_maximum_changed_disk_io: bool = False,
             use_queue: bool = False
@@ -63,6 +64,8 @@ class SystemResourceMonitor:
         :param get_memory: bool, get the memory usage.
         :param get_disk_io_bytes: bool, get the disk I/O utilization of bytes.
         :param get_disk_files_count: bool, get the disk files count in the interval.
+        :param get_disk_busy_time: bool, get the disk busy time.
+            !!! For some reason on Windows it gets the count of files read or written and not the time in ms.
         :param get_disk_used_percent: bool, get the disk used percentage.
         :param calculate_maximum_changed_disk_io: bool, calculate the maximum changed disk I/O. This includes the
             maximum changed disk I/O read and write in bytes/s and the maximum changed disk files count.
@@ -107,6 +110,7 @@ class SystemResourceMonitor:
         self.get_memory: bool = get_memory
         self.get_disk_io_bytes: bool = get_disk_io_bytes
         self.get_disk_files_count: bool = get_disk_files_count
+        self.get_disk_busy_time: bool = get_disk_busy_time
         self.get_disk_used_percent: bool = get_disk_used_percent
         self.calculate_maximum_changed_disk_io: bool = calculate_maximum_changed_disk_io
 
@@ -137,8 +141,8 @@ class SystemResourceMonitor:
         if self.process is None or not self.process.is_alive():
             self.process = multiprocessing.Process(target=run_check_system_resources, args=(
                 self.interval, self.get_cpu, self.get_memory, self.get_disk_io_bytes, self.get_disk_files_count,
-                self.get_disk_used_percent, self.calculate_maximum_changed_disk_io, self.maximum_disk_io,
-                self.shared_results, self.queue))
+                self.get_disk_busy_time, self.get_disk_used_percent, self.calculate_maximum_changed_disk_io,
+                self.maximum_disk_io, self.shared_results, self.queue))
             self.process.start()
         else:
             print_api("Monitoring process is already running.", color='yellow', **print_kwargs)
@@ -170,6 +174,7 @@ def start_monitoring(
         get_memory: bool = True,
         get_disk_io_bytes: bool = True,
         get_disk_files_count: bool = True,
+        get_disk_busy_time: bool = False,
         get_disk_used_percent: bool = True,
         calculate_maximum_changed_disk_io: bool = False,
         use_queue: bool = False,
@@ -182,6 +187,8 @@ def start_monitoring(
     :param get_memory: bool, get memory usage.
     :param get_disk_io_bytes: bool, get TOTAL disk I/O utilization in bytes/s.
     :param get_disk_files_count: bool, get TOTAL disk files count.
+    :param get_disk_busy_time: bool, get TOTAL disk busy time.
+        !!! For some reason on Windows it gets the count of files read or written and not the time in ms.
     :param get_disk_used_percent: bool, get TOTAL disk used percentage.
     :param calculate_maximum_changed_disk_io: bool, calculate the maximum changed disk I/O. This includes the
         maximum changed disk I/O read and write in bytes/s and the maximum changed disk files count.
@@ -210,6 +217,7 @@ def start_monitoring(
             get_memory=get_memory,
             get_disk_io_bytes=get_disk_io_bytes,
             get_disk_files_count=get_disk_files_count,
+            get_disk_busy_time=get_disk_busy_time,
             get_disk_used_percent=get_disk_used_percent,
             calculate_maximum_changed_disk_io=calculate_maximum_changed_disk_io,
             use_queue=use_queue

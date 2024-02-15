@@ -14,7 +14,8 @@ def check_system_resources(
         get_cpu: bool = True,
         get_memory: bool = True,
         get_disk_io_bytes: bool = True,
-        get_disk_files_count: bool = False,
+        get_disk_files_count: bool = True,
+        get_disk_busy_time: bool = False,
         get_disk_used_percent: bool = True
 ):
     """
@@ -24,6 +25,8 @@ def check_system_resources(
     :param get_memory: bool, get memory usage.
     :param get_disk_io_bytes: bool, get TOTAL disk I/O utilization in bytes/s.
     :param get_disk_files_count: bool, get TOTAL disk files count.
+    :param get_disk_busy_time: bool, get TOTAL disk busy time.
+        !!! For some reason on Windows it gets the count of files read or written and not the time in ms.
     :param get_disk_used_percent: bool, get TOTAL disk used percentage.
     :return:
     """
@@ -36,6 +39,7 @@ def check_system_resources(
         'disk_io_read': None,
         'disk_files_count_read': None,
         'disk_files_count_write': None,
+        'disk_busy_time': None,
         'disk_used_percent': None
     }
 
@@ -57,6 +61,10 @@ def check_system_resources(
         result['disk_files_count_read'] = aggregated_disk_files_count['read_file_count_per_sec']
         result['disk_files_count_write'] = aggregated_disk_files_count['write_file_count_per_sec']
 
+    def set_disk_busy_time():
+        result['disk_busy_time'] = (
+            disks.get_disk_io(interval=interval, aggregated=True, io_busy_time=True))['aggregated']['busy_time_percent']
+
     def set_disk_used_percent():
         result['disk_used_percent'] = disks.get_disk_usage()['aggregated'].percent
 
@@ -69,6 +77,8 @@ def check_system_resources(
         threads.append(threading.Thread(target=set_disk_io_bytes_change))
     if get_disk_files_count:
         threads.append(threading.Thread(target=set_disk_files_count))
+    if get_disk_busy_time:
+        threads.append(threading.Thread(target=set_disk_busy_time))
     if get_disk_used_percent:
         threads.append(threading.Thread(target=set_disk_used_percent))
 
