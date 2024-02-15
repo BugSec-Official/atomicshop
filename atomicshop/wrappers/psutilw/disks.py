@@ -145,16 +145,16 @@ def get_disk_io(
         if io_busy_time:
             total_read_time = io_end_aggregated.read_time - io_start_aggregated.read_time
             total_write_time = io_end_aggregated.write_time - io_start_aggregated.write_time
-            total_read_time_per_sec = total_read_time / interval
-            total_write_time_per_sec = total_write_time / interval
+            total_read_time_per_sec = total_read_time / 1000 / interval
+            total_write_time_per_sec = total_write_time / 1000 / interval
             io_change['aggregated'].update({
                 'read_time_ms': total_read_time,
                 'write_time_ms': total_write_time,
                 'read_time_per_sec': total_read_time_per_sec,
                 'write_time_per_sec': total_write_time_per_sec,
-                'busy_time': total_read_time + total_write_time,
+                'busy_time_ms': total_read_time + total_write_time,
                 'busy_time_per_sec': total_read_time_per_sec + total_write_time_per_sec,
-                'busy_time_percent': (total_read_time + total_write_time) / interval
+                'busy_time_percent': (total_read_time + total_write_time) / 1000 / interval
             })
 
     return io_change
