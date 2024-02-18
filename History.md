@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.9.4 - 18.02.2024
+  * 'wrappers.psutilw.disks' - fixes and improvements.
+  * 'basics.numbers' - added 'convert_bytes_to_readable' function.
 * 2.9.3 - 15.02.2024
   * 'wrappers.psutilw.disks' - fixes and improvements.
 * 2.9.2 - 15.02.2024

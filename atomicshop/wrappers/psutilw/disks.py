@@ -38,14 +38,16 @@ def get_disk_io(
         }
     :param io_busy_time: Boolean indicating whether to return I/O busy time.
         !!! For some reason on Windows it gets the count of files read or written and not the time in ms.
+        !!! On Ubuntu it gets the time in ms, but for some reason it can return value higher than the interval.
+            Which is not possible, so it is not reliable.
         Returned dictionary:
         {
             'read_time_ms': int,
             'write_time_ms': int,
-            'read_time_per_sec': float,
-            'write_time_per_sec': float,
+            'read_time_in_sec': float,
+            'write_time_in_sec': float,
             'busy_time': int,
-            'busy_time_per_sec': float,
+            'busy_time_in_sec': float,
             'busy_time_percent': float
         }
     :return: Disk utilization data.
@@ -121,40 +123,44 @@ def get_disk_io(
         io_change['aggregated'] = {}
 
         if io_change_bytes:
-            total_read_change = io_end_aggregated.read_bytes - io_start_aggregated.read_bytes
-            total_write_change = io_end_aggregated.write_bytes - io_start_aggregated.write_bytes
-            total_read_change_per_sec = total_read_change / interval
-            total_write_change_per_sec = total_write_change / interval
+            aggregated_read_change = io_end_aggregated.read_bytes - io_start_aggregated.read_bytes
+            aggregated_write_change = io_end_aggregated.write_bytes - io_start_aggregated.write_bytes
+            aggregated_read_change_per_sec = aggregated_read_change / interval
+            aggregated_write_change_per_sec = aggregated_write_change / interval
             io_change['aggregated'] = {
-                'read_change_bytes': total_read_change,
-                'write_change_bytes': total_write_change,
-                'read_change_per_sec': total_read_change_per_sec,
-                'write_change_per_sec': total_write_change_per_sec,
+                'read_change_bytes': aggregated_read_change,
+                'write_change_bytes': aggregated_write_change,
+                'total_change_bytes': aggregated_read_change + aggregated_write_change,
+                'read_change_per_sec': aggregated_read_change_per_sec,
+                'write_change_per_sec': aggregated_write_change_per_sec,
+                'total_change_per_sec': aggregated_read_change_per_sec + aggregated_write_change_per_sec
             }
         if io_file_count:
-            total_read_count = io_end_aggregated.read_count - io_start_aggregated.read_count
-            total_write_count = io_end_aggregated.write_count - io_start_aggregated.write_count
-            total_read_count_per_sec = total_read_count / interval
-            total_write_count_per_sec = total_write_count / interval
+            aggregated_read_count = io_end_aggregated.read_count - io_start_aggregated.read_count
+            aggregated_write_count = io_end_aggregated.write_count - io_start_aggregated.write_count
+            aggregated_read_count_per_sec = aggregated_read_count / interval
+            aggregated_write_count_per_sec = aggregated_write_count / interval
             io_change['aggregated'].update({
-                'read_file_count': total_read_count,
-                'write_file_count': total_write_count,
-                'read_file_count_per_sec': total_read_count_per_sec,
-                'write_file_count_per_sec': total_write_count_per_sec,
+                'read_file_count': aggregated_read_count,
+                'write_file_count': aggregated_write_count,
+                'total_file_count': aggregated_read_count + aggregated_write_count,
+                'read_file_count_per_sec': aggregated_read_count_per_sec,
+                'write_file_count_per_sec': aggregated_write_count_per_sec,
+                'total_file_count_per_sec': aggregated_read_count_per_sec + aggregated_write_count_per_sec
             })
         if io_busy_time:
-            total_read_time = io_end_aggregated.read_time - io_start_aggregated.read_time
-            total_write_time = io_end_aggregated.write_time - io_start_aggregated.write_time
-            total_read_time_per_sec = total_read_time / 1000 / interval
-            total_write_time_per_sec = total_write_time / 1000 / interval
+            aggregated_read_time = io_end_aggregated.read_time - io_start_aggregated.read_time
+            aggregated_write_time = io_end_aggregated.write_time - io_start_aggregated.write_time
+            aggregated_read_time_per_sec = aggregated_read_time / 1000 / interval
+            aggregated_write_time_per_sec = aggregated_write_time / 1000 / interval
             io_change['aggregated'].update({
-                'read_time_ms': total_read_time,
-                'write_time_ms': total_write_time,
-                'read_time_per_sec': total_read_time_per_sec,
-                'write_time_per_sec': total_write_time_per_sec,
-                'busy_time_ms': total_read_time + total_write_time,
-                'busy_time_per_sec': total_read_time_per_sec + total_write_time_per_sec,
-                'busy_time_percent': (total_read_time + total_write_time) / 1000 / interval
+                'read_time_ms': aggregated_read_time,
+                'write_time_ms': aggregated_write_time,
+                'read_time_in_sec': aggregated_read_time_per_sec,
+                'write_time_in_sec': aggregated_write_time_per_sec,
+                'busy_time_ms': aggregated_read_time + aggregated_write_time,
+                'busy_time_in_sec': aggregated_read_time_per_sec + aggregated_write_time_per_sec,
+                'busy_time_percent': (aggregated_read_time + aggregated_write_time) / 1000 / interval
             })
 
     return io_change
