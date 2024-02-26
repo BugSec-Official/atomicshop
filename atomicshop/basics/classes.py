@@ -185,6 +185,31 @@ def import_first_class_name_from_file_path(script_directory: str, file_path: str
     return imported_class
 
 
+def import_file_as_module(script_directory: str, file_path: str):
+    """
+    Function imports file as module and returns the module object.
+
+    :param script_directory: string, of file full path to working directory of the main script that will be subtracted
+        from the file path.
+    :param file_path: string, of full file path to python file module.
+    :return: module object.
+    """
+
+    # Get the module name string.
+    module_name: str = get_module_name_from_file_path(script_directory, file_path)
+
+    # Import the module.
+    try:
+        imported_module = import_module_by_string(module_name)
+    except ModuleNotFoundError:
+        # If the module is not found, we will try to add this path to the system path and try again.
+        sys.path.append(str(Path(file_path).parent))
+
+        imported_module = import_module_by_string(module_name)
+
+    return imported_module
+
+
 def get_attributes(
         obj,
         include_private_1: bool = False,

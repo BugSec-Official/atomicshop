@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.9.5 - 26.02.2024
+  * 'system_resources_monitor' - fixes and improvements.
+  * 'basics.classes' - added 'import_file_as_module' function.
 * 2.9.4 - 18.02.2024
   * 'wrappers.psutilw.disks' - fixes and improvements.
   * 'basics.numbers' - added 'convert_bytes_to_readable' function.
