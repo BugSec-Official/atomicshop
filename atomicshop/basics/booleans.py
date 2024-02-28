@@ -33,3 +33,12 @@ def check_if_2_booleans_are_true(boolean1: tuple, boolean2: tuple) -> None:
                   f"{boolean1[1]}={boolean1[0]}\n" \
                   f"{boolean2[1]}={boolean2[0]}\n"
         raise ValueError(message)
+
+
+def convert_string_to_bool(string: str) -> bool:
+    if string.lower() == 'true':
+        return True
+    elif string.lower() == 'false':
+        return False
+    else:
+        raise ValueError(f"The value '{string}' is not a boolean.")
