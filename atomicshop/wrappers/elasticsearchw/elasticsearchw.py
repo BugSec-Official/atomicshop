@@ -185,6 +185,30 @@ def count(index_name: str, query: dict, elastic_wrapper: Elasticsearch = None):
     return res['count']
 
 
+def get_mapping(index_name: str, elastic_wrapper: Elasticsearch = None):
+    """
+    The function returns the mapping of the index.
+
+    :param index_name: str, the name of the index.
+    :param elastic_wrapper: Elasticsearch, the Elasticsearch wrapper.
+    :return: dict, the mapping of the index.
+
+    Usage:
+        res = get_mapping(index_name="test_index")
+    """
+
+    if elastic_wrapper is None:
+        elastic_wrapper = get_elastic_wrapper()
+
+    # Retrieve the mapping
+    mapping = elastic_wrapper.indices.get_mapping(index=index_name)
+
+    # Extract and print the field types
+    properties = mapping[index_name]['mappings']['properties']
+
+    return mapping, properties
+
+
 def get_response_hits(response: dict):
     """
     The function returns the 'hits' from the response.

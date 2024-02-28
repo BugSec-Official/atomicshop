@@ -1,6 +1,10 @@
 <!-- HISTORY -->
 ## History
 
+* 2.9.8 - 28.02.2024
+  * 'wrappers.elasticsearchw.elasticsearchw' - fixes and improvements.
+* 2.9.7 - 28.02.2024
+  * 'wrappers.elasticsearchw.elasticsearchw' - fixes and improvements.
 * 2.9.6 - 28.02.2024
   * 'basics.booleans' - added 'convert_string_to_bool' function.
 * 2.9.5 - 26.02.2024
