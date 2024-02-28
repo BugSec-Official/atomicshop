@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.9.6 - 28.02.2024
+  * 'basics.booleans' - added 'convert_string_to_bool' function.
 * 2.9.5 - 26.02.2024
   * 'system_resources_monitor' - fixes and improvements.
   * 'basics.classes' - added 'import_file_as_module' function.
