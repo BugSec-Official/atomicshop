@@ -1,6 +1,7 @@
 from typing import Union
 import threading
 import multiprocessing
+import multiprocessing.managers
 
 from .print_api import print_api
 from . import system_resources
@@ -202,7 +203,7 @@ def start_monitoring(
         get_disk_used_percent: bool = True,
         calculate_maximum_changed_disk_io: bool = False,
         queue_list: list = None,
-        manager_dict=None,      # multiprocessing.Manager().dict()
+        manager_dict: multiprocessing.managers.DictProxy = None,      # multiprocessing.Manager().dict()
         print_kwargs: dict = None
 ):
     """

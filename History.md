@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.9.9 - 04.03.2024
+  * 'filesystem' - added 'get_subpaths_between' function.
 * 2.9.8 - 28.02.2024
   * 'wrappers.elasticsearchw.elasticsearchw' - fixes and improvements.
 * 2.9.7 - 28.02.2024
