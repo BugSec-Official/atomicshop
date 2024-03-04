@@ -929,3 +929,83 @@ def get_directory_size(directory_path: str):
             elif entry.is_dir():
                 total_size += get_directory_size(entry.path)
     return total_size
+
+
+def get_subpaths_between(start_path: str, end_path: str) -> list[str]:
+    """
+    Get the subpaths between two paths.
+    :param start_path: string, start path.
+    :param end_path: string, end path.
+    :return:
+
+    Example Linux:
+        start_path = '/test/1'
+        end_path = '/test/1/2/3/4'
+
+        subpaths = get_subpaths_between(start_path, end_path)
+
+        subpaths = [
+            '/test/1'
+            '/test/1/2',
+            '/test/1/2/3',
+            '/test/1/2/3/4',
+        ]
+
+
+    Example Windows:
+        start_path = 'C:\\test\\1'
+        end_path = 'C:\\test\\1\\2\\3\\4'
+
+        subpaths = get_subpaths_between(start_path, end_path)
+
+        subpaths = [
+            'C:\\test\\1',
+            'C:\\test\\1\\2',
+            'C:\\test\\1\\2\\3',
+            'C:\\test\\1\\2\\3\\4',
+        ]
+    """
+
+    # Detect slash type based on the input (default to forward slash)
+    slash_type = "\\" if "\\" in start_path else "/"
+
+    # Normalize the paths to use forward slashes for processing
+    start_path = start_path.replace("\\", "/")
+    end_path = end_path.replace("\\", "/")
+
+    if not end_path.startswith(start_path):
+        raise ValueError("Start path must be a prefix of the end path")
+
+    # Get the remainder of the end path after the start path.
+    remainder = end_path[len(start_path):].strip("/")
+    parts = remainder.split("/")
+
+    # Construct the subpaths having the start path as the first element.
+    subpaths = [start_path.replace("/", slash_type)]
+    current_path = start_path
+    for part in parts:
+        if part:  # Avoid empty parts
+            current_path += "/" + part  # Use forward slash for processing
+            # Convert the path back to the original slash type before adding
+            subpaths.append(current_path.replace("/", slash_type))
+
+    return subpaths
+
+    # start = Path(start_path).resolve()
+    # end = Path(end_path).resolve()
+    # subpaths = []
+    #
+    # # Ensure start is a parent of end
+    # if start in end.parents:
+    #     current = end
+    #     while current != start:
+    #         subpaths.append(current)
+    #         current = current.parent
+    #     subpaths.append(str(start))  # Optionally add the start path itself
+    # else:
+    #     raise ValueError("Start path must be a parent of the end path")
+    #
+    # # Reverse the list so it goes from start to end.
+    # subpaths.reverse()
+    #
+    # return subpaths
