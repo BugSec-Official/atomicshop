@@ -68,6 +68,7 @@ dependencies = [
     "python-magic",
     "pywin32; platform_system == 'Windows'",
     "reportlab",
+    "setuptools",
     "SoundCard",
     "soundfile",
     "SpeechRecognition",

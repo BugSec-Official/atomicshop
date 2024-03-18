@@ -1,9 +1,10 @@
 from elasticsearch import Elasticsearch
 from datetime import datetime
+import json
+from typing import Union
 
 from . import config_basic
 from ...basics import dicts
-
 
 ELASTIC_WRAPPER = None
 
@@ -126,6 +127,7 @@ def index(
 def search(
         index_name: str,
         query: dict,
+        keys_convert_to_json: list = None,
         elastic_wrapper: Elasticsearch = None,
 ):
     """
@@ -133,6 +135,9 @@ def search(
 
     :param index_name: str, the name of the index.
     :param query: dict, the query to be used for searching the documents.
+    :param keys_convert_to_json: list, the keys of the documents that should be converted from string to json.
+        Recursively searches for keys in specified list in a nested dictionary in the 'hits_only' dictionary
+        and converts their values using 'json.loads' if found.
     :param elastic_wrapper: Elasticsearch, the Elasticsearch wrapper.
     :return: dict, the result of the search operation.
 
@@ -145,12 +150,46 @@ def search(
         res = search(index_name="test_index", query=query)
     """
 
+    def convert_key_values_to_objects(returned_data: Union[dict, list]) -> Union[dict, list]:
+        """
+        Recursively searches for keys 'test1' and 'test2' in a nested dictionary 'd'
+        and converts their values using json.loads if found.
+
+        :param returned_data: The nested dictionary to search through.
+        :type returned_data: dict
+        """
+
+        nonlocal keys_convert_to_json
+
+        if isinstance(returned_data, dict):
+            for key, value in returned_data.items():
+                if key in keys_convert_to_json:
+                    # Can be that the value is None, so we don't need to convert it.
+                    if value is None:
+                        continue
+
+                    try:
+                        returned_data[key] = json.loads(value)
+                    except (ValueError, TypeError):
+                        # This is needed only to know the possible exception types.
+                        raise
+                else:
+                    convert_key_values_to_objects(value)
+        elif isinstance(returned_data, list):
+            for i, item in enumerate(returned_data):
+                returned_data[i] = convert_key_values_to_objects(item)
+
+        return returned_data
+
     if elastic_wrapper is None:
         elastic_wrapper = get_elastic_wrapper()
 
     res = elastic_wrapper.search(index=index_name, body=query)
 
     hits_only: list = get_response_hits(res)
+
+    if keys_convert_to_json is not None:
+        hits_only = convert_key_values_to_objects(hits_only)
 
     aggregations: dict = dict()
     if 'aggregations' in res:

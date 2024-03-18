@@ -1,8 +1,8 @@
 import shlex
 import types
 
-from ..basics import dicts, list_of_dicts
-from ..print_api import print_api
+from ...basics import dicts, list_of_dicts
+from ...print_api import print_api
 
 import psutil
 

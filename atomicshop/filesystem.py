@@ -1009,3 +1009,141 @@ def get_subpaths_between(start_path: str, end_path: str) -> list[str]:
     # subpaths.reverse()
     #
     # return subpaths
+
+
+def create_dict_of_paths_list(list_of_paths: list) -> dict:
+    """
+    The function receives a list of paths and returns a dictionary with keys as the paths and values as the
+    subpaths of the key path.
+
+    Example:
+        list_of_paths = [
+            "/test1/test2/3/4/5/file1.txt",
+            "/test1/test2/file2.txt",
+            "/test1/test2/3/file3.txt",
+            "/test1/test2/3/4/5/file4.txt"
+        ]
+
+        structure = create_dict_of_paths_list(list_of_paths)
+
+        structure = {
+            "test1": {
+                "test2": {
+                    "3": {
+                        "4": {
+                            "5": {
+                                0: "file1.txt",
+                                1: "file4.txt"
+                            }
+                        },
+                        0: "file3.txt"
+                    },
+                    0: "file2.txt"
+                }
+            }
+        }
+
+    :param list_of_paths: list of strings, paths.
+    :return: dictionary.
+    """
+
+    structure = []
+    for path in list_of_paths:
+        create_dict_of_path(path, structure)
+    return structure
+
+
+def create_dict_of_path(
+        path: str,
+        # structure_dict: dict,
+        structure_list: list,
+        add_data_to_entry: any = None,
+        add_data_key: str = 'addon',
+        parent_entry: str = None
+):
+    """
+    The function receives a path and a dictionary and adds the path to the dictionary.
+
+    Check the working example from 'create_dict_of_paths_list' function.
+
+    :param path: string, path.
+    :param structure_dict: dictionary to add the path to.
+    :param add_data_to_entry: any, data to add to the entry.
+    :param add_data_key: string, key to add the data to.
+    :param parent_entry: string, for internal use to pass the current parent entry.
+    :return:
+    """
+
+    # # Normalize path for cross-platform compatibility
+    # normalized_path = path.replace("\\", "/")
+    # parts = normalized_path.strip("/").split("/")
+    # current_level = structure_dict
+    #
+    # for part in parts[:-1]:  # Iterate through the directories
+    #     # If the part is not already a key in the current level of the structure, add it
+    #     if part not in current_level:
+    #         current_level[part] = {}
+    #     current_level = current_level[part]
+    #
+    # # Create the entry for the file with additional data
+    # file_entry = {"entry": parts[-1], add_data_key: add_data_to_entry}
+    #
+    # # We're adding file entries under numeric keys.
+    # if isinstance(current_level, dict) and all(isinstance(key, int) for key in current_level.keys()):
+    #     current_level[len(current_level)] = file_entry
+    # else:
+    #     # Handle cases where there's a mix of numeric keys and directory names
+    #     # Find the next available numeric key
+    #     next_key = max([key if isinstance(key, int) else -1 for key in current_level.keys()], default=-1) + 1
+    #     current_level[next_key] = file_entry
+
+    # entries_key_name = "__entries__"
+    #
+    # # Normalize path for cross-platform compatibility
+    # normalized_path = path.replace("\\", "/")
+    # parts = normalized_path.strip("/").split("/")
+    # current_level = structure_dict
+    #
+    # for part in parts[:-1]:  # Navigate through or create directory structure
+    #     if part not in current_level:
+    #         current_level[part] = {}
+    #     current_level = current_level[part]
+    #
+    # # Create the entry for the file with additional data
+    # file_entry = {"entry": parts[-1], add_data_key: add_data_to_entry}
+    #
+    # # If the current level (final directory) does not have an "entries" key for files, create it
+    # if entries_key_name not in current_level:
+    #     current_level[entries_key_name] = []
+    #
+    # # Append the file entry to the list associated with the "entries" key
+    # current_level[entries_key_name].append(file_entry)
+
+    # Normalize path for cross-platform compatibility
+    normalized_path = path.replace("\\", "/")
+    parts = normalized_path.strip("/").split("/")
+
+    current_level = structure_list
+
+    for i, part in enumerate(parts):
+        # Determine if this is the last part (a file)
+        is_last_part = (i == len(parts) - 1)
+
+        # Try to find an existing entry for this part
+        existing_entry = next((item for item in current_level if item["entry"] == part), None)
+
+        if existing_entry is None:
+            # For the last part, add the additional data; for directories, just create the structure
+            if is_last_part:
+                new_entry = {"entry": part, add_data_key: add_data_to_entry, "included": []}
+            else:
+                new_entry = {"entry": part, "included": []}
+
+            current_level.append(new_entry)
+            # Only update current_level if it's not the last part
+            if not is_last_part:
+                current_level = new_entry["included"]
+        else:
+            # If it's not the last part and the entry exists, navigate deeper
+            if not is_last_part:
+                current_level = existing_entry["included"]

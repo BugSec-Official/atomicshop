@@ -35,6 +35,7 @@ def write_json_file(
         file_path: str,
         file_mode: str = 'w',
         indent=None,
+        encoding: str = None,
         use_default_indent=False,
         file_object=None,
         **kwargs
@@ -54,6 +55,7 @@ def write_json_file(
     :param indent: integer number of spaces for indentation.
         If 'ident=0' new lines still will be created. The most compact is 'indent=None' (from documentation)
         So, using default as 'None' and not something else.
+    :param encoding: string, write the file with encoding. Example: 'utf-8'. 'None' is default, since it is default.
     :param use_default_indent: boolean. Default indent for 'json' format in many places is '2'. So, if you don't want
         to set 'indent=2', just set this to 'True'.
     :param file_object: file object of the 'open()' function in the decorator. Decorator executes the 'with open()'

@@ -1,6 +1,13 @@
 <!-- HISTORY -->
 ## History
 
+* 2.9.10 - 18.03.2024
+  * wrappers.elasticsearchw.elasticsearchw - fixes and improvements.
+  * basics.list_of_dicts - fies and improvements.
+  * system_resources - fixes and improvements.
+  * filesystem - fixes and improvements.
+  * wrappers.psutilw.psutilw - fixes and improvements.
+  * file_io.jsons - fixes and improvements.
 * 2.9.9 - 04.03.2024
   * 'filesystem' - added 'get_subpaths_between' function.
 * 2.9.8 - 28.02.2024

@@ -102,10 +102,14 @@ def wait_for_resource_availability(cpu_percent_max: int = 80, memory_percent_max
     :return: None
     """
     while True:
-        cpu, memory, _ = check_system_resources()
-        if cpu < cpu_percent_max and memory < memory_percent_max:
+        result = check_system_resources(
+            get_cpu=True, get_memory=True,
+            get_disk_io_bytes=False, get_disk_files_count=False, get_disk_busy_time=False, get_disk_used_percent=False)
+        if result['cpu_usage'] < cpu_percent_max and result['memory_usage'] < memory_percent_max:
             break
-        print_api(f"Waiting for resources to be available... CPU: {cpu}%, Memory: {memory}%", color='yellow')
+        print_api(
+            f"Waiting for resources to be available... "
+            f"CPU: {result['cpu_usage']}%, Memory: {result['memory_usage']}%", color='yellow')
         time.sleep(wait_time)  # Wait for 'wait_time' seconds before checking again
 
 

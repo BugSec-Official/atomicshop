@@ -284,3 +284,12 @@ def convert_int_to_str_in_mixed_lists(item):
     else:
         # If the item is neither a dictionary, list, nor tuple, return it as is.
         return item
+
+
+def convert_dict_to_list_of_key_value_pairs(input_dict: dict) -> list:
+    """
+    Convert a dictionary to a list of key-value dicts.
+    :param input_dict: dict, the dictionary to convert.
+    :return: list, the list of key-value pairs.
+    """
+    return [{key: value} for key, value in input_dict.items()]
