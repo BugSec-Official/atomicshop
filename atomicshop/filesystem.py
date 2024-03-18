@@ -590,7 +590,7 @@ def get_file_paths_from_directory(
             # If 'add_last_modified_time' was passed.
             if add_last_modified_time:
                 # Get last modified time of the file.
-                file_result['last_modified'] = get_file_modified_time(file_result['path'])
+                file_result['last_modified'] = get_file_modified_time(file_result['file_path'])
 
         object_list.append(file_result)
 
