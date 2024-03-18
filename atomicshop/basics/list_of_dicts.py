@@ -15,12 +15,12 @@ def remove_duplicates(list_of_dicts: list, preserve_order: bool = False):
         return list({frozenset(item.items()): item for item in list_of_dicts}.values())
 
 
-def sort_by_keys(list_instance: list, key_list: list, case_insensitive: bool = False):
+def sort_by_keys(list_instance: list, key_list: list, reverse: bool = False, case_insensitive: bool = False):
     for key in key_list:
         if case_insensitive:
-            list_instance = sorted(list_instance, key=lambda d: d[key].lower())
+            list_instance = sorted(list_instance, key=lambda d: d[key].lower(), reverse=reverse)
         else:
-            list_instance = sorted(list_instance, key=itemgetter(key))
+            list_instance = sorted(list_instance, key=itemgetter(key), reverse=reverse)
     return list_instance
 
 
