@@ -387,19 +387,19 @@ def temporary_change_working_directory(new_working_directory: str) -> None:
         os.chdir(original_working_directory)
 
 
-def move_file(source_file_path: str, target_file_path: str, no_overwrite: bool = False) -> None:
+def move_file(source_file_path: str, target_file_path: str, overwrite: bool = True) -> None:
     """
     The function moves file from source to target.
 
     :param source_file_path: string, full path to source file.
     :param target_file_path: string, full path to target file.
-    :param no_overwrite: boolean, if 'True', then the function will not overwrite the file if it exists.
+    :param overwrite: boolean, if 'False', then the function will not overwrite the file if it exists.
 
     :return: None
     """
 
     # Check if 'no_overwrite' is set to 'True' and if the file exists.
-    if no_overwrite:
+    if not overwrite:
         if check_file_existence(target_file_path):
             raise FileExistsError(f'File already exists: {target_file_path}')
 
@@ -407,10 +407,18 @@ def move_file(source_file_path: str, target_file_path: str, no_overwrite: bool =
     shutil.move(source_file_path, target_file_path)
 
 
-def move_files_from_folder_to_folder(source_directory: str, target_directory: str):
+def move_files_from_folder_to_folder(
+        source_directory: str,
+        target_directory: str,
+        overwrite: bool = True
+):
     """
     The function is currently non-recursive and not tested with directories inside the source directories.
     The function will move all the files from source directory to target directory overwriting existing files.
+
+    :param source_directory: string, full path to source directory.
+    :param target_directory: string, full path to target directory.
+    :param overwrite: boolean, if 'False', then the function will not overwrite the files if they exist.
     """
 
     # Iterate over each item in the source directory
@@ -420,7 +428,8 @@ def move_files_from_folder_to_folder(source_directory: str, target_directory: st
         destination_item = os.path.join(target_directory, item)
 
         # Move each item to the destination directory
-        shutil.move(source_item, destination_item)
+        move_file(source_file_path=source_item, target_file_path=destination_item, overwrite=overwrite)
+
     # # Get all file names without full paths in source folder.
     # file_list_in_source: list = get_file_paths_from_directory(source_directory)
     #
