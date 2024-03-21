@@ -5,9 +5,9 @@ def check_3_booleans_when_only_1_can_be_true(boolean1: tuple, boolean2: tuple, b
             (self.config['section']['default_usage'], 'default_usage'),
             (self.config['section']['create_usage'], 'create_usage'),
             (self.config['section']['custom_usage'], 'custom_usage'))
-    :param boolean1: tuple, first entry contains the value, second contains the name of the setting.
-    :param boolean2: tuple, first entry contains the value, second contains the name of the setting.
-    :param boolean3: tuple, first entry contains the value, second contains the name of the setting.
+    :param boolean1: tuple, (value, string name of the setting you want to print to the user to be aware of).
+    :param boolean2: tuple, (value, string name of the setting you want to print to the user to be aware of).
+    :param boolean3: tuple, (value, string name of the setting you want to print to the user to be aware of).
     :return:
     """
 

@@ -89,7 +89,8 @@ class ModuleCategory:
 
 # Assigning external class object by message domain received from client. If the domain is not in the list,
 # the reference general module will be assigned.
-def assign_class_by_domain(engines_list: list, message_domain_name: str, reference_module, logger=None):
+def assign_class_by_domain(
+        engines_list: list, message_domain_name: str, reference_module, config, logger=None):
     # Defining return variables:
     function_parser = None
     function_responder = None
@@ -97,30 +98,33 @@ def assign_class_by_domain(engines_list: list, message_domain_name: str, referen
 
     # In case SNI came empty in the request from client, then there's no point in iterating through engine domains.
     if message_domain_name:
-        # Checking if current domain is in engines' domain list to activate domain specific engine
-        for function_module in engines_list:
-            # The list: matches_list = ["domain1.com", "domain2.com", "domain3.com"]
-            # The string: a_string = "www.domain1.com"
-            # Checking that the message subdomain + domain contains current module's domain name
-            # Template Should be like this: if any(x in a_string for x in matches_list):
+        # If the engines_usage is set to True in the config file, then we'll iterate through the list of engines
+        # to find the domain in the list of domains of the engine.
+        if config['tcp']['engines_usage']:
+            # Checking if current domain is in engines' domain list to activate domain specific engine
+            for function_module in engines_list:
+                # The list: matches_list = ["domain1.com", "domain2.com", "domain3.com"]
+                # The string: a_string = "www.domain1.com"
+                # Checking that the message subdomain + domain contains current module's domain name
+                # Template Should be like this: if any(x in a_string for x in matches_list):
 
-            # On the other hand if you want to find if partial string is
-            # in the list of strings: if any(a_string in x for x in matches_list):
-            # In this case list is the same and string: a_string = domain
-            if any(x in message_domain_name for x in function_module.domain_list):
-                # Assigning modules by current engine of the domain
-                function_parser = function_module.parser_class_object
-                function_recorder = function_module.recorder_class_object
-                # Since the responder is being initiated only once, we're assigning only the instance
-                function_responder = function_module.responder_instance
+                # On the other hand if you want to find if partial string is
+                # in the list of strings: if any(a_string in x for x in matches_list):
+                # In this case list is the same and string: a_string = domain
+                if any(x in message_domain_name for x in function_module.domain_list):
+                    # Assigning modules by current engine of the domain
+                    function_parser = function_module.parser_class_object
+                    function_recorder = function_module.recorder_class_object
+                    # Since the responder is being initiated only once, we're assigning only the instance
+                    function_responder = function_module.responder_instance
 
-                logger.info(f"Assigned Modules for [{message_domain_name}]: "
-                            f"{function_module.parser_class_object.__name__}, "
-                            f"{function_module.responder_class_object.__name__}, "
-                            f"{function_module.recorder_class_object.__name__}")
+                    logger.info(f"Assigned Modules for [{message_domain_name}]: "
+                                f"{function_module.parser_class_object.__name__}, "
+                                f"{function_module.responder_class_object.__name__}, "
+                                f"{function_module.recorder_class_object.__name__}")
 
-                # If the domain was found in the current list of class domains, we can stop the loop
-                break
+                    # If the domain was found in the current list of class domains, we can stop the loop
+                    break
 
     # If none of the domains were found in the engine domains list, then we'll assign reference module.
     # It's enough to check only parser, since responder and recorder also will be empty.

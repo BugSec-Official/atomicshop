@@ -1,8 +1,9 @@
 import os
 import threading
 
+# Importing atomicshop package to get the version of the package.
 import atomicshop
-from atomicshop.print_api import print_api
+
 from .import_config import ImportConfig
 from .initialize_engines import ModuleCategory
 from .connection_thread_worker import thread_worker_main
@@ -12,6 +13,7 @@ from ..wrappers.socketw.socket_wrapper import SocketWrapper
 from ..wrappers.socketw.dns_server import DnsServer
 from ..basics import dicts_nested
 from ..wrappers.loggingw import loggingw
+from ..print_api import print_api
 
 
 def initialize_mitm_server(config_static):
@@ -129,20 +131,57 @@ def initialize_mitm_server(config_static):
                                        logger=system_logger, stdout=False, reference_general=True)
     # === EOF Initialize Reference Module ==========================================================================
     # === Engine logging ===========================================================================================
-    # If engines were found.
-    if engines_list:
-        # Printing the parsers using "start=1" for index to start counting from "1" and not "0"
-        system_logger.info("[*] Found Engines:")
-        for index, engine in enumerate(engines_list, start=1):
-            system_logger.info(f"[*] {index}: {engine.engine_name} | {engine.domain_list}")
-            system_logger.info(f"[*] Modules: {engine.parser_class_object.__name__}, "
-                               f"{engine.responder_class_object.__name__}, "
-                               f"{engine.recorder_class_object.__name__}")
-    # If engines weren't found.
+    # Printing the parsers using "start=1" for index to start counting from "1" and not "0"
+    print_api(f"[*] Found Engines:", logger=system_logger)
+    for index, engine in enumerate(engines_list, start=1):
+        message = f"[*] {index}: {engine.engine_name} | {engine.domain_list}"
+        print_api(message, logger=system_logger)
+
+        message = (f"[*] Modules: {engine.parser_class_object.__name__}, "
+                   f"{engine.responder_class_object.__name__}, "
+                   f"{engine.recorder_class_object.__name__}")
+        print_api(message, logger=system_logger)
+
+    if config['dns']['enable_dns_server']:
+        print_api("DNS Server is enabled.", logger=system_logger)
+
+        # If engines were found and dns is set to route by the engine domains.
+        if engines_list and config['dns']['route_to_tcp_server_only_engine_domains']:
+            print_api("Engine domains will be routed by the DNS server to Built-in TCP Server.", logger=system_logger)
+        # If engines were found, but the dns isn't set to route to engines.
+        elif engines_list and not config['dns']['route_to_tcp_server_only_engine_domains']:
+            message = f"[*] Engine domains found, but the DNS routing is set not to use them for routing."
+            print_api(message, color="yellow", logger=system_logger)
+        elif not engines_list and config['dns']['route_to_tcp_server_only_engine_domains']:
+            raise ValueError("No engines were found, but the DNS routing is set to use them for routing.\n"
+                             "Please check your DNS configuration in the 'config.ini' file.")
+
+        if config['dns']['route_to_tcp_server_all_domains']:
+            print_api("All domains will be routed by the DNS server to Built-in TCP Server.", logger=system_logger)
+
+        if config['dns']['regular_resolving']:
+            print_api(
+                "Regular DNS resolving is enabled. Built-in TCP server will not be routed to",
+                logger=system_logger, color="yellow")
     else:
-        system_logger.info("[*] NO ENGINES WERE FOUND!")
-        system_logger.info(f"Server will process all the incoming (domains) connections by "
-                           f"[{reference_module.engine_name}] engine.")
+        print_api("DNS Server is disabled.", logger=system_logger, color="yellow")
+
+    if config['tcp']['enable_tcp_server']:
+        print_api("TCP Server is enabled.", logger=system_logger)
+
+        if engines_list and not config['tcp']['engines_usage']:
+            message = \
+                f"Engines found, but the TCP server is set not to use them for processing. General responses only."
+            print_api(message, color="yellow", logger=system_logger)
+        elif engines_list and config['tcp']['engines_usage']:
+            message = f"Engines found, and the TCP server is set to use them for processing."
+            print_api(message, logger=system_logger)
+        elif not engines_list and config['tcp']['engines_usage']:
+            raise ValueError("No engines were found, but the TCP server is set to use them for processing.\n"
+                             "Please check your TCP configuration in the 'config.ini' file.")
+    else:
+        print_api("TCP Server is disabled.", logger=system_logger, color="yellow")
+
     # === EOF Engine Logging =======================================================================================
 
     # Assigning all the engines domains to all time domains, that will be responsible for adding new domains.
@@ -178,20 +217,24 @@ def initialize_mitm_server(config_static):
         dns_server.request_domain_queue = domain_queue
         # Initiate the thread.
         threading.Thread(target=dns_server.start).start()
+
     # === EOF Initialize DNS module ================================================================================
+    # === Initialize TCP Server ====================================================================================
+    if config['tcp']['enable_tcp_server']:
+        socket_wrapper = SocketWrapper(
+            config=dicts_nested.merge(config, config_static.CONFIG_EXTENDED), logger=listener_logger,
+            statistics_logger=statistics_logger)
 
-    socket_wrapper = SocketWrapper(
-        config=dicts_nested.merge(config, config_static.CONFIG_EXTENDED), logger=listener_logger,
-        statistics_logger=statistics_logger)
+        socket_wrapper.create_tcp_listening_socket_list()
 
-    socket_wrapper.create_tcp_listening_socket_list()
+        socket_wrapper.requested_domain_from_dns_server = domain_queue
 
-    socket_wrapper.requested_domain_from_dns_server = domain_queue
+        # General exception handler will catch all the exceptions that occurred in the threads and write it to the log.
+        try:
+            socket_wrapper.loop_for_incoming_sockets(function_reference=thread_worker_main, reference_args=(
+                network_logger, statistics_logger, engines_list, reference_module, config,))
+        except Exception:
+            message = f"Unhandled Exception occurred in 'loop_for_incoming_sockets' function"
+            print_api(message, error_type=True, color="red", logger=network_logger, traceback_string=True, oneline=True)
 
-    # The general exception handler will catch all the exceptions that occurred in the threads and write it to the log.
-    try:
-        socket_wrapper.loop_for_incoming_sockets(function_reference=thread_worker_main, reference_args=(
-            network_logger, statistics_logger, engines_list, reference_module, config,))
-    except Exception:
-        message = f"Unhandled Exception occurred in 'loop_for_incoming_sockets' function"
-        print_api(message, error_type=True, color="red", logger=network_logger, traceback_string=True, oneline=True)
+    # === EOF Initialize TCP Server ================================================================================
