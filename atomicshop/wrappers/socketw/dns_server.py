@@ -91,9 +91,19 @@ class DnsServer:
 
         # Check if 'route_to_tcp_server_only_engine_domains' was set to 'True' and output message accordingly.
         if self.config['dns']['route_to_tcp_server_only_engine_domains']:
-            self.logger.info(f"Current engine domains: {self.domain_list}")
-        else:
-            self.logger.info("Not using engine domains. All 'A' records will be forwarded to TCP Server.")
+            message = "Routing only engine domains to Built-in TCP Server."
+            print_api(message, logger=self.logger)
+
+            message = f"Current engine domains: {self.domain_list}"
+            print_api(message, logger=self.logger, color='green')
+
+        if self.config['dns']['route_to_tcp_server_all_domains']:
+            message = "Routing all domains to Built-in TCP Server."
+            print_api(message, logger=self.logger, color='green')
+
+        if self.config['dns']['regular_resolving']:
+            message = f"Routing all domains to Live DNS Service: {self.config['dns']['forwarding_dns_service_ipv4']}"
+            print_api(message, logger=self.logger, color='green')
 
         # The list that will hold all the threads that can be joined later
         threads_list: list = list()
@@ -201,22 +211,28 @@ class DnsServer:
                     else:
                         # Check if the incoming Record is "A" record.
                         if qtype_string == "A":
-                            # If so, check if 'route_to_tcp_server_only_engine_domains' is set to 'True' in 'config.ini'.
+                            # Check if 'route_to_tcp_server_only_engine_domains' is set to 'True' in 'config.ini'.
                             # If so, we need to check if the incoming domain contain any of the 'engine_domains'.
                             if self.config['dns']['route_to_tcp_server_only_engine_domains']:
                                 # If current query domain (+ subdomains) CONTAIN any of the domains from modules config
                                 # files and current request contains "A" (IPv4) record.
                                 if any(x in question_domain for x in self.domain_list):
-                                    # If incoming domain contains any of the 'engine_domains' then domain will be forwarded
-                                    # to our TCP Server.
+                                    # If incoming domain contains any of the 'engine_domains' then domain will
+                                    # be forwarded to our TCP Server.
                                     forward_to_tcp_server = True
                                 else:
                                     forward_to_tcp_server = False
-                            # If 'route_to_tcp_server_only_engine_domains' was set to 'False' in 'config.ini' file then the
-                            # domains in engine config files doesn't matter, and we'll forward all 'A' records domains to
-                            # our TCP Server.
-                            else:
+
+                            # If 'route_to_tcp_server_all_domains' was set to 'False' in 'config.ini' file then
+                            # we'll forward all 'A' records domains to the Built-in TCP Server.
+                            if self.config['dns']['route_to_tcp_server_all_domains']:
                                 forward_to_tcp_server = True
+
+                            # If 'regular_resolving' was set to 'True' in 'config.ini' file then
+                            # we'll forward all 'A' records domains to the Live DNS Service.
+                            if self.config['dns']['regular_resolving']:
+                                forward_to_tcp_server = False
+
                         # If incoming record is not an "A" record, then it will not be forwarded to our TCP Server.
                         else:
                             forward_to_tcp_server = False

@@ -112,10 +112,9 @@ def thread_worker_main(
 
         # Loading parser by domain, if there is no parser for current domain - general reference parser is loaded.
         # These should be outside any loop and initialized only once entering the thread.
-        parser, responder, recorder = assign_class_by_domain(engines_list,
-                                                             client_message.server_name,
-                                                             reference_module=reference_module,
-                                                             logger=network_logger)
+        parser, responder, recorder = assign_class_by_domain(
+            engines_list, client_message.server_name, reference_module=reference_module, config=config,
+            logger=network_logger)
 
         # Defining client connection boolean variable to enter the loop
         client_connection_boolean: bool = True

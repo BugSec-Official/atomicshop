@@ -63,6 +63,13 @@ class ImportConfig:
                 "Exiting..."
             )
 
+        # Check [dns] boolean configurations. ==========================================================================
+        check_3_booleans_when_only_1_can_be_true(
+            (self.config['dns']['route_to_tcp_server_only_engine_domains'], 'route_to_tcp_server_only_engine_domains'),
+            (self.config['dns']['route_to_tcp_server_all_domains'], 'route_to_tcp_server_all_domains'),
+            (self.config['dns']['regular_resolving'], 'regular_resolving')
+        )
+
         check_3_booleans_when_only_1_can_be_true(
             (self.config['certificates']['default_server_certificate_usage'], 'default_server_certificate_usage'),
             (self.config['certificates']['sni_create_server_certificate_for_each_domain'],
