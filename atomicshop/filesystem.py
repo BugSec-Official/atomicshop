@@ -1071,12 +1071,12 @@ def create_dict_of_path(
         parent_entry: str = None
 ):
     """
-    The function receives a path and a dictionary and adds the path to the dictionary.
+    The function receives a path and a list, and adds the path to the list.
 
     Check the working example from 'create_dict_of_paths_list' function.
 
     :param path: string, path.
-    :param structure_dict: dictionary to add the path to.
+    :param structure_list: list to add the path to.
     :param add_data_to_entry: any, data to add to the entry.
     :param add_data_key: string, key to add the data to.
     :param parent_entry: string, for internal use to pass the current parent entry.

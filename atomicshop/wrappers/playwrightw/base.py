@@ -1,5 +1,3 @@
-import time
-
 from . import combos, javascript
 from ...file_io import file_io
 
