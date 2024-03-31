@@ -25,7 +25,7 @@ def get_elastic_wrapper(url: str = None, overwrite: bool = False):
 
     # If no url is provided, use the default url.
     if url is None:
-        url = config_basic.DEFAULT_URL
+        url = config_basic.DEFAULT_ELASTIC_URL
 
     # Get the global variable.
     global ELASTIC_WRAPPER

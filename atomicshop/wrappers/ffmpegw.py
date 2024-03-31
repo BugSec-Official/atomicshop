@@ -4,7 +4,7 @@ import shlex
 
 from ..print_api import print_api
 from ..tempfiles import TempFile
-from ..github_wrapper import GitHubWrapper
+from .githubw import GitHubWrapper
 from ..process import execute_with_live_output
 from ..filesystem import create_directory
 

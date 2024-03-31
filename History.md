@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.9.15 - 31.03.2024
+  * wrappers.elasticsearchw - installation and infrastructure scripts.
 * 2.9.14 - 21.03.2024
   * mitm - major fixes and improvements in config to work with all parameters.
 * 2.9.13 - 20.03.2024
