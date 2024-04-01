@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.9.16 - 01.04.2024
+  * wrappers.dockerw.install_docker - fixes and improvements.
+  * wrappers.factw.install - fixes and improvements.
 * 2.9.15 - 31.03.2024
   * wrappers.elasticsearchw - installation and infrastructure scripts.
 * 2.9.14 - 21.03.2024

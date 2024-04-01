@@ -1,6 +1,6 @@
 import subprocess
 
-from ... import process
+from ... import process, filesystem
 from ...print_api import print_api
 
 
@@ -42,6 +42,10 @@ def install_docker_ubuntu():
         if __name__ == '__main__':
             main()
     """
+
+    # Remove the existing keyrings, so we will not be asked to overwrite it if it exists.
+    docker_keyring_file_path: str = "/etc/apt/keyrings/docker.gpg"
+    filesystem.remove_file(docker_keyring_file_path)
 
     script = f"""
     # Step 1: Set up Docker's apt repository

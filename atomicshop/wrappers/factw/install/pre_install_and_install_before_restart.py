@@ -4,6 +4,7 @@ import sys
 
 from .... import permissions, filesystem
 from ... import githubw
+from ...dockerw import install_docker
 from .. import config_install
 
 
@@ -29,6 +30,10 @@ def install_before_restart(installation_directory: str, remove_existing_installa
     # Remove the existing keyrings, so we will not be asked to overwrite it if it exists.
     filesystem.remove_file(docker_keyring_file_path)
     filesystem.remove_file(nodesource_keyring_file_path)
+
+    # Install docker. FACT installs the docker, but there can be a problem with permissions, so we need to add
+    # the user permissions to the docker group before restart.
+    install_docker.install_docker_ubuntu()
 
     # Remove the existing installation directory.
     if remove_existing_installation_directory:
