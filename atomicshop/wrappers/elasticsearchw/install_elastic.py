@@ -1,7 +1,7 @@
 import sys
 
 from ...print_api import print_api
-from ... import process
+from ... import process, permissions
 from .. import ubuntu_terminal
 from . import config_basic, infrastructure
 
@@ -195,6 +195,10 @@ def install_elastic_kibana_ubuntu(install_elastic: bool = True, install_kibana: 
     if install_elastic:
         # Install Elasticsearch.
         ubuntu_terminal.install_packages([config_basic.UBUNTU_ELASTIC_PACKAGE_NAME])
+
+        if not permissions.is_admin():
+            print_api("This script requires root privileges...", color='red')
+            sys.exit(1)
 
         # Check if the configuration file exists.
         infrastructure.is_elastic_config_file_exists(exit_on_error=True, output_message=True)

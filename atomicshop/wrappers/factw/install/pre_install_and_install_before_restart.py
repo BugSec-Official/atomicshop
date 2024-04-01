@@ -4,7 +4,7 @@ import sys
 
 from .... import permissions, filesystem
 from ....print_api import print_api
-from ... import githubw
+from ... import githubw, ubuntu_terminal
 from ...dockerw import install_docker
 from .. import config_install
 
@@ -21,7 +21,6 @@ def install_before_restart(installation_directory: str, remove_existing_installa
     """
 
     if not permissions.is_admin():
-        permissions.request_sudo_on_ubuntu_by_python()
         print_api("This script requires root privileges...", color='red')
         sys.exit(1)
 
@@ -57,7 +56,9 @@ def install_before_restart(installation_directory: str, remove_existing_installa
 
     # Install docker. FACT installs the docker, but there can be a problem with permissions, so we need to add
     # the user permissions to the docker group before restart.
-    install_docker.install_docker_ubuntu()
+    if not install_docker.add_current_user_to_docker_group():
+        print_api("Docker is installed, but the current user was not added to the docker group.", color='red')
+        sys.exit(1)
 
     print_api("FACT_core installation before restart is finished.", color='green')
     print_api("Please restart the computer to continue the installation.", color='red')
