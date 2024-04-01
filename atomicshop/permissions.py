@@ -32,7 +32,8 @@ def is_admin() -> bool:
 def request_sudo_on_ubuntu_by_python():
     """
     The function tries to request sudo on Ubuntu for the user to enter the password, by executing python executable
-    with sudo.
+    with sudo. This is better approach than using the bash script to request sudo (request_sudo_on_ubuntu_by_bash)
+    because of the permission issues that can occur.
 
     :return:
     """
@@ -50,6 +51,7 @@ def request_sudo_on_ubuntu_by_bash():
     """
     The function tries to request sudo on Ubuntu for the user to enter the password, by executing appropriate
     bash commands.
+    Better approach is to use 'request_sudo_on_ubuntu_by_python'.
 
     :return:
     """
