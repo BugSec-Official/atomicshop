@@ -1,8 +1,11 @@
 import os
+import sys
 import stat
 import ctypes
 import contextlib
 import subprocess
+
+from .print_api import print_api
 
 
 def is_admin() -> bool:
@@ -23,6 +26,22 @@ def is_admin() -> bool:
             result = False
 
     return result
+
+
+def request_sudo_on_ubuntu():
+    """
+    The function tries to request sudo on Ubuntu for the user to enter the password.
+
+    :return:
+    """
+
+    try:
+        # Attempt to re-execute the script using sudo
+        subprocess.check_call(['sudo', 'python3'] + sys.argv)
+    except subprocess.CalledProcessError:
+        # Handle the error in case sudo command fails (e.g., wrong password)
+        print_api("Failed to gain sudo access. Please try again.", color='red')
+        sys.exit(1)
 
 
 def set_executable_permission(file_path: str):

@@ -71,6 +71,8 @@ def install_docker_ubuntu():
 
     process.execute_script(script, shell=True)
 
+    subprocess.check_call(['sudo', 'usermod', '-aG', 'docker', '$USER'])
+
     # Verify the installation.
     result: list = process.execute_with_live_output('sudo docker run hello-world')
 
