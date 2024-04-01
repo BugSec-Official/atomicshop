@@ -31,10 +31,6 @@ def install_before_restart(installation_directory: str, remove_existing_installa
     filesystem.remove_file(docker_keyring_file_path)
     filesystem.remove_file(nodesource_keyring_file_path)
 
-    # Install docker. FACT installs the docker, but there can be a problem with permissions, so we need to add
-    # the user permissions to the docker group before restart.
-    install_docker.install_docker_ubuntu()
-
     # Remove the existing installation directory.
     if remove_existing_installation_directory:
         filesystem.remove_directory(installation_directory)
@@ -56,3 +52,7 @@ def install_before_restart(installation_directory: str, remove_existing_installa
 
     # Run the shell script
     subprocess.run(['bash', fact_core_pre_install_file_path])
+
+    # Install docker. FACT installs the docker, but there can be a problem with permissions, so we need to add
+    # the user permissions to the docker group before restart.
+    install_docker.install_docker_ubuntu()
