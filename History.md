@@ -1,6 +1,10 @@
 <!-- HISTORY -->
 ## History
 
+* 2.9.18 - 01.04.2024
+  * wrappers.factw.install - fixes and improvements.
+  * wrappers.dockerw.install_docker - fixes and improvements.
+  * permissions - fixes and improvements.
 * 2.9.17 - 01.04.2024
   * wrappers.factw.install - fixes and improvements.
 * 2.9.16 - 01.04.2024
