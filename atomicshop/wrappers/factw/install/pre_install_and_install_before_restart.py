@@ -21,7 +21,7 @@ def install_before_restart(installation_directory: str, remove_existing_installa
     """
 
     if not permissions.is_admin():
-        permissions.request_sudo_on_ubuntu()
+        permissions.request_sudo_on_ubuntu_by_python()
         print_api("This script requires root privileges...", color='red')
         sys.exit(1)
 
