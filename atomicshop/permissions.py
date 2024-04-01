@@ -1,11 +1,10 @@
 import os
-import sys
 import stat
 import ctypes
 import contextlib
 import subprocess
 
-from .print_api import print_api
+from . import process
 
 
 def is_admin() -> bool:
@@ -35,13 +34,16 @@ def request_sudo_on_ubuntu():
     :return:
     """
 
-    try:
-        # Attempt to re-execute the script using sudo
-        subprocess.check_call(['sudo', 'python3'] + sys.argv)
-    except subprocess.CalledProcessError:
-        # Handle the error in case sudo command fails (e.g., wrong password)
-        print_api("Failed to gain sudo access. Please try again.", color='red')
-        sys.exit(1)
+    script = """
+    if [ "$EUID" -ne 0 ]; then
+      echo "This script requires root privileges. Please enter your password for sudo access."
+      sudo -v
+      while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
+    fi
+    # Your bash commands that require sudo here
+    """
+
+    process.execute_script(script, shell=True)
 
 
 def set_executable_permission(file_path: str):
