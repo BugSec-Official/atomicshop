@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.9.20 - 01.04.2024
+  * permissions - fixes and improvements.
 * 2.9.19 - 01.04.2024
   * permissions - fixes and improvements.
 * 2.9.18 - 01.04.2024
