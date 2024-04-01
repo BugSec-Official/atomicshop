@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.9.22 - 01.04.2024
+  * wrappers.dockerw.install_docker - fixes and improvements.
 * 2.9.21 - 01.04.2024
   * wrappers.factw.install - fixes and improvements.
 * 2.9.20 - 01.04.2024

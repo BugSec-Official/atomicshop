@@ -1,4 +1,5 @@
 import subprocess
+import getpass
 
 from ... import process, filesystem
 from ...print_api import print_api
@@ -71,7 +72,9 @@ def install_docker_ubuntu():
 
     process.execute_script(script, shell=True)
 
-    subprocess.check_call(['sudo', 'usermod', '-aG', 'docker', '$USER'])
+    # Add the current user to the docker group.
+    current_user: str = getpass.getuser()
+    subprocess.check_call(['sudo', 'usermod', '-aG', 'docker', current_user])
 
     # Verify the installation.
     result: list = process.execute_with_live_output('sudo docker run hello-world')
