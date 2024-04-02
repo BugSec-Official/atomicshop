@@ -61,14 +61,33 @@ FILE_NAME_REPLACEMENT_DICT: dict = {
 }
 
 
-def get_linux_home() -> str:
+def get_home_directory(return_sudo_user: bool = False) -> str:
     """
-    The function will return the home directory of the user on Linux.
+    Returns the home directory of the current user or the user who invoked sudo.
 
-    :return: string, home directory of the user on Linux.
+    :param return_sudo_user: bool, if 'False', then the function will return the home directory of the user who invoked
+        sudo (if the script was invoked with sudo).
+        If 'True', then the function will return the home directory of the current user, doesn't matter if the script was
+        invoked with sudo or not, if so home directory of the sudo user will be returned.
     """
 
-    return os.path.expanduser('~')
+    def return_home_directory_of_current_user():
+        """
+        Returns the home directory of the current user.
+        """
+        return os.path.expanduser('~')
+
+    # Check if the script is run using sudo
+    if 'SUDO_USER' in os.environ:
+        # If 'return_sudo_user' is set to 'True', return the home directory of the sudo user.
+        if return_sudo_user:
+            return_home_directory_of_current_user()
+        else:
+            # Get the home directory of the user who invoked sudo
+            return os.path.expanduser(f"~{os.environ['SUDO_USER']}")
+
+    # Get the current user's home directory
+    return_home_directory_of_current_user()
 
 
 def create_empty_file(file_path: str) -> None:
