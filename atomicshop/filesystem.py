@@ -87,7 +87,7 @@ def get_home_directory(return_sudo_user: bool = False) -> str:
             return os.path.expanduser(f"~{os.environ['SUDO_USER']}")
 
     # Get the current user's home directory
-    return_home_directory_of_current_user()
+    return return_home_directory_of_current_user()
 
 
 def create_empty_file(file_path: str) -> None:

@@ -6,9 +6,14 @@ DEFAULT_KIBANA_PORT: str = '5601'
 DEFAULT_KIBANA_HOST: str = 'localhost'
 DEFAULT_KIBANA_URL: str = f"http://{DEFAULT_KIBANA_HOST}:{DEFAULT_KIBANA_PORT}"
 
-ELASTIC_CONFIG_FILE: str = "/etc/elasticsearch/elasticsearch.yml"
-ELASTIC_JVM_OPTIONS_FILE: str = "/etc/elasticsearch/jvm.options"
+ELASTIC_SEARCH_CONFIG_DIRECTORY: str = "/etc/elasticsearch"
+
+ELASTIC_CONFIG_FILE: str = f"{ELASTIC_SEARCH_CONFIG_DIRECTORY}/elasticsearch.yml"
 XPACK_SECURITY_SETTING_NAME: str = "xpack.security.enabled"
+
+ELASTIC_JVM_OPTIONS_DIRECTORY: str = f"{ELASTIC_SEARCH_CONFIG_DIRECTORY}/jvm.options.d"
+ELASTIC_JVM_OPTIONS_CUSTOM_FILE: str = f"{ELASTIC_JVM_OPTIONS_DIRECTORY}/custom.options"
+ELASTIC_JVM_OPTIONS_4GB_MEMORY_USAGE: list[str] = ['-Xms4g', '-Xmx4g']
 
 UBUNTU_DEPENDENCY_PACKAGES: list[str] = ['apt-transport-https', 'openjdk-11-jdk', 'wget']
 UBUNTU_ELASTIC_PACKAGE_NAME: str = 'elasticsearch'

@@ -1,6 +1,13 @@
 <!-- HISTORY -->
 ## History
 
+* 2.10.0 - 02.04.2024
+  * wrappers.nodejsw - initial release.
+  * wrappers.elasticsearchw - fixes and improvements.
+  * wrappers.factw.install - fixes and improvements.
+  * filesystem - fixes and improvements.
+* 2.9.33 - 02.04.2024
+  * filesystem - fixes and improvements.
 * 2.9.32 - 02.04.2024
   * filesystem - fixes and improvements.
 * 2.9.31 - 01.04.2024
