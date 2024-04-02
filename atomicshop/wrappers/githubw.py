@@ -1,18 +1,79 @@
 import requests
 import fnmatch
 
-from ..web import download_and_extract_file
+from .. import web, urls
 from ..print_api import print_api
-from ..urls import url_parser
 
 
 class GitHubWrapper:
     # You also can use '.tar.gz' as extension.
     def __init__(
-            self, user_name: str = str(), repo_name: str = str(), repo_url: str = str(),
-            branch: str = 'master', branch_file_extension: str = '.zip'):
+            self,
+            user_name: str = None,
+            repo_name: str = None,
+            repo_url: str = None,
+            branch: str = 'master',
+            branch_file_extension: str = '.zip'
+    ):
+        """
+        This class is a wrapper for GitHub repositories. It can download the branch file from the repository and extract
+        it to the target directory and more.
+
+        :param user_name: str, the user-name of the repository.
+             https://github.com/{user_name}/{repo_name}
+        :param repo_name: str, the repository name.
+        :param repo_url: str, the repository url.
+            You can provide the full url to the repository directly and then extract the user_name and repo_name from it
+            with the 'build_links_from_repo_url' function.
+        :param branch: str, the branch name. The default is 'master'.
+        :param branch_file_extension: str, the branch file extension. The default is '.zip'.
+
+        ================================================================================================================
+        Usage to download the 'master' branch file:
+            git_wrapper = GitHubWrapper(user_name='user_name', repo_name='repo_name')
+            git_wrapper.download_and_extract_branch(target_directory='target_directory')
+
+        Usage to download the 'main' branch file:
+            git_wrapper = GitHubWrapper(user_name='user_name', repo_name='repo_name', branch='main')
+            git_wrapper.download_and_extract_branch(target_directory='target_directory')
+
+        You can provide the user_name and repo_name after the initialization of the class:
+            git_wrapper = GitHubWrapper()
+            git_wrapper.user_name = 'user_name'
+            git_wrapper.repo_name = 'repo_name'
+            git_wrapper.build_links_from_user_and_repo()
+            git_wrapper.download_and_extract_branch(target_directory='target_directory')
+        ================================================================================================================
+        Usage to download the 'master' branch file from the repository url:
+            git_wrapper = GitHubWrapper(repo_url='http://github.com/user_name/repo_name')
+            git_wrapper.download_and_extract_branch(target_directory='target_directory')
+
+        Usage to download the 'main' branch file from the repository url:
+            git_wrapper = GitHubWrapper(repo_url='http://github.com/user_name/repo_name', branch='main')
+            git_wrapper.download_and_extract_branch(target_directory='target_directory')
+
+        You can provide the repo_url after the initialization of the class:
+            git_wrapper = GitHubWrapper()
+            git_wrapper.repo_url = 'http://github.com/user_name/repo_name'
+            git_wrapper.build_links_from_repo_url()
+            git_wrapper.download_and_extract_branch(target_directory='target_directory')
+        ================================================================================================================
+        Usage to download the latest release where the file name is 'test_file.zip':
+            git_wrapper = GitHubWrapper(user_name='user_name', repo_name='repo_name')
+            git_wrapper.download_and_extract_latest_release(
+                target_directory='target_directory', string_pattern='test_*.zip')
+        ================================================================================================================
+        Usage to get the latest release json:
+            git_wrapper = GitHubWrapper(user_name='user_name', repo_name='repo_name')
+            git_wrapper.get_the_latest_release_json()
+        ================================================================================================================
+        Usage to get the latest release version:
+            git_wrapper = GitHubWrapper(user_name='user_name', repo_name='repo_name')
+            git_wrapper.get_the_latest_release_version_number()
+        """
+
         self.user_name: str = user_name
-        self.repo_name = repo_name
+        self.repo_name: str = repo_name
         self.repo_url: str = repo_url
         self.branch: str = branch
         self.branch_file_extension: str = branch_file_extension
@@ -26,6 +87,12 @@ class GitHubWrapper:
         self.branch_download_link: str = str()
         self.branch_downloaded_folder_name: str = str()
         self.latest_release_json_url: str = str()
+
+        if self.user_name and self.repo_name and not self.repo_url:
+            self.build_links_from_user_and_repo()
+
+        if self.repo_url and not self.user_name and not self.repo_name:
+            self.build_links_from_repo_url()
 
     def build_links_from_user_and_repo(self, **kwargs):
         if not self.user_name or not self.repo_name:
@@ -43,7 +110,7 @@ class GitHubWrapper:
             message = "'repo_url' is empty."
             print_api(message, color="red", error_type=True, **kwargs)
 
-        repo_url_parsed = url_parser(self.repo_url)
+        repo_url_parsed = urls.url_parser(self.repo_url)
         self.check_github_domain(repo_url_parsed['netloc'])
         self.user_name = repo_url_parsed['directories'][0]
         self.repo_name = repo_url_parsed['directories'][1]
@@ -73,20 +140,32 @@ class GitHubWrapper:
         """
 
         # Download the repo to current working directory, extract and remove the archive.
-        download_and_extract_file(
+        web.download_and_extract_file(
             file_url=self.branch_download_link,
             target_directory=target_directory,
             archive_remove_first_directory=archive_remove_first_directory,
             **kwargs)
 
     def download_and_extract_latest_release(
-            self, target_directory: str, string_pattern: str,
-            archive_remove_first_directory: bool = False, **kwargs):
-        # Download latest release url.
-        response = requests.get(self.latest_release_json_url)
-        # Response from the latest releases page is json. Convert response to json from downloaded format and get
-        # 'assets' key.
-        github_latest_releases_list = response.json()['assets']
+            self,
+            target_directory: str,
+            string_pattern: str,
+            archive_remove_first_directory: bool = False,
+            **kwargs):
+        """
+        This function will download the latest release from the GitHub repository, extract the file and remove the file,
+        leaving only the extracted folder.
+        :param target_directory: str, the target directory to download and extract the file.
+        :param string_pattern: str, the string pattern to search in the latest release. Wildcards can be used.
+        :param archive_remove_first_directory: bool, sets if archive extract function will extract the archive
+            without first directory in the archive. Check reference in the
+            'archiver.zip.extract_archive_with_zipfile' function.
+        :param kwargs: dict, the print arguments for the 'print_api' function.
+        :return:
+        """
+
+        # Get the 'assets' key of the latest release json.
+        github_latest_releases_list = self.get_the_latest_release_json()['assets']
 
         # Get only download urls of the latest releases.
         download_urls: list = list()
@@ -103,8 +182,23 @@ class GitHubWrapper:
                       f'{found_urls}'
             print_api(message, color="red", error_type=True, **kwargs)
 
-        download_and_extract_file(
+        web.download_and_extract_file(
             file_url=found_urls[0],
             target_directory=target_directory,
             archive_remove_first_directory=archive_remove_first_directory,
             **kwargs)
+
+    def get_the_latest_release_json(self):
+        """
+        This function will get the latest releases json.
+        :return:
+        """
+        response = requests.get(self.latest_release_json_url)
+        return response.json()
+
+    def get_the_latest_release_version_number(self):
+        """
+        This function will get the latest release version number.
+        :return:
+        """
+        return self.get_the_latest_release_json()['tag_name']

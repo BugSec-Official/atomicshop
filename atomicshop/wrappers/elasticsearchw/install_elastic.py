@@ -215,6 +215,12 @@ def install_elastic_kibana_ubuntu(install_elastic: bool = True, install_kibana: 
 
         infrastructure.start_elastic_and_check_service_availability()
 
+        print_api("Creating custom JVM options file with 4GB memory usage.")
+        infrastructure.create_jvm_options_custom_file(
+            file_path=config_basic.ELASTIC_JVM_OPTIONS_CUSTOM_FILE,
+            options=config_basic.ELASTIC_JVM_OPTIONS_4GB_MEMORY_USAGE
+        )
+
     if install_kibana:
         # Install Kibana.
         ubuntu_terminal.install_packages([config_basic.UBUNTU_KIBANA_PACKAGE_NAME])

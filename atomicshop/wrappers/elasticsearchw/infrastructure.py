@@ -170,6 +170,29 @@ def modify_xpack_security_setting(
             print_api(f"The setting is already set to [{setting}].")
 
 
+def create_jvm_options_custom_file(file_path: str = None, options: list = None):
+    """
+    The function creates a custom JVM options file for Elasticsearch.
+    The default file path is 'config_basic.ELASTIC_JVM_OPTIONS_CUSTOM_FILE'.
+    The default options are 'config_basic.ELASTIC_JVM_OPTIONS_4GB_MEMORY_USAGE'.
+    The 4GB memory usage options are needed for the Elasticsearch to work properly and not to crash.
+    :param file_path: str, the path to the custom JVM options file.
+    :param options: list, the list of JVM options.
+    :return:
+    """
+
+    if not file_path:
+        file_path = config_basic.ELASTIC_JVM_OPTIONS_CUSTOM_FILE
+
+    if not options:
+        options = config_basic.ELASTIC_JVM_OPTIONS_4GB_MEMORY_USAGE
+
+    # Write the options to the file.
+    with open(file_path, 'w') as file:
+        for option in options:
+            file.write(f"{option}\n")
+
+
 def is_server_available(
         max_attempts: int = 5,
         wait_between_attempts_seconds: float = 10,
