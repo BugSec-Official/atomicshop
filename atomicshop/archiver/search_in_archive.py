@@ -3,7 +3,7 @@ import zipfile
 from io import BytesIO
 from typing import Union
 
-from . import zip, sevenz
+from . import zips, sevenzs
 from .. import file_types
 
 import py7zr
@@ -37,12 +37,12 @@ def _get_unique_filename(directory, filename):
 
 def _is_zip_file(file, zip_obj):
     with zip_obj.open(file) as file_data:
-        return zip.is_zip_zipfile(file_data.read())
+        return zips.is_zip_zipfile(file_data.read())
 
 
 def _is_7z_file(file, sevenz_obj):
     with sevenz_obj.open(file) as file_data:
-        return sevenz.is_7z(file_data.read())
+        return sevenzs.is_7z(file_data.read())
 
 
 def _match_file_name(target, current, case_sensitive):
@@ -158,9 +158,9 @@ def _get_archive_type(file_object) -> Union[str, None]:
     if file_mime not in SUPPORTED_ARCHIVE_MIMES:
         return None
 
-    if zip.is_zip_zipfile(file_object):
+    if zips.is_zip_zipfile(file_object):
         return 'zip'
-    elif sevenz.is_7z(file_object):
+    elif sevenzs.is_7z(file_object):
         return '7z'
     else:
         raise UnknownArchiveType(f"{file_object[:10]} is not a known archive type.")

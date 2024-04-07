@@ -2,7 +2,7 @@ import os
 import urllib.request
 
 from .print_api import print_api
-from .archiver import zip
+from .archiver import zips
 from .urls import url_parser
 from .file_io import file_io
 from .wrappers.playwrightw import scenarios
@@ -239,7 +239,7 @@ def download_and_extract_file(
         file_url=file_url, target_directory=target_directory, file_name=file_name, **kwargs)
 
     # Extract the archive and remove the first directory.
-    zip.extract_archive_with_zipfile(
+    zips.extract_archive_with_zipfile(
         archive_path=f'{file_path}', extract_directory=target_directory,
         remove_first_directory=archive_remove_first_directory, **kwargs)
 
