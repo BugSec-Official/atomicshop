@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.10.1 - 07.04.2024
+  * archiver - fixes and improvements.
+  * wrappers.factw.install - fixes and improvements.
 * 2.10.0 - 02.04.2024
   * wrappers.nodejsw - initial release.
   * wrappers.elasticsearchw - fixes and improvements.

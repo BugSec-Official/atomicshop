@@ -244,6 +244,58 @@ def convert_object_with_attributes_to_dict(
     return obj_dict
 
 
+def convert_complex_object_to_dict(data):
+    """ Function that converts complex objects to dict recursively """
+
+    # 1. Extracts only the first level of objects. No byte decoding.
+    # new_dict = dict()
+    # for key, value in vars(obj).items():
+    #     new_dict.update({key: str(value)})
+    # return new_dict
+
+    # 2. Extracts only the first level of objects. Tries to decode bytes, if exception rises stores string as is.
+    # new_dict = dict()
+    # for key, value in vars(obj).items():
+    #     try:
+    #         new_dict.update({key: value.decode('utf-8')})
+    #     except Exception:
+    #         new_dict.update({key: str(value)})
+    # return new_dict
+
+    # 3. Decompress all the objects, save objects as is (no byte decoding).
+    if hasattr(data, "__dict__"):
+        # 'vars' return a dictionary of all the variables in a class / object.
+        # 'map' iterates through function 'dict_converter' all the values of the second argument and returns a list
+        # of all iterations of the function result.
+        function_return = dict(map(convert_complex_object_to_dict, vars(data).items()))
+        # If 'data' type is 'bytes'
+    elif isinstance(data, dict):
+        function_return = dict(map(convert_complex_object_to_dict, data.items()))
+    elif isinstance(data, tuple):
+        function_return = tuple(map(convert_complex_object_to_dict, data))
+    elif isinstance(data, list):
+        function_return = list(map(convert_complex_object_to_dict, data))
+    # One value objects.
+    elif isinstance(data, datetime.datetime):
+        function_return = data.strftime('%Y-%m-%d-%H:%M:%S')
+    elif isinstance(data, bytes) or isinstance(data, bytearray):
+        function_return = str(data)
+
+        # Don't want to use the next method, since there will be different formatted strings / messages. And we don't
+        # want that, since we can't manipulate it easily later.
+        # # Try to decode, if fails, return string.
+        # try:
+        #     function_return = data.decode(encoding='utf-8')
+        # except Exception:
+        #     function_return = str(data)
+        #     pass
+    # Any other type will return as is (something that 'dict()' function can handle), like strings and integers.
+    else:
+        function_return = data
+
+    return function_return
+
+
 def convert_tuples_to_lists(obj):
     """
     Convert all tuples in object to lists. The first  input 'obj' can be a dictionary, list or tuple.

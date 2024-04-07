@@ -95,6 +95,8 @@ def install_nodejs_ubuntu(
         if not force_install:
             return
 
+    # NodeSource is listed as source under official Node.js GitHub repository:
+    # https://github.com/nodejs/node?tab=readme-ov-file#current-and-lts-releases
     print_api("Adding NodeSource repository...")
 
     # Fetch and execute the NodeSource repository setup script.
