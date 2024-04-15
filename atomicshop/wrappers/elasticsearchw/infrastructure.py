@@ -170,27 +170,33 @@ def modify_xpack_security_setting(
             print_api(f"The setting is already set to [{setting}].")
 
 
-def create_jvm_options_custom_file(file_path: str = None, options: list = None):
+def create_jvm_options_custom_file(file_path: str, options: list):
     """
     The function creates a custom JVM options file for Elasticsearch.
-    The default file path is 'config_basic.ELASTIC_JVM_OPTIONS_CUSTOM_FILE'.
-    The default options are 'config_basic.ELASTIC_JVM_OPTIONS_4GB_MEMORY_USAGE'.
-    The 4GB memory usage options are needed for the Elasticsearch to work properly and not to crash.
+    You can use the default directory path as 'config_basic.ELASTIC_JVM_OPTIONS_DIRECTORY'.
     :param file_path: str, the path to the custom JVM options file.
     :param options: list, the list of JVM options.
     :return:
     """
 
-    if not file_path:
-        file_path = config_basic.ELASTIC_JVM_OPTIONS_CUSTOM_FILE
-
-    if not options:
-        options = config_basic.ELASTIC_JVM_OPTIONS_4GB_MEMORY_USAGE
-
     # Write the options to the file.
     with open(file_path, 'w') as file:
         for option in options:
             file.write(f"{option}\n")
+
+
+def create_jvm_options_custom_4gb_memory_heap_file(file_path: str = None):
+    """
+    The function creates a custom JVM options file with 4GB memory heap usage.
+    The 4GB memory usage options are needed for the Elasticsearch to work properly and not to crash.
+    :param file_path: str, the path to the custom JVM options file.
+    :return:
+    """
+
+    if not file_path:
+        file_path = config_basic.ELASTIC_JVM_OPTIONS_4GB_CUSTOM_FILE
+
+    create_jvm_options_custom_file(file_path, config_basic.ELASTIC_JVM_OPTIONS_4GB_MEMORY_USAGE)
 
 
 def is_server_available(
@@ -234,3 +240,25 @@ def is_server_available(
 
     print_api("Elasticsearch did not start within the expected time.", color='red', **print_kwargs)
     return False
+
+
+def is_4gb_memory_heap_options_applied_on_server() -> bool:
+    """
+    The function checks if the 4GB memory heap options are applied on the Elasticsearch server.
+    :return: bool.
+    """
+
+    # Send a GET request
+    response = requests.get(config_basic.DEFAULT_ELASTIC_URL_JVM_OPTIONS)
+    response.raise_for_status()  # Raise an exception for HTTP errors
+
+    # Load JSON data from the response
+    jvm_data = response.json()
+
+    # Check if memory heap options are applied in 'input_arguments' key.
+    for node in jvm_data['nodes'].values():
+        # Get the JVM input arguments values.
+        input_arguments = node['jvm']['input_arguments']
+
+        # Check that the 4GB memory heap options are applied.
+        return all(options in input_arguments for options in config_basic.ELASTIC_JVM_OPTIONS_4GB_MEMORY_USAGE)
