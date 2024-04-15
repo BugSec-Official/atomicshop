@@ -1,6 +1,10 @@
 <!-- HISTORY -->
 ## History
 
+* 2.10.4 - 15.04.2024
+  * basics.numbers - fixes and improvements.
+  * wrappers.psutilw - fixes and improvements.
+  * wrappers.elasticsearchw - fixes and improvements.
 * 2.10.3 - 08.04.2024
   * wrappers.pipw - fixes and improvements.
 * 2.10.2 - 08.04.2024

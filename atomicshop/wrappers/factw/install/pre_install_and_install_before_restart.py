@@ -68,7 +68,7 @@ def install_before_restart(
                 archive_path=fact_source_archive_path, extract_directory=installation_directory,
                 remove_first_directory=True, **(print_kwargs or {}))
 
-        # Set the executable permission on the pre-install file.
+        # Set the executable permission on the pre-installation file.
         permissions.set_executable_permission(fact_core_pre_install_file_path)
 
     # Run the shell script
