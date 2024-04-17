@@ -1,6 +1,5 @@
 from typing import Union
 import threading
-import multiprocessing
 import multiprocessing.managers
 
 from .print_api import print_api
@@ -22,7 +21,7 @@ class SystemResourceMonitor:
             get_disk_used_percent: bool = True,
             calculate_maximum_changed_disk_io: bool = False,
             queue_list: list = None,
-            manager_dict = None     # multiprocessing.Manager().dict()
+            manager_dict=None     # multiprocessing.Manager().dict()
     ):
         """
         Initialize the system resource monitor.
@@ -97,7 +96,7 @@ class SystemResourceMonitor:
         self.get_disk_used_percent: bool = get_disk_used_percent
         self.calculate_maximum_changed_disk_io: bool = calculate_maximum_changed_disk_io
         self.queue_list: list = queue_list
-        self.manager_dict: multiprocessing.Manager().dict = manager_dict
+        self.manager_dict = manager_dict        # multiprocessing.Manager().dict()
 
         self.maximum_disk_io: dict = {
             'read_bytes_per_sec': 0,

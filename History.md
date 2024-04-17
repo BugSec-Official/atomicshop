@@ -1,6 +1,12 @@
 <!-- HISTORY -->
 ## History
 
+* 2.10.6 - 17.04.2024
+  * system_resources - fixes and improvements.
+* 2.10.5 - 17.04.2024
+  * system_resources_monitor - fixes and improvements.
+  * system_resources - fixes and improvements.
+  * basics.multiprocesses - fixes and improvements.
 * 2.10.4 - 15.04.2024
   * basics.numbers - fixes and improvements.
   * wrappers.psutilw - fixes and improvements.
