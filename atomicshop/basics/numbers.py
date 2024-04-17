@@ -54,4 +54,3 @@ def convert_bytes_to_readable(
         return readable_format
     else:
         return byte_size, suffixes[i]
-

@@ -3,6 +3,7 @@ import time
 import tempfile
 import shutil
 import threading
+import multiprocessing.managers
 
 from .print_api import print_api
 from .wrappers.psutilw import cpus, memories, disks
@@ -93,18 +94,39 @@ def check_system_resources(
     return result
 
 
-def wait_for_resource_availability(cpu_percent_max: int = 80, memory_percent_max: int = 80, wait_time: float = 5):
+def wait_for_resource_availability(
+        cpu_percent_max: int = 80,
+        memory_percent_max: int = 80,
+        wait_time: float = 5,
+        system_monitor_manager_dict: multiprocessing.managers.DictProxy = None
+):
     """
     Wait for system resources to be available.
     :param cpu_percent_max: int, maximum CPU percentage. Above that usage, we will wait.
     :param memory_percent_max: int, maximum memory percentage. Above that usage, we will wait.
     :param wait_time: float, time to wait between checks.
+    :param system_monitor_manager_dict: multiprocessing.managers.DictProxy, shared manager dict for
+        system monitoring. The object is the output of atomicshop.system_resource_monitor.
+        If you are already running this monitor, you can pass the manager_dict to both the system monitor and this
+        class to share the system resources data.
+        If this is used, the system resources will be checked before starting each new execution from this
+        shared dict instead of performing new checks.
     :return: None
     """
     while True:
-        result = check_system_resources(
-            get_cpu=True, get_memory=True,
-            get_disk_io_bytes=False, get_disk_files_count=False, get_disk_busy_time=False, get_disk_used_percent=False)
+        # Check system resources. If system_monitor_manager_dict is provided, use it.
+        if system_monitor_manager_dict:
+            result = dict(system_monitor_manager_dict)
+        else:
+            result = check_system_resources(
+                get_cpu=True,
+                get_memory=True,
+                get_disk_io_bytes=False,
+                get_disk_files_count=False,
+                get_disk_busy_time=False,
+                get_disk_used_percent=False
+            )
+
         if result['cpu_usage'] < cpu_percent_max and result['memory_usage'] < memory_percent_max:
             break
         print_api(

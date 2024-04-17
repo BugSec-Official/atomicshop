@@ -1,4 +1,5 @@
 import multiprocessing
+import multiprocessing.managers
 import queue
 import concurrent.futures
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -42,10 +43,11 @@ class MultiProcessorRecursive:
             max_workers: int = None,
             cpu_percent_max: int = 80,
             memory_percent_max: int = 80,
-            wait_time: float = 5
+            wait_time: float = 5,
+            system_monitor_manager_dict: multiprocessing.managers.DictProxy = None
     ):
         """
-        MultiProcessor class. Used to execute functions in parallel. The result of each execution is feeded back
+        MultiProcessor class. Used to execute functions in parallel. The result of each execution is fed back
             to the provided function. Making it sort of recursive execution.
         :param process_function: function, function to execute on the input list.
         :param input_list: list, list of inputs to process.
@@ -56,6 +58,12 @@ class MultiProcessorRecursive:
         :param memory_percent_max: integer, maximum memory percentage. Above that usage, we will wait, before starting
             new execution.
         :param wait_time: float, time to wait if the CPU or memory usage is above the maximum percentage.
+        :param system_monitor_manager_dict: multiprocessing.managers.DictProxy, shared manager dict for
+            system monitoring. The object is the output of atomicshop.system_resource_monitor.
+            If you are already running this monitor, you can pass the manager_dict to both the system monitor and this
+            class to share the system resources data.
+            If this is used, the system resources will be checked before starting each new execution from this
+            shared dict instead of performing new checks.
 
         Usage:
             def unpack_file(file_path):
@@ -87,6 +95,7 @@ class MultiProcessorRecursive:
         self.cpu_percent_max: int = cpu_percent_max
         self.memory_percent_max: int = memory_percent_max
         self.wait_time: float = wait_time
+        self.system_monitor_manager_dict: multiprocessing.managers.DictProxy = system_monitor_manager_dict
 
     def run_process(self):
         with multiprocessing.Pool(processes=self.max_workers) as pool:
@@ -100,7 +109,8 @@ class MultiProcessorRecursive:
                     system_resources.wait_for_resource_availability(
                         cpu_percent_max=self.cpu_percent_max,
                         memory_percent_max=self.memory_percent_max,
-                        wait_time=self.wait_time)
+                        wait_time=self.wait_time,
+                        system_monitor_manager_dict=self.system_monitor_manager_dict)
 
                     # Process the item
                     async_result = pool.apply_async(self.process_function, (item,))
