@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.10.7 - __.04.2024
+  * file_io.docxs - fixes and improvements.
 * 2.10.6 - 17.04.2024
   * system_resources - fixes and improvements.
 * 2.10.5 - 17.04.2024
