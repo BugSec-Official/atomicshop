@@ -19,7 +19,7 @@ def get_hyperlinks(docx_path):
     # If the file is empty, it will raise an exception.
     # The same exception will rise if the file is opened in Word.
     except PackageNotFoundError:
-        print_api(f"File is empty or opened in Word: {docx_path}", color="red", error_type=True)
+        print_api(f"File is not DOCX format or opened in Word: {docx_path}", color="red", error_type=True)
         return hyperlinks
 
     for paragraph in doc.paragraphs:
@@ -67,7 +67,7 @@ def search_for_hyperlink_in_files(directory_path: str, hyperlink: str, relative_
 
     # Get all the docx files in the specified directory.
     files = filesystem.get_file_paths_from_directory(
-        directory_path, file_name_check_pattern="*.docx",
+        directory_path, file_name_check_pattern="*\.docx",
         add_relative_directory=True, relative_file_name_as_directory=True)
 
     found_in_files: list = list()
@@ -98,14 +98,23 @@ def search_for_hyperlink_in_files_interface_main(script_directory: str = None):
         def main():
             docxs.search_for_hyperlink_in_files_interface_main()
 
+        # Create the 'config.toml' file if it doesn't exist.
+        # Run the script the first time in order to create empty TOML.
+        # Note: relative_paths: boolean, if True, the function will return relative paths to the files and not the full
+        #         file paths. Example: 'content\file.docx' instead of 'D:/content/file.docx' if you specified 'D:/' as
+        #         'directory_path'.
+        # hyperlink = 'https://www.example.com'
+        # directory_path = 'C:/where/to/look/for/docxs'
+        # relative_paths = True
+
         if __name__ == '__main__':
             main()
     """
 
     # Create the 'config.toml' file if it doesn't exist. Manually constructing the TOML content.
     toml_dict = {
-        'directory_path': '',
         'hyperlink': '',
+        'directory_path': '',
         'relative_paths': True
     }
 
@@ -117,7 +126,10 @@ def search_for_hyperlink_in_files_interface_main(script_directory: str = None):
     found_in_files = search_for_hyperlink_in_files(
         config['directory_path'], config['hyperlink'], relative_paths=config['relative_paths'])
 
-    for found_file in found_in_files:
-        print(found_file)
+    print_api(f"Found in [{len(found_in_files)}] files:", color="blue")
 
-    input('press Enter')
+    for index, found_file in enumerate(found_in_files):
+        print_api(f"[{index+1}]", print_end="", color="green")
+        print_api(f" {found_file}")
+
+    input('[*] Press [Enter] to exit...')

@@ -569,6 +569,9 @@ def get_file_paths_from_directory(
     :param file_name_check_pattern: string, if specified, the function will return only files that match the pattern.
         The string can contain part of file name to check or full file name with extension.
         Can contain wildcards.
+        If you need to specify a "." in the pattern, you need to escape it with a backslash:
+        Example: "*\.txt" will return all files with the extension ".txt".
+        While "*.txt" will return all files that contain "txt" in the name.
     :param add_relative_directory: boolean, if
         'True', then the function will add relative directory to the output list.
             In this case the output list will contain dictionaries with keys 'path' and 'relative_dir'.
