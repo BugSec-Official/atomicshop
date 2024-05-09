@@ -1,7 +1,9 @@
 <!-- HISTORY -->
 ## History
 
-* 2.10.7 - __.04.2024
+* 2.10.8 - 09.05.2024
+  * wrappers.factw.install - fixes and improvements.
+* 2.10.7 - 30.04.2024
   * file_io.docxs - fixes and improvements.
 * 2.10.6 - 17.04.2024
   * system_resources - fixes and improvements.

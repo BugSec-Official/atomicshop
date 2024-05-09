@@ -59,10 +59,14 @@ def add_current_user_to_docker_group(print_kwargs: dict = None):
         return False
 
 
-def install_docker_ubuntu(add_current_user_to_docker_group_bool: bool = True):
+def install_docker_ubuntu(rootless: bool = True, add_current_user_to_docker_group_bool: bool = False):
     """
     The function will install docker on ubuntu.
+    :param rootless: bool, if True, the rootless installation will be performed.
+        Meaning, you will be able to run the 'docker' command without sudo and you will not need to add the
+        current user to the docker group.
     :param add_current_user_to_docker_group_bool: bool, if True, the current user will be added to the docker group.
+        So the user will be able to run the 'docker' command without sudo.
 
     Usage in main.py (run with sudo):
         from atomicshop.wrappers.dockerw import install_docker

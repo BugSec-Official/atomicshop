@@ -1,7 +1,10 @@
 import fnmatch
 import re
+from pathlib import Path
+import argparse
 
 from . import lists
+from ..print_api import print_api
 
 
 def get_nth_character_from_start(input_string: str, nth: int):
@@ -411,21 +414,76 @@ def convert_string_to_colon_separated(string: str, number_of_characters: int = 2
     return ':'.join([string[i:i+number_of_characters] for i in range(0, len(string), number_of_characters)])
 
 
-def replace_string_in_file(file_path: str, old_string: str, new_string: str):
+def replace_string_in_file(
+        file_path: str,
+        old_string: str,
+        new_string: str = None,
+        find_only: bool = False,
+        print_kwargs: dict = None
+) -> list[int]:
     """
     Function replaces 'old_string' with 'new_string' in the file.
     :param file_path: string, path to the file.
     :param old_string: string, to replace.
     :param new_string: string, to replace with.
+    :param find_only: boolean, if 'True' will only find the 'old_string' and return line numbers where it was found.
+    :param print_kwargs: dict, the print_api arguments.
+    :return: list of integers, line numbers where the 'old_string' was found.
     """
 
-    # Read in the file
-    with open(file_path, 'r') as file:
-        filedata = file.read()
+    if not find_only and new_string is None:
+        raise ValueError("The 'new_string' string must be provided if 'find_only' is False.")
 
-    # Replace the target string
-    filedata = filedata.replace(old_string, new_string)
+    changed_lines = []
 
-    # Write the file out again
-    with open(file_path, 'w') as file:
-        file.write(filedata)
+    # Read the file content
+    with open(file_path, 'r', encoding='utf-8') as file:
+        lines = file.readlines()
+
+    # Search for the old string and either replace or just track line numbers
+    for index, line in enumerate(lines, start=1):
+        if old_string in line:
+            changed_lines.append(index)
+            if not find_only:
+                lines[index - 1] = line.replace(old_string, new_string)
+
+    # If not in find-only mode, overwrite the file with the replaced content
+    if not find_only:
+        with open(file_path, 'w', encoding='utf-8') as file:
+            file.writelines(lines)
+
+    # Output the relevant line numbers
+    print_api(f"Target string found on the following lines: {changed_lines}", **(print_kwargs or {}))
+    return changed_lines
+
+
+def replace_string_in_file_main_argparse():
+    """
+    Main function for the 'replace_string_in_file' function.
+    You can use this function as a command line tool.
+    Example:
+        Create a file 'replace_string_in_file.py' with the next content:
+        ```
+        from atomicshop.basics import strings
+
+        if __name__ == '__main__':
+            strings.replace_string_in_file_main_argparse()
+        ```
+    """
+
+    parser = argparse.ArgumentParser(description="Replace string in file.")
+    parser.add_argument("file_path", type=Path, help="Path to the file.")
+    parser.add_argument("old_string", type=str, help="Old string to replace.")
+    parser.add_argument("--new_string", '-n', help="New string to replace with.")
+    parser.add_argument(
+        '--find_only', '-f', action='store_true',
+        help='Only output lines where the old string is found, without replacing.')
+
+    args = parser.parse_args()
+
+    replace_string_in_file(
+        file_path=args.file_path,
+        old_string=args.old_string,
+        new_string=args.new_string,
+        find_only=args.find_only
+    )
