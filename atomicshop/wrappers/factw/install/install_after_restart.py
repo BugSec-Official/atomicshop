@@ -32,4 +32,4 @@ def install_after_restart(
     process.execute_with_live_output(cmd=install_command, verbose=True)
     # Remove the FACT_core installation log.
     working_directory_path: str = filesystem.get_working_directory()
-    filesystem.remove_file(str(Path(working_directory_path, config_install.INSTALL_LOG_FILE_NAME)))
+    # filesystem.remove_file(str(Path(working_directory_path, config_install.INSTALL_LOG_FILE_NAME)))
