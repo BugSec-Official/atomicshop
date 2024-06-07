@@ -118,10 +118,12 @@ def install_nodejs_ubuntu(
     is_nodejs_installed()
 
 
-def install_npm_package_ubuntu(package_name: str):
+def install_npm_package_ubuntu(package_name: str, sudo: bool = True):
     """
     The function will install a npm package on Ubuntu.
     :param package_name: str, the name of the package to install.
+    :param sudo: bool, if True, the function will use sudo.
+        NPM commands require sudo to install global packages.
     :return:
     """
 
@@ -130,4 +132,8 @@ def install_npm_package_ubuntu(package_name: str):
         return
 
     command = f"npm install -g {package_name}"
+
+    if sudo:
+        command = f"sudo {command}"
+
     _ = subprocess.check_output(command, shell=True, stderr=subprocess.STDOUT)

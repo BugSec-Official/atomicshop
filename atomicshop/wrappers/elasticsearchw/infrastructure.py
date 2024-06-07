@@ -13,11 +13,11 @@ def is_elastic_service_running():
 
 
 def enable_elastic_service():
-    ubuntu_terminal.enable_service(config_basic.UBUNTU_ELASTIC_SERVICE_NAME)
+    ubuntu_terminal.enable_service(config_basic.UBUNTU_ELASTIC_SERVICE_NAME, sudo=True)
 
 
 def start_elastic_service():
-    ubuntu_terminal.start_service(config_basic.UBUNTU_ELASTIC_SERVICE_NAME)
+    ubuntu_terminal.start_service(config_basic.UBUNTU_ELASTIC_SERVICE_NAME, sudo=True)
 
 
 def is_kibana_service_running():
@@ -25,11 +25,11 @@ def is_kibana_service_running():
 
 
 def enable_kibana_service():
-    ubuntu_terminal.enable_service(config_basic.UBUNTU_KIBANA_SERVICE_NAME)
+    ubuntu_terminal.enable_service(config_basic.UBUNTU_KIBANA_SERVICE_NAME, sudo=True)
 
 
 def start_kibana_service():
-    ubuntu_terminal.start_service(config_basic.UBUNTU_KIBANA_SERVICE_NAME)
+    ubuntu_terminal.start_service(config_basic.UBUNTU_KIBANA_SERVICE_NAME, sudo=True)
 
 
 def start_elastic_and_check_service_availability(wait_time_seconds: float = 30, exit_on_error: bool = True):
@@ -88,6 +88,7 @@ def is_elastic_config_file_exists(
     if not config_file_path:
         config_file_path = config_basic.ELASTIC_CONFIG_FILE
 
+    # if not ubuntu_terminal.is_sudo_file_exists(config_file_path):
     if not filesystem.check_file_existence(config_file_path):
         if output_message:
             message = f"Configuration file does not exist at {config_file_path}."

@@ -3,13 +3,32 @@ import functools
 from typing import Union
 import shlex
 import subprocess
+import shutil
 
 from .print_api import print_api
 from .inspect_wrapper import get_target_function_default_args_and_combine_with_current
 from .basics.strings import match_pattern_against_string
+from .wrappers import ubuntu_terminal
 
 if os.name == 'nt':
     from .process_poller import GetProcessList
+
+
+def is_command_exists(cmd: str) -> bool:
+    """
+    The function checks if the command exists in the system.
+    :param cmd: string, the command to check.
+    :return: bool, True if the command exists, False otherwise.
+
+    With this you can also check if the command is in the PATH environment variable.
+    Example:
+    print(is_command_exists('7z'))  # C:\\Program Files\\7-Zip\\7z.exe
+    """
+
+    if shutil.which(cmd):
+        return True
+    else:
+        return False
 
 
 def process_execution_decorator(function_name):
@@ -145,7 +164,13 @@ def execute_in_new_window(
     return executed_process
 
 
-def execute_script(script: str, check: bool = True, shell: bool = False):
+def execute_script(
+        script: str,
+        check: bool = True,
+        shell: bool = False,
+        executable: Union[str, None] = '',
+        as_regular_user: bool = False
+):
     """
     The function executes a batch script bash on Linux or CMD.exe on Windows.
     :param script: string, script to execute.
@@ -166,15 +191,29 @@ def execute_script(script: str, check: bool = True, shell: bool = False):
         'cd' is shell-specific functionality.
         Without shell=True, the Python subprocess module would not understand the command "cd <directory>" as it's
         not an executable but a shell built-in command.
+    :param executable: string, the executable that will be used to run the script.
+        If not provided, the default shell will be used.
+    :param as_regular_user: boolean, if True, the script will be executed as a regular user with:
+        'sudo -u <username> <script>'
+        but in this context as:
+        'sudo -u {os.getlogin()} <script>'
+        This is useful when you want to execute a script as a regular user, but you are running the script with sudo.
+        Sometimes even if you try to use os.setuid() to change the user, it will not work, since the script is executed
+        with sudo.
     :return: None if execution was successful, subprocess.CalledProcessError string if not.
     """
 
-    if os.name == 'nt':
-        executable = 'cmd.exe'
-    elif os.name == 'posix':
-        executable = '/bin/bash'
-    else:
-        raise OSError(f'OS not supported: {os.name}')
+    if executable == '':
+        if os.name == 'nt':
+            executable = 'cmd.exe'
+        elif os.name == 'posix':
+            executable = '/bin/bash'
+        else:
+            raise OSError(f'OS not supported: {os.name}')
+
+    if as_regular_user:
+        script = ubuntu_terminal.get_command_execution_as_sudo_executer(script)
+        # script = f'sudo -u {os.getlogin()} {script}'
 
     try:
         subprocess.run(script, check=check, shell=shell, executable=executable)
