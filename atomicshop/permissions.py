@@ -1,5 +1,5 @@
 import os
-import sys
+import pwd
 import stat
 import ctypes
 import contextlib
@@ -102,3 +102,9 @@ def temporary_regular_permissions():
         # Revert to the original effective user and group ID
         os.seteuid(original_euid)
         os.setegid(original_egid)
+
+
+def expand_user_path(user_name, path):
+    pwnam = pwd.getpwnam(user_name)
+    home_dir = pwnam.pw_dir
+    return path.replace("~", home_dir)

@@ -173,8 +173,8 @@ def install_elastic_kibana_ubuntu(install_elastic: bool = True, install_kibana: 
         raise ValueError("At least one of the services (Elasticsearch or Kibana) must be installed.")
 
     # Update and upgrade system packages.
-    ubuntu_terminal.upgrade_system_packages()
     ubuntu_terminal.update_system_packages()
+    ubuntu_terminal.upgrade_system_packages()
 
     # Install necessary dependencies.
     ubuntu_terminal.install_packages(config_basic.UBUNTU_DEPENDENCY_PACKAGES)

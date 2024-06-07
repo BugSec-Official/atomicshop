@@ -66,10 +66,10 @@ def create_docker_image_ubuntu(directory_path: str):
     cd fact_extractor
 
     # Start docker service.
-    sudo service docker start
+    # sudo service docker start
 
     # Build the Docker image
-    sudo docker build -t fact_extractor .
+    docker build -t fact_extractor .
     """
 
     # Execute the script.

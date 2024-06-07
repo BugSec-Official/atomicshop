@@ -113,18 +113,22 @@ def _search_in_archive(
     elif archive_type == '7z':
         file_info_list = arch_obj.list()
 
+    # Iterate over each file in the archive.
     for item_index, item in enumerate(file_info_list):
         if item.filename.endswith('/'):  # Skip directories
             continue
 
+        # At this stage we will get the bytes of the archived file, which is an 'item' in the archive.
         archived_file_bytes = None
+        # If the main archive is zip we will use the 'open' method, if it's 7z we will use the 'read' method.
         if archive_type == 'zip':
             with arch_obj.open(item) as file_data:
                 archived_file_bytes = file_data.read()
         elif archive_type == '7z':
-            file_dict = arch_obj.read(item.filename)
+            file_dict = arch_obj.read([item.filename])
             archived_file_bytes = file_dict[item.filename].read()
 
+        # After we get the file bytes we will check if the file matches the callback functions.
         callback_matched = False
         if callback_functions:
             callback_matched = _handle_callback_matching(
