@@ -1178,3 +1178,54 @@ def create_dict_of_path(
             # If it's not the last part and the entry exists, navigate deeper
             if not is_last_part:
                 current_level = existing_entry["included"]
+
+
+def is_any_file_in_directory_locked(directory_path: str) -> bool:
+    """
+    The function checks if any file in the directory is locked (if the file is currently being written to that directory
+    it will be locked for reading). Basically it opens a handle for read and write and if it fails, then the file is
+    locked.
+
+    :param directory_path: string, full path to directory.
+    :return: boolean, if 'True', then at least one file in the directory is locked.
+    """
+
+    for filename in os.listdir(directory_path):
+        file_path = os.path.join(directory_path, filename)
+        if os.path.isfile(file_path):
+            return is_file_locked(file_path)
+    return False
+
+
+def is_any_file_locked_in_list(file_paths_list: list[str]) -> bool:
+    """
+    The function checks if any file in the list is locked (if the file is currently being written to it will be locked
+    for reading). Basically it opens a handle for read and write and if it fails, then the file is locked.
+
+    :param file_paths_list: list of strings, full paths to files.
+    :return: boolean, if 'True', then at least one file in the list is locked.
+    """
+
+    for file_path in file_paths_list:
+        if is_file_locked(file_path):
+            return True
+    return False
+
+
+def is_file_locked(file_path: str) -> bool:
+    """
+    The function checks if the file is locked (if the file is currently being written to it will be locked for reading).
+    Basically it opens a handle for read and write and if it fails, then the file is locked.
+
+    :param file_path: string, full path to file.
+    :return: boolean, if 'True', then the file is locked.
+    """
+
+    try:
+        # Attempt to open the file exclusively
+        with open(file_path, 'rb+') as f:
+            pass
+    except IOError:
+        # If we can't open the file, it might be in the process of being copied
+        return True
+    return False

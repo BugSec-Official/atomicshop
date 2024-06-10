@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.11.47 - 10.06.2024
+  * filesystem - added locked files check.
 * 2.11.46 - 10.06.2024
   * permissions - import pwd only on posix systems.
 * 2.11.1-2.11.45 - 30.05.2024-07.06.2024
