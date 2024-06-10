@@ -7,6 +7,8 @@ import stat
 import errno
 from contextlib import contextmanager
 
+import psutil
+
 from .print_api import print_api, print_status_of_list
 from .basics import strings, list_of_dicts
 from .file_io import file_io
@@ -1180,52 +1182,94 @@ def create_dict_of_path(
                 current_level = existing_entry["included"]
 
 
-def is_any_file_in_directory_locked(directory_path: str) -> bool:
+def list_open_files_in_directory(directory):
     """
-    The function checks if any file in the directory is locked (if the file is currently being written to that directory
-    it will be locked for reading). Basically it opens a handle for read and write and if it fails, then the file is
-    locked.
+    The function lists all open files by any processes in the directory.
+    :param directory:
+    :return:
+    """
+    open_files: list = []
+
+    # Iterate over all running processes
+    for proc in psutil.process_iter(['pid', 'name']):
+        try:
+            # List open files for the process
+            proc_open_files = proc.open_files()
+            for file in proc_open_files:
+                if file.path.startswith(directory):
+                    open_files.append((proc.info['pid'], proc.info['name'], file.path))
+        except (psutil.AccessDenied, psutil.NoSuchProcess):
+            # Ignore processes that can't be accessed
+            continue
+
+    return open_files
+
+
+def is_any_file_in_directory_opened_by_process(directory_path: str) -> bool:
+    """
+    The function checks if any file in the directory is opened in any process using psutil.
 
     :param directory_path: string, full path to directory.
-    :return: boolean, if 'True', then at least one file in the directory is locked.
+    :return: boolean, if 'True', then at least one file in the directory is opened by a process.
     """
 
-    for filename in os.listdir(directory_path):
-        file_path = os.path.join(directory_path, filename)
-        if os.path.isfile(file_path):
-            return is_file_locked(file_path)
+    # for filename in os.listdir(directory_path):
+    #     file_path = os.path.join(directory_path, filename)
+    #     if os.path.isfile(file_path):
+    #         return is_file_locked(file_path)
+    # return False
+
+    # Iterate over all running processes
+    for proc in psutil.process_iter(['pid', 'name']):
+        try:
+            # List open files for the process
+            proc_open_files = proc.open_files()
+            for file in proc_open_files:
+                if file.path.startswith(directory_path):
+                    return True
+        except (psutil.AccessDenied, psutil.NoSuchProcess):
+            # Ignore processes that can't be accessed
+            continue
+
     return False
 
 
-def is_any_file_locked_in_list(file_paths_list: list[str]) -> bool:
+def is_any_file_in_list_open_by_process(file_paths_list: list[str]) -> bool:
     """
-    The function checks if any file in the list is locked (if the file is currently being written to it will be locked
-    for reading). Basically it opens a handle for read and write and if it fails, then the file is locked.
+    The function checks if any file in the list is opened by any running process.
 
     :param file_paths_list: list of strings, full paths to files.
     :return: boolean, if 'True', then at least one file in the list is locked.
     """
 
     for file_path in file_paths_list:
-        if is_file_locked(file_path):
+        if is_file_open_by_process(file_path):
             return True
     return False
 
 
-def is_file_locked(file_path: str) -> bool:
+def is_file_open_by_process(file_path: str) -> bool:
     """
-    The function checks if the file is locked (if the file is currently being written to it will be locked for reading).
-    Basically it opens a handle for read and write and if it fails, then the file is locked.
+    The function checks if the file is opened in any of the running processes.
 
     :param file_path: string, full path to file.
     :return: boolean, if 'True', then the file is locked.
     """
 
-    try:
-        # Attempt to open the file exclusively
-        with open(file_path, 'rb+') as f:
-            pass
-    except IOError:
-        # If we can't open the file, it might be in the process of being copied
-        return True
+    # If the file doesn't exist, or it is not a file, it's not locked.
+    if not os.path.isfile(file_path):
+        return False
+
+    # Iterate over all running processes
+    for proc in psutil.process_iter(['pid', 'name']):
+        try:
+            # List open files for the process
+            proc_open_files = proc.open_files()
+            for file in proc_open_files:
+                if file.path == file_path:
+                    return True
+        except (psutil.AccessDenied, psutil.NoSuchProcess):
+            # Ignore processes that can't be accessed
+            continue
+
     return False

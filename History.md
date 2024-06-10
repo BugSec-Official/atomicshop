@@ -1,6 +1,10 @@
 <!-- HISTORY -->
 ## History
 
+* 2.11.49 - 10.06.2024
+  * filesystem - added locked files check.
+* 2.11.48 - 10.06.2024
+  * filesystem - added locked files check.
 * 2.11.47 - 10.06.2024
   * filesystem - added locked files check.
 * 2.11.46 - 10.06.2024
