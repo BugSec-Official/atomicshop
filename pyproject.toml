@@ -53,6 +53,7 @@ dependencies = [
     "docker",
     "elasticsearch",
     "numpy",
+    "olefile",
     "openpyxl",
     "pandas",
     "paramiko",

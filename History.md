@@ -1,8 +1,29 @@
 <!-- HISTORY -->
 ## History
 
+* 2.11.46 - 10.06.2024
+  * permissions - import pwd only on posix systems.
+* 2.11.1-2.11.45 - 30.05.2024-07.06.2024
+  * wrappers.dockerw.install_docker - fixes and improvements.
+  * addons.mains - added docker installation scripts for ubuntu.
+  * archiver.search_in_archive - fixed 7z search in archive.
+  * permissions - fixes and improvements.
+  * process - fixes and improvements.
+  * wrappers.elasticsearchw - fixes and improvements.
+  * wrappers.factw - fixes and improvements.
+  * wrappers.nodejsw - fixes and improvements.
+  * wrappers.pipw - fixes and improvements.
+  * wrappers.ubuntu_terminal - fixes and improvements.
+* 2.11.0 - 31.05.2024
+  * process - fixes and improvements.
+  * wrappers.dockerw.install_docker - added docker installation in rootless mode.
+  * wrappers.ubuntu_terminal - fixes and improvements.
+  * wrappers.ctyping.msi_windows_installer - initial release.
+  * archiver.sevenz_app_w - initial release.
+  * wrapper.olefilew - initial release.
 * 2.10.8 - 09.05.2024
   * wrappers.factw.install - fixes and improvements.
+  * basics.strings - fixes and improvements.
 * 2.10.7 - 30.04.2024
   * file_io.docxs - fixes and improvements.
 * 2.10.6 - 17.04.2024

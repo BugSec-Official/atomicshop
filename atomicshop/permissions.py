@@ -1,12 +1,12 @@
 import os
-import pwd
 import stat
 import ctypes
 import contextlib
 import subprocess
 
-from . import process
-from .print_api import print_api
+# Import pwd only on linux.
+if os.name == 'posix':
+    import pwd
 
 
 def is_admin() -> bool:
