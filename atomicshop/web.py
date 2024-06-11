@@ -174,6 +174,7 @@ def download(file_url: str, target_directory: str, file_name: str = None, **kwar
     file_path: str = f'{target_directory}{os.sep}{file_name}'
 
     print_api(f'Downloading: {file_url}', **kwargs)
+    print_api(f'To: {file_path}', **kwargs)
 
     # In order to use 'urllib.request', it is not enough to 'import urllib', you need to 'import urllib.request'.
     # Open the URL for data gathering.
