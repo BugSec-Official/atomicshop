@@ -1,8 +1,13 @@
 <!-- HISTORY -->
 ## History
 
-* 2.11.49 - 10.06.2024
-  * filesystem - added locked files check.
+* 2.12.0 - 11.06.2024
+  * filesystem - fixes and improvements.
+  * permissions - fixes and improvements.
+  * web - fixes and improvements.
+  * wrappers.githubw - fixes and improvements.
+  * wrappers.fibratusw - initial release.
+  * wrappers.msiw - initial release.
 * 2.11.48 - 10.06.2024
   * filesystem - added locked files check.
 * 2.11.47 - 10.06.2024

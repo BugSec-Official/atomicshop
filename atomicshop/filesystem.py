@@ -6,6 +6,8 @@ import shutil
 import stat
 import errno
 from contextlib import contextmanager
+from typing import Literal
+import tempfile
 
 import psutil
 
@@ -113,6 +115,22 @@ def get_working_directory() -> str:
     :return: string.
     """
     return str(Path.cwd())
+
+
+def get_temp_directory() -> str:
+    """
+    The function returns temporary directory of the system.
+
+    :return: string.
+    """
+
+    # Get the temporary directory in 8.3 format
+    short_temp_dir = tempfile.gettempdir()
+
+    # Convert to the long path name
+    long_temp_dir = str(Path(short_temp_dir).resolve())
+
+    return long_temp_dir
 
 
 def get_file_directory(file_path: str) -> str:
@@ -1273,3 +1291,31 @@ def is_file_open_by_process(file_path: str) -> bool:
             continue
 
     return False
+
+
+def get_download_directory(place: Literal['temp', 'script', 'working'] = 'temp', script_path: str = None) -> str:
+    """
+    The function returns the default download directory based on place.
+
+    :param place: string,
+        'temp', then the function will return the temporary directory.
+        'script', then the function will return the directory of the script.
+        'working', then the function will return the working directory.
+    :param script_path: string, full path to the script.
+    :return: string, full path to the default download directory.
+    """
+
+    if place == 'script' and script_path is None:
+        raise ValueError("Script path must be specified if place is 'script'.")
+
+    # Get the download directory based on the operating system
+    if place == 'script':
+        download_directory = get_file_directory(script_path)
+    elif place == 'working':
+        download_directory = get_working_directory()
+    elif place == 'temp':
+        download_directory = get_temp_directory()
+    else:
+        raise ValueError("Invalid place specified.")
+
+    return download_directory

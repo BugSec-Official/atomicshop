@@ -3,6 +3,7 @@ import fnmatch
 
 from .. import web, urls
 from ..print_api import print_api
+from ..basics import strings
 
 
 class GitHubWrapper:
@@ -146,22 +147,17 @@ class GitHubWrapper:
             archive_remove_first_directory=archive_remove_first_directory,
             **kwargs)
 
-    def download_and_extract_latest_release(
+    def get_latest_release_url(
             self,
-            target_directory: str,
             string_pattern: str,
-            archive_remove_first_directory: bool = False,
+            exclude_string: str = None,
             **kwargs):
         """
-        This function will download the latest release from the GitHub repository, extract the file and remove the file,
-        leaving only the extracted folder.
-        :param target_directory: str, the target directory to download and extract the file.
+        This function will return the latest release url.
         :param string_pattern: str, the string pattern to search in the latest release. Wildcards can be used.
-        :param archive_remove_first_directory: bool, sets if archive extract function will extract the archive
-            without first directory in the archive. Check reference in the
-            'archiver.zip.extract_archive_with_zipfile' function.
+        :param exclude_string: str, the string to exclude from the search. No wildcards can be used.
         :param kwargs: dict, the print arguments for the 'print_api' function.
-        :return:
+        :return: str, the latest release url.
         """
 
         # Get the 'assets' key of the latest release json.
@@ -171,6 +167,12 @@ class GitHubWrapper:
         download_urls: list = list()
         for single_dict in github_latest_releases_list:
             download_urls.append(single_dict['browser_download_url'])
+
+        # Exclude urls against 'exclude_string'.
+        if exclude_string:
+            for download_url in download_urls:
+                if exclude_string in download_url:
+                    download_urls.remove(download_url)
 
         # Find urls against 'string_pattern'.
         found_urls = fnmatch.filter(download_urls, string_pattern)
@@ -182,8 +184,55 @@ class GitHubWrapper:
                       f'{found_urls}'
             print_api(message, color="red", error_type=True, **kwargs)
 
+        return found_urls[0]
+
+    def download_latest_release(
+            self,
+            target_directory: str,
+            string_pattern: str,
+            exclude_string: str = None,
+            **kwargs):
+        """
+        This function will download the latest release from the GitHub repository.
+        :param target_directory: str, the target directory to download the file.
+        :param string_pattern: str, the string pattern to search in the latest release. Wildcards can be used.
+        :param exclude_string: str, the string to exclude from the search. No wildcards can be used.
+            The 'excluded_string' will be filtered before the 'string_pattern' entries.
+        :param kwargs: dict, the print arguments for the 'print_api' function.
+        :return:
+        """
+
+        # Get the latest release url.
+        found_url = self.get_latest_release_url(string_pattern=string_pattern, exclude_string=exclude_string, **kwargs)
+
+        downloaded_file_path = web.download(file_url=found_url, target_directory=target_directory, **kwargs)
+        return downloaded_file_path
+
+    def download_and_extract_latest_release(
+            self,
+            target_directory: str,
+            string_pattern: str,
+            exclude_string: str = None,
+            archive_remove_first_directory: bool = False,
+            **kwargs):
+        """
+        This function will download the latest release from the GitHub repository, extract the file and remove the file,
+        leaving only the extracted folder.
+        :param target_directory: str, the target directory to download and extract the file.
+        :param string_pattern: str, the string pattern to search in the latest release. Wildcards can be used.
+        :param exclude_string: str, the string to exclude from the search. No wildcards can be used.
+        :param archive_remove_first_directory: bool, sets if archive extract function will extract the archive
+            without first directory in the archive. Check reference in the
+            'archiver.zip.extract_archive_with_zipfile' function.
+        :param kwargs: dict, the print arguments for the 'print_api' function.
+        :return:
+        """
+
+        # Get the latest release url.
+        found_url = self.get_latest_release_url(string_pattern=string_pattern, exclude_string=exclude_string, **kwargs)
+
         web.download_and_extract_file(
-            file_url=found_urls[0],
+            file_url=found_url,
             target_directory=target_directory,
             archive_remove_first_directory=archive_remove_first_directory,
             **kwargs)
