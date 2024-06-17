@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.12.1 - 17.06.2024
+  * file_io.csvs - fixes and improvements, including the dependable functions.
 * 2.12.0 - 11.06.2024
   * filesystem - fixes and improvements.
   * permissions - fixes and improvements.
