@@ -155,7 +155,9 @@ def analyze(main_file_path: str):
 
     # Get the content from statistics files.
     statistics_content: list = reading.get_logs(
-        config['statistic_files_path'], pattern='statistics*.csv', log_type='csv',
+        config['statistic_files_path'],
+        pattern='statistics*.csv',
+        log_type='csv',
     )
 
     # Initialize loop.

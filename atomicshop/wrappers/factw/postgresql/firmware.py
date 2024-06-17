@@ -245,6 +245,6 @@ def save_firmware_uids_as_csv(
 
     # Save UIDs as CSV file.
     file_path = directory_path + os.sep + 'uids.csv'
-    csvs.write_list_to_csv(export_list, file_path)
+    csvs.write_list_to_csv(file_path, export_list)
 
     return None

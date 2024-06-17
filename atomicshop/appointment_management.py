@@ -5,7 +5,7 @@ from .print_api import print_api
 from .basics.lists import remove_duplicates
 from .datetimes import convert_single_digit_to_zero_padded, create_date_range_for_year, \
     create_date_range_for_year_month
-from .file_io.csvs import read_csv_to_list
+from .file_io import csvs
 
 
 class AppointmentManager:
@@ -38,7 +38,8 @@ class AppointmentManager:
     def read_latest_date_csv(self):
         try:
             # Read the csv to list of dicts.
-            csv_list, _ = read_csv_to_list(file_path=self.latest_date_to_check_filepath, raise_exception=True)
+            csv_list, _ = csvs.read_csv_to_list_of_dicts_by_header(
+                file_path=self.latest_date_to_check_filepath, raise_exception=True)
             # It has only 1 line, so get it to dict.
             latest_date_dict = csv_list[0]
 
@@ -100,7 +101,8 @@ class BlacklistEngine:
     def read_blacklist_csv(self) -> None:
         try:
             # Read the csv to list of dicts.
-            csv_list, _ = read_csv_to_list(file_path=self.blacklist_dates_filepath, raise_exception=True)
+            csv_list, _ = csvs.read_csv_to_list_of_dicts_by_header(
+                file_path=self.blacklist_dates_filepath, raise_exception=True)
 
             daterange = None
             # Iterate through all the rows.
