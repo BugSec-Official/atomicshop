@@ -38,7 +38,7 @@ class DiffChecker:
             The object is 'None' by default, since there are objects that are needed to be provided in the
             function input for that object. So, not always you know what your object type during class initialization.
         :param check_object_display_name: string, name of the object to display in the message.
-            If not specified, the 'check_object' will be displayed.
+            If not specified, the provided 'check_object' will be displayed.
         :param aggregation: boolean, if True, the object will be aggregated with other objects in the list of objects.
             Meaning, that the object will be checked against the existing objects in the list, and if it is not
             in the list, it will be added to the list. If it is in the list, it will be ignored.
@@ -62,6 +62,74 @@ class DiffChecker:
 
             True: return updated dictionary on first cycle. This is the default.
             False: don't return updated dictionary on first cycle.
+
+        --------------------------------------------------
+
+        Working example:
+        from atomicshop import diff_check
+
+
+        # Example of checking list of dicts.
+        check_list_of_dicts = [
+            {'name': 'John', 'age': 25},
+            {'name': 'Alice', 'age': 30}
+        ]
+
+        diff_checker = diff_check.DiffChecker(
+            check_object=check_list_of_dicts,
+            check_object_display_name='List of Dicts',
+            aggregation=True,
+            input_file_path='D:\\input\\list_of_dicts.json',
+            input_file_write_only=True,
+            return_first_cycle=True
+        )
+
+        result, message = diff_checker.check_list_of_dicts(
+            sort_by_keys=['name']
+        )
+
+        # If result is not None, it means that the object was updated.
+        if result:
+            print(message)
+
+        --------------------------------------------------
+
+        Working example when you need to aggregate a list of dicts, meaning only new entries will be added to the list:
+        from atomicshop import diff_check
+
+
+        diff_checker = diff_check.DiffChecker(
+            check_object_display_name='List of Dicts',
+            aggregation=True,
+            input_file_path='D:\\input\\list_of_dicts.json',
+            input_file_write_only=True,
+            return_first_cycle=True
+        )
+
+        # Example of checking list of dicts.
+        check_list_of_dicts = [
+            {'name': 'John', 'age': 25},
+            {'name': 'Alice', 'age': 30}
+        ]
+
+        diff_checker.check_object = check_list_of_dicts
+        result, message = diff_checker.check_list_of_dicts()
+
+        # If result is not None, it means that the object was updated.
+        if result:
+            print(message)
+
+
+        check_list_of_dicts = [
+            {'name': 'John', 'age': 25},
+            {'name': 'Jessie', 'age': 50}
+        ]
+
+        diff_checker.check_object = check_list_of_dicts
+        result, message = diff_checker.check_list_of_dicts()
+
+        if result:
+            print(message)
         """
 
         # 'check_object' can be none, so checking if it not equals empty string.
@@ -130,13 +198,13 @@ class DiffChecker:
                 try:
                     if self.save_as == 'txt':
                         self.previous_content = file_io.read_file(
-                            self.input_file_path, stderr=False, **print_kwargs)
+                            self.input_file_path, stderr=False, **(print_kwargs or {}))
                     elif self.save_as == 'json':
                         self.previous_content = jsons.read_json_file(
-                            self.input_file_path, stderr=False, **print_kwargs)
+                            self.input_file_path, stderr=False, **(print_kwargs or {}))
                 except FileNotFoundError as except_object:
                     message = f"Input File [{Path(except_object.filename).name}] doesn't exist - Will create new one."
-                    print_api(message, color='yellow', **print_kwargs)
+                    print_api(message, color='yellow', **(print_kwargs or {}))
                     pass
 
             # get the content of current function.
@@ -182,10 +250,10 @@ class DiffChecker:
             if self.input_file_path:
                 if self.save_as == 'txt':
                     # noinspection PyTypeChecker
-                    file_io.write_file(self.previous_content, self.input_file_path, **print_kwargs)
+                    file_io.write_file(self.previous_content, self.input_file_path, **(print_kwargs or {}))
                 elif self.save_as == 'json':
                     jsons.write_json_file(
-                        self.previous_content, self.input_file_path, use_default_indent=True, **print_kwargs)
+                        self.previous_content, self.input_file_path, use_default_indent=True, **(print_kwargs or {}))
         else:
             message = f"Object didn't change: {self.check_object_display_name}"
 
