@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.12.2-2.12.3 - 18.06.2024
+  * diff_check - fixes and improvements.
+  * file_io.csvs - fixes and improvements
 * 2.12.1 - 17.06.2024
   * file_io.csvs - fixes and improvements, including the dependable functions.
 * 2.12.0 - 11.06.2024

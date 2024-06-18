@@ -84,15 +84,24 @@ def read_csv_to_list_of_lists(
     csv_reader = csv.reader(file_object)
 
     csv_list = list(csv_reader)
-    header = csv_list[0]
 
-    if exclude_header_from_content:
+    # Get the header if there is only something in the content.
+    if csv_list:
+        header = csv_list[0]
+    else:
+        header = []
+
+    if exclude_header_from_content and csv_list:
         csv_list.pop(0)
 
     return csv_list, header
 
 
-def write_list_to_csv(file_path: str, content_list: list, mode: str = 'w') -> None:
+def write_list_to_csv(
+        file_path: str,
+        content_list: list,
+        mode: str = 'w'
+) -> None:
     """
     Function to write list object that each iteration of it contains dict object with same keys and different values.
 
@@ -103,15 +112,23 @@ def write_list_to_csv(file_path: str, content_list: list, mode: str = 'w') -> No
     """
 
     with open(file_path, mode=mode) as csv_file:
-        # Create header from keys of the first dictionary in list.
-        header = content_list[0].keys()
-        # Create CSV writer.
-        writer = csv.DictWriter(csv_file, fieldnames=header, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+        if len(content_list) > 0 and isinstance(content_list[0], dict):
+            # Treat the list as list of dictionaries.
+            header = content_list[0].keys()
 
-        # Write header.
-        writer.writeheader()
-        # Write list of dits as rows.
-        writer.writerows(content_list)
+            # Create CSV writer.
+            writer = csv.DictWriter(csv_file, fieldnames=header, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+
+            # Write header.
+            writer.writeheader()
+            # Write list of dits as rows.
+            writer.writerows(content_list)
+        # Else, treat the list as list of lists.
+        else:
+            # Create CSV writer.
+            writer = csv.writer(csv_file)
+            # Write list of lists as rows.
+            writer.writerows(content_list)
 
 
 def get_header(file_path: str, print_kwargs: dict = None) -> list:
