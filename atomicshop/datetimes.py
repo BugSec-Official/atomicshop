@@ -2,6 +2,7 @@ import datetime
 from datetime import timedelta
 import time
 import random
+import re
 
 
 class MonthToNumber:
@@ -44,6 +45,29 @@ class MonthToNumber:
         'אוקטובר': '10',
         'נובמבר': '11',
         'דצמבר': '12'}
+
+
+def get_datetime_from_complex_string_by_pattern(complex_string: str, date_pattern: str):
+    """
+    Function will get datetime object from a complex string by pattern.
+
+    :param complex_string: string that contains date and time.
+    :param date_pattern: pattern that will be used to extract date and time from the string.
+    :return: datetime object.
+    """
+
+    # Convert the date pattern to regex pattern
+    regex_pattern = re.sub(r'%[a-zA-Z]', r'\\d+', date_pattern)
+
+    # Find the date part in the file name using the regex pattern
+    date_str = re.search(regex_pattern, complex_string)
+
+    if date_str:
+        # Convert the date string to a datetime object based on the given pattern
+        date_obj = datetime.datetime.strptime(date_str.group(), date_pattern)
+        return date_obj
+    else:
+        raise ValueError("No valid date found in the string")
 
 
 def convert_single_digit_to_zero_padded(string: str):

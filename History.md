@@ -1,6 +1,14 @@
 <!-- HISTORY -->
 ## History
 
+* 2.12.4 - 24.06.2024
+  * basics.lists - fixes and improvements.
+  * datetimes - fixes and improvements.
+  * diff_check - fixes and improvements.
+  * etw.dns_trace - fixes and improvements.
+  * monitor.change_monitor - fixes and improvements.
+  * permissions - fixes and improvements.
+  * wrappers.loggingw - fixes and improvements.
 * 2.12.2-2.12.3 - 18.06.2024
   * diff_check - fixes and improvements.
   * file_io.csvs - fixes and improvements

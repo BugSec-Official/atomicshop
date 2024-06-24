@@ -1,3 +1,5 @@
+from typing import Literal, Union
+
 from .checks import dns, network, hash, process_running
 from .. import filesystem, scheduling
 from ..diff_check import DiffChecker
@@ -9,18 +11,34 @@ class ChangeMonitor:
     """
     def __init__(
             self,
-            object_type: str,
+            object_type: Union[
+                Literal[
+                    'file',
+                    'dns',
+                    'network',
+                    'process_running',
+                    'url_urllib',
+                    'url_playwright_html',
+                    'url_playwright_pdf',
+                    'url_playwright_png',
+                    'url_playwright_jpeg'],
+                None] = None,
             check_object_list: list = None,
             input_file_directory: str = None,
             input_file_name: str = None,
             generate_input_file_name: bool = False,
             input_file_write_only: bool = True,
             store_original_object: bool = False,
+            operation_type: Literal['hit_statistics', 'all_objects'] = None
     ):
         """
         :param object_type: string, type of object to check. The type must be one of the following:
-            'dns': 'check_object_list' will be none, since the DNS events will be queried from the system.
             'file': 'check_object_list' must contain strings of full path to the file.
+            'dns': 'check_object_list' will be none, since the DNS events will be queried from the system.
+            'network': 'check_object_list' will be none, since the network events will be queried from the system.
+            'process_running': 'check_object_list' must contain strings of process names to check if they are running.
+                Example: ['chrome.exe', 'firefox.exe']
+                No file is written.
             'url_urllib': 'check_object_list' must contain strings of full URL to a web page. The page will be
                 downloaded using 'urllib' library in HTML.
             'url_playwright_html': 'check_object_list' must contain strings of full URL to a web page. The page will
@@ -52,6 +70,10 @@ class ChangeMonitor:
                 from the memory.
         :param store_original_object: boolean, if True, the original object will be stored on the disk inside
         'Original' folder, inside 'input_file_directory'.
+        :param operation_type: string, type of operation to perform. The type must be one of the following:
+            'hit_statistics': will only store the statistics of the entries in the input file.
+            'all_objects': disable the DiffChecker features, meaning any new entries will be emitted as is.
+            None: will use the default operation type, based on the object type.
 
         If 'input_file_directory' is not specified, the 'input_file_name' is not specified, and
         'generate_input_file_name' is False, then the input file will not be used and the object will be stored
@@ -72,19 +94,25 @@ class ChangeMonitor:
             raise ValueError(
                 'ERROR: [input_file_name] and [generate_input_file_name] cannot be both specified and True.')
 
+        if operation_type:
+            if operation_type not in ['hit_statistics', 'all_objects']:
+                raise ValueError(
+                    'ERROR: [operation_type] must be one of the following: "hit_statistics", "all_objects".')
+
         # === EOF Exception section ========================================
         # === Initialize Main variables ====================================
 
         if not check_object_list:
             check_object_list = list()
 
-        self.object_type: str = object_type
+        self.object_type = object_type
         self.check_object_list: list = check_object_list
         self.input_file_directory: str = input_file_directory
         self.input_file_name: str = input_file_name
         self.generate_input_file_name: bool = generate_input_file_name
         self.input_file_write_only: bool = input_file_write_only
         self.store_original_object: bool = store_original_object
+        self.operation_type = operation_type
 
         # === EOF Initialize Main variables ================================
         # === Initialize Secondary variables ===============================
@@ -98,6 +126,7 @@ class ChangeMonitor:
                 self.diff_check_list.append(
                     DiffChecker(
                         input_file_write_only=self.input_file_write_only,
+                        operation_type=self.operation_type
                     )
                 )
         # Else, if 'check_object_list' is None, create a DiffChecker object only once.
@@ -105,6 +134,7 @@ class ChangeMonitor:
             self.diff_check_list.append(
                 DiffChecker(
                     input_file_write_only=self.input_file_write_only,
+                    operation_type=self.operation_type
                 )
             )
 

@@ -26,7 +26,9 @@ def _execute_cycle(change_monitor_instance, print_kwargs: dict = None):
 
         # Change settings for the DiffChecker object.
         change_monitor_instance.diff_check_list[0].return_first_cycle = True
-        change_monitor_instance.diff_check_list[0].aggregation = True
+        # 'operation_type' is None.
+        if not change_monitor_instance.operation_type:
+            change_monitor_instance.diff_check_list[0].operation_type = 'new_objects'
 
         if change_monitor_instance.generate_input_file_name:
             original_name = 'known_domains'
@@ -48,6 +50,17 @@ def _execute_cycle(change_monitor_instance, print_kwargs: dict = None):
     # will return a dict with current DNS trace event.
     event_dict = change_monitor_instance.fetch_engine.emit()
 
+    # If 'disable_diff_check' is True, we'll return the event_dict as is.
+    # if change_monitor_instance.disable_diff_check:
+    #     return_list.append(event_dict)
+    #
+    #     message = \
+    #         (f"Current domain: {event_dict['name']} | {event_dict['domain']} | {event_dict['query_type']} | "
+    #          f"{event_dict['cmdline']}")
+    #     print_api(message, color='yellow', **print_kwargs)
+    #
+    #     return return_list
+    # else:
     change_monitor_instance.diff_check_list[0].check_object = [event_dict]
 
     # if event_dict not in change_monitor_instance.diff_check_list[0].check_object:
@@ -62,14 +75,27 @@ def _execute_cycle(change_monitor_instance, print_kwargs: dict = None):
         sort_by_keys=['cmdline', 'name'], print_kwargs=print_kwargs)
 
     if result:
-        # Get list of new connections only.
-        # new_connections_only: list = list_of_dicts.get_difference(result['old'], result['updated'])
+        # Check if 'updated' key is in the result. THis means that this is a regular cycle.
+        if 'updated' in result:
+            # Get list of new connections only.
+            # new_connections_only: list = list_of_dicts.get_difference(result['old'], result['updated'])
 
-        for connection in result['updated']:
-            message = \
-                f"New domain: {connection['name']} | " \
-                f"{connection['domain']} | {connection['query_type']} | " \
-                f"{connection['cmdline']}"
+            for connection in result['updated']:
+                message = \
+                    f"New domain: {connection['name']} | " \
+                    f"{connection['domain']} | {connection['query_type']} | " \
+                    f"{connection['cmdline']}"
+                print_api(message, color='yellow', **print_kwargs)
+
+                return_list.append(message)
+        # Check if 'count' key is in the result. This means that this a statistics cycle.
+        elif 'count' in result:
+            message = f"Current domain: {result['entry']} | Times hit: {result['count']}"
+            print_api(message, color='yellow', **print_kwargs)
+
+            return_list.append(message)
+        elif 'count' not in result and 'entry' in result:
+            message = f"Current domain: {result['entry']}"
             print_api(message, color='yellow', **print_kwargs)
 
             return_list.append(message)

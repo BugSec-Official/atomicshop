@@ -14,6 +14,17 @@ class DnsTrace:
             every 100 ms. Since the DNS events doesn't contain the process name and command line, only PID.
             Then DNS events will be enriched with the process name and command line from the process poller.
         :param attrs: List of attributes to return. If None, all attributes will be returned.
+
+        Usage Example:
+            from atomicshop.etw import dns_trace
+
+
+            dns_trace_w = dns_trace.DnsTrace(enable_process_poller=True, attrs=['pid', 'name', 'cmdline', 'domain', 'query_type'])
+            dns_trace_w.start()
+            while True:
+                dns_dict = dns_trace_w.emit()
+                print(dns_dict)
+            dns_trace_w.stop()
         """
 
         self.enable_process_poller = enable_process_poller
