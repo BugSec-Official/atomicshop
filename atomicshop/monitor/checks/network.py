@@ -70,6 +70,8 @@ def _get_list(change_monitor_instance):
         # Set the 'check_object' to empty list, since we will append the list of DNS events.
         change_monitor_instance.diff_check_list[0].check_object = list()
 
+        change_monitor_instance.diff_check_list[0].operation_type = 'single_object'
+
     # Get all connections (list of dicts), including process name and cmdline.
     connections_list_of_dicts: list = \
         change_monitor_instance.fetch_engine.get_connections_with_process_as_list_of_dicts(

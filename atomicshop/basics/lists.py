@@ -1,3 +1,6 @@
+import copy
+
+
 def remove_duplicates(list_instance: list):
     # One of the fastest methods.
     seen = set()
@@ -109,3 +112,14 @@ def get_the_most_frequent_element_from_list(list_instance: list[str]) -> str:
     """
 
     return max(set(list_instance), key=list_instance.count)
+
+
+def copy_list_of_mutable_objects(list_instance: list) -> list:
+    """
+    This function will copy the list of mutable objects. Meaning that all the mutable objects inside will be copied
+    as well.
+    :param list_instance: list.
+    :return: list.
+    """
+
+    return copy.deepcopy(list_instance)

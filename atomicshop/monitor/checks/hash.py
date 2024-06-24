@@ -28,6 +28,8 @@ def _execute_cycle(change_monitor_instance, print_kwargs: dict = None):
             # Set the input file path.
             change_monitor_instance._set_input_file_path(check_object_index=check_object_index)
 
+        change_monitor_instance.diff_check_list[check_object_index].operation_type = 'single_object'
+
         # Check if the object was updated.
         result, message = change_monitor_instance.diff_check_list[check_object_index].check_string(
             print_kwargs=print_kwargs)

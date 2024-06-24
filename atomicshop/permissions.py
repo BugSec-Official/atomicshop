@@ -54,6 +54,18 @@ def set_executable_permission(file_path: str):
     os.chmod(file_path, os.stat(file_path).st_mode | stat.S_IXUSR)
 
 
+def change_file_owner_ubuntu(file_path: str, username: str):
+    """
+    Function changes the owner of the file to the specified user.
+    :param file_path: str, path to the file.
+    :param username: str, username of the new owner.
+    :return:
+    """
+
+    uid = pwd.getpwnam(username).pw_uid
+    os.chown(file_path, uid, -1)
+
+
 def is_executable_permission(file_path: str) -> bool:
     """
     Function checks if the file has the executable permission.
