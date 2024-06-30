@@ -30,6 +30,7 @@ version = {attr = "atomicshop.__version__"}
 # resource_path = importlib.resources.files(package_name) / resource
 [tool.setuptools.package-data]
 "atomicshop.addons" = ["**"]
+"atomicshop.mains" = ["**"]
 
 [project]
 # Name of the package.
