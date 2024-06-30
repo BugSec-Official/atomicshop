@@ -72,44 +72,45 @@ def get_logs_paths(
         add_last_modified_time=True,
         sort_by_last_modified_time=True)
 
-    if date_pattern:
-        latest_timestamp: float = 0
-        for file_index, single_file in enumerate(logs_files):
-            # Get file name from current loop file path.
-            current_file_name: str = Path(single_file['file_path']).name
-            # Get the datetime object from the file name by the date pattern.
-            try:
-                datetime_object = datetimes.get_datetime_from_complex_string_by_pattern(current_file_name, date_pattern)
-                timestamp_float = datetime_object.timestamp()
-            # ValueError will be raised if the date pattern does not match the file name.
-            except ValueError:
-                timestamp_float = 0
-            # Update the last modified time to the dictionary.
-            logs_files[file_index]['last_modified'] = timestamp_float
+    if len(logs_files) > 1:
+        if date_pattern:
+            latest_timestamp: float = 0
+            for file_index, single_file in enumerate(logs_files):
+                # Get file name from current loop file path.
+                current_file_name: str = Path(single_file['file_path']).name
+                # Get the datetime object from the file name by the date pattern.
+                try:
+                    datetime_object = datetimes.get_datetime_from_complex_string_by_pattern(current_file_name, date_pattern)
+                    timestamp_float = datetime_object.timestamp()
+                # ValueError will be raised if the date pattern does not match the file name.
+                except ValueError:
+                    timestamp_float = 0
+                # Update the last modified time to the dictionary.
+                logs_files[file_index]['last_modified'] = timestamp_float
 
-            if timestamp_float > latest_timestamp:
-                latest_timestamp = timestamp_float
+                if timestamp_float > latest_timestamp:
+                    latest_timestamp = timestamp_float
 
-        # Now, there should be a file that doesn't have the string date pattern in the file name.
-        # We will add one day to the latest date that we found and assign to that file path.
-        for file_index, single_file in enumerate(logs_files):
-            if single_file['last_modified'] == 0:
-                latest_timestamp += 86400
-                logs_files[file_index]['last_modified'] = latest_timestamp
-                break
+            # Now, there should be a file that doesn't have the string date pattern in the file name.
+            # We will add one day to the latest date that we found and assign to that file path.
+            for file_index, single_file in enumerate(logs_files):
+                if single_file['last_modified'] == 0:
+                    latest_timestamp += 86400
+                    logs_files[file_index]['last_modified'] = latest_timestamp
+                    break
 
-        # Sort the files by the last modified time.
-        logs_files = sorted(logs_files, key=lambda x: x['last_modified'], reverse=False)
+            # Sort the files by the last modified time.
+            logs_files = sorted(logs_files, key=lambda x: x['last_modified'], reverse=False)
 
-    if latest_only:
-        logs_files = [logs_files[-1]]
+        if latest_only:
+            logs_files = [logs_files[-1]]
 
-    if previous_day_only:
-        # Check if there is a previous day log file.
-        if len(logs_files) == 1:
-            logs_files = []
-        else:
-            logs_files = [logs_files[-2]]
+        if previous_day_only:
+            # Check if there is a previous day log file.
+            if len(logs_files) == 1:
+                logs_files = []
+            else:
+                logs_files = [logs_files[-2]]
 
     return logs_files
 
@@ -248,12 +249,17 @@ def get_latest_lines(
     previous_file_lines: list = []
 
     # Get the latest statistics file path.
-    latest_statistics_file_path: str = get_logs_paths(
+    latest_statistics_file_path_object = get_logs_paths(
         log_file_path=log_file_path,
         date_pattern=date_pattern,
         log_type='csv',
         latest_only=True
-    )[0]['file_path']
+    )
+
+    if not latest_statistics_file_path_object:
+        return [], [], [], []
+
+    latest_statistics_file_path: str = latest_statistics_file_path_object[0]['file_path']
 
     # Get the previous day statistics file path.
     previous_day_statistics_file_path: Union[str, None] = None

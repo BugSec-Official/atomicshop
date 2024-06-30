@@ -1,6 +1,12 @@
 <!-- HISTORY -->
 ## History
 
+* 2.12.6 - 30.06.2024
+  * wrappers.loggingw - fixes and improvements.
+* 2.12.5 - 30.06.2024
+  * wrappers.loggingw - fixes and improvements.
+  * wrappers.pycharmw - initial release.
+  * mains.installs.pycharm - initial release.
 * 2.12.4 - 24.06.2024
   * basics.lists - fixes and improvements.
   * datetimes - fixes and improvements.
