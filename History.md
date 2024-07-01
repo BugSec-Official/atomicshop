@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.12.7 - 01.07.2024
+  * web - fixes and improvements.
+  * wrappers.pycharmw - fixes and improvements.
 * 2.12.6 - 30.06.2024
   * wrappers.loggingw - fixes and improvements.
 * 2.12.5 - 30.06.2024

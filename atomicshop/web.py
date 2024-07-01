@@ -144,12 +144,13 @@ def get_page_content(
     return result
 
 
-def download(file_url: str, target_directory: str, file_name: str = None, **kwargs) -> str:
+def download(file_url: str, target_directory: str = None, file_name: str = None, **kwargs) -> str:
     """
     The function receives url and target filesystem directory to download the file.
 
     :param file_url: full URL to download the file.
     :param target_directory: The directory on the filesystem to save the file to.
+        If not specified, temporary directory will be used.
     :param file_name: string, file name (example: file.zip) that you want the downloaded file to be saved as.
         If not specified, the default filename from 'file_url' will be used.
     :return: string, full file path of downloaded file. If download failed, 'None' will be returned.
@@ -169,6 +170,10 @@ def download(file_url: str, target_directory: str, file_name: str = None, **kwar
     if not file_name:
         # Get only the filename from URL.
         file_name = get_filename_from_url(file_url=file_url)
+
+    # If 'target_directory' wasn't specified, we will use the temporary directory.
+    if not target_directory:
+        target_directory = filesystem.get_temp_directory()
 
     # Build full path to file.
     file_path: str = f'{target_directory}{os.sep}{file_name}'
