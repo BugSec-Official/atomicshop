@@ -45,9 +45,10 @@ authors = [
 description = "Atomic functions and classes to make developer life easier"
 license = {file = "LICENSE.txt"}
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "wheel",
+    "beautifulsoup4",
     "cryptography",
     "dnslib",
     "dnspython",

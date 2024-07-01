@@ -1,11 +1,13 @@
 import requests
-import os
+from bs4 import BeautifulSoup
 import subprocess
-import tempfile
+
+from .. import web, filesystem
+from ..print_api import print_api
 
 
 # URL to the PyCharm Community Edition download page
-PYCHARM_DOWNLOAD_URL = 'https://www.jetbrains.com/pycharm/download/download-thanks.html?platform=windows&code=PCC'
+PYCHARM_DOWNLOAD_URL = 'https://www.jetbrains.com/pycharm/download/#section=windowsC'
 
 
 def download_install_main():
@@ -27,30 +29,53 @@ def download_install_main():
             main()
     """
 
-    # Get the redirect URL for the download
-    response = requests.get(PYCHARM_DOWNLOAD_URL, allow_redirects=True)
+    def get_latest_pycharm_download_link():
+        url = "https://www.jetbrains.com/pycharm/download/"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
 
-    # Extract the final download URL
-    download_url = response.url
+        response = requests.get(url, headers=headers)
+        if response.status_code != 200:
+            raise Exception("Failed to load the download page")
 
-    # Get the file name from the download URL
-    file_name = download_url.split('/')[-1]
+        soup = BeautifulSoup(response.text, 'html.parser')
+        download_link = None
 
-    # Create a temporary directory to download the installer
-    temp_dir = tempfile.mkdtemp()
-    installer_path = os.path.join(temp_dir, file_name)
+        # Find the Professional version download link
+        for a in soup.find_all('a', href=True):
+            if '/download?code=PCC&platform=windows' in a['href']:
+                download_link = a['href']
+                break
 
-    # Download the installer
-    print(f"Downloading {file_name}...")
-    with requests.get(download_url, stream=True) as r:
-        r.raise_for_status()
-        with open(installer_path, 'wb') as f:
-            for chunk in r.iter_content(chunk_size=8192):
-                f.write(chunk)
-    print("Download complete.")
+        if not download_link:
+            raise Exception("Could not find the download link for the latest version of PyCharm Professional")
+
+        return f"https:{download_link}"
+
+    installer_path: str = None
+    try:
+        print_api("Fetching the latest PyCharm download link...")
+        download_url = get_latest_pycharm_download_link()
+        print_api(f"Download URL: {download_url}")
+
+        print_api("Starting the download...")
+        file_name = "pycharm-latest.exe"
+        # download_file(download_url, file_name)
+        installer_path = web.download(file_url=download_url, file_name=file_name)
+        print_api(f"Downloaded the latest version of PyCharm to {file_name}", color='green')
+    except Exception as e:
+        print_api(f"An error occurred: {e}")
+
+    if not installer_path:
+        print_api("Failed to download the latest version of PyCharm", color='red')
+        return 1
 
     # Install PyCharm
     # Run the installer
-    print("Running the installer...")
+    print_api("Running the installer...")
     subprocess.run([installer_path, '/S'], check=True)  # /S for silent installation
-    print("Installation complete.")
+    print_api("Installation complete.", color='green')
+
+    # Remove the installer
+    filesystem.remove_file(installer_path)
