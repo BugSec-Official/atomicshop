@@ -20,7 +20,7 @@ def _execute_cycle(change_monitor_instance, print_kwargs: dict = None):
     processes = _get_list(change_monitor_instance)
 
     for process_name in change_monitor_instance.check_object_list:
-        result = list_of_dicts.is_value_exist_in_key(processes, 'cmdline', process_name)
+        result = list_of_dicts.is_value_exist_in_key(processes, 'cmdline', process_name, value_case_insensitive=True)
 
         # If the process name was found in the list of currently running processes.
         if result:

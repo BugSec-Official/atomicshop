@@ -1,5 +1,7 @@
 import os
 import urllib.request
+import ssl
+import certifi
 
 from .print_api import print_api
 from .archiver import zips
@@ -182,8 +184,9 @@ def download(file_url: str, target_directory: str = None, file_name: str = None,
     print_api(f'To: {file_path}', **kwargs)
 
     # In order to use 'urllib.request', it is not enough to 'import urllib', you need to 'import urllib.request'.
-    # Open the URL for data gathering.
-    file_to_download = urllib.request.urlopen(file_url)
+    # Open the URL for data gathering with SSL context from certifi
+    ssl_context = ssl.create_default_context(cafile=certifi.where())
+    file_to_download = urllib.request.urlopen(file_url, context=ssl_context)
 
     # Check status of url.
     if not is_status_ok(status_code=file_to_download.status, **kwargs):

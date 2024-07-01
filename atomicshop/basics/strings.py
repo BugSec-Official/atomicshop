@@ -108,7 +108,12 @@ def is_any_string_from_list_in_string(string_list: list, check_string: str) -> b
     return any(test_string in check_string for test_string in string_list)
 
 
-def match_pattern_against_string(pattern: str, check_string: str, prefix_suffix: bool = False) -> bool:
+def match_pattern_against_string(
+        pattern: str,
+        check_string: str,
+        case_insensitive: bool = False,
+        prefix_suffix: bool = False
+) -> bool:
     """
     Function checks the 'pattern' against 'check_string' and returns 'True' if pattern matches and 'False' if not.
 
@@ -121,6 +126,7 @@ def match_pattern_against_string(pattern: str, check_string: str, prefix_suffix:
 
     :param pattern: string, can include wildcards as '*'.
     :param check_string: string, to check the pattern against.
+    :param case_insensitive: boolean, if 'True' will treat the 'pattern' and 'check_string' as case-insensitive.
     :param prefix_suffix: boolean, that sets if the function should return 'True' also for all the cases that wildcard
         in the beginning of the pattern and in the end of the pattern, since the default behavior of regex to return
         'False' on these cases.
@@ -152,12 +158,16 @@ def match_pattern_against_string(pattern: str, check_string: str, prefix_suffix:
     # on complex strings.
     # return fnmatch.fnmatch(check_string, pattern)
 
+    # Determine the regex flags based on case_insensitive.
+    flags = re.IGNORECASE if case_insensitive else 0
+
     def search_pattern(function_pattern):
         # Use regex to match the pattern.
-        return re.search(fr'{function_pattern}', check_string)
+        return re.search(fr'{function_pattern}', check_string, flags)
 
     wildcard_str: str = '*'
     wildcard_re: str = '.+'
+    # wildcard_re: str = '.*'  # Adjusted to '.*' to match zero or more characters
 
     # Replace the wildcard string '*' with regex wildcard string '.+'.
     # In regex '.' is a wildcard, but only for 1 character, if you need more than 1 character you should add '+'.
@@ -204,13 +214,19 @@ def match_pattern_against_string(pattern: str, check_string: str, prefix_suffix:
     return False
 
 
-def match_list_of_patterns_against_string(patterns: list, check_string: str, prefix_suffix: bool = False) -> bool:
+def match_list_of_patterns_against_string(
+        patterns: list,
+        check_string: str,
+        case_insensitive: bool = False,
+        prefix_suffix: bool = False
+) -> bool:
     """
     Function checks each pattern in 'patterns' list against 'check_string' and returns 'True' if any pattern matches
     and 'False' if not.
 
     :param patterns: list, of string patterns to check against. May include wildcards.
     :param check_string: string, to check the pattern against.
+    :param case_insensitive: boolean, if 'True' will treat the 'pattern' and 'check_string' as case-insensitive.
     :param prefix_suffix: boolean, that sets if the function should return 'True' also for all the cases that wildcard
         in the beginning of the pattern and in the end of the pattern, since the default behavior of regex to return
         'False' on these cases.
@@ -221,7 +237,8 @@ def match_list_of_patterns_against_string(patterns: list, check_string: str, pre
     """
 
     for pattern in patterns:
-        if match_pattern_against_string(pattern, check_string, prefix_suffix=prefix_suffix):
+        if match_pattern_against_string(
+                pattern, check_string, case_insensitive=case_insensitive, prefix_suffix=prefix_suffix):
             return True
 
     return False
