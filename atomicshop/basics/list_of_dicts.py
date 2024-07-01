@@ -100,7 +100,13 @@ def merge_to_dict(list_of_dicts: list) -> dict:
     return result_dict
 
 
-def is_value_exist_in_key(list_of_dicts: list, key: str, value_to_match: str, prefix_suffix: bool = False) -> bool:
+def is_value_exist_in_key(
+        list_of_dicts: list,
+        key: str,
+        value_to_match: str,
+        value_case_insensitive: bool = False,
+        prefix_suffix: bool = False
+) -> bool:
     """
     The function will check if a value exists in a key in a list of dicts.
 
@@ -113,6 +119,7 @@ def is_value_exist_in_key(list_of_dicts: list, key: str, value_to_match: str, pr
     :param key: str, the key to check in each entry (dict) in the list.
     :param value_to_match: str, the value to find in the key.
         This values is a pattern, so it can be a part of the value and can contain wildcards as "*" character.
+    :param value_case_insensitive: bool, if True the value will be matched case insensitive.
     :param prefix_suffix: bool, related to how pattern of 'value_to_find' is matched against the value in the key.
         Check the 'strings.match_pattern_against_string' function for more information.
     :return: bool, True if the value exists in the key in any entry in the list of dicts, False if not.
@@ -121,7 +128,9 @@ def is_value_exist_in_key(list_of_dicts: list, key: str, value_to_match: str, pr
     for dictionary in list_of_dicts:
         try:
             # if value_to_find in dictionary.get(key, None):
-            if strings.match_pattern_against_string(value_to_match, dictionary.get(key, None), prefix_suffix):
+            if strings.match_pattern_against_string(
+                    value_to_match, dictionary.get(key, None), case_insensitive=value_case_insensitive,
+                    prefix_suffix=prefix_suffix):
                 return True
         # If the key is not present in the dict 'TypeError' will be raised, since 'None' doesn't have the 'in' operator.
         except TypeError:

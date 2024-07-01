@@ -7,7 +7,7 @@ import shutil
 
 from .print_api import print_api
 from .inspect_wrapper import get_target_function_default_args_and_combine_with_current
-from .basics.strings import match_pattern_against_string
+from .basics import strings
 from .wrappers import ubuntu_terminal
 
 if os.name == 'nt':
@@ -247,12 +247,18 @@ def safe_terminate(popen_process: subprocess.Popen):
     popen_process.wait()
 
 
-def match_pattern_against_running_processes_cmdlines(pattern: str, first: bool = False, prefix_suffix: bool = False):
+def match_pattern_against_running_processes_cmdlines(
+        pattern: str,
+        process_name_case_insensitive: bool = False,
+        first: bool = False,
+        prefix_suffix: bool = False
+):
     """
     The function matches specified string pattern including wildcards against all the currently running processes'
     command lines.
 
     :param pattern: string, the pattern that we will search in the command line list of currently running processes.
+    :param process_name_case_insensitive: boolean, if True, the process name will be matched case insensitive.
     :param first: boolean, that will set if first pattern match found the iteration will stop, or we will return
         the list of all command lines that contain the pattern.
     :param prefix_suffix: boolean. Check the description in 'match_pattern_against_string' function.
@@ -268,7 +274,9 @@ def match_pattern_against_running_processes_cmdlines(pattern: str, first: bool =
     for process in processes:
         # Check if command line isn't empty and that string pattern is matched against command line.
         if process['cmdline'] and \
-                match_pattern_against_string(pattern, process['cmdline'], prefix_suffix):
+                strings.match_pattern_against_string(
+                    pattern, process['cmdline'], case_insensitive=process_name_case_insensitive,
+                    prefix_suffix=prefix_suffix):
             matched_cmdlines.append(process['cmdline'])
             # If 'first' was set to 'True' we will stop, since we found the first match.
             if first:
