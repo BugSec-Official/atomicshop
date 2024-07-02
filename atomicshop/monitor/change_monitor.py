@@ -29,7 +29,13 @@ class ChangeMonitor:
             generate_input_file_name: bool = False,
             input_file_write_only: bool = True,
             store_original_object: bool = False,
-            operation_type: Literal['hit_statistics', 'all_objects'] = None
+            operation_type: Literal[
+                'hit_statistics',
+                'all_objects'] = None,
+            input_file_rotation_cycle_hours: Union[
+                float,
+                Literal['midnight'],
+                None] = None
     ):
         """
         :param object_type: string, type of object to check. The type must be one of the following:
@@ -74,6 +80,10 @@ class ChangeMonitor:
             'hit_statistics': will only store the statistics of the entries in the input file.
             'all_objects': disable the DiffChecker features, meaning any new entries will be emitted as is.
             None: will use the default operation type, based on the object type.
+        :param input_file_rotation_cycle_hours:
+            float, the amount of hours the input file will be rotated.
+            str, (only 'midnight' is valid), the input file will be rotated daily at midnight.
+            This is valid only for the 'hit_statistics' operation type.
 
         If 'input_file_directory' is not specified, the 'input_file_name' is not specified, and
         'generate_input_file_name' is False, then the input file will not be used and the object will be stored
@@ -99,6 +109,9 @@ class ChangeMonitor:
                 raise ValueError(
                     'ERROR: [operation_type] must be one of the following: "hit_statistics", "all_objects".')
 
+        if input_file_rotation_cycle_hours and operation_type != 'hit_statistics':
+            raise ValueError("[input_file_rotation_cycle] can be specified only for 'hit_statistics' operation type.")
+
         # === EOF Exception section ========================================
         # === Initialize Main variables ====================================
 
@@ -113,6 +126,7 @@ class ChangeMonitor:
         self.input_file_write_only: bool = input_file_write_only
         self.store_original_object: bool = store_original_object
         self.operation_type = operation_type
+        self.input_file_rotation_cycle_hours = input_file_rotation_cycle_hours
 
         # === EOF Initialize Main variables ================================
         # === Initialize Secondary variables ===============================
@@ -126,7 +140,8 @@ class ChangeMonitor:
                 self.diff_check_list.append(
                     DiffChecker(
                         input_file_write_only=self.input_file_write_only,
-                        operation_type=self.operation_type
+                        operation_type=self.operation_type,
+                        input_file_rotation_cycle_hours=self.input_file_rotation_cycle_hours
                     )
                 )
         # Else, if 'check_object_list' is None, create a DiffChecker object only once.
@@ -134,7 +149,8 @@ class ChangeMonitor:
             self.diff_check_list.append(
                 DiffChecker(
                     input_file_write_only=self.input_file_write_only,
-                    operation_type=self.operation_type
+                    operation_type=self.operation_type,
+                    input_file_rotation_cycle_hours=self.input_file_rotation_cycle_hours
                 )
             )
 

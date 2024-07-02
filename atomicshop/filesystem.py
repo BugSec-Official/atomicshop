@@ -14,7 +14,7 @@ import psutil
 from .print_api import print_api, print_status_of_list
 from .basics import strings, list_of_dicts
 from .file_io import file_io
-from . import hashing
+from . import hashing, datetimes
 
 
 WINDOWS_DIRECTORY_SPECIAL_CHARACTERS = ['<', '>', ':', '"', '/', '\\', '|', '?', '*']
@@ -444,6 +444,26 @@ def move_file(source_file_path: str, target_file_path: str, overwrite: bool = Tr
 
     # Move file.
     shutil.move(source_file_path, target_file_path)
+
+
+def move_folder(source_directory: str, target_directory: str, overwrite: bool = True) -> None:
+    """
+    The function moves folder from source to target.
+
+    :param source_directory: string, full path to source directory.
+    :param target_directory: string, full path to target directory.
+    :param overwrite: boolean, if 'False', then the function will not overwrite the directory if it exists.
+
+    :return: None
+    """
+
+    # Check if 'overwrite' is set to 'True' and if the directory exists.
+    if not overwrite:
+        if check_directory_existence(target_directory):
+            raise FileExistsError(f'Directory already exists: {target_directory}')
+
+    # Move directory.
+    shutil.move(source_directory, target_directory)
 
 
 def move_files_from_folder_to_folder(
@@ -1319,3 +1339,47 @@ def get_download_directory(place: Literal['temp', 'script', 'working'] = 'temp',
         raise ValueError("Invalid place specified.")
 
     return download_directory
+
+
+def backup_folder(directory_path: str, backup_directory: str) -> None:
+    """
+    Backup the specified directory.
+
+    :param directory_path: The directory path to backup.
+    :param backup_directory: The directory to backup the directory to.
+
+    Example:
+    backup_folder(directory_path='C:\\Users\\user1\\Downloads\\folder1', backup_directory='C:\\Users\\user1\\Downloads\\backup')
+
+    Backed up folder will be moved to 'C:\\Users\\user1\\Downloads\\backup' with timestamp in the name.
+    Final path will look like: 'C:\\Users\\user1\\Downloads\\backup\\20231003-120000-000000_folder1'
+    """
+
+    if check_directory_existence(directory_path):
+        timestamp: str = datetimes.TimeFormats().get_current_formatted_time_filename_stamp(True)
+        directory_name = Path(directory_path).name
+        backup_directory_path: str = str(Path(backup_directory) / f"{timestamp}_{directory_name}")
+        create_directory(backup_directory_path)
+        move_folder(directory_path, backup_directory_path)
+
+
+def backup_file(file_path: str, backup_directory: str) -> None:
+    """
+    Backup the specified file.
+
+    :param file_path: The file path to backup.
+    :param backup_directory: The directory to backup the file to.
+
+    Example:
+    backup_file(file_path='C:\\Users\\user1\\Downloads\\file.txt', backup_directory='C:\\Users\\user1\\Downloads\\backup')
+
+    Backed up file will be moved to 'C:\\Users\\user1\\Downloads\\backup' with timestamp in the name.
+    Final path will look like: 'C:\\Users\\user1\\Downloads\\backup\\20231003-120000-000000_file.txt'
+    """
+
+    if check_file_existence(file_path):
+        timestamp: str = datetimes.TimeFormats().get_current_formatted_time_filename_stamp(True)
+        file_name_no_extension = Path(file_path).stem
+        file_extension = Path(file_path).suffix
+        backup_file_path: str = str(Path(backup_directory) / f"{file_name_no_extension}_{timestamp}{file_extension}")
+        move_file(file_path, backup_file_path)

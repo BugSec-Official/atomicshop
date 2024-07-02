@@ -31,7 +31,15 @@ class DiffChecker:
             input_file_path: str = None,
             input_file_write_only: bool = True,
             return_first_cycle: bool = True,
-            operation_type: Literal['new_objects', 'hit_statistics', 'all_objects', 'single_object'] = None
+            operation_type: Literal[
+                'new_objects',
+                'hit_statistics',
+                'all_objects',
+                'single_object'] = None,
+            input_file_rotation_cycle_hours: Union[
+                float,
+                Literal['midnight'],
+                None] = None
     ):
         """
         :param check_object: any, object to check if it changed.
@@ -68,10 +76,16 @@ class DiffChecker:
         :param operation_type: string, type of operation to perform. The type must be one of the following:
             'new_objects': will only store the new objects in the input file.
             'hit_statistics': will only store the statistics of the entries in the input file.
+                The file will be rotated after the specified time in the 'input_file_rotation_cycle' variable, if
+                it is specified.
             'all_objects': disable the DiffChecker features, meaning any new entries will be emitted as is.
             'single_object': will store the object as is, without any comparison. Meaning, that the object will be
                  compared only to itself, and if it changes, it will be updated.
             None: Nothing will be done, you will get an exception.
+        :param input_file_rotation_cycle_hours:
+            float, the amount of hours the input file will be rotated.
+            str, (only 'midnight' is valid), the input file will be rotated daily at midnight.
+            This is valid only for the 'hit_statistics' operation type.
 
         --------------------------------------------------
 
@@ -150,6 +164,9 @@ class DiffChecker:
             raise ValueError(f"[operation_type] must be one of the following: "
                              f"'new_objects', 'hit_statistics', 'all_objects', 'single_object'.")
 
+        if input_file_rotation_cycle_hours and operation_type != 'hit_statistics':
+            raise ValueError("[input_file_rotation_cycle] can be specified only for 'hit_statistics' operation type.")
+
         self.check_object = check_object
         self.check_object_display_name = check_object_display_name
         self.aggregation: bool = aggregation
@@ -157,6 +174,7 @@ class DiffChecker:
         self.input_file_write_only: bool = input_file_write_only
         self.return_first_cycle: bool = return_first_cycle
         self.operation_type = operation_type
+        self.input_file_rotation_cycle = input_file_rotation_cycle_hours
 
         if not self.check_object_display_name:
             self.check_object_display_name = self.check_object
