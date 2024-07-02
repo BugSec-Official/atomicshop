@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.12.10 - 02.07.2024
+  * filesystem - fixes and improvements.
 * 2.12.9 - 01.07.2024
   * basics.strings - fixes and improvements on the pattern match function for case insensitive matching. The depending functions were also updated.
 * 2.12.8 - 01.07.2024
