@@ -552,6 +552,34 @@ def copy_directory(source_directory: str, target_directory: str, overwrite: bool
     shutil.copytree(source_directory, target_directory)
 
 
+def copy_files_from_folder_to_folder(source_directory: str, target_directory: str, overwrite: bool = False) -> None:
+    """
+    The function will copy all the files from source directory to target directory.
+
+    :param source_directory: string, full path to source directory.
+    :param target_directory: string, full path to target directory.
+    :param overwrite: boolean, if 'True', then the function will overwrite the files if they exist.
+    """
+    # Make sure the destination directory exists, if not create it
+    os.makedirs(target_directory, exist_ok=True)
+
+    # Copy contents of the source directory to the destination directory
+    for item in os.listdir(source_directory):
+        s = os.path.join(source_directory, item)
+        d = os.path.join(target_directory, item)
+
+        if os.path.isdir(s):
+            if os.path.exists(d) and not overwrite:
+                print(f"Directory {d} already exists. Skipping due to overwrite=False.")
+            else:
+                shutil.copytree(s, d, dirs_exist_ok=overwrite)
+        else:
+            if os.path.exists(d) and not overwrite:
+                print(f"File {d} already exists. Skipping due to overwrite=False.")
+            else:
+                shutil.copy2(s, d)
+
+
 def get_directory_paths_from_directory(
         directory_path: str,
         recursive: bool = True
