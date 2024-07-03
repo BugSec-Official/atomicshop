@@ -32,8 +32,8 @@ def _execute_cycle(change_monitor_instance, print_kwargs: dict = None):
 
         # Since the 'operation_type' is 'hit_statistics', we'll set the 'statistics_queue' to the 'statistics_queue' of
         # the 'diff_check_list[0]'.
-        if change_monitor_instance.diff_check_list[0].operation_type == 'hit_statistics':
-            change_monitor_instance.statistics_queue = change_monitor_instance.diff_check_list[0].statistics_queue
+        # if change_monitor_instance.diff_check_list[0].operation_type == 'hit_statistics':
+        #     change_monitor_instance.statistics_queue = change_monitor_instance.diff_check_list[0].statistics_queue
 
         if change_monitor_instance.generate_input_file_name:
             original_name = 'known_domains'
