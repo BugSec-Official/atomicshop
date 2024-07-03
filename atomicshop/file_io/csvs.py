@@ -30,8 +30,10 @@ def read_csv_to_list_of_dicts_by_header(
     :param file_mode: string, file reading mode. Examples: 'r', 'rb'. Default is 'r'.
     :param encoding: string, encoding of the file. Default is 'None'.
     :param header: list, list of strings that will be the header of the CSV file. Default is 'None'.
-        If you want to use the header from the CSV file, use 'None'. In this case, the first row of the CSV file will
-        be the header.
+        None: the header from the CSV file will be used. The first row of the CSV file will be the header.
+            Meaning, that the first line will be skipped and the second line will be the first row of the content.
+        List: the list will be used as header.
+            All the lines of the CSV file will be considered as content.
     :param file_object: file object of the 'open()' function in the decorator. Decorator executes the 'with open()'
         statement and passes to this function. That's why the default is 'None', since we get it from the decorator.
     :return: list.

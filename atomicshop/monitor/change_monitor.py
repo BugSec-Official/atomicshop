@@ -1,4 +1,5 @@
 from typing import Literal, Union
+import queue
 
 from .checks import dns, network, hash, process_running
 from .. import filesystem, scheduling
@@ -129,6 +130,7 @@ class ChangeMonitor:
         self.store_original_object: bool = store_original_object
         self.operation_type = operation_type
         self.input_file_rotation_cycle_hours = input_file_rotation_cycle_hours
+        self.enable_statistics_queue = enable_statistics_queue
 
         # === EOF Initialize Main variables ================================
         # === Initialize Secondary variables ===============================
@@ -143,7 +145,8 @@ class ChangeMonitor:
                     DiffChecker(
                         input_file_write_only=self.input_file_write_only,
                         operation_type=self.operation_type,
-                        input_file_rotation_cycle_hours=self.input_file_rotation_cycle_hours
+                        input_file_rotation_cycle_hours=self.input_file_rotation_cycle_hours,
+                        enable_statistics_queue=self.enable_statistics_queue
                     )
                 )
         # Else, if 'check_object_list' is None, create a DiffChecker object only once.
@@ -152,7 +155,8 @@ class ChangeMonitor:
                 DiffChecker(
                     input_file_write_only=self.input_file_write_only,
                     operation_type=self.operation_type,
-                    input_file_rotation_cycle_hours=self.input_file_rotation_cycle_hours
+                    input_file_rotation_cycle_hours=self.input_file_rotation_cycle_hours,
+                    enable_statistics_queue=self.enable_statistics_queue
                 )
             )
 
@@ -173,8 +177,6 @@ class ChangeMonitor:
         # Initialize objects for DNS and Network monitoring.
         self.fetch_engine = None
         self.thread_looper = scheduling.ThreadLooper()
-
-        self.statistics_queue = None
 
     def _set_input_file_path(self, check_object_index: int = 0):
         if self.first_cycle:

@@ -369,6 +369,8 @@ class DiffChecker:
                     # Put the statistics in the queue to be processed.
                     if self.statistics_queue:
                         self.statistics_queue.put((input_file_statistics, previous_day_date_object))
+
+                    self.previous_content = {}
         else:
             raise NotImplementedError("This feature is not implemented yet.")
 

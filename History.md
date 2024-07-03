@@ -1,7 +1,9 @@
 <!-- HISTORY -->
 ## History
 
-* 2.12.12 - 03.07.2024
+* 2.12.15 - 03.07.2024
+  * diff_check, monitor, wrappers.loggingw, file_io.csvs - fixes and improvements.
+* 2.12.12-2.12.14 - 03.07.2024
   * filesystem - fixes and improvements.
   * diff_check - fixes and improvements.
   * monitor - fixes and improvements.

@@ -210,7 +210,8 @@ def get_latest_lines(
         log_file_path: str,
         date_pattern: str = None,
         log_type: Literal['csv'] = 'csv',
-        get_previous_file: bool = False
+        get_previous_file: bool = False,
+        header: list = None
 ) -> tuple:
     """
     This function gets the latest lines from the log file.
@@ -225,6 +226,11 @@ def get_latest_lines(
         Meaning, once the day will change, the function will get the log file from the previous day in the third entry
         of the return tuple. This happens only once each 24 hours. Not from the time the function was called, but from
         the time the day changed.
+    :param header: List of strings that will be the header of the CSV file. Default is 'None'.
+        None: the header from the CSV file will be used. The first row of the CSV file will be the header.
+            Meaning, that the first line will be skipped and the second line will be the first row of the content.
+        List: the list will be used as header.
+            All the lines of the CSV file will be considered as content.
     return: List of new lines.
 
     Usage:
@@ -273,7 +279,8 @@ def get_latest_lines(
     except KeyError:
         pass
 
-    current_lines, _ = csvs.read_csv_to_list_of_dicts_by_header(latest_statistics_file_path, stdout=False)
+    current_lines, header = csvs.read_csv_to_list_of_dicts_by_header(
+        latest_statistics_file_path, header=header, stdout=False)
     if len(current_lines) > len(READING_EXISTING_LINES):
         # return current_lines
         pass
@@ -281,8 +288,8 @@ def get_latest_lines(
         # return None
         pass
     elif len(current_lines) < len(READING_EXISTING_LINES):
-        current_lines, _ = csvs.read_csv_to_list_of_dicts_by_header(
-            previous_day_statistics_file_path, stdout=False)
+        current_lines, header = csvs.read_csv_to_list_of_dicts_by_header(
+            previous_day_statistics_file_path, header=header, stdout=False)
         # Handle case where source CSV is empty (rotation period)
         READING_EXISTING_LINES.clear()  # Clear existing lines to start fresh after rotation
 
@@ -301,4 +308,4 @@ def get_latest_lines(
         if new_lines:
             READING_EXISTING_LINES.extend(new_lines)
 
-    return new_lines, current_lines, READING_EXISTING_LINES, previous_file_lines
+    return new_lines, current_lines, READING_EXISTING_LINES, previous_file_lines, header
