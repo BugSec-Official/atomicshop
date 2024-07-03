@@ -1,6 +1,10 @@
 <!-- HISTORY -->
 ## History
 
+* 2.12.12 - 03.07.2024
+  * filesystem - fixes and improvements.
+  * diff_check - fixes and improvements.
+  * monitor - fixes and improvements.
 * 2.12.11 - 02.07.2024
   * filesystem - fixes and improvements.
 * 2.12.10 - 02.07.2024
