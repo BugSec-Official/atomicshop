@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.12.16 - 03.07.2024
+  * wrappers.loggingw.reading - fixes and improvements.
 * 2.12.15 - 03.07.2024
   * diff_check, monitor, wrappers.loggingw, file_io.csvs - fixes and improvements.
 * 2.12.12-2.12.14 - 03.07.2024

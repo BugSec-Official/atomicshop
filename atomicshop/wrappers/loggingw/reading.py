@@ -7,6 +7,7 @@ from ...file_io import csvs
 
 
 READING_EXISTING_LINES: list = []
+EXISTING_LOGS_FILE_COUNT: int = 0
 
 
 def get_logs_paths(
@@ -80,7 +81,8 @@ def get_logs_paths(
                 current_file_name: str = Path(single_file['file_path']).name
                 # Get the datetime object from the file name by the date pattern.
                 try:
-                    datetime_object = datetimes.get_datetime_from_complex_string_by_pattern(current_file_name, date_pattern)
+                    datetime_object = datetimes.get_datetime_from_complex_string_by_pattern(
+                        current_file_name, date_pattern)
                     timestamp_float = datetime_object.timestamp()
                 # ValueError will be raised if the date pattern does not match the file name.
                 except ValueError:
@@ -249,6 +251,31 @@ def get_latest_lines(
             time.sleep(1)
     """
 
+    def extract_new_lines_only(content_lines: list):
+        new_lines: list = []
+        for row in content_lines:
+            # If the row is not in the existing lines, then add it to the new lines.
+            if row not in READING_EXISTING_LINES:
+                new_lines.append(row)
+
+        if new_lines:
+            READING_EXISTING_LINES.extend(new_lines)
+
+        return new_lines
+
+    global EXISTING_LOGS_FILE_COUNT
+
+    # If the existing logs file count is 0, it means that this is the first check. We need to get the current count.
+    if EXISTING_LOGS_FILE_COUNT == 0:
+        EXISTING_LOGS_FILE_COUNT = len(get_logs_paths(
+            log_file_path=log_file_path,
+            log_type='csv'
+        ))
+
+        # If the count is still 0, then there are no logs to read.
+        if EXISTING_LOGS_FILE_COUNT == 0:
+            return [], [], header
+
     if log_type != 'csv':
         raise ValueError('Only "csv" log type is supported.')
 
@@ -261,9 +288,6 @@ def get_latest_lines(
         log_type='csv',
         latest_only=True
     )
-
-    if not latest_statistics_file_path_object:
-        return [], [], [], []
 
     latest_statistics_file_path: str = latest_statistics_file_path_object[0]['file_path']
 
@@ -279,33 +303,36 @@ def get_latest_lines(
     except KeyError:
         pass
 
-    current_lines, header = csvs.read_csv_to_list_of_dicts_by_header(
-        latest_statistics_file_path, header=header, stdout=False)
-    if len(current_lines) > len(READING_EXISTING_LINES):
-        # return current_lines
-        pass
-    elif len(current_lines) == len(READING_EXISTING_LINES):
-        # return None
-        pass
-    elif len(current_lines) < len(READING_EXISTING_LINES):
+    # Count all the rotated files.
+    current_log_files_count: int = len(get_logs_paths(
+        log_file_path=log_file_path,
+        log_type='csv'
+    ))
+
+    # If the count of the log files is greater than the existing logs file count, it means that the rotation happened.
+    # We will read the previous day statistics file.
+    new_lines_from_previous_file: list = []
+    if current_log_files_count > EXISTING_LOGS_FILE_COUNT:
         current_lines, header = csvs.read_csv_to_list_of_dicts_by_header(
             previous_day_statistics_file_path, header=header, stdout=False)
-        # Handle case where source CSV is empty (rotation period)
-        READING_EXISTING_LINES.clear()  # Clear existing lines to start fresh after rotation
 
         if get_previous_file:
             previous_file_lines = current_lines
 
-        # return current_lines
+        EXISTING_LOGS_FILE_COUNT = current_log_files_count
 
-    new_lines: list = []
-    if current_lines:
-        for row in current_lines:
-            # If the row is not in the existing lines, then add it to the new lines.
-            if row not in READING_EXISTING_LINES:
-                new_lines.append(row)
+        new_lines_from_previous_file = extract_new_lines_only(current_lines)
 
-        if new_lines:
-            READING_EXISTING_LINES.extend(new_lines)
+        # empty the previous file lines, since the file is rotated.
+        READING_EXISTING_LINES.clear()
 
-    return new_lines, current_lines, READING_EXISTING_LINES, previous_file_lines, header
+    current_lines, header = csvs.read_csv_to_list_of_dicts_by_header(
+        latest_statistics_file_path, header=header, stdout=False)
+
+    new_lines = extract_new_lines_only(current_lines)
+
+    # If we have new lines from the previous file, we will add the new lines from the latest file.
+    if new_lines_from_previous_file:
+        new_lines = new_lines_from_previous_file + new_lines
+
+    return new_lines, previous_file_lines, header
