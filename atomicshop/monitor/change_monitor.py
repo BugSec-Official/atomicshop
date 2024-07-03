@@ -35,7 +35,8 @@ class ChangeMonitor:
             input_file_rotation_cycle_hours: Union[
                 float,
                 Literal['midnight'],
-                None] = None
+                None] = None,
+            enable_statistics_queue: bool = False
     ):
         """
         :param object_type: string, type of object to check. The type must be one of the following:
@@ -81,9 +82,10 @@ class ChangeMonitor:
             'all_objects': disable the DiffChecker features, meaning any new entries will be emitted as is.
             None: will use the default operation type, based on the object type.
         :param input_file_rotation_cycle_hours:
-            float, the amount of hours the input file will be rotated.
+            float, the amount of hours the input file will be rotated in the 'hit_statistics' operation type.
             str, (only 'midnight' is valid), the input file will be rotated daily at midnight.
             This is valid only for the 'hit_statistics' operation type.
+        :param enable_statistics_queue: boolean, if True, the statistics queue will be enabled.
 
         If 'input_file_directory' is not specified, the 'input_file_name' is not specified, and
         'generate_input_file_name' is False, then the input file will not be used and the object will be stored
@@ -171,6 +173,8 @@ class ChangeMonitor:
         # Initialize objects for DNS and Network monitoring.
         self.fetch_engine = None
         self.thread_looper = scheduling.ThreadLooper()
+
+        self.statistics_queue = None
 
     def _set_input_file_path(self, check_object_index: int = 0):
         if self.first_cycle:

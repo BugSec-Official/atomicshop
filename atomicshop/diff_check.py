@@ -2,7 +2,9 @@ import datetime
 from pathlib import Path
 from typing import Union, Literal
 import json
+import queue
 
+from . import filesystem, datetimes
 from .file_io import file_io, jsons
 from .print_api import print_api
 from .basics import list_of_dicts, dicts
@@ -39,7 +41,8 @@ class DiffChecker:
             input_file_rotation_cycle_hours: Union[
                 float,
                 Literal['midnight'],
-                None] = None
+                None] = None,
+            enable_statistics_queue: bool = False
     ):
         """
         :param check_object: any, object to check if it changed.
@@ -83,9 +86,30 @@ class DiffChecker:
                  compared only to itself, and if it changes, it will be updated.
             None: Nothing will be done, you will get an exception.
         :param input_file_rotation_cycle_hours:
-            float, the amount of hours the input file will be rotated.
+            float, the amount of hours the input file will be rotated in the 'hit_statistics' operation type.
             str, (only 'midnight' is valid), the input file will be rotated daily at midnight.
             This is valid only for the 'hit_statistics' operation type.
+        :param enable_statistics_queue: boolean, if True, the statistics queue will be enabled for the 'hit_statistics'
+            operation type. You can use this queue to process the statistics in another thread.
+
+            Example:
+            diff_checker = DiffChecker(
+                check_object_display_name='List of Dicts',
+                input_file_path='D:\\input\\list_of_dicts.json',
+                input_file_write_only=True,
+                return_first_cycle=True,
+                operation_type='hit_statistics',
+                input_file_rotation_cycle_hours='midnight',
+                enable_statistics_queue=True)
+
+            def process_statistics_queue():
+                while True:
+                    statistics = diff_checker.statistics_queue.get()
+                    print(statistics)
+
+            threading.Thread(target=process_statistics_queue).start()
+
+            <... Your checking operation for the object ...>
 
         --------------------------------------------------
 
@@ -167,6 +191,14 @@ class DiffChecker:
         if input_file_rotation_cycle_hours and operation_type != 'hit_statistics':
             raise ValueError("[input_file_rotation_cycle] can be specified only for 'hit_statistics' operation type.")
 
+        if enable_statistics_queue and operation_type != 'hit_statistics':
+            raise ValueError("[enable_statistics_queue] can be specified only for 'hit_statistics' operation type.")
+
+        if input_file_rotation_cycle_hours and not isinstance(input_file_rotation_cycle_hours, float) and \
+                not isinstance(input_file_rotation_cycle_hours, int) and \
+                input_file_rotation_cycle_hours != 'midnight':
+            raise ValueError("[input_file_rotation_cycle] must be float, int or 'midnight' str.")
+
         self.check_object = check_object
         self.check_object_display_name = check_object_display_name
         self.aggregation: bool = aggregation
@@ -175,6 +207,7 @@ class DiffChecker:
         self.return_first_cycle: bool = return_first_cycle
         self.operation_type = operation_type
         self.input_file_rotation_cycle = input_file_rotation_cycle_hours
+        self.enable_statistics_queue = enable_statistics_queue
 
         if not self.check_object_display_name:
             self.check_object_display_name = self.check_object
@@ -183,6 +216,19 @@ class DiffChecker:
         self.previous_content: Union['list', 'str', None] = None
         # The format the file will be saved as (not used as extension): txt, json.
         self.save_as: str = str()
+
+        # If the input file rotation cycle is set and the statistics queue is enabled, we will create the queue.
+        if self.input_file_rotation_cycle and self.enable_statistics_queue:
+            # You can use this queue to process the statistics in another thread.
+            self.statistics_queue = queue.Queue()
+        else:
+            self.statistics_queue = None
+
+        # If the input file rotation cycle is set to midnight, we will store the previous day as today.
+        if self.input_file_rotation_cycle == 'midnight':
+            self.previous_day = datetime.datetime.now().strftime('%d')
+        else:
+            self.previous_day = None
 
     def check_string(self, print_kwargs: dict = None):
         """
@@ -297,6 +343,35 @@ class DiffChecker:
         return result, message
 
     def _hit_statistics_only_handling(self, current_content, result, message, sort_by_keys, print_kwargs: dict = None):
+        if self.input_file_rotation_cycle == 'midnight':
+            # If the current time is midnight, we will rotate the file.
+            # Get current date.
+            current_date = datetime.datetime.now().strftime('%d')
+            # If current date is different from previous date it means it is a new day, rotate the file.
+            if current_date != self.previous_day:
+                input_file_statistics = None
+                try:
+                    # Read the latest statistics from the input file.
+                    input_file_statistics = jsons.read_json_file(self.input_file_path)
+                # Basically, this means that the input statistics file doesn't exist yet, and no events hit
+                # yet and new day has come, so it doesn't matter, since there are no statistics to rotate the file.
+                except FileNotFoundError:
+                    pass
+
+                if input_file_statistics:
+                    # Rename the file.
+                    filesystem.backup_file(
+                        self.input_file_path, str(Path(self.input_file_path).parent), timestamp_as_prefix=False)
+                    # Update the previous date.
+                    self.previous_day = current_date
+
+                    previous_day_date_object = (datetime.datetime.now() - datetime.timedelta(days=1)).date()
+                    # Put the statistics in the queue to be processed.
+                    if self.statistics_queue:
+                        self.statistics_queue.put((input_file_statistics, previous_day_date_object))
+        else:
+            raise NotImplementedError("This feature is not implemented yet.")
+
         # Convert the dictionary entry to string, since we will use it as a key in the dictionary.
         current_entry = json.dumps(current_content[0])
 

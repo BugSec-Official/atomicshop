@@ -1391,23 +1391,44 @@ def backup_folder(directory_path: str, backup_directory: str) -> None:
         move_folder(directory_path, backup_directory_path)
 
 
-def backup_file(file_path: str, backup_directory: str) -> None:
+def backup_file(file_path: str, backup_directory: str, timestamp_as_prefix: bool = False) -> None:
     """
     Backup the specified file.
 
     :param file_path: The file path to backup.
     :param backup_directory: The directory to backup the file to.
-
+    :param timestamp_as_prefix: boolean, if
+        True, then the timestamp will be added as a prefix to the file name.
+        False, then the timestamp will be added as a suffix to the file name.
+    -----------------------------------------
     Example:
-    backup_file(file_path='C:\\Users\\user1\\Downloads\\file.txt', backup_directory='C:\\Users\\user1\\Downloads\\backup')
+    backup_file(
+        file_path='C:\\Users\\user1\\Downloads\\file.txt',
+        backup_directory='C:\\Users\\user1\\Downloads\\backup',
+        timestamp_as_prefix=True
+    )
 
     Backed up file will be moved to 'C:\\Users\\user1\\Downloads\\backup' with timestamp in the name.
     Final path will look like: 'C:\\Users\\user1\\Downloads\\backup\\20231003-120000-000000_file.txt'
+    ---------------------------------------------
+    Example when timestamp_as_prefix is False:
+    backup_file(
+        file_path='C:\\Users\\user1\\Downloads\\file.txt',
+        backup_directory='C:\\Users\\user1\\Downloads\\backup',
+        timestamp_as_prefix=False
+    )
+
+    Backed up file will be moved to 'C:\\Users\\user1\\Downloads\\backup' with timestamp in the name.
+    Final path will look like: 'C:\\Users\\user1\\Downloads\\backup\\file_20231003-120000-000000.txt'
     """
 
     if check_file_existence(file_path):
         timestamp: str = datetimes.TimeFormats().get_current_formatted_time_filename_stamp(True)
         file_name_no_extension = Path(file_path).stem
         file_extension = Path(file_path).suffix
-        backup_file_path: str = str(Path(backup_directory) / f"{file_name_no_extension}_{timestamp}{file_extension}")
+        if timestamp_as_prefix:
+            file_name: str = f"{timestamp}_{file_name_no_extension}{file_extension}"
+        else:
+            file_name: str = f"{file_name_no_extension}_{timestamp}{file_extension}"
+        backup_file_path: str = str(Path(backup_directory) / file_name)
         move_file(file_path, backup_file_path)
