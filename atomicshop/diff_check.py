@@ -207,7 +207,7 @@ class DiffChecker:
         self.new_objects_seconds_then_difference: Union[float, None] = None
         self.timer = None
 
-    def _static_pre_process(self):
+    def initiate_before_action(self):
         """
         This function will be called before the actual checking of the object.
         If you change any attribute of the class, you will need to call this function again.
@@ -254,7 +254,8 @@ class DiffChecker:
             self.previous_day = None
 
         if self.new_objects_hours_then_difference and self.operation_type != 'new_objects':
-            raise ValueError("The 'new_objects_hours_then_difference' variable must be set for 'new_objects' operation type.")
+            raise ValueError(
+                "The 'new_objects_hours_then_difference' variable must be set for 'new_objects' operation type.")
 
         if self.new_objects_hours_then_difference:
             self.new_objects_seconds_then_difference = self.new_objects_hours_then_difference * 60 * 60
@@ -265,8 +266,6 @@ class DiffChecker:
         """
         The function will check file content for change by hashing it and comparing the hash.
         """
-
-        self._static_pre_process()
 
         if not isinstance(self.check_object, str):
             raise TypeError(f"[check_object] must be string, not {type(self.check_object)}.")
@@ -286,8 +285,6 @@ class DiffChecker:
         :param sort_by_keys: list, of keys to sort the list of dicts by.
         :param print_kwargs: dict, of kwargs to pass to 'print_api' function.
         """
-
-        self._static_pre_process()
 
         if not isinstance(self.check_object, list):
             raise TypeError(f'[check_object] must be list, not {type(self.check_object)}.')
