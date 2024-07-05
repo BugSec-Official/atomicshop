@@ -3,11 +3,35 @@ from ...basics import list_of_dicts
 from ...print_api import print_api
 
 
-def _execute_cycle(change_monitor_instance, print_kwargs: dict = None):
+def setup_check(change_monitor_instance):
+    original_name: str = str()
+
+    # Initialize objects for network monitoring.
+    change_monitor_instance.fetch_engine = psutilw.PsutilConnections()
+
+    # Change settings for the DiffChecker object.
+    change_monitor_instance.diff_checker.return_first_cycle = True
+
+    if change_monitor_instance.generate_input_file_name:
+        original_name = 'known_connections'
+        # Make path for 'input_file_name'.
+        change_monitor_instance.input_file_name = f'{original_name}.txt'
+
+    change_monitor_instance.diff_checker.check_object_display_name = \
+        f'{original_name}|{change_monitor_instance.object_type}'
+
+    # Set the 'check_object' to empty list, since we will append the list of DNS events.
+    change_monitor_instance.diff_checker.check_object = list()
+
+    change_monitor_instance.diff_checker.operation_type = 'single_object'
+
+
+def execute_cycle(change_monitor_instance, print_kwargs: dict = None):
     """
     This function executes the cycle of the change monitor: network.
 
     :param change_monitor_instance: Instance of the ChangeMonitor class.
+    :param print_kwargs: print_api kwargs.
 
     :return: List of dictionaries with the results of the cycle.
     """
@@ -22,7 +46,7 @@ def _execute_cycle(change_monitor_instance, print_kwargs: dict = None):
     change_monitor_instance._set_input_file_path()
 
     # Check if 'known_domains' list was updated from previous cycle.
-    result, message = change_monitor_instance.diff_check_list[0].check_list_of_dicts(print_kwargs=print_kwargs)
+    result, message = change_monitor_instance.diff_checker.check_list_of_dicts(print_kwargs=print_kwargs)
 
     if result:
         # Get list of new connections only.
@@ -50,28 +74,6 @@ def _get_list(change_monitor_instance):
     :return: list of dicts, of new network sockets.
     """
 
-    if change_monitor_instance.first_cycle:
-        original_name: str = str()
-
-        # Initialize objects for network monitoring.
-        change_monitor_instance.fetch_engine = psutilw.PsutilConnections()
-
-        # Change settings for the DiffChecker object.
-        change_monitor_instance.diff_check_list[0].return_first_cycle = True
-
-        if change_monitor_instance.generate_input_file_name:
-            original_name = 'known_connections'
-            # Make path for 'input_file_name'.
-            change_monitor_instance.input_file_name = f'{original_name}.txt'
-
-        change_monitor_instance.diff_check_list[0].check_object_display_name = \
-            f'{original_name}|{change_monitor_instance.object_type}'
-
-        # Set the 'check_object' to empty list, since we will append the list of DNS events.
-        change_monitor_instance.diff_check_list[0].check_object = list()
-
-        change_monitor_instance.diff_check_list[0].operation_type = 'single_object'
-
     # Get all connections (list of dicts), including process name and cmdline.
     connections_list_of_dicts: list = \
         change_monitor_instance.fetch_engine.get_connections_with_process_as_list_of_dicts(
@@ -80,10 +82,10 @@ def _get_list(change_monitor_instance):
 
     # Get list of connections that are not in 'known_connections' list.
     missing_connections_from_cycle: list = list_of_dicts.get_difference(
-        change_monitor_instance.diff_check_list[0].check_object, connections_list_of_dicts)
+        change_monitor_instance.diff_checker.check_object, connections_list_of_dicts)
     # Add missing new connections to 'known_connections' list.
-    change_monitor_instance.diff_check_list[0].check_object.extend(missing_connections_from_cycle)
+    change_monitor_instance.diff_checker.check_object.extend(missing_connections_from_cycle)
 
     # Sort list of dicts by process name and then by process cmdline.
-    change_monitor_instance.diff_check_list[0].check_object = list_of_dicts.sort_by_keys(
-        change_monitor_instance.diff_check_list[0].check_object, key_list=['cmdline', 'name'], case_insensitive=True)
+    change_monitor_instance.diff_checker.check_object = list_of_dicts.sort_by_keys(
+        change_monitor_instance.diff_checker.check_object, key_list=['cmdline', 'name'], case_insensitive=True)
