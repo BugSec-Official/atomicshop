@@ -46,6 +46,7 @@ def setup_check(change_monitor_instance):
             f'{change_monitor_instance.input_file_name}|{change_monitor_instance.object_type}'
         DIFF_CHECKER_AGGREGATION.input_file_path = input_file_path
         DIFF_CHECKER_AGGREGATION.new_objects_hours_then_difference = SETTINGS['learning_hours']
+        DIFF_CHECKER_AGGREGATION.initiate_before_action()
 
     if SETTINGS['create_alert_statistics']:
         DIFF_CHECKER_STATISTICS.input_file_write_only = change_monitor_instance.input_file_write_only
@@ -53,6 +54,7 @@ def setup_check(change_monitor_instance):
             f'{change_monitor_instance.input_statistics_file_name}|{change_monitor_instance.object_type}'
         DIFF_CHECKER_STATISTICS.input_file_path = input_statistic_file_path
         DIFF_CHECKER_STATISTICS.hit_statistics_input_file_rotation_cycle_hours = SETTINGS['statistics_rotation_hours']
+        DIFF_CHECKER_STATISTICS.initiate_before_action()
 
     # Start DNS monitoring.
     FETCH_ENGINE.start()
