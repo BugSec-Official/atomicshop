@@ -7,7 +7,10 @@ class TimerError(Exception):
 
 class Timer:
     """ Custom timer class to measure elapsed time. Returns time in seconds (float) or nanoseconds with setting. """
-    def __init__(self, nanoseconds: bool = False):
+    def __init__(
+            self,
+            nanoseconds: bool = False
+    ):
         """
         Set up timer in seconds or nanoseconds
         Seconds are returned as float, nanoseconds as int.
@@ -16,6 +19,9 @@ class Timer:
         """
         self._start_time = None
         self._nanoseconds: bool = nanoseconds
+
+        self.running: bool = False
+        self.last_measure = None
 
     def start(self):
         """Start a new timer"""
@@ -28,6 +34,8 @@ class Timer:
         else:
             self._start_time = time.perf_counter()
 
+        self.running = True
+
     def restart(self):
         """Reset the timer"""
 
@@ -37,20 +45,31 @@ class Timer:
     def measure(self):
         """Measure the elapsed time"""
 
-        if self._start_time is None:
-            raise TimerError(f"Timer is not running. Use .start() to start it")
+        # if self._start_time is None and self.last_measure is None:
+        #     raise TimerError(f"Timer is not running. Use .start() to start it")
 
-        if self._nanoseconds:
-            elapsed_time = time.perf_counter_ns() - self._start_time
-        else:
-            elapsed_time = time.perf_counter() - self._start_time
+        # If the timer is running, measure the elapsed time. If not, return the last measured time.
+        if self.running:
+            if self._nanoseconds:
+                self.last_measure = time.perf_counter_ns() - self._start_time
+            else:
+                self.last_measure = time.perf_counter() - self._start_time
 
-        return elapsed_time
+        return self.last_measure
 
-    def stop(self):
-        """Stop the timer, and report the elapsed time"""
+    def stop(self, measure: bool = True):
+        """
+        Stop the timer, and report the elapsed time
 
-        elapsed_time = self.measure()
+        :param measure: True to measure the elapsed time, False to stop the timer without measuring.
+            Measuring, means that the timer will return the elapsed time and 'self.last_measure' will be updated.
+        """
+
+        elapsed_time = None
+        if measure:
+            elapsed_time = self.measure()
+
         self._start_time = None
+        self.running = False
 
         return elapsed_time

@@ -4,7 +4,7 @@ from typing import Union, Literal
 import json
 import queue
 
-from . import filesystem, datetimes
+from . import filesystem, timer
 from .file_io import file_io, jsons
 from .print_api import print_api
 from .basics import list_of_dicts, dicts
@@ -29,7 +29,6 @@ class DiffChecker:
             self,
             check_object: any = None,
             check_object_display_name: str = None,
-            aggregation: bool = False,
             input_file_path: str = None,
             input_file_write_only: bool = True,
             return_first_cycle: bool = True,
@@ -38,11 +37,13 @@ class DiffChecker:
                 'hit_statistics',
                 'all_objects',
                 'single_object'] = None,
-            input_file_rotation_cycle_hours: Union[
+            hit_statistics_input_file_rotation_cycle_hours: Union[
                 float,
                 Literal['midnight'],
                 None] = None,
-            enable_statistics_queue: bool = False
+            hit_statistics_enable_queue: bool = False,
+            new_objects_hours_then_difference: float = None
+
     ):
         """
         :param check_object: any, object to check if it changed.
@@ -85,11 +86,11 @@ class DiffChecker:
             'single_object': will store the object as is, without any comparison. Meaning, that the object will be
                  compared only to itself, and if it changes, it will be updated.
             None: Nothing will be done, you will get an exception.
-        :param input_file_rotation_cycle_hours:
+        :param hit_statistics_input_file_rotation_cycle_hours:
             float, the amount of hours the input file will be rotated in the 'hit_statistics' operation type.
             str, (only 'midnight' is valid), the input file will be rotated daily at midnight.
             This is valid only for the 'hit_statistics' operation type.
-        :param enable_statistics_queue: boolean, if True, the statistics queue will be enabled for the 'hit_statistics'
+        :param hit_statistics_enable_queue: boolean, if True, the statistics queue will be enabled for the 'hit_statistics'
             operation type. You can use this queue to process the statistics in another thread.
 
             Example:
@@ -99,8 +100,8 @@ class DiffChecker:
                 input_file_write_only=True,
                 return_first_cycle=True,
                 operation_type='hit_statistics',
-                input_file_rotation_cycle_hours='midnight',
-                enable_statistics_queue=True)
+                hit_statistics_input_file_rotation_cycle_hours='midnight',
+                hit_statistics_enable_queue=True)
 
             def process_statistics_queue():
                 while True:
@@ -110,6 +111,12 @@ class DiffChecker:
             threading.Thread(target=process_statistics_queue).start()
 
             <... Your checking operation for the object ...>
+        :param new_objects_hours_then_difference: float, This is only for the 'new_objects' operation type.
+            If the object is not in the list of objects, it will be added to the list.
+            If the object is in the list of objects, it will be ignored.
+            After the specified amount of hours, new objects will not be added to the input file list, so each new
+            object will be outputted from the function. This is useful for checking new objects that are not
+            supposed to be in the list of objects, but you want to know about them.
 
         --------------------------------------------------
 
@@ -180,60 +187,86 @@ class DiffChecker:
             print(message)
         """
 
-        # 'check_object' can be none, so checking if it not equals empty string.
-        if check_object == "":
-            raise ValueError("[check_object] option can't be empty string.")
-
-        if operation_type and operation_type not in ['new_objects', 'hit_statistics', 'all_objects', 'single_object']:
-            raise ValueError(f"[operation_type] must be one of the following: "
-                             f"'new_objects', 'hit_statistics', 'all_objects', 'single_object'.")
-
-        if input_file_rotation_cycle_hours and operation_type != 'hit_statistics':
-            raise ValueError("[input_file_rotation_cycle] can be specified only for 'hit_statistics' operation type.")
-
-        if enable_statistics_queue and operation_type != 'hit_statistics':
-            raise ValueError("[enable_statistics_queue] can be specified only for 'hit_statistics' operation type.")
-
-        if input_file_rotation_cycle_hours and not isinstance(input_file_rotation_cycle_hours, float) and \
-                not isinstance(input_file_rotation_cycle_hours, int) and \
-                input_file_rotation_cycle_hours != 'midnight':
-            raise ValueError("[input_file_rotation_cycle] must be float, int or 'midnight' str.")
-
         self.check_object = check_object
         self.check_object_display_name = check_object_display_name
-        self.aggregation: bool = aggregation
         self.input_file_path: str = input_file_path
         self.input_file_write_only: bool = input_file_write_only
         self.return_first_cycle: bool = return_first_cycle
         self.operation_type = operation_type
-        self.input_file_rotation_cycle = input_file_rotation_cycle_hours
-        self.enable_statistics_queue = enable_statistics_queue
-
-        if not self.check_object_display_name:
-            self.check_object_display_name = self.check_object
+        self.hit_statistics_input_file_rotation_cycle_hours = hit_statistics_input_file_rotation_cycle_hours
+        self.hit_statistics_enable_queue = hit_statistics_enable_queue
+        self.new_objects_hours_then_difference: float = new_objects_hours_then_difference
 
         # Previous content.
         self.previous_content: Union['list', 'str', None] = None
         # The format the file will be saved as (not used as extension): txt, json.
         self.save_as: str = str()
 
+        self.statistics_queue = None
+        self.previous_day = None
+        self.new_objects_seconds_then_difference: Union[float, None] = None
+        self.timer = None
+
+    def _static_pre_process(self):
+        """
+        This function will be called before the actual checking of the object.
+        If you change any attribute of the class, you will need to call this function again.
+        """
+        # 'check_object' can be none, so checking if it not equals empty string.
+        if self.check_object == "":
+            raise ValueError("[check_object] option can't be empty string.")
+
+        if (self.operation_type and self.operation_type not in
+                ['new_objects', 'hit_statistics', 'all_objects', 'single_object']):
+            raise ValueError(f"[operation_type] must be one of the following: "
+                             f"'new_objects', 'hit_statistics', 'all_objects', 'single_object'.")
+
+        if self.hit_statistics_input_file_rotation_cycle_hours and self.operation_type != 'hit_statistics':
+            raise ValueError("[input_file_rotation_cycle] can be specified only for 'hit_statistics' operation type.")
+
+        if self.hit_statistics_enable_queue and self.operation_type != 'hit_statistics':
+            raise ValueError("[hit_statistics_enable_queue] can be specified only for 'hit_statistics' operation type.")
+
+        if (self.hit_statistics_input_file_rotation_cycle_hours and
+                not isinstance(self.hit_statistics_input_file_rotation_cycle_hours, float) and
+                not isinstance(self.hit_statistics_input_file_rotation_cycle_hours, int) and
+                self.hit_statistics_input_file_rotation_cycle_hours != 'midnight'):
+            raise ValueError("[input_file_rotation_cycle] must be float, int or 'midnight' str.")
+
+        if self.new_objects_hours_then_difference and self.operation_type != 'new_objects':
+            raise ValueError(
+                "[new_objects_hours_then_difference] can be specified only for 'new_objects' operation type.")
+
+        if not self.check_object_display_name:
+            self.check_object_display_name = self.check_object
+
         # If the input file rotation cycle is set and the statistics queue is enabled, we will create the queue.
-        if self.input_file_rotation_cycle and self.enable_statistics_queue:
+        if self.hit_statistics_input_file_rotation_cycle_hours and self.hit_statistics_enable_queue:
             # You can use this queue to process the statistics in another thread.
             self.statistics_queue = queue.Queue()
         else:
             self.statistics_queue = None
 
         # If the input file rotation cycle is set to midnight, we will store the previous day as today.
-        if self.input_file_rotation_cycle == 'midnight':
+        if self.hit_statistics_input_file_rotation_cycle_hours == 'midnight':
             self.previous_day = datetime.datetime.now().strftime('%d')
         else:
             self.previous_day = None
+
+        if self.new_objects_hours_then_difference and self.operation_type != 'new_objects':
+            raise ValueError("The 'new_objects_hours_then_difference' variable must be set for 'new_objects' operation type.")
+
+        if self.new_objects_hours_then_difference:
+            self.new_objects_seconds_then_difference = self.new_objects_hours_then_difference * 60 * 60
+            self.timer = timer.Timer()
+            self.timer.start()
 
     def check_string(self, print_kwargs: dict = None):
         """
         The function will check file content for change by hashing it and comparing the hash.
         """
+
+        self._static_pre_process()
 
         if not isinstance(self.check_object, str):
             raise TypeError(f"[check_object] must be string, not {type(self.check_object)}.")
@@ -253,6 +286,8 @@ class DiffChecker:
         :param sort_by_keys: list, of keys to sort the list of dicts by.
         :param print_kwargs: dict, of kwargs to pass to 'print_api' function.
         """
+
+        self._static_pre_process()
 
         if not isinstance(self.check_object, list):
             raise TypeError(f'[check_object] must be list, not {type(self.check_object)}.')
@@ -343,7 +378,7 @@ class DiffChecker:
         return result, message
 
     def _hit_statistics_only_handling(self, current_content, result, message, sort_by_keys, print_kwargs: dict = None):
-        if self.input_file_rotation_cycle == 'midnight':
+        if self.hit_statistics_input_file_rotation_cycle_hours == 'midnight':
             # If the current time is midnight, we will rotate the file.
             # Get current date.
             current_date = datetime.datetime.now().strftime('%d')
@@ -417,29 +452,40 @@ class DiffChecker:
                     'object': self.check_object_display_name,
                     'old': list(self.previous_content),
                     'updated': current_content
-                    # 'type': self.object_type
                 }
 
                 # f"Type: {result['type']} | "
                 message = f"Object: {result['object']} | Old: {result['old']} | Updated: {result['updated']}"
 
-            # Make known content the current, since it is updated.
-            self.previous_content.extend(current_content)
+            # If the time has passed, we will stop updating the input file.
+            if ((self.new_objects_seconds_then_difference and
+                self.new_objects_seconds_then_difference > self.timer.measure())
+                    or not self.new_objects_hours_then_difference):
 
-            # Sort list of dicts by specified list of keys.
-            if sort_by_keys:
-                self.previous_content = list_of_dicts.sort_by_keys(
-                    self.previous_content, sort_by_keys, case_insensitive=True)
+                result['time_passed'] = False
 
-            # If 'input_file_path' was specified by the user, it means that we will use the input file to save
-            # our known content there for next iterations to compare.
-            if self.input_file_path:
-                if self.save_as == 'txt':
-                    # noinspection PyTypeChecker
-                    file_io.write_file(self.previous_content, self.input_file_path, **(print_kwargs or {}))
-                elif self.save_as == 'json':
-                    jsons.write_json_file(
-                        self.previous_content, self.input_file_path, use_default_indent=True, **(print_kwargs or {}))
+                # Make known content the current, since it is updated.
+                self.previous_content.extend(current_content)
+
+                # Sort list of dicts by specified list of keys.
+                if sort_by_keys:
+                    self.previous_content = list_of_dicts.sort_by_keys(
+                        self.previous_content, sort_by_keys, case_insensitive=True)
+
+                # If 'input_file_path' was specified by the user, it means that we will use the input file to save
+                # our known content there for next iterations to compare.
+                if self.input_file_path:
+                    if self.save_as == 'txt':
+                        # noinspection PyTypeChecker
+                        file_io.write_file(self.previous_content, self.input_file_path, **(print_kwargs or {}))
+                    elif self.save_as == 'json':
+                        jsons.write_json_file(
+                            self.previous_content, self.input_file_path, use_default_indent=True, **(print_kwargs or {}))
+            else:
+                result['time_passed'] = True
+                # We will stop the timer, since the time has passed, the 'measure' method will return the last measure
+                # when the timer was running.
+                self.timer.stop()
         else:
             message = f"Object didn't change: {self.check_object_display_name}"
 
