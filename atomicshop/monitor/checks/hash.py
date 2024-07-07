@@ -1,17 +1,16 @@
+from ... import diff_check
 from ...print_api import print_api
 from .hash_checks import file, url
 
 
+DIFF_CHECKER = diff_check.DiffChecker(
+    return_first_cycle=False,
+    operation_type='single_object'
+)
+
+
 def setup_check(change_monitor_instance):
-    # if store_original_object and not (input_directory or input_file_path):
-    #     raise ValueError(
-    #         'ERROR: if [store_original_object] is True, either '
-    #         '[input_directory] or [input_file_path] must be specified .')
-
-
     change_monitor_instance.set_input_file_path()
-
-    change_monitor_instance.diff_checker.operation_type = 'single_object'
 
     if change_monitor_instance.object_type == 'file':
         file.setup_check(change_monitor_instance, change_monitor_instance.check_object)
