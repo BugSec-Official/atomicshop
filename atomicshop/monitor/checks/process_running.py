@@ -3,51 +3,50 @@ from ...basics import list_of_dicts
 from ...print_api import print_api
 
 
-def setup_check(change_monitor_instance):
-    change_monitor_instance.fetch_engine = psutilw.PsutilProcesses()
-
-
-def execute_cycle(change_monitor_instance, print_kwargs: dict = None):
+class ProcessRunningCheck:
     """
-    This function executes the cycle of the change monitor: process_running.
-
-    :param change_monitor_instance: Instance of the ChangeMonitor class.
-    :param print_kwargs: Dictionary with the print arguments.
-    :return: List of dictionaries with the results of the cycle.
+    Class for process running monitoring.
     """
 
-    if print_kwargs is None:
-        print_kwargs = dict()
+    def __init__(self, change_monitor_instance):
+        self.change_monitor_instance = change_monitor_instance
+        self.fetch_engine = psutilw.PsutilProcesses()
 
-    return_list = list()
+    def execute_cycle(self, print_kwargs: dict = None):
+        """
+        This function executes the cycle of the change monitor: process_running.
 
-    processes = _get_list(change_monitor_instance)
+        :param print_kwargs: Dictionary with the print arguments.
+        :return: List of dictionaries with the results of the cycle.
+        """
 
-    for process_name in change_monitor_instance.check_object:
-        result = list_of_dicts.is_value_exist_in_key(processes, 'cmdline', process_name, value_case_insensitive=True)
+        return_list = list()
 
-        # If the process name was found in the list of currently running processes.
-        if result:
-            message = f"Process [{process_name}] is Running."
-            print_api(message, color='green', **print_kwargs)
-        # If the process name was not found in the list of currently running processes.
-        else:
-            message = f"Process [{process_name}] not Running!"
-            print_api(message, color='red', **print_kwargs)
+        processes = self._get_list()
 
-            return_list.append(message)
+        for process_name in self.change_monitor_instance.check_object:
+            result = list_of_dicts.is_value_exist_in_key(
+                processes, 'cmdline', process_name, value_case_insensitive=True)
 
-    return return_list
+            # If the process name was found in the list of currently running processes.
+            if result:
+                message = f"Process [{process_name}] is Running."
+                print_api(message, color='green', **(print_kwargs or {}))
+            # If the process name was not found in the list of currently running processes.
+            else:
+                message = f"Process [{process_name}] not Running!"
+                print_api(message, color='red', **(print_kwargs or {}))
 
+                return_list.append(message)
 
-def _get_list(change_monitor_instance):
-    """
-    The function will get the list of opened network sockets and return only the new ones.
+        return return_list
 
-    :param change_monitor_instance: Instance of the ChangeMonitor class.
+    def _get_list(self):
+        """
+        The function will get the list of opened network sockets and return only the new ones.
 
-    :return: list of dicts, of new network sockets.
-    """
+        :return: list of dicts, of new network sockets.
+        """
 
-    return change_monitor_instance.fetch_engine.get_processes_as_list_of_dicts(
-        default_keys=True, cmdline_to_string=True)
+        return self.fetch_engine.get_processes_as_list_of_dicts(
+            default_keys=True, cmdline_to_string=True)

@@ -102,8 +102,10 @@ def write_file(
             content = '\n'.join(content)
         else:
             file_object.writelines(content)
-
-    if isinstance(content, str):
+    elif isinstance(content, str):
+        file_object.write(content)
+    # THis will happen if the content is bytes and the file mode is 'wb'.
+    elif isinstance(content, bytes) and 'b' in file_mode:
         file_object.write(content)
     else:
         raise TypeError(f"Content type is not supported: {type(content)}")

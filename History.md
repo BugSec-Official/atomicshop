@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.12.19 - 07.07.2024
+  * file_io, monitor - fixes and improvements.
 * 2.12.18 - 05.07.2024
   * diff_check, monitor - fixes and improvements.
 * 2.12.17 - 05.07.2024

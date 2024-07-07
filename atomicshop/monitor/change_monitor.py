@@ -1,8 +1,6 @@
 from typing import Literal, Union
-from pathlib import Path
 
-from .checks import dns, network, hash, process_running
-from .. import filesystem, scheduling
+from .checks import dns, network, file, url, process_running
 
 
 DNS__DEFAULT_SETTINGS = {
@@ -122,36 +120,31 @@ class ChangeMonitor:
 
         # === Additional variables ========================================
 
-        # self.original_object_directory = None
-        # self.original_object_file_path = None
-
-        # # If 'store_original_object' is True, create directory for original object.
-        # if self.store_original_object:
-        #     # Make path for original object.
-        #     self.original_object_directory = filesystem.add_object_to_path(
-        #         self.input_directory, 'Original')
-        #     # Create directory if it doesn't exist.
-        #     filesystem.create_directory(self.original_object_directory)
-        #
-        # Initialize objects for DNS and Network monitoring.
-
         self.checks_instance = None
         self._setup_object()
 
     def _setup_object(self):
-        if self.object_type == 'file' or 'url_' in self.object_type:
-            self.checks_instance = hash
-        if self.object_type == 'dns':
-            self.checks_instance = dns
+        if self.object_type == 'file':
+            if not self.object_type_settings:
+                self.object_type_settings = FILE__URL__DEFAULT_SETTINGS
 
+            self.checks_instance = file.FileCheck(self)
+        elif self.object_type.startswith('url_'):
+            if not self.object_type_settings:
+                self.object_type_settings = FILE__URL__DEFAULT_SETTINGS
+
+            self.checks_instance = url.UrlCheck(self)
+        elif self.object_type == 'dns':
             if not self.object_type_settings:
                 self.object_type_settings = DNS__DEFAULT_SETTINGS
-        elif self.object_type == 'network':
-            self.checks_instance = network
-        elif self.object_type == 'process_running':
-            self.checks_instance = process_running
 
-        self.checks_instance.setup_check(self)
+            self.checks_instance = dns.DnsCheck(self)
+        elif self.object_type == 'network':
+            self.checks_instance = network.NetworkCheck(self)
+        elif self.object_type == 'process_running':
+            self.checks_instance = process_running.ProcessRunningCheck(self)
+        else:
+            raise ValueError(f"ERROR: Unknown object type: {self.object_type}")
 
     def check_cycle(self, print_kwargs: dict = None):
         """
