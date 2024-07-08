@@ -67,12 +67,90 @@ def get_logger_with_timedfilehandler(
 
 def get_logger_with_stream_handler_and_timedfilehandler(
         logger_name: str,
-        directory_path, file_name: str = None, file_extension: str = '.txt',
-        logging_level="DEBUG", formatter_filehandler='default',
+        directory_path,
+        file_name: str = None,
+        file_extension: str = '.txt',
+        logging_level="DEBUG",
+        formatter_filehandler='default',
         formatter_streamhandler: str = "%(levelname)s | %(threadName)s | %(name)s | %(message)s",
-        formatter_message_only: bool = False, disable_duplicate_ms: bool = False,
-        when: str = "midnight", interval: int = 1, delay: bool = True, encoding=None
+        formatter_message_only: bool = False,
+        disable_duplicate_ms: bool = False,
+        when: str = "midnight",
+        interval: int = 1,
+        delay: bool = True,
+        encoding=None
 ) -> logging.Logger:
+    """
+    Function to get a logger and add StreamHandler and TimedRotatingFileHandler to it.
+
+    :param logger_name: Name of the logger.
+    :param directory_path: string, Path to the directory where the log file will be created.
+    :param file_name: string, Name of the log file without file extension, since we add it through separate argument.
+        If not provided, logger name will be used.
+    :param file_extension: string, Extension of the log file. Default is '.txt'.
+        '.txt': Text file.
+        '.csv': CSV file.
+        '.json': JSON file.
+    :param logging_level: str or int, Logging level for the handler, that will use the logger while initiated.
+    :param formatter_filehandler: string, Formatter to use for handler. It is template of how a message will look like.
+        None: No formatter will be used.
+        'default': Default formatter will be used for each file extension:
+            .txt: "%(asctime)s | %(levelname)s | %(threadName)s | %(name)s | %(message)s"
+            .csv: "%(asctime)s,%(levelname)s,%(threadName)s,%(name)s,%(message)s"
+            .json: '{"time": "%(asctime)s", "level": "%(levelname)s", "thread": "%(threadName)s",
+                "logger": "%(name)s", "message": "%(message)s"}'
+    :param formatter_streamhandler: string, Formatter to use for StreamHandler. It is template of how a message will
+        look like.
+    :param formatter_message_only: bool, If set to True, formatter will be used only for the 'message' part.
+    :param disable_duplicate_ms: bool, If set to True, duplicate milliseconds will be removed from formatter
+        'asctime' element.
+    :param when: string, When to rotate the log file. Default is 'midnight'.
+        [when="midnight"] is set to rotate the filename at midnight. This means that the current file name will be
+        added Yesterday's date to the end of the file and today's file will continue to write at the same
+        filename. Also, if the script finished working on 25.11.2021, the name of the log file will be "test.log"
+        If you run the script again on 28.11.2021, the logging module will take the last modification date of
+        the file "test.log" and assign a date to it: test.log.2021_11_25
+        The log filename of 28.11.2021 will be called "test.log" again.
+    :param interval: int, Interval to rotate the log file. Default is 1.
+        If 'when="midnight"' and 'interval=1', then the log file will be rotated every midnight.
+        If 'when="midnight"' and 'interval=2', then the log file will be rotated every 2nd midnights.
+    :param delay: bool, If set to True, the log file will be created only if there's something to write.
+    :param encoding: string, Encoding to use for the log file. Default is None.
+
+    :return: Logger.
+
+    ================================================================================================================
+
+    Working example to write CSV logs to the file and output messages to the console:
+    from atomicshop.wrappers.loggingw import loggingw
+
+
+    def main():
+        def output_csv_header():
+            # Since there is no implementation of header in logging file handler modules, we'll do it manually each time.
+            header: list = ['time',
+                           'host',
+                           'path',
+                           'error'
+                           ]
+            error_logger.info(','.join(header))
+
+
+        output_directory: str = "D:\\logs"
+
+        error_logger = loggingw.get_logger_with_stream_handler_and_timedfilehandler(
+            logger_name="errors", directory_path=output_directory,
+            file_extension=".csv", formatter_message_only=True
+        )
+
+        output_csv_header()
+
+        error_logger.info(f"{datetime.now()},host1,/path/to/file,error message")
+
+
+    if __name__ == "__main__":
+        main()
+    """
     logger = get_logger_with_level(logger_name, logging_level)
     add_stream_handler(logger, logging_level, formatter_streamhandler, formatter_message_only)
     add_timedfilehandler_with_queuehandler(
