@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.12.20 - 08.07.2024
+  * wrappers.loggingw.loggingw - fixes and improvements.
+  * startup, wrappers.pywin32w.winshell - initial release.
 * 2.12.19 - 07.07.2024
   * file_io, monitor - fixes and improvements.
 * 2.12.18 - 05.07.2024
