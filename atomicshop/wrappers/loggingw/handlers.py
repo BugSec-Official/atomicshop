@@ -1,6 +1,34 @@
 import logging
 from logging.handlers import TimedRotatingFileHandler, QueueListener, QueueHandler
 import re
+import os
+
+
+class TimedRotatingFileHandlerWithHeader(TimedRotatingFileHandler):
+    """
+    Custom TimedRotatingFileHandler that writes a header to the log file each time there is a file rotation.
+    Useful for writing CSV files.
+
+    :param header: string, Header to write to the log file.
+        Example: "time,host,error"
+    """
+    def __init__(self, *args, **kwargs):
+        self.header = kwargs.pop('header', None)
+        super().__init__(*args, **kwargs)
+
+    def doRollover(self):
+        super().doRollover()
+        self._write_header()
+
+    def _write_header(self):
+        if self.header:
+            with open(self.baseFilename, 'a') as f:
+                f.write(self.header + '\n')
+
+    def emit(self, record):
+        if not os.path.exists(self.baseFilename) or os.path.getsize(self.baseFilename) == 0:
+            self._write_header()
+        super().emit(record)
 
 
 def get_stream_handler() -> logging.StreamHandler:
@@ -36,6 +64,28 @@ def get_timed_rotating_file_handler(
 
     return TimedRotatingFileHandler(
         filename=log_file_path, when=when, interval=interval, delay=delay, encoding=encoding)
+
+
+def get_timed_rotating_file_handler_with_header(
+        log_file_path: str, when: str = "midnight", interval: int = 1, delay: bool = False, encoding=None,
+        header: str = None) -> TimedRotatingFileHandlerWithHeader:
+    """
+    Function to get a TimedRotatingFileHandler with header.
+    This handler will output messages to a file, rotating the log file at certain timed intervals.
+    It will write a header to the log file each time there is a file rotation.
+
+    :param log_file_path: Path to the log file.
+    :param when: When to rotate the log file. Possible
+    :param interval: Interval to rotate the log file.
+    :param delay: bool, If set to True, the log file will be created only if there's something to write.
+    :param encoding: Encoding to use for the log file. Same as for the TimeRotatingFileHandler, which uses Default None.
+    :param header: Header to write to the log file.
+        Example: "time,host,error"
+    :return: TimedRotatingFileHandlerWithHeader.
+    """
+
+    return TimedRotatingFileHandlerWithHeader(
+        filename=log_file_path, when=when, interval=interval, delay=delay, encoding=encoding, header=header)
 
 
 def start_queue_listener_for_file_handler(
@@ -133,3 +183,22 @@ def change_rotated_filename(file_handler: logging.Handler, file_extension: str):
     file_handler.suffix = logfile_suffix
     file_handler.namer = lambda name: name.replace(file_extension + ".", "") + file_extension
     file_handler.extMatch = logfile_regex_suffix
+
+
+def has_handlers(logger: logging.Logger) -> bool:
+    """
+    Function to check if the logger has handlers.
+    :param logger: Logger to check
+    :return: True if logger has handlers, False otherwise
+    """
+
+    # Omitted the usage of "hasHandlers()" method, since sometimes returned "True" even when there were no handlers
+    # Didn't research the issue much, just used the "len(logger.handlers)" to check how many handlers there are
+    # in the logger.
+    # if not logging.getLogger(function_module_name).hasHandlers():
+    # if len(logging.getLogger(function_module_name).handlers) == 0:
+
+    if len(logger.handlers) == 0:
+        return False
+    else:
+        return True
