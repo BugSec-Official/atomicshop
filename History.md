@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.12.21 - 09.07.2024
+  * wrappers.loggingw, mitm.initialize_mitm_server - fixes and improvements.
 * 2.12.20 - 08.07.2024
   * wrappers.loggingw.loggingw - fixes and improvements.
   * startup, wrappers.pywin32w.winshell - initial release.

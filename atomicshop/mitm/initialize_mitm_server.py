@@ -16,26 +16,13 @@ from ..wrappers.loggingw import loggingw
 from ..print_api import print_api
 
 
+STATISTICS_HEADER: str = \
+    'request_time_sent,host,path,command,status_code,request_size_bytes,response_size_bytes,file_path,process_cmd,error'
+
+
 def initialize_mitm_server(config_static):
     # Main function should return integer with error code, 0 is successful.
     # Since listening server is infinite, this will not be reached.
-    def output_statistics_csv_header():
-        # Since there is no implementation of header in logging file handler modules, we'll do it manually each time.
-        statistics_header: list = ['request_time_sent',
-                                   'host',
-                                   'path',
-                                   'command',
-                                   'status_code',
-                                   'request_size_bytes',
-                                   'response_size_bytes',
-                                   # 'request_hex',
-                                   # 'response_hex',
-                                   'file_path',
-                                   'process_cmd',
-                                   'error'
-                                   ]
-        statistics_logger.info(','.join(statistics_header))
-
     # After modules import - we check for python version.
     check_python_version_compliance(minimum_version='3.11')
 
@@ -190,9 +177,8 @@ def initialize_mitm_server(config_static):
     # Creating Statistics logger.
     statistics_logger = loggingw.get_logger_with_stream_handler_and_timedfilehandler(
         logger_name="statistics", directory_path=config['log']['logs_path'],
-        file_extension=config_static.CSV_EXTENSION, formatter_message_only=True
+        file_extension=config_static.CSV_EXTENSION, formatter_message_only=True, header=STATISTICS_HEADER
     )
-    output_statistics_csv_header()
 
     network_logger_name = "network"
     network_logger = loggingw.get_logger_with_stream_handler_and_timedfilehandler(

@@ -78,7 +78,8 @@ def get_logger_with_stream_handler_and_timedfilehandler(
         when: str = "midnight",
         interval: int = 1,
         delay: bool = True,
-        encoding=None
+        encoding=None,
+        header: str = None
 ) -> logging.Logger:
     """
     Function to get a logger and add StreamHandler and TimedRotatingFileHandler to it.
@@ -116,6 +117,8 @@ def get_logger_with_stream_handler_and_timedfilehandler(
         If 'when="midnight"' and 'interval=2', then the log file will be rotated every 2nd midnights.
     :param delay: bool, If set to True, the log file will be created only if there's something to write.
     :param encoding: string, Encoding to use for the log file. Default is None.
+    :param header: string, Header to write to the log file.
+        Example: "time,host,error"
 
     :return: Logger.
 
@@ -126,24 +129,13 @@ def get_logger_with_stream_handler_and_timedfilehandler(
 
 
     def main():
-        def output_csv_header():
-            # Since there is no implementation of header in logging file handler modules, we'll do it manually each time.
-            header: list = ['time',
-                           'host',
-                           'path',
-                           'error'
-                           ]
-            error_logger.info(','.join(header))
-
-
+        header: str = "time,host,error"
         output_directory: str = "D:\\logs"
 
         error_logger = loggingw.get_logger_with_stream_handler_and_timedfilehandler(
             logger_name="errors", directory_path=output_directory,
-            file_extension=".csv", formatter_message_only=True
+            file_extension=".csv", formatter_message_only=True, header=header
         )
-
-        output_csv_header()
 
         error_logger.info(f"{datetime.now()},host1,/path/to/file,error message")
 
@@ -155,7 +147,7 @@ def get_logger_with_stream_handler_and_timedfilehandler(
     add_stream_handler(logger, logging_level, formatter_streamhandler, formatter_message_only)
     add_timedfilehandler_with_queuehandler(
         logger, directory_path, file_name, file_extension, logging_level, formatter_filehandler,
-        formatter_message_only, disable_duplicate_ms, when, interval, delay, encoding
+        formatter_message_only, disable_duplicate_ms, when, interval, delay, encoding, header
     )
 
     return logger
@@ -201,10 +193,20 @@ def add_stream_handler(
 
 
 def add_timedfilehandler_with_queuehandler(
-        logger: logging.Logger, directory_path, file_name_no_extension: str = None, file_extension: str = '.txt',
+        logger: logging.Logger,
+        directory_path: str,
+        file_name_no_extension: str = None,
+        file_extension: str = '.txt',
         logging_level="DEBUG",
-        formatter='default', formatter_message_only: bool = False, disable_duplicate_ms: bool = False,
-        when: str = 'midnight', interval: int = 1, delay: bool = True, encoding=None):
+        formatter='default',
+        formatter_message_only: bool = False,
+        disable_duplicate_ms: bool = False,
+        when: str = 'midnight',
+        interval: int = 1,
+        delay: bool = True,
+        encoding=None,
+        header: str = None
+):
     """
     Function to add TimedRotatingFileHandler and QueueHandler to logger.
     TimedRotatingFileHandler will output messages to the file through QueueHandler.
@@ -238,6 +240,8 @@ def add_timedfilehandler_with_queuehandler(
         If 'when="midnight"' and 'interval=2', then the log file will be rotated every 2nd midnights.
     :param delay: bool, If set to True, the log file will be created only if there's something to write.
     :param encoding: string, Encoding to use for the log file. Default is None.
+    :param header: string, Header to write to the log file.
+        Example: "time,host,error"
     """
 
     # If file name wasn't provided we will use the logger name instead.
@@ -254,8 +258,17 @@ def add_timedfilehandler_with_queuehandler(
 
     # Creating file handler with log filename. At this stage the log file is created and locked by the handler,
     # Unless we use "delay=True" to tell the class to write the file only if there's something to write.
-    file_handler = handlers.get_timed_rotating_file_handler(
-        log_file_path, when=when, interval=interval, delay=delay, encoding=encoding)
+
+    if file_extension == ".csv":
+        # If file extension is CSV, we'll set the header to the file.
+        # This is needed since the CSV file will be rotated, and we'll need to set the header each time.
+        # We'll use the custom TimedRotatingFileHandlerWithHeader class.
+        file_handler = handlers.get_timed_rotating_file_handler_with_header(
+            log_file_path, when=when, interval=interval, delay=delay, encoding=encoding, header=header)
+    else:
+        file_handler = handlers.get_timed_rotating_file_handler(
+            log_file_path, when=when, interval=interval, delay=delay, encoding=encoding)
+
     loggers.set_logging_level(file_handler, logging_level)
 
     if formatter == "default":

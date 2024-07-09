@@ -236,16 +236,25 @@ def get_latest_lines(
     return: List of new lines.
 
     Usage:
+        from typing import Union
+
+
+        # The header of the log file will be read from the first iteration of the log file.
+        # When the file is rotated, this header will be used to not read the header again.
+        header: Union[list, None] = None
         while True:
-            latest_lines, current_lines, existing_lines, last_24_hours_lines = get_latest_log_lines(
+            latest_lines, previous_day_24h_lines, header = reading.get_latest_lines(
                 log_file_path='/path/to/log.csv',
-                log_type='csv'
+                log_type='csv',
+                date_pattern='%Y_%m_%d',
+                get_previous_file=True,
+                header=header
             )
 
             if latest_lines:
                 # Do something with the new lines.
 
-            if last_24_hours_lines:
+            if previous_day_24h_lines:
                 # Do something with the last 24 hours lines. Reminder, this will happen once a day on log rotation.
 
             time.sleep(1)
