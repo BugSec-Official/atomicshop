@@ -113,6 +113,10 @@ def get_logs_paths(
                 logs_files = []
             else:
                 logs_files = [logs_files[-2]]
+    # If there is only one file, meaning it is the current day log.
+    # If the 'previous_day_only' is True, then there are no previous day logs to output.
+    elif len(logs_files) == 1 and previous_day_only:
+        logs_files = []
 
     return logs_files
 
@@ -309,7 +313,8 @@ def get_latest_lines(
             log_type='csv',
             previous_day_only=True
         )[0]['file_path']
-    except KeyError:
+    # If you get IndexError, it means that there are no previous day logs to read.
+    except IndexError:
         pass
 
     # Count all the rotated files.
