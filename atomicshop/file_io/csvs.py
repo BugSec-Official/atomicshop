@@ -105,7 +105,11 @@ def write_list_to_csv(
         mode: str = 'w'
 ) -> None:
     """
-    Function to write list object that each iteration of it contains dict object with same keys and different values.
+    This function got dual purpose:
+    1. Write list object that each iteration of it contains list object with same length.
+    2. Write list object that each iteration of it contains dict object with same keys and different values.
+    The dictionary inside the function will be identified by the first iteration of the list.
+    Other objects (inside the provided list) than dictionary will be identified as regular objects.
 
     :param file_path: Full file path to CSV file.
     :param content_list: List object that each iteration contains dictionary with same keys and different values.
@@ -113,7 +117,7 @@ def write_list_to_csv(
     :return: None.
     """
 
-    with open(file_path, mode=mode) as csv_file:
+    with open(file_path, mode=mode, newline='') as csv_file:
         if len(content_list) > 0 and isinstance(content_list[0], dict):
             # Treat the list as list of dictionaries.
             header = content_list[0].keys()
