@@ -135,7 +135,7 @@ class ProcessPollerPool:
             self, store_cycles: int = 200,
             interval_seconds: Union[int, float] = 0,
             operation: Literal['thread', 'process'] = 'thread',
-            poller_method: Literal['psutil', 'pywin32', 'process_dll'] = 'process_dll'
+            poller_method: Literal['psutil', 'pywin32', 'process_dll'] = 'process_dll',
     ):
         """
         :param store_cycles: int, how many cycles to store. Each cycle is polling processes.
@@ -162,6 +162,14 @@ class ProcessPollerPool:
             'psutil': Get the list of processes by 'psutil' library. Resource intensive and slow.
             'pywin32': Get the list of processes by 'pywin32' library, using WMI. Not resource intensive, but slow.
             'process_dll'. Not resource intensive and fast. Probably works only in Windows 10 x64.
+        ---------------------------------------------
+        If there is an exception, ProcessPollerPool.processes will be set to the exception.
+        While getting the processes you can use this to execute the exception:
+
+        processes = ProcessPollerPool.processes
+
+        if isinstance(processes, BaseException):
+            raise processes
         """
 
         self.store_cycles: int = store_cycles
@@ -193,44 +201,60 @@ class ProcessPollerPool:
     def _start_thread(self):
         self.running = True
         # threading.Thread(target=self._worker, args=(self.process_polling_instance,)).start()
-        threading.Thread(target=self._worker).start()
+        thread = threading.Thread(target=self._worker)
+        thread.daemon = True
+        thread.start()
 
     def _start_process(self):
         self.running = True
-        multiprocessing.Process(target=self._worker).start()
-        threading.Thread(target=self._thread_get_queue).start()
+        stopping_queue = multiprocessing.Queue()
+        multiprocessing.Process(target=self._worker, args=(stopping_queue,)).start()
 
-    # def _worker(self, process_polling_instance):
+        thread = threading.Thread(target=self._thread_get_queue)
+        thread.daemon = True
+        thread.start()
+
     def _worker(self):
         # We must initiate the connection inside the thread/process, because it is not thread-safe.
         self.get_processes_list.connect()
 
+        exception = None
         list_of_processes: list = list()
         while self.running:
-            # If the list is full (to specified 'store_cycles'), remove the first element.
-            if len(list_of_processes) == self.store_cycles:
-                del list_of_processes[0]
+            try:
+                # If the list is full (to specified 'store_cycles'), remove the first element.
+                if len(list_of_processes) == self.store_cycles:
+                    del list_of_processes[0]
 
-            # Get the current processes and reinitialize the instance of the dict.
-            current_processes: dict = dict(self.get_processes_list.get_processes())
+                # Get the current processes and reinitialize the instance of the dict.
+                current_processes: dict = dict(self.get_processes_list.get_processes())
 
-            # Remove Command lines that contains only numbers, since they are useless.
-            for pid, process_info in current_processes.items():
-                if process_info['cmdline'].isnumeric():
-                    current_processes[pid]['cmdline'] = str()
-                elif process_info['cmdline'] == 'Error':
-                    current_processes[pid]['cmdline'] = str()
+                # Remove Command lines that contains only numbers, since they are useless.
+                for pid, process_info in current_processes.items():
+                    if process_info['cmdline'].isnumeric():
+                        current_processes[pid]['cmdline'] = str()
+                    elif process_info['cmdline'] == 'Error':
+                        current_processes[pid]['cmdline'] = str()
 
-            # Append the current processes to the list.
-            list_of_processes.append(current_processes)
+                # Append the current processes to the list.
+                list_of_processes.append(current_processes)
 
-            # Merge all dicts in the list to one dict, updating with most recent PIDs.
-            self.processes = list_of_dicts.merge_to_dict(list_of_processes)
+                # Merge all dicts in the list to one dict, updating with most recent PIDs.
+                self.processes = list_of_dicts.merge_to_dict(list_of_processes)
 
-            if self.operation == 'process':
-                self.queue.put(self.processes)
+                if self.operation == 'process':
+                    self.queue.put(self.processes)
 
-            time.sleep(self.interval_seconds)
+                time.sleep(self.interval_seconds)
+            except KeyboardInterrupt as e:
+                self.running = False
+                exception = e
+            except Exception as e:
+                self.running = False
+                exception = e
+
+        if not self.running:
+            self.queue.put(exception)
 
     def _thread_get_queue(self):
         while True:

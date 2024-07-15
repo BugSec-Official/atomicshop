@@ -3,6 +3,9 @@
 #include <tchar.h>
 #include <iostream>
 #include <tlhelp32.h>
+#include <atomic>
+
+std::atomic<bool> cancelRequested(false);
 
 typedef LONG NTSTATUS;
 typedef NTSTATUS (*PFN_NT_QUERY_INFORMATION_PROCESS)(HANDLE, UINT, PVOID, ULONG, PULONG);
@@ -121,6 +124,10 @@ bool GetProcessCommandLine(DWORD dwPid, wchar_t** ppszCmdLine, wchar_t* szProces
 
 typedef void(*CallbackFunc)(DWORD pid, wchar_t* process_name, wchar_t* cmdline);
 
+extern "C" __declspec(dllexport) void RequestCancellation() {
+    cancelRequested.store(true);
+}
+
 extern "C" __declspec(dllexport) void GetProcessDetails(CallbackFunc callback) {
     if (!EnableDebugPrivilege()) {
         std::wcout << L"Failed to enable debug privilege." << std::endl;
@@ -156,7 +163,7 @@ extern "C" __declspec(dllexport) void GetProcessDetails(CallbackFunc callback) {
         } else {
             callback(pe32.th32ProcessID, szProcessName, NULL);
         }
-    } while (Process32NextW(hSnap, &pe32));
+    } while (Process32NextW(hSnap, &pe32) && !cancelRequested.load());
 
     CloseHandle(hSnap);
 }

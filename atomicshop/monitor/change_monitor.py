@@ -40,28 +40,28 @@ class ChangeMonitor:
                     'url_playwright_png',
                     'url_playwright_jpeg'],
                 None] = None,
-            object_type_settings: dict = None
+            object_type_settings: dict = None,
+            etw_session_name: str = None
     ):
         """
         :param object_type: string, type of object to check. The type must be one of the following:
-            'file': 'check_object_list' must contain strings of full path to the file.
-            'dns': 'check_object_list' will be none, since the DNS events will be queried from the system.
-            'network': 'check_object_list' will be none, since the network events will be queried from the system.
-            'process_running': 'check_object_list' must contain strings of process names to check if they are running.
+            'file': 'check_object' must contain string of full path to the file.
+            'dns': 'check_object' will be none, since the DNS events will be queried from the system.
+            'network': 'check_object' will be none, since the network events will be queried from the system.
+            'process_running': 'check_object' must contain list of strings of process names to check if they are
+                running.
                 Example: ['chrome.exe', 'firefox.exe']
                 No file is written.
-            'url_urllib': 'check_object_list' must contain strings of full URL to a web page. The page will be
-                downloaded using 'urllib' library in HTML.
-            'url_playwright_html': 'check_object_list' must contain strings of full URL to a web page. The page will
-                be downloaded using 'playwright' library in HTML.
-            'url_playwright_pdf': 'check_object_list' must contain strings of full URL to a web page. The page will
-                be downloaded using 'playwright' library in PDF.
-            'url_playwright_png': 'check_object_list' must contain strings of full URL to a web page. The page will
-                be downloaded using 'playwright' library in PNG.
-            'url_playwright_jpeg': 'check_object_list' must contain strings of full URL to a web page. The page will
-                be downloaded using 'playwright' library in JPEG.
+            'url_*': 'check_object' must contain string of full URL to a web page to download.
+                'url_urllib': download using 'urllib' library to HTML file.
+                'url_playwright_html': download using 'playwright' library to HTML file.
+                'url_playwright_pdf': download using 'playwright' library to PDF file.
+                'url_playwright_png': download using 'playwright' library to PNG file.
+                'url_playwright_jpeg': download using 'playwright' library to JPEG file.
         :param object_type_settings: dict, specific settings for the object type.
             'dns': Check the default settings example in 'DNS__DEFAULT_SETTINGS'.
+            'file': Check the default settings example in 'FILE__URL__DEFAULT_SETTINGS'.
+            'url_*': Check the default settings example in 'FILE__URL__DEFAULT_SETTINGS'.
         :param check_object: The object to check if changed.
             'dns': empty.
             'network': empty.
@@ -84,24 +84,10 @@ class ChangeMonitor:
                 to the input file whether the object was updated.
             False: write to input file each time there is an update, and read each check cycle from the file and not
                 from the memory.
-        :param store_original_object: boolean, if True, the original object will be stored on the disk inside
-        'Original' folder, inside 'input_directory'.
-        :param operation_type: string, type of operation to perform. The type must be one of the following:
-            'hit_statistics': will only store the statistics of the entries in the input file.
-            'all_objects': disable the DiffChecker features, meaning any new entries will be emitted as is.
-            None: will use the default operation type, based on the object type.
-        :param hit_statistics_input_file_rotation_cycle_hours:
-            float, the amount of hours the input file will be rotated in the 'hit_statistics' operation type.
-            str, (only 'midnight' is valid), the input file will be rotated daily at midnight.
-            This is valid only for the 'hit_statistics' operation type.
-        :param hit_statistics_enable_queue: boolean, if True, the statistics queue will be enabled.
-        :param new_objects_hours_then_difference: float, currently works only for the 'dns' object_type.
-            This is only for the 'new_objects' operation type.
-            If the object is not in the list of objects, it will be added to the list.
-            If the object is in the list of objects, it will be ignored.
-            After the specified amount of hours, new objects will not be added to the input file list, so each new
-            object will be outputted from the function. This is useful for checking new objects that are not
-            supposed to be in the list of objects, but you want to know about them.
+        :param etw_session_name: string, the name of the ETW session. This should help you manage your ETW sessions
+            with logman and other tools: logman query -ets
+            If not provided, a default name will be generated.
+            'dns': 'AtomicShopDnsTrace'
 
         If 'input_directory' is not specified, the 'input_file_name' is not specified, and
         'generate_input_file_name' is False, then the input file will not be used and the object will be stored
@@ -117,13 +103,14 @@ class ChangeMonitor:
         self.input_file_write_only: bool = input_file_write_only
         self.object_type = object_type
         self.object_type_settings: dict = object_type_settings
+        self.etw_session_name: str = etw_session_name
 
         # === Additional variables ========================================
 
         self.checks_instance = None
-        self._setup_object()
+        self._setup_check()
 
-    def _setup_object(self):
+    def _setup_check(self):
         if self.object_type == 'file':
             if not self.object_type_settings:
                 self.object_type_settings = FILE__URL__DEFAULT_SETTINGS
