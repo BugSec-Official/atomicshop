@@ -8,6 +8,7 @@ from ...import diff_check
 
 INPUT_FILE_DEFAULT_NAME: str = 'known_domains.json'
 INPUT_STATISTICS_FILE_DEFAULT_NAME: str = 'dns_statistics.json'
+ETW_DEFAULT_SESSION_NAME: str = 'AtomicShopDnsTrace'
 
 
 class DnsCheck:
@@ -20,8 +21,17 @@ class DnsCheck:
         self.diff_checker_aggregation: Union[diff_check.DiffChecker, None] = None
         self.diff_checker_statistics: Union[diff_check.DiffChecker, None] = None
         self.settings: dict = change_monitor_instance.object_type_settings
+
+        if change_monitor_instance.etw_session_name:
+            self.etw_session_name: str = change_monitor_instance.etw_session_name
+        else:
+            self.etw_session_name: str = ETW_DEFAULT_SESSION_NAME
+
         self.fetch_engine: DnsTrace = (
-            DnsTrace(enable_process_poller=True, attrs=['name', 'cmdline', 'domain', 'query_type']))
+            DnsTrace(
+                enable_process_poller=True, attrs=['name', 'cmdline', 'domain', 'query_type'],
+                session_name=self.etw_session_name)
+        )
 
         if self.settings['alert_always'] and self.settings['alert_about_missing_entries_after_learning']:
             raise ValueError(

@@ -3,9 +3,18 @@ import queue
 # Import FireEye Event Tracing library.
 import etw
 
+from ..basics import atexits
+
 
 class EventTrace(etw.ETW):
-    def __init__(self, providers: list, event_callback=None, event_id_filters: list = None):
+    def __init__(
+            self,
+            providers: list,
+            event_callback=None,
+            event_id_filters: list = None,
+            session_name: str = None,
+            stop_etw_tracing_on_exit: bool = False
+            ):
         """
         :param providers: List of tuples with provider name and provider GUID.
             tuple[0] = provider name
@@ -13,8 +22,21 @@ class EventTrace(etw.ETW):
         :param event_callback: Reference to the callable callback function that will be called for each occurring event.
         :param event_id_filters: List of event IDs that we want to filter. If not provided, all events will be returned.
             The default in the 'etw.ETW' method is 'None'.
+        :param session_name: The name of the session to create. If not provided, a UUID will be generated.
+        :param stop_etw_tracing_on_exit: If True, the ETW tracing will be stopped when the script exits.
+            'pywintrace' module starts a new session for ETW tracing, and it will not stop the session when the script
+            exits or exception is raised.
+            This can cause problems when you want to start the script again, and the session is already running.
+            If the session is already running, and you start a new session with the same session name, you will get
+            the buffer from when you stopped getting the events from the buffer.
+            If you give different session name for new session, the previous session will still continue to run,
+            filling the buffer with events, until you will stop getting new events on all sessions or get an
+            exception that the buffer is full (WinError 1450).
         """
         self.event_queue = queue.Queue()
+        self.stop_etw_tracing_on_exit: bool = stop_etw_tracing_on_exit
+
+        self._set_atexit_and_signals()
 
         # If no callback function is provided, we will use the default one, which will put the event in the queue.
         if not event_callback:
@@ -29,7 +51,9 @@ class EventTrace(etw.ETW):
             etw_format_providers.append(etw.ProviderInfo(provider[0], etw.GUID(provider[1])))
 
         super().__init__(
-            providers=etw_format_providers, event_callback=function_callable, event_id_filters=event_id_filters)
+            providers=etw_format_providers, event_callback=function_callable, event_id_filters=event_id_filters,
+            session_name=session_name
+        )
 
     def start(self):
         try:
@@ -59,3 +83,37 @@ class EventTrace(etw.ETW):
         """
 
         return self.event_queue.get()
+
+    def _set_atexit_and_signals(self):
+        if self.stop_etw_tracing_on_exit:
+            atexits.run_callable_on_exit_and_signals(self.stop)
+
+
+def find_sessions_by_provider(provider_name: str):
+    """
+    Find ETW session by provider name.
+
+    :param provider_name: The name of the provider to search for.
+    """
+
+    return
+
+
+def get_all_providers_from_session(session_name: str):
+    """
+    Get all providers that ETW session uses.
+
+    :param session_name: The name of the session to get providers from.
+    """
+
+    return
+
+
+def stop_session_by_name(session_name: str):
+    """
+    Stop ETW session by name.
+
+    :param session_name: The name of the session to stop.
+    """
+
+    return

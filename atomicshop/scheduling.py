@@ -12,7 +12,7 @@ def periodic_task(interval, priority, function_ref, args=(), sched_object=None):
     sched_object.run()
 
 
-def threaded_periodic_task(interval, function_ref, args=(), kwargs=None, thread_name=None):
+def threaded_periodic_task(interval, function_ref, args=(), kwargs=None, thread_name=None, daemon=True):
     """
     The function executes referenced function 'function_ref' with arguments 'args' each 'interval' in a new thread.
     The old thread is closed, each time the new is executed.
@@ -24,6 +24,10 @@ def threaded_periodic_task(interval, function_ref, args=(), kwargs=None, thread_
     :param thread_name: the name of the thread that will be created:
         threading.Thread(target=thread_timer, name=thread_name).start()
         The default parameter for 'Thread' 'name' is 'None', so if you don't specify the name it works as default.
+    :param daemon: bool, if True, the thread will be a daemon thread. Default is True.
+        Since this is a periodic task, we don't need to wait for the thread to finish, so we can set it to True.
+
+    :return: thread object.
     """
 
     # If 'kwargs' is not provided, we'll initialize it as an empty dictionary.
@@ -50,7 +54,13 @@ def threaded_periodic_task(interval, function_ref, args=(), kwargs=None, thread_
             time.sleep(interval)
 
     # Start in a new thread.
-    threading.Thread(target=thread_timer, name=thread_name).start()
+    thread = threading.Thread(target=thread_timer, name=thread_name)
+
+    if daemon:
+        thread.daemon = True
+
+    thread.start()
+    return thread
 
 
 class ThreadLooper:

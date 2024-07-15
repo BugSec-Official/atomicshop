@@ -3,10 +3,11 @@ from .. import dns
 from ..wrappers.psutilw import psutilw
 from ..basics import dicts
 from ..process_poller import ProcessPollerPool
+from ..print_api import print_api
 
 
 class DnsTrace:
-    def __init__(self, enable_process_poller: bool = False, attrs: list = None):
+    def __init__(self, enable_process_poller: bool = False, attrs: list = None, session_name: str = None):
         """
         DnsTrace class use to trace DNS events from Windows Event Tracing for EventId 3008.
 
@@ -14,6 +15,7 @@ class DnsTrace:
             every 100 ms. Since the DNS events doesn't contain the process name and command line, only PID.
             Then DNS events will be enriched with the process name and command line from the process poller.
         :param attrs: List of attributes to return. If None, all attributes will be returned.
+        :param session_name: The name of the session to create. If not provided, a UUID will be generated.
 
         Usage Example:
             from atomicshop.etw import dns_trace
@@ -31,9 +33,10 @@ class DnsTrace:
         self.attrs = attrs
 
         self.event_trace = etw.EventTrace(
-            [(dns.ETW_DNS_INFO['provider_name'], dns.ETW_DNS_INFO['provider_guid'])],
+            providers=[(dns.ETW_DNS_INFO['provider_name'], dns.ETW_DNS_INFO['provider_guid'])],
             # lambda x: self.event_queue.put(x),
-            event_id_filters=[dns.ETW_DNS_INFO['event_id']]
+            event_id_filters=[dns.ETW_DNS_INFO['event_id']],
+            session_name=session_name
         )
 
         if self.enable_process_poller:
@@ -117,7 +120,12 @@ class DnsTrace:
             event_dict['status'] = 'Error'
 
         if self.enable_process_poller:
-            event_dict = psutilw.cross_single_connection_with_processes(event_dict, self.process_poller.processes)
+            processes = self.process_poller.processes
+
+            if isinstance(processes, BaseException):
+                raise processes
+
+            event_dict = psutilw.cross_single_connection_with_processes(event_dict, processes)
             # If it was impossible to get the process name from the process poller, get it from psutil.
             # if event_dict['name'].isnumeric():
             #     event_dict['name'] = process_name
