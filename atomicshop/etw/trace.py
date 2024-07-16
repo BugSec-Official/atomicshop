@@ -1,9 +1,10 @@
 import queue
+import sys
 
 # Import FireEye Event Tracing library.
 import etw
 
-from ..basics import atexits
+from ..print_api import print_api
 
 
 class EventTrace(etw.ETW):
@@ -12,9 +13,8 @@ class EventTrace(etw.ETW):
             providers: list,
             event_callback=None,
             event_id_filters: list = None,
-            session_name: str = None,
-            stop_etw_tracing_on_exit: bool = False
-            ):
+            session_name: str = None
+    ):
         """
         :param providers: List of tuples with provider name and provider GUID.
             tuple[0] = provider name
@@ -23,7 +23,8 @@ class EventTrace(etw.ETW):
         :param event_id_filters: List of event IDs that we want to filter. If not provided, all events will be returned.
             The default in the 'etw.ETW' method is 'None'.
         :param session_name: The name of the session to create. If not provided, a UUID will be generated.
-        :param stop_etw_tracing_on_exit: If True, the ETW tracing will be stopped when the script exits.
+        ------------------------------------------
+        You should stop the ETW tracing when you are done with it.
             'pywintrace' module starts a new session for ETW tracing, and it will not stop the session when the script
             exits or exception is raised.
             This can cause problems when you want to start the script again, and the session is already running.
@@ -32,11 +33,15 @@ class EventTrace(etw.ETW):
             If you give different session name for new session, the previous session will still continue to run,
             filling the buffer with events, until you will stop getting new events on all sessions or get an
             exception that the buffer is full (WinError 1450).
+
+            Example to stop the ETW tracing at the end of the script:
+            from atomicshop.basics import atexits
+
+
+            event_tracing = EventTrace(<Your parameters>)
+            atexits.run_callable_on_exit_and_signals(EventTrace.stop)
         """
         self.event_queue = queue.Queue()
-        self.stop_etw_tracing_on_exit: bool = stop_etw_tracing_on_exit
-
-        self._set_atexit_and_signals()
 
         # If no callback function is provided, we will use the default one, which will put the event in the queue.
         if not event_callback:
@@ -59,8 +64,10 @@ class EventTrace(etw.ETW):
         try:
             super().start()
         except OSError as e:
-            raise OSError(f"PyWinTrace Error: {e}\n"
-                          f"PyWinTrace crashed, didn't find solution to this, RESTART computer.")
+            message = f"PyWinTrace Error: {e}\n" \
+                        f"PyWinTrace crashed, didn't find solution to this, RESTART computer."
+            print_api(message, error_type=True, logger_method='critical')
+            sys.exit(1)
 
     def stop(self):
         super().stop()
@@ -83,10 +90,6 @@ class EventTrace(etw.ETW):
         """
 
         return self.event_queue.get()
-
-    def _set_atexit_and_signals(self):
-        if self.stop_etw_tracing_on_exit:
-            atexits.run_callable_on_exit_and_signals(self.stop)
 
 
 def find_sessions_by_provider(provider_name: str):

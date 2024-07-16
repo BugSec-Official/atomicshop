@@ -1,4 +1,4 @@
-from . import etw
+from . import trace
 from .. import dns
 from ..wrappers.psutilw import psutilw
 from ..basics import dicts
@@ -32,7 +32,7 @@ class DnsTrace:
         self.enable_process_poller = enable_process_poller
         self.attrs = attrs
 
-        self.event_trace = etw.EventTrace(
+        self.event_trace = trace.EventTrace(
             providers=[(dns.ETW_DNS_INFO['provider_name'], dns.ETW_DNS_INFO['provider_guid'])],
             # lambda x: self.event_queue.put(x),
             event_id_filters=[dns.ETW_DNS_INFO['event_id']],
