@@ -7,7 +7,13 @@ from ..print_api import print_api
 
 
 class DnsTrace:
-    def __init__(self, enable_process_poller: bool = False, attrs: list = None, session_name: str = None):
+    def __init__(
+            self,
+            enable_process_poller: bool = False,
+            attrs: list = None,
+            session_name: str = None,
+            close_existing_session_name: bool = True
+    ):
         """
         DnsTrace class use to trace DNS events from Windows Event Tracing for EventId 3008.
 
@@ -16,6 +22,14 @@ class DnsTrace:
             Then DNS events will be enriched with the process name and command line from the process poller.
         :param attrs: List of attributes to return. If None, all attributes will be returned.
         :param session_name: The name of the session to create. If not provided, a UUID will be generated.
+        :param close_existing_session_name: Boolean to close existing session names.
+            True: if ETW session with 'session_name' exists, you will be notified and the session will be closed.
+                Then the new session with this name will be created.
+            False: if ETW session with 'session_name' exists, you will be notified and the new session will not be
+                created. Instead, the existing session will be used. If there is a buffer from the previous session,
+                you will get the events from the buffer.
+
+        -------------------------------------------------
 
         Usage Example:
             from atomicshop.etw import dns_trace
@@ -36,7 +50,8 @@ class DnsTrace:
             providers=[(dns.ETW_DNS_INFO['provider_name'], dns.ETW_DNS_INFO['provider_guid'])],
             # lambda x: self.event_queue.put(x),
             event_id_filters=[dns.ETW_DNS_INFO['event_id']],
-            session_name=session_name
+            session_name=session_name,
+            close_existing_session_name=close_existing_session_name
         )
 
         if self.enable_process_poller:
