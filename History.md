@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.12.24 - 16.07.2024
+  * on_exit, etw, monitor, process_name_cmd, process_poller
 * 2.12.23 - 15.07.2024
   * etw, monitor, process_name_cmd, process_poller, scheduling - fixes and improvements.
 * 2.12.22 - 10.07.2024

@@ -1,4 +1,4 @@
-from importlib import resources
+from importlib.resources import files
 import ctypes
 from ctypes import wintypes
 from typing import Literal
@@ -8,19 +8,18 @@ from .basics import list_of_dicts
 
 
 PACKAGE_DLL_PATH = 'addons/process_list/compiled/Win10x64/process_list.dll'
+FULL_DLL_PATH = str(files(__package__).joinpath(PACKAGE_DLL_PATH))
 
 
 class ProcessNameCmdline:
     def __init__(self, load_dll: bool = False):
         self.load_dll: bool = load_dll
+        self.dll_path = FULL_DLL_PATH
 
         self.dll = None
         self.callback_output = None
         self.CALLBACKFUNC = None
         self.CALLBACKFUNC_ref = None
-
-        with resources.path(__package__, PACKAGE_DLL_PATH) as dll_path:
-            self.dll_path = str(dll_path)
 
         if self.load_dll:
             self.load()

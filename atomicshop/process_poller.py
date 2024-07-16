@@ -207,8 +207,7 @@ class ProcessPollerPool:
 
     def _start_process(self):
         self.running = True
-        stopping_queue = multiprocessing.Queue()
-        multiprocessing.Process(target=self._worker, args=(stopping_queue,)).start()
+        multiprocessing.Process(target=self._worker).start()
 
         thread = threading.Thread(target=self._thread_get_queue)
         thread.daemon = True

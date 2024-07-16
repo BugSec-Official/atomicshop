@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Union
 
-from ...etw.dns_trace import DnsTrace
+from ...etw.trace_dns import DnsTrace
 from ...print_api import print_api
 from ...import diff_check
 
