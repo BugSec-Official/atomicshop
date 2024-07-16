@@ -30,7 +30,7 @@ class DnsCheck:
         self.fetch_engine: DnsTrace = (
             DnsTrace(
                 enable_process_poller=True, attrs=['name', 'cmdline', 'domain', 'query_type'],
-                session_name=self.etw_session_name)
+                session_name=self.etw_session_name, close_existing_session_name=True)
         )
 
         if self.settings['alert_always'] and self.settings['alert_about_missing_entries_after_learning']:

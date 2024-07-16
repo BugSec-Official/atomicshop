@@ -1,13 +1,13 @@
 import ctypes
 from ctypes import wintypes
+from ctypes.wintypes import ULONG
 
-
-# Load the necessary library
-advapi32 = ctypes.WinDLL('advapi32')
 
 # Constants
 EVENT_TRACE_CONTROL_STOP = 1
 WNODE_FLAG_TRACED_GUID = 0x00020000
+
+MAXIMUM_LOGGERS = 64
 
 
 # Define GUID structure
@@ -53,5 +53,42 @@ class EVENT_TRACE_PROPERTIES(ctypes.Structure):
         ("RealTimeBuffersLost", wintypes.ULONG),
         ("LoggerThreadId", wintypes.HANDLE),
         ("LogFileNameOffset", wintypes.ULONG),
-        ("LoggerNameOffset", wintypes.ULONG)
+        ("LoggerNameOffset", wintypes.ULONG),
+        # Allocate space for the names at the end of the structure
+        ("_LoggerName", wintypes.WCHAR * 1024),
+        ("_LogFileName", wintypes.WCHAR * 1024)
     ]
+
+
+class PROVIDER_ENUMERATION_INFO(ctypes.Structure):
+    _fields_ = [
+        ("NumberOfProviders", ULONG),
+        ("Reserved", ULONG),
+    ]
+
+
+class PROVIDER_INFORMATION(ctypes.Structure):
+    _fields_ = [
+        ("ProviderId", ctypes.c_byte * 16),
+        ("SchemaSource", ULONG),
+        ("ProviderNameOffset", ULONG),
+    ]
+
+
+# Load the necessary library
+advapi32 = ctypes.WinDLL('advapi32')
+tdh = ctypes.windll.tdh
+
+# Define necessary TDH functions
+tdh.TdhEnumerateProviders.argtypes = [ctypes.POINTER(PROVIDER_ENUMERATION_INFO), ctypes.POINTER(ULONG)]
+tdh.TdhEnumerateProviders.restype = ULONG
+
+
+# Define the function prototype
+QueryAllTraces = advapi32.QueryAllTracesW
+QueryAllTraces.argtypes = [
+    ctypes.POINTER(ctypes.POINTER(EVENT_TRACE_PROPERTIES)),
+    wintypes.ULONG,
+    ctypes.POINTER(wintypes.ULONG)
+]
+QueryAllTraces.restype = wintypes.ULONG

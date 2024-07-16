@@ -5,6 +5,7 @@ import sys
 import etw
 
 from ..print_api import print_api
+from . import sessions
 
 
 class EventTrace(etw.ETW):
@@ -13,7 +14,8 @@ class EventTrace(etw.ETW):
             providers: list,
             event_callback=None,
             event_id_filters: list = None,
-            session_name: str = None
+            session_name: str = None,
+            close_existing_session_name: bool = True
     ):
         """
         :param providers: List of tuples with provider name and provider GUID.
@@ -23,6 +25,7 @@ class EventTrace(etw.ETW):
         :param event_id_filters: List of event IDs that we want to filter. If not provided, all events will be returned.
             The default in the 'etw.ETW' method is 'None'.
         :param session_name: The name of the session to create. If not provided, a UUID will be generated.
+        :param close_existing_session_name: Boolean to close existing session names.
         ------------------------------------------
         You should stop the ETW tracing when you are done with it.
             'pywintrace' module starts a new session for ETW tracing, and it will not stop the session when the script
@@ -42,6 +45,7 @@ class EventTrace(etw.ETW):
             atexits.run_callable_on_exit_and_signals(EventTrace.stop)
         """
         self.event_queue = queue.Queue()
+        self.close_existing_session_name: bool = close_existing_session_name
 
         # If no callback function is provided, we will use the default one, which will put the event in the queue.
         if not event_callback:
@@ -61,6 +65,17 @@ class EventTrace(etw.ETW):
         )
 
     def start(self):
+        # Check if the session name already exists.
+        if sessions.is_session_running(self.session_name):
+            print_api(f'ETW Session already running: {self.session_name}', color='yellow')
+
+            # Close the existing session name.
+            if self.close_existing_session_name:
+                print_api(f'Closing existing session: {self.session_name}', color='blue')
+                sessions.stop_and_delete(self.session_name)
+            else:
+                print_api(f'Using existing session: {self.session_name}', color='yellow')
+
         try:
             super().start()
         except OSError as e:
