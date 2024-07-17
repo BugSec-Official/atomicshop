@@ -6,10 +6,6 @@ from ... import filesystem, datetimes
 from ...file_io import csvs
 
 
-READING_EXISTING_LINES: list = []
-EXISTING_LOGS_FILE_COUNT: int = 0
-
-
 def get_logs_paths(
         log_files_directory_path: str = None,
         log_file_path: str = None,
@@ -212,31 +208,10 @@ def get_logs(
     return logs_content
 
 
-def get_latest_lines(
-        log_file_path: str,
-        date_pattern: str = None,
-        log_type: Literal['csv'] = 'csv',
-        get_previous_file: bool = False,
-        header: list = None
-) -> tuple:
+class LogReader:
     """
-    This function gets the latest lines from the log file.
+    This class gets the latest lines from the log file.
 
-    :param log_file_path: Path to the log file.
-    :param date_pattern: Pattern to match the date in the log file name.
-        If specified, the function will get the log file by the date pattern.
-        If not specified, the function will get the file date by file last modified time.
-    :param log_type: Type of log to get.
-    :param get_previous_file: Boolean, if True, the function will get the previous log file.
-        For example, your log is set to rotate every Midnight.
-        Meaning, once the day will change, the function will get the log file from the previous day in the third entry
-        of the return tuple. This happens only once each 24 hours. Not from the time the function was called, but from
-        the time the day changed.
-    :param header: List of strings that will be the header of the CSV file. Default is 'None'.
-        None: the header from the CSV file will be used. The first row of the CSV file will be the header.
-            Meaning, that the first line will be skipped and the second line will be the first row of the content.
-        List: the list will be used as header.
-            All the lines of the CSV file will be considered as content.
     return: List of new lines.
 
     Usage:
@@ -246,14 +221,15 @@ def get_latest_lines(
         # The header of the log file will be read from the first iteration of the log file.
         # When the file is rotated, this header will be used to not read the header again.
         header: Union[list, None] = None
+        log_reader = reading.LogReader(
+            log_file_path='/path/to/log.csv',
+            log_type='csv',
+            date_pattern='%Y_%m_%d',
+            get_previous_file=True,
+            header=header
+        )
         while True:
-            latest_lines, previous_day_24h_lines, header = reading.get_latest_lines(
-                log_file_path='/path/to/log.csv',
-                log_type='csv',
-                date_pattern='%Y_%m_%d',
-                get_previous_file=True,
-                header=header
-            )
+            latest_lines, previous_day_24h_lines, header = log_reader.get_latest_lines(header=header)
 
             if latest_lines:
                 # Do something with the new lines.
@@ -262,91 +238,132 @@ def get_latest_lines(
                 # Do something with the last 24 hours lines. Reminder, this will happen once a day on log rotation.
 
             time.sleep(1)
-    """
+        """
 
-    def extract_new_lines_only(content_lines: list):
+    def __init__(
+            self,
+            log_file_path: str,
+            date_pattern: str = None,
+            log_type: Literal['csv'] = 'csv',
+            get_previous_file: bool = False,
+            header: list = None
+    ):
+        """
+        :param log_file_path: Path to the log file.
+        :param date_pattern: Pattern to match the date in the log file name.
+            If specified, the function will get the log file by the date pattern.
+            If not specified, the function will get the file date by file last modified time.
+        :param log_type: Type of log to get.
+        :param get_previous_file: Boolean, if True, the function will get the previous log file.
+            For example, your log is set to rotate every Midnight.
+            Meaning, once the day will change, the function will get the log file from the previous day in the third entry
+            of the return tuple. This happens only once each 24 hours. Not from the time the function was called, but from
+            the time the day changed.
+        :param header: List of strings that will be the header of the CSV file. Default is 'None'.
+            None: the header from the CSV file will be used. The first row of the CSV file will be the header.
+                Meaning, that the first line will be skipped and the second line will be the first row of the content.
+            List: the list will be used as header.
+                All the lines of the CSV file will be considered as content.
+        """
+
+        self.log_file_path: str = log_file_path
+        self.date_pattern: str = date_pattern
+        self.log_type: Literal['csv'] = log_type
+        self.get_previous_file: bool = get_previous_file
+        self.header: list = header
+
+        self._reading_existing_lines: list = []
+        self._existing_logs_file_count: int = 0
+
+    def _extract_new_lines_only(self, content_lines: list):
         new_lines: list = []
         for row in content_lines:
             # If the row is not in the existing lines, then add it to the new lines.
-            if row not in READING_EXISTING_LINES:
+            if row not in self._reading_existing_lines:
                 new_lines.append(row)
 
         if new_lines:
-            READING_EXISTING_LINES.extend(new_lines)
+            self._reading_existing_lines.extend(new_lines)
 
         return new_lines
 
-    global EXISTING_LOGS_FILE_COUNT
+    def get_latest_lines(self, header: list = None) -> tuple:
+        if header:
+            self.header = header
 
-    # If the existing logs file count is 0, it means that this is the first check. We need to get the current count.
-    if EXISTING_LOGS_FILE_COUNT == 0:
-        EXISTING_LOGS_FILE_COUNT = len(get_logs_paths(
-            log_file_path=log_file_path,
+        # If the existing logs file count is 0, it means that this is the first check. We need to get the current count.
+        if self._existing_logs_file_count == 0:
+            self._existing_logs_file_count = len(get_logs_paths(
+                log_file_path=self.log_file_path,
+                log_type='csv'
+            ))
+
+            # If the count is still 0, then there are no logs to read.
+            if self._existing_logs_file_count == 0:
+                return [], [], self.header
+
+        if self.log_type != 'csv':
+            raise ValueError('Only "csv" log type is supported.')
+
+        previous_file_lines: list = []
+
+        # Get the latest statistics file path.
+        latest_statistics_file_path_object = get_logs_paths(
+            log_file_path=self.log_file_path,
+            date_pattern=self.date_pattern,
+            log_type='csv',
+            latest_only=True
+        )
+
+        # # If there are no logs to read, return empty lists.
+        # if not latest_statistics_file_path_object:
+        #     return [], [], self.header
+
+        latest_statistics_file_path: str = latest_statistics_file_path_object[0]['file_path']
+
+        # Get the previous day statistics file path.
+        previous_day_statistics_file_path: Union[str, None] = None
+        try:
+            previous_day_statistics_file_path = get_logs_paths(
+                log_file_path=self.log_file_path,
+                date_pattern=self.date_pattern,
+                log_type='csv',
+                previous_day_only=True
+            )[0]['file_path']
+        # If you get IndexError, it means that there are no previous day logs to read.
+        except IndexError:
+            pass
+
+        # Count all the rotated files.
+        current_log_files_count: int = len(get_logs_paths(
+            log_file_path=self.log_file_path,
             log_type='csv'
         ))
 
-        # If the count is still 0, then there are no logs to read.
-        if EXISTING_LOGS_FILE_COUNT == 0:
-            return [], [], header
+        # If the count of the log files is greater than the existing logs file count, it means that the rotation
+        # happened. We will read the previous day statistics file.
+        new_lines_from_previous_file: list = []
+        if current_log_files_count > self._existing_logs_file_count:
+            current_lines, self.header = csvs.read_csv_to_list_of_dicts_by_header(
+                previous_day_statistics_file_path, header=self.header, stdout=False)
 
-    if log_type != 'csv':
-        raise ValueError('Only "csv" log type is supported.')
+            if self.get_previous_file:
+                previous_file_lines = current_lines
 
-    previous_file_lines: list = []
+            self._existing_logs_file_count = current_log_files_count
 
-    # Get the latest statistics file path.
-    latest_statistics_file_path_object = get_logs_paths(
-        log_file_path=log_file_path,
-        date_pattern=date_pattern,
-        log_type='csv',
-        latest_only=True
-    )
+            new_lines_from_previous_file = self._extract_new_lines_only(current_lines)
 
-    latest_statistics_file_path: str = latest_statistics_file_path_object[0]['file_path']
+            # empty the previous file lines, since the file is rotated.
+            self._reading_existing_lines.clear()
 
-    # Get the previous day statistics file path.
-    previous_day_statistics_file_path: Union[str, None] = None
-    try:
-        previous_day_statistics_file_path = get_logs_paths(
-            log_file_path=log_file_path,
-            date_pattern=date_pattern,
-            log_type='csv',
-            previous_day_only=True
-        )[0]['file_path']
-    # If you get IndexError, it means that there are no previous day logs to read.
-    except IndexError:
-        pass
+        current_lines, self.header = csvs.read_csv_to_list_of_dicts_by_header(
+            latest_statistics_file_path, header=self.header, stdout=False)
 
-    # Count all the rotated files.
-    current_log_files_count: int = len(get_logs_paths(
-        log_file_path=log_file_path,
-        log_type='csv'
-    ))
+        new_lines = self._extract_new_lines_only(current_lines)
 
-    # If the count of the log files is greater than the existing logs file count, it means that the rotation happened.
-    # We will read the previous day statistics file.
-    new_lines_from_previous_file: list = []
-    if current_log_files_count > EXISTING_LOGS_FILE_COUNT:
-        current_lines, header = csvs.read_csv_to_list_of_dicts_by_header(
-            previous_day_statistics_file_path, header=header, stdout=False)
+        # If we have new lines from the previous file, we will add the new lines from the latest file.
+        if new_lines_from_previous_file:
+            new_lines = new_lines_from_previous_file + new_lines
 
-        if get_previous_file:
-            previous_file_lines = current_lines
-
-        EXISTING_LOGS_FILE_COUNT = current_log_files_count
-
-        new_lines_from_previous_file = extract_new_lines_only(current_lines)
-
-        # empty the previous file lines, since the file is rotated.
-        READING_EXISTING_LINES.clear()
-
-    current_lines, header = csvs.read_csv_to_list_of_dicts_by_header(
-        latest_statistics_file_path, header=header, stdout=False)
-
-    new_lines = extract_new_lines_only(current_lines)
-
-    # If we have new lines from the previous file, we will add the new lines from the latest file.
-    if new_lines_from_previous_file:
-        new_lines = new_lines_from_previous_file + new_lines
-
-    return new_lines, previous_file_lines, header
+        return new_lines, previous_file_lines, self.header
