@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.12.26 - 17.07.2024
+  * wrappers.ctyping.etw_winapi, wrappers.loggingw.reading - fixes and improvements.
 * 2.12.25 - 16.07.2024
   * etw, monitor, wrappers.ctyping.etw_winapi - fixes and improvements.
 * 2.12.24 - 16.07.2024
