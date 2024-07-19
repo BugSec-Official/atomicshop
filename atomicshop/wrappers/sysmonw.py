@@ -92,9 +92,10 @@ def start_as_service(
     if use_config_in_same_directory:
         config_file_path = SYSMON_CONFIG_FILE_PATH
 
-    # Check if the file exists
-    if not os.path.exists(config_file_path):
-        raise ConfigFileNotFoundError(f"Configuration file '{config_file_path}' not found.")
+    if config_file_path:
+        # Check if the file exists
+        if not os.path.exists(config_file_path):
+            raise ConfigFileNotFoundError(f"Configuration file '{config_file_path}' not found.")
 
     if not installation_path:
         installation_path = DEFAULT_INSTALLATION_PATH
@@ -109,7 +110,10 @@ def start_as_service(
             raise SymonExecutableNotFoundError(f"Sysmon executable '{sysmon_file_path}' not found.")
 
     # Start Sysmon as a service.
-    subprocess.run([sysmon_file_path, '-accepteula', '-i', config_file_path])
+    if config_file_path:
+        subprocess.run([sysmon_file_path, '-accepteula', '-i', config_file_path])
+    else:
+        subprocess.run([sysmon_file_path, '-accepteula', '-i'])
 
 
 def stop_service(installation_path: str = None):
