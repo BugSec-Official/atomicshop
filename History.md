@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.13.01 - 19.07.2024
+  * wrappers.sysmonw - fixes and improvements.
 * 2.13.00 - 19.07.2024
   * wrappers.sysmonw - initial release.
   * basics.dicts, diff_check, dns, etws, monitor, process, process_poller, wrappers.psutilw - fixes and improvements.
