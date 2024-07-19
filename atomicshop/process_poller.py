@@ -5,8 +5,10 @@ from typing import Literal, Union
 
 from .wrappers.pywin32w import wmi_win32process
 from .wrappers.psutilw import psutilw
+from .etws.traces import trace_sysmon_process_creation
 from .basics import list_of_dicts, dicts
 from .process_name_cmd import ProcessNameCmdline
+from .print_api import print_api
 
 
 def get_process_time_tester(
@@ -40,16 +42,24 @@ test = get_process_list.get_processes()
 
 
 class GetProcessList:
+    """
+    The class is responsible for getting the list of running processes.
+
+    Example of one time polling with 'pywin32' method:
+    from atomicshop import process_poller
+    process_list: dict = \
+        process_poller.GetProcessList(get_method='pywin32', connect_on_init=True).get_processes(as_dict=True)
+    """
     def __init__(
             self,
-            get_method: Literal['psutil', 'pywin32', 'process_dll'] = 'process_dll',
+            get_method: Literal['psutil', 'pywin32', 'process_dll', 'sysmon_etw'] = 'process_dll',
             connect_on_init: bool = False
     ):
         """
         :param get_method: str, The method to get the list of processes. Default is 'process_list_dll'.
             'psutil': Get the list of processes by 'psutil' library. Resource intensive and slow.
             'pywin32': Get the list of processes by 'pywin32' library, using WMI. Not resource intensive, but slow.
-            'process_dll'. Not resource intensive and fast. Probably works only in Windows 10 x64
+            'process_dll'. Not resource intensive and fast. Probably works only in Windows 10 x64.
         :param connect_on_init: bool, if True, will connect to the service on init. 'psutil' don't need to connect.
         """
         self.get_method = get_method
@@ -86,7 +96,7 @@ class GetProcessList:
         """
         The function will get the list of opened processes and return it as a list of dicts.
 
-        :return: list of dicts, of opened processes.
+        :return: dict while key is pid or list of dicts, of opened processes (depending on 'as_dict' setting).
         """
 
         if as_dict:
@@ -132,19 +142,14 @@ class ProcessPollerPool:
     Later, I'll find a solution to make it more efficient.
     """
     def __init__(
-            self, store_cycles: int = 200,
+            self,
             interval_seconds: Union[int, float] = 0,
             operation: Literal['thread', 'process'] = 'thread',
-            poller_method: Literal['psutil', 'pywin32', 'process_dll'] = 'process_dll',
+            poller_method: Literal['psutil', 'pywin32', 'process_dll', 'sysmon_etw'] = 'sysmon_etw',
+            sysmon_etw_session_name: str = None,
+            sysmon_directory: str = None
     ):
         """
-        :param store_cycles: int, how many cycles to store. Each cycle is polling processes.
-            Example: Specifying 3 will store last 3 polled cycles of processes.
-
-            Default is 200, which means that 200 latest cycles original PIDs and their process names will be stored.
-
-            You can execute the 'get_process_time_tester' function in order to find the optimal number of cycles
-            and how much time it will take.
         :param interval_seconds: float, how many seconds to wait between each cycle.
             Default is 0, which means that the polling will be as fast as possible.
 
@@ -162,6 +167,18 @@ class ProcessPollerPool:
             'psutil': Get the list of processes by 'psutil' library. Resource intensive and slow.
             'pywin32': Get the list of processes by 'pywin32' library, using WMI. Not resource intensive, but slow.
             'process_dll'. Not resource intensive and fast. Probably works only in Windows 10 x64.
+            'sysmon_etw': Get the list of processes with running SysMon by ETW - Event Tracing for Windows.
+                In this case 'store_cycles' and 'interval_seconds' are irrelevant, since the ETW is real-time.
+                Steps we take:
+                    1. Check if SysMon is Running. If not, check if the executable exists in specified
+                        location and start it as a service.
+                    2. Start the "Microsoft-Windows-Sysmon" ETW session.
+                    3. Take a snapshot of current processes and their CMDs with psutil and store it in a dict.
+                    4. Each new process creation from ETW updates the dict.
+        :param sysmon_etw_session_name: str, only for 'sysmon_etw' get_method.
+            The name of the ETW session for tracing process creation.
+        :param sysmon_directory: str, only for 'sysmon_etw' get_method.
+            The directory where the SysMon executable is located. If non-existed will be downloaded.
         ---------------------------------------------
         If there is an exception, ProcessPollerPool.processes will be set to the exception.
         While getting the processes you can use this to execute the exception:
@@ -172,20 +189,20 @@ class ProcessPollerPool:
             raise processes
         """
 
-        self.store_cycles: int = store_cycles
         self.interval_seconds: float = interval_seconds
         self.operation: str = operation
         self.poller_method = poller_method
-
-        self.get_processes_list = GetProcessList(get_method=self.poller_method)
+        self.sysmon_etw_session_name: str = sysmon_etw_session_name
+        self.sysmon_directory: str = sysmon_directory
 
         # Current process pool.
-        self.processes: dict = dict()
+        self._processes: dict = dict()
 
         # The variable is responsible to stop the thread if it is running.
-        self.running: bool = False
+        self._running: bool = False
 
-        self.queue = multiprocessing.Queue()
+        self._process_queue = multiprocessing.Queue()
+        self._running_state_queue = multiprocessing.Queue()
 
     def start(self):
         if self.operation == 'thread':
@@ -195,66 +212,116 @@ class ProcessPollerPool:
         else:
             raise ValueError(f'Invalid operation type [{self.operation}]')
 
-    def stop(self):
-        self.running = False
-
-    def _start_thread(self):
-        self.running = True
-        # threading.Thread(target=self._worker, args=(self.process_polling_instance,)).start()
-        thread = threading.Thread(target=self._worker)
-        thread.daemon = True
-        thread.start()
-
-    def _start_process(self):
-        self.running = True
-        multiprocessing.Process(target=self._worker).start()
-
         thread = threading.Thread(target=self._thread_get_queue)
         thread.daemon = True
         thread.start()
 
-    def _worker(self):
-        # We must initiate the connection inside the thread/process, because it is not thread-safe.
-        self.get_processes_list.connect()
+    def stop(self):
+        self._running = False
+        self._running_state_queue.put(False)
 
-        exception = None
-        list_of_processes: list = list()
-        while self.running:
-            try:
-                # If the list is full (to specified 'store_cycles'), remove the first element.
-                if len(list_of_processes) == self.store_cycles:
-                    del list_of_processes[0]
+    def get_processes(self):
+        return self._processes
 
-                # Get the current processes and reinitialize the instance of the dict.
-                current_processes: dict = dict(self.get_processes_list.get_processes())
+    def _start_thread(self):
+        self._running = True
 
-                # Remove Command lines that contains only numbers, since they are useless.
-                for pid, process_info in current_processes.items():
-                    if process_info['cmdline'].isnumeric():
-                        current_processes[pid]['cmdline'] = str()
-                    elif process_info['cmdline'] == 'Error':
-                        current_processes[pid]['cmdline'] = str()
+        thread = threading.Thread(
+            target=_worker, args=(
+                self.poller_method, self._running_state_queue, self.interval_seconds,
+                self._process_queue, self.sysmon_etw_session_name, self.sysmon_directory,
+            )
+        )
+        thread.daemon = True
+        thread.start()
 
-                # Append the current processes to the list.
-                list_of_processes.append(current_processes)
-
-                # Merge all dicts in the list to one dict, updating with most recent PIDs.
-                self.processes = list_of_dicts.merge_to_dict(list_of_processes)
-
-                if self.operation == 'process':
-                    self.queue.put(self.processes)
-
-                time.sleep(self.interval_seconds)
-            except KeyboardInterrupt as e:
-                self.running = False
-                exception = e
-            except Exception as e:
-                self.running = False
-                exception = e
-
-        if not self.running:
-            self.queue.put(exception)
+    def _start_process(self):
+        self._running = True
+        multiprocessing.Process(
+            target=_worker, args=(
+                self.poller_method, self._running_state_queue, self.interval_seconds,
+                self._process_queue, self.sysmon_etw_session_name, self.sysmon_directory,
+            )).start()
 
     def _thread_get_queue(self):
         while True:
-            self.processes = self.queue.get()
+            self._processes = self._process_queue.get()
+
+
+def _worker(
+        poller_method, running_state_queue, interval_seconds, process_queue, sysmon_etw_session_name, sysmon_directory):
+    def _worker_to_get_running_state():
+        nonlocal running_state
+        running_state = running_state_queue.get()
+
+    running_state: bool = True
+
+    thread = threading.Thread(target=_worker_to_get_running_state)
+    thread.daemon = True
+    thread.start()
+
+    if poller_method == 'sysmon_etw':
+        poller_instance = trace_sysmon_process_creation.SysmonProcessCreationTrace(
+            attrs=['pid', 'original_file_name', 'command_line'],
+            session_name=sysmon_etw_session_name,
+            close_existing_session_name=True,
+            sysmon_directory=sysmon_directory
+        )
+
+        # We must initiate the connection inside the thread/process, because it is not thread-safe.
+        poller_instance.start()
+
+        processes = GetProcessList(get_method='pywin32', connect_on_init=True).get_processes(as_dict=True)
+        process_queue.put(processes)
+    else:
+        poller_instance = GetProcessList(get_method=poller_method)
+        poller_instance.connect()
+        processes = {}
+
+    exception = None
+    list_of_processes: list = list()
+    while running_state:
+        try:
+            if poller_method == 'sysmon_etw':
+                # Get the current processes and reinitialize the instance of the dict.
+                current_cycle: dict = poller_instance.emit()
+                current_processes: dict = {int(current_cycle['pid']): {
+                    'name': current_cycle['original_file_name'],
+                    'cmdline': current_cycle['command_line']}
+                }
+            else:
+                # Get the current processes and reinitialize the instance of the dict.
+                current_processes: dict = dict(poller_instance.get_processes())
+
+            # Remove Command lines that contains only numbers, since they are useless.
+            for pid, process_info in current_processes.items():
+                if process_info['cmdline'].isnumeric():
+                    current_processes[pid]['cmdline'] = str()
+                elif process_info['cmdline'] == 'Error':
+                    current_processes[pid]['cmdline'] = str()
+
+            # This loop is essential for keeping the command lines.
+            # When the process unloads from memory, the last polling will have only pid and executable name, but not
+            # the command line. This loop will keep the command line from the previous polling if this happens.
+            for pid, process_info in current_processes.items():
+                if pid in processes:
+                    if processes[pid]['name'] == current_processes[pid]['name']:
+                        if current_processes[pid]['cmdline'] == '':
+                            current_processes[pid]['cmdline'] = processes[pid]['cmdline']
+            processes.update(current_processes)
+
+            process_queue.put(processes)
+
+            # Since ETW is a blocking operation, we don't need to sleep.
+            if poller_method != 'sysmon_etw':
+                time.sleep(interval_seconds)
+        except KeyboardInterrupt as e:
+            running_state = False
+            exception = e
+        except Exception as e:
+            running_state = False
+            exception = e
+            print_api(f'Exception in ProcessPollerPool: {e}', color='red')
+
+    if not running_state:
+        process_queue.put(exception)

@@ -314,10 +314,10 @@ class DiffChecker:
                 try:
                     if self.save_as == 'txt':
                         self.previous_content = file_io.read_file(
-                            self.input_file_path, stderr=False, **(print_kwargs or {}))
+                            self.input_file_path, stdout=False, stderr=False, **(print_kwargs or {}))
                     elif self.save_as == 'json':
                         self.previous_content = jsons.read_json_file(
-                            self.input_file_path, stderr=False, **(print_kwargs or {}))
+                            self.input_file_path, stdout=False, stderr=False, **(print_kwargs or {}))
                 except FileNotFoundError as except_object:
                     message = f"Input File [{Path(except_object.filename).name}] doesn't exist - Will create new one."
                     print_api(message, color='yellow', **(print_kwargs or {}))
@@ -433,10 +433,11 @@ class DiffChecker:
         if self.input_file_path:
             if self.save_as == 'txt':
                 # noinspection PyTypeChecker
-                file_io.write_file(self.previous_content, self.input_file_path, **(print_kwargs or {}))
+                file_io.write_file(self.previous_content, self.input_file_path, stdout=False, **(print_kwargs or {}))
             elif self.save_as == 'json':
                 jsons.write_json_file(
-                    self.previous_content, self.input_file_path, use_default_indent=True, **(print_kwargs or {}))
+                    self.previous_content, self.input_file_path, use_default_indent=True, stdout=False,
+                    **(print_kwargs or {}))
 
         return result, message
 
