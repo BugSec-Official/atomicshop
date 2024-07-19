@@ -24,6 +24,18 @@ def get_first_key_and_value_dict(input_dict: dict) -> dict:
     return {first_key: input_dict[first_key]}
 
 
+def get_last_added_key_value(input_dict: dict) -> dict:
+    """
+    The function will return the last added key and value in a dictionary.
+
+    :param input_dict: dict, the dictionary to get the last added key and value.
+    :return: dict, the last added key and value in the dictionary.
+    """
+
+    last_key = list(input_dict.keys())[-1]
+    return {last_key: input_dict[last_key]}
+
+
 def remove_keys(input_dict: dict, key_list: list) -> None:
     """
     The function will remove a key from dictionary without raising an exception if it doesn't exist.

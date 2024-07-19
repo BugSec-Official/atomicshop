@@ -11,7 +11,7 @@ from .basics import strings
 from .wrappers import ubuntu_terminal
 
 if os.name == 'nt':
-    from .process_poller import GetProcessList
+    from . import process_poller
 
 
 def is_command_exists(cmd: str) -> bool:
@@ -265,7 +265,7 @@ def match_pattern_against_running_processes_cmdlines(
     """
 
     # Get the list of all the currently running processes.
-    get_process_list = GetProcessList(get_method='pywin32', connect_on_init=True)
+    get_process_list = process_poller.GetProcessList(get_method='pywin32', connect_on_init=True)
     processes = get_process_list.get_processes(as_dict=False)
 
     # Iterate through all the current process, while fetching executable file 'name' and the command line.

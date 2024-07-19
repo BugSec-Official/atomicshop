@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.13.00 - 19.07.2024
+  * wrappers.sysmonw - initial release.
+  * basics.dicts, diff_check, dns, etws, monitor, process, process_poller, wrappers.psutilw - fixes and improvements.
 * 2.12.26 - 17.07.2024
   * wrappers.ctyping.etw_winapi, wrappers.loggingw.reading - fixes and improvements.
 * 2.12.25 - 16.07.2024

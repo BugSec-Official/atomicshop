@@ -1,14 +1,13 @@
 from pathlib import Path
 from typing import Union
 
-from ...etw.trace_dns import DnsTrace
+from ...etws.traces import trace_dns
 from ...print_api import print_api
 from ...import diff_check
 
 
 INPUT_FILE_DEFAULT_NAME: str = 'known_domains.json'
 INPUT_STATISTICS_FILE_DEFAULT_NAME: str = 'dns_statistics.json'
-ETW_DEFAULT_SESSION_NAME: str = 'AtomicShopDnsTrace'
 
 
 class DnsCheck:
@@ -22,15 +21,16 @@ class DnsCheck:
         self.diff_checker_statistics: Union[diff_check.DiffChecker, None] = None
         self.settings: dict = change_monitor_instance.object_type_settings
 
-        if change_monitor_instance.etw_session_name:
-            self.etw_session_name: str = change_monitor_instance.etw_session_name
-        else:
-            self.etw_session_name: str = ETW_DEFAULT_SESSION_NAME
+        self.etw_session_name: str = change_monitor_instance.etw_session_name
 
-        self.fetch_engine: DnsTrace = (
-            DnsTrace(
-                enable_process_poller=True, attrs=['name', 'cmdline', 'domain', 'query_type'],
-                session_name=self.etw_session_name, close_existing_session_name=True)
+        self.fetch_engine: trace_dns.DnsRequestResponseTrace = (
+            trace_dns.DnsRequestResponseTrace(
+                attrs=['name', 'cmdline', 'domain', 'query_type'],
+                session_name=self.etw_session_name,
+                close_existing_session_name=True,
+                enable_process_poller=True,
+                process_poller_etw_session_name=change_monitor_instance.etw_process_session_name
+            )
         )
 
         if self.settings['alert_always'] and self.settings['alert_about_missing_entries_after_learning']:
@@ -106,7 +106,7 @@ class DnsCheck:
 
     def _aggregation_process(self, event_dict: dict, return_list: list, print_kwargs: dict = None):
         self.diff_checker_aggregation.check_object = [event_dict]
-    
+
         # Check if 'known_domains' list was updated from previous cycle.
         result, message = self.diff_checker_aggregation.check_list_of_dicts(
             sort_by_keys=['cmdline', 'name'], print_kwargs=print_kwargs)

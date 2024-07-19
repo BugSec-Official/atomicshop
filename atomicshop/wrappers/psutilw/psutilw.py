@@ -164,6 +164,15 @@ def filter_processes_with_present_connections(processes) -> list:
 
 
 class PsutilProcesses:
+    """
+    Class to get all the current processes.
+
+    Example get current running processes as dicts as
+    {'<pid'>: {'name': '<process_name>', 'cmdline': '<process_cmdline>'}}:
+        from atomicshop.wrappers.psutilw import psutilw
+        processes = psutilw.PsutilProcesses().get_processes_as_dict(
+            attrs=['pid', 'name', 'cmdline'], cmdline_to_string=True)
+    """
     def __init__(self):
         self.processes = None
 
