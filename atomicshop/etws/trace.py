@@ -1,11 +1,20 @@
 import queue
 import sys
+import time
 
 # Import FireEye Event Tracing library.
 import etw
 
 from ..print_api import print_api
 from . import sessions
+from .. import process_poller
+from ..wrappers.psutilw import psutilw
+
+
+PROCESS_POLLER_ETW_DEFAULT_SESSION_NAME: str = 'AtomicShopProcessTrace'
+
+WAIT_FOR_PROCESS_POLLER_PID_SECONDS: int = 3
+WAIT_FOR_PROCESS_POLLER_PID_COUNTS: int = WAIT_FOR_PROCESS_POLLER_PID_SECONDS * 10
 
 
 class EventTrace(etw.ETW):
@@ -15,7 +24,9 @@ class EventTrace(etw.ETW):
             event_callback=None,
             event_id_filters: list = None,
             session_name: str = None,
-            close_existing_session_name: bool = True
+            close_existing_session_name: bool = True,
+            enable_process_poller: bool = False,
+            process_poller_etw_session_name: str = None
     ):
         """
         :param providers: List of tuples with provider name and provider GUID.
@@ -26,7 +37,13 @@ class EventTrace(etw.ETW):
             The default in the 'etw.ETW' method is 'None'.
         :param session_name: The name of the session to create. If not provided, a UUID will be generated.
         :param close_existing_session_name: Boolean to close existing session names.
+        :param enable_process_poller: Boolean to enable process poller. Gets the process PID, Name and CommandLine.
+            Since the DNS events doesn't contain the process name and command line, only PID.
+            Then DNS events will be enriched with the process name and command line from the process poller.
+        :param process_poller_etw_session_name: The name of the ETW session for tracing process creation.
+
         ------------------------------------------
+
         You should stop the ETW tracing when you are done with it.
             'pywintrace' module starts a new session for ETW tracing, and it will not stop the session when the script
             exits or exception is raised.
@@ -46,6 +63,8 @@ class EventTrace(etw.ETW):
         """
         self.event_queue = queue.Queue()
         self.close_existing_session_name: bool = close_existing_session_name
+        self.enable_process_poller: bool = enable_process_poller
+        self.process_poller_etw_session_name: str = process_poller_etw_session_name
 
         # If no callback function is provided, we will use the default one, which will put the event in the queue.
         if not event_callback:
@@ -59,12 +78,23 @@ class EventTrace(etw.ETW):
         for provider in providers:
             etw_format_providers.append(etw.ProviderInfo(provider[0], etw.GUID(provider[1])))
 
+        if not process_poller_etw_session_name:
+            process_poller_etw_session_name = PROCESS_POLLER_ETW_DEFAULT_SESSION_NAME
+
+        if self.enable_process_poller:
+            self.process_poller = process_poller.ProcessPollerPool(
+                operation='process', poller_method='sysmon_etw',
+                sysmon_etw_session_name=process_poller_etw_session_name)
+
         super().__init__(
             providers=etw_format_providers, event_callback=function_callable, event_id_filters=event_id_filters,
             session_name=session_name
         )
 
     def start(self):
+        if self.enable_process_poller:
+            self.process_poller.start()
+
         # Check if the session name already exists.
         if sessions.is_session_running(self.session_name):
             print_api(f'ETW Session already running: {self.session_name}', color='yellow')
@@ -87,6 +117,9 @@ class EventTrace(etw.ETW):
     def stop(self):
         super().stop()
 
+        if self.enable_process_poller:
+            self.process_poller.stop()
+
     def emit(self):
         """
         The Function will return the next event from the queue.
@@ -104,34 +137,44 @@ class EventTrace(etw.ETW):
         :return: etw event object.
         """
 
-        return self.event_queue.get()
+        # Get the processes first, since we need the process name and command line.
+        # If they're not ready, we will get just pids from DNS tracing.
+        if self.enable_process_poller:
+            self._get_processes_from_poller()
 
+        event: tuple = self.event_queue.get()
 
-def find_sessions_by_provider(provider_name: str):
-    """
-    Find ETW session by provider name.
+        event_dict: dict = {
+            'event_id': event[0],
+            'event': event[1],
+            'pid': event[1]['EventHeader']['ProcessId']
+        }
 
-    :param provider_name: The name of the provider to search for.
-    """
+        if self.enable_process_poller:
+            processes = self.process_poller.get_processes()
+            if event_dict['pid'] not in processes:
+                counter = 0
+                while counter < WAIT_FOR_PROCESS_POLLER_PID_COUNTS:
+                    processes = self.process_poller.get_processes()
+                    if event_dict['pid'] not in processes:
+                        time.sleep(0.1)
+                        counter += 1
+                    else:
+                        break
 
-    return
+                if counter == WAIT_FOR_PROCESS_POLLER_PID_COUNTS:
+                    print_api(f"Error: Couldn't get the process name for PID: {event_dict['pid']}.", color='red')
 
+            event_dict = psutilw.cross_single_connection_with_processes(event_dict, processes)
 
-def get_all_providers_from_session(session_name: str):
-    """
-    Get all providers that ETW session uses.
+        return event_dict
 
-    :param session_name: The name of the session to get providers from.
-    """
+    def _get_processes_from_poller(self):
+        processes: dict = {}
+        while not processes:
+            processes = self.process_poller.get_processes()
 
-    return
+            if isinstance(processes, BaseException):
+                raise processes
 
-
-def stop_session_by_name(session_name: str):
-    """
-    Stop ETW session by name.
-
-    :param session_name: The name of the session to stop.
-    """
-
-    return
+        return processes
