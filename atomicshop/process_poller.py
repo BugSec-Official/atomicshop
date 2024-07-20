@@ -6,7 +6,7 @@ from typing import Literal, Union
 from .wrappers.pywin32w import wmi_win32process
 from .wrappers.psutilw import psutilw
 from .etws.traces import trace_sysmon_process_creation
-from .basics import list_of_dicts, dicts
+from .basics import dicts
 from .process_name_cmd import ProcessNameCmdline
 from .print_api import print_api
 
@@ -322,6 +322,7 @@ def _worker(
             running_state = False
             exception = e
             print_api(f'Exception in ProcessPollerPool: {e}', color='red')
+            raise
 
     if not running_state:
         process_queue.put(exception)

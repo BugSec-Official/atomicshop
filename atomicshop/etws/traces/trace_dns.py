@@ -19,20 +19,15 @@ WAIT_FOR_PROCESS_POLLER_PID_COUNTS: int = WAIT_FOR_PROCESS_POLLER_PID_SECONDS * 
 
 
 class DnsRequestResponseTrace:
+    """DnsTrace class use to trace DNS events from Windows Event Tracing for EventId 3008."""
     def __init__(
             self,
             attrs: list = None,
             session_name: str = None,
             close_existing_session_name: bool = True,
-            enable_process_poller: bool = False,
             process_poller_etw_session_name: str = None
     ):
         """
-        DnsTrace class use to trace DNS events from Windows Event Tracing for EventId 3008.
-
-        :param enable_process_poller: Boolean to enable process poller. Gets the process PID, Name and CommandLine,
-            every 100 ms. Since the DNS events doesn't contain the process name and command line, only PID.
-            Then DNS events will be enriched with the process name and command line from the process poller.
         :param attrs: List of attributes to return. If None, all attributes will be returned.
         :param session_name: The name of the session to create. If not provided, a UUID will be generated.
         :param close_existing_session_name: Boolean to close existing session names.
@@ -63,7 +58,6 @@ class DnsRequestResponseTrace:
             dns_trace_w.stop()
         """
 
-        self.enable_process_poller = enable_process_poller
         self.attrs = attrs
 
         if not session_name:
@@ -74,25 +68,16 @@ class DnsRequestResponseTrace:
             # lambda x: self.event_queue.put(x),
             event_id_filters=[REQUEST_RESP_EVENT_ID],
             session_name=session_name,
-            close_existing_session_name=close_existing_session_name
+            close_existing_session_name=close_existing_session_name,
+            enable_process_poller=True,
+            process_poller_etw_session_name=process_poller_etw_session_name
         )
 
-        if self.enable_process_poller:
-            self.process_poller = ProcessPollerPool(
-                operation='process', poller_method='sysmon_etw',
-                sysmon_etw_session_name=process_poller_etw_session_name)
-
     def start(self):
-        if self.enable_process_poller:
-            self.process_poller.start()
-
         self.event_trace.start()
 
     def stop(self):
         self.event_trace.stop()
-
-        if self.enable_process_poller:
-            self.process_poller.stop()
 
     def emit(self):
         """
@@ -107,29 +92,26 @@ class DnsRequestResponseTrace:
         :return: Dictionary with the event data.
         """
 
-        # Get the processes first, since we need the process name and command line.
-        # If they're not ready, we will get just pids from DNS tracing.
-        if self.enable_process_poller:
-            self._get_processes_from_poller()
-
         event = self.event_trace.emit()
 
         event_dict: dict = {
-            'pid': event[1]['EventHeader']['ProcessId'],
-            'etw_id': event[0],
-            'domain': event[1]['QueryName'],
-            'query_type_id': str(event[1]['QueryType']),
-            'query_type': dns.TYPES_DICT[str(event[1]['QueryType'])]
+            'event_id': event['event_id'],
+            'domain': event['event']['QueryName'],
+            'query_type_id': str(event['event']['QueryType']),
+            'query_type': dns.TYPES_DICT[str(event['event']['QueryType'])],
+            'pid': event['pid'],
+            'name': event['name'],
+            'cmdline': event['cmdline']
         }
 
         # Defining list if ips and other answers, which aren't IPs.
         list_of_ips = list()
         list_of_other_domains = list()
         # Parse DNS results, only if 'QueryResults' key isn't empty, since many of the events are, mostly due errors.
-        if event[1]['QueryResults']:
+        if event['event']['QueryResults']:
             # 'QueryResults' key contains a string with all the 'Answers' divided by type and ';' character.
             # Basically, we can parse each type out of string, but we need only IPs and other answers.
-            list_of_parameters = event[1]['QueryResults'].split(';')
+            list_of_parameters = event['event']['QueryResults'].split(';')
 
             # Iterating through all the parameters that we got from 'QueryResults' key.
             for parameter in list_of_parameters:
@@ -149,47 +131,17 @@ class DnsRequestResponseTrace:
         event_dict['other_domains'] = list_of_other_domains
 
         # Getting the 'QueryStatus' key.
-        event_dict['status_id'] = event[1]['QueryStatus']
+        event_dict['status_id'] = event['event']['QueryStatus']
 
         # Getting the 'QueryStatus' key. If DNS Query Status is '0' then it was executed successfully.
         # And if not, it means there was an error. The 'QueryStatus' indicate what number of an error it is.
-        if event[1]['QueryStatus'] == '0':
+        if event['event']['QueryStatus'] == '0':
             event_dict['status'] = 'Success'
         else:
             event_dict['status'] = 'Error'
-
-        if self.enable_process_poller:
-            processes = self.process_poller.get_processes()
-            if event_dict['pid'] not in processes:
-                counter = 0
-                while counter < WAIT_FOR_PROCESS_POLLER_PID_COUNTS:
-                    processes = self.process_poller.get_processes()
-                    if event_dict['pid'] not in processes:
-                        time.sleep(0.1)
-                        counter += 1
-                    else:
-                        break
-
-                if counter == WAIT_FOR_PROCESS_POLLER_PID_COUNTS:
-                    print_api(f"Error: Couldn't get the process name for PID: {event_dict['pid']}.", color='red')
-
-            event_dict = psutilw.cross_single_connection_with_processes(event_dict, processes)
-            # If it was impossible to get the process name from the process poller, get it from psutil.
-            # if event_dict['name'].isnumeric():
-            #     event_dict['name'] = process_name
 
         if self.attrs:
             event_dict = dicts.reorder_keys(
                 event_dict, self.attrs, skip_keys_not_in_list=True)
 
         return event_dict
-
-    def _get_processes_from_poller(self):
-        processes: dict = {}
-        while not processes:
-            processes = self.process_poller.get_processes()
-
-            if isinstance(processes, BaseException):
-                raise processes
-
-        return processes

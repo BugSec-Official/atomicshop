@@ -1,8 +1,6 @@
 from .. import trace, const
-from ...wrappers.psutilw import psutilw
 from ...wrappers import sysmonw
 from ...basics import dicts
-from ...print_api import print_api
 
 
 PROVIDER_NAME: str = const.ETW_SYSMON['provider_name']
@@ -87,26 +85,26 @@ class SysmonProcessCreationTrace:
         event = self.event_trace.emit()
 
         event_dict: dict = {
-            'etw_id': event[0],
-            'pid': event[1]['ProcessId'],
-            'process_guid': event[1]['ProcessGuid'],
-            'image': event[1]['Image'],
-            'file_version': event[1]['FileVersion'],
-            'product': event[1]['Product'],
-            'company': event[1]['Company'],
-            'original_file_name': event[1]['OriginalFileName'],
-            'command_line': event[1]['CommandLine'],
-            'current_directory': event[1]['CurrentDirectory'],
-            'user': event[1]['User'],
-            'logon_id': event[1]['LogonId'],
-            'logon_guid': event[1]['LogonGuid'],
-            'terminal_session_id': event[1]['TerminalSessionId'],
-            'integrity_level': event[1]['IntegrityLevel'],
-            'hashes': event[1]['Hashes'],
-            'parent_process_guid': event[1]['ParentProcessGuid'],
-            'parent_process_id': event[1]['ParentProcessId'],
-            'parent_image': event[1]['ParentImage'],
-            'parent_command_line': event[1]['ParentCommandLine']
+            'event_id': event['event_id'],
+            'pid': event['event']['ProcessId'],
+            'process_guid': event['event']['ProcessGuid'],
+            'image': event['event']['Image'],
+            'file_version': event['event']['FileVersion'],
+            'product': event['event']['Product'],
+            'company': event['event']['Company'],
+            'original_file_name': event['event']['OriginalFileName'],
+            'command_line': event['event']['CommandLine'],
+            'current_directory': event['event']['CurrentDirectory'],
+            'user': event['event']['User'],
+            'logon_id': event['event']['LogonId'],
+            'logon_guid': event['event']['LogonGuid'],
+            'terminal_session_id': event['event']['TerminalSessionId'],
+            'integrity_level': event['event']['IntegrityLevel'],
+            'hashes': event['event']['Hashes'],
+            'parent_process_guid': event['event']['ParentProcessGuid'],
+            'parent_process_id': event['event']['ParentProcessId'],
+            'parent_image': event['event']['ParentImage'],
+            'parent_command_line': event['event']['ParentCommandLine']
         }
 
         if self.attrs:
