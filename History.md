@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.14.02 - 21.07.2024
+  * process_poller, wrappers.pywin32w.win_event_log - fixes and improvements.
 * 2.14.01 - 21.07.2024
   * etws.trace, etws.traces, monitor, process_poller - fixes and improvements.
 * 2.14.00 - 21.07.2024
