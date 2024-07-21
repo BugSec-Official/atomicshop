@@ -2,8 +2,10 @@ import threading
 import multiprocessing
 import time
 from typing import Literal, Union
+from pathlib import Path
 
 from .wrappers.pywin32w import wmi_win32process
+from .wrappers.pywin32w.win_event_log.subscribes import subscribe_to_process_create
 from .wrappers.psutilw import psutilw
 from .etws.traces import trace_sysmon_process_creation
 from .basics import dicts
@@ -52,7 +54,7 @@ class GetProcessList:
     """
     def __init__(
             self,
-            get_method: Literal['psutil', 'pywin32', 'process_dll', 'sysmon_etw'] = 'process_dll',
+            get_method: Literal['psutil', 'pywin32', 'process_dll'] = 'process_dll',
             connect_on_init: bool = False
     ):
         """
@@ -145,7 +147,7 @@ class ProcessPollerPool:
             self,
             interval_seconds: Union[int, float] = 0,
             operation: Literal['thread', 'process'] = 'thread',
-            poller_method: Literal['psutil', 'pywin32', 'process_dll', 'sysmon_etw'] = 'sysmon_etw',
+            poller_method: Literal['psutil', 'pywin32', 'process_dll', 'sysmon_etw', 'event_log'] = 'event_log',
             sysmon_etw_session_name: str = None,
             sysmon_directory: str = None
     ):
@@ -175,6 +177,9 @@ class ProcessPollerPool:
                     2. Start the "Microsoft-Windows-Sysmon" ETW session.
                     3. Take a snapshot of current processes and their CMDs with psutil and store it in a dict.
                     4. Each new process creation from ETW updates the dict.
+            'event_log': Get the list of processes by subscribing to the Windows Event Log.
+                Log Channel: Security, Event ID: 4688.
+                We enable the necessary prerequisites in registry and subscribe to the event.
         :param sysmon_etw_session_name: str, only for 'sysmon_etw' get_method.
             The name of the ETW session for tracing process creation.
         :param sysmon_directory: str, only for 'sysmon_etw' get_method.
@@ -273,6 +278,12 @@ def _worker(
 
         processes = GetProcessList(get_method='pywin32', connect_on_init=True).get_processes(as_dict=True)
         process_queue.put(processes)
+    elif poller_method == 'event_log':
+        poller_instance = subscribe_to_process_create.ProcessCreateSubscriber()
+        poller_instance.start()
+
+        processes = GetProcessList(get_method='pywin32', connect_on_init=True).get_processes(as_dict=True)
+        process_queue.put(processes)
     else:
         poller_instance = GetProcessList(get_method=poller_method)
         poller_instance.connect()
@@ -287,6 +298,13 @@ def _worker(
                 current_cycle: dict = poller_instance.emit()
                 current_processes: dict = {int(current_cycle['pid']): {
                     'name': current_cycle['original_file_name'],
+                    'cmdline': current_cycle['command_line']}
+                }
+            elif poller_method == 'event_log':
+                # Get the current processes and reinitialize the instance of the dict.
+                current_cycle: dict = poller_instance.emit()
+                current_processes: dict = {current_cycle['pid']: {
+                    'name': Path(current_cycle['process_name']).name,
                     'cmdline': current_cycle['command_line']}
                 }
             else:

@@ -27,8 +27,7 @@ class DnsCheck:
             trace_dns.DnsRequestResponseTrace(
                 attrs=['name', 'cmdline', 'domain', 'query_type'],
                 session_name=self.etw_session_name,
-                close_existing_session_name=True,
-                process_poller_etw_session_name=change_monitor_instance.etw_process_session_name
+                close_existing_session_name=True
             )
         )
 
