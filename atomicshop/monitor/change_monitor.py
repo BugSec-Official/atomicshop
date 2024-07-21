@@ -41,8 +41,7 @@ class ChangeMonitor:
                     'url_playwright_jpeg'],
                 None] = None,
             object_type_settings: dict = None,
-            etw_session_name: str = None,
-            etw_process_session_name: str = None
+            etw_session_name: str = None
     ):
         """
         :param object_type: string, type of object to check. The type must be one of the following:
@@ -89,8 +88,6 @@ class ChangeMonitor:
             with logman and other tools: logman query -ets
             If not provided, a default name will be generated.
             'dns': 'AtomicShopDnsTrace'
-        :param etw_process_session_name: string, the name of the ETW session for tracing process creation.
-            This is needed to correlate the process cmd with the DNS requests PIDs.
 
         If 'input_directory' is not specified, the 'input_file_name' is not specified, and
         'generate_input_file_name' is False, then the input file will not be used and the object will be stored
@@ -107,7 +104,6 @@ class ChangeMonitor:
         self.object_type = object_type
         self.object_type_settings: dict = object_type_settings
         self.etw_session_name: str = etw_session_name
-        self.etw_process_session_name: str = etw_process_session_name
 
         # === Additional variables ========================================
 

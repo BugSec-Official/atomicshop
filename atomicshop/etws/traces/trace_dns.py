@@ -24,8 +24,7 @@ class DnsRequestResponseTrace:
             self,
             attrs: list = None,
             session_name: str = None,
-            close_existing_session_name: bool = True,
-            process_poller_etw_session_name: str = None
+            close_existing_session_name: bool = True
     ):
         """
         :param attrs: List of attributes to return. If None, all attributes will be returned.
@@ -36,7 +35,6 @@ class DnsRequestResponseTrace:
             False: if ETW session with 'session_name' exists, you will be notified and the new session will not be
                 created. Instead, the existing session will be used. If there is a buffer from the previous session,
                 you will get the events from the buffer.
-        :param process_poller_etw_session_name: The name of the ETW session for tracing process creation.
 
         -------------------------------------------------
 
@@ -48,8 +46,7 @@ class DnsRequestResponseTrace:
                 attrs=['pid', 'name', 'cmdline', 'domain', 'query_type'],
                 session_name='MyDnsTrace',
                 close_existing_session_name=True,
-                enable_process_poller=True,
-                process_poller_etw_session_name='MyProcessTrace'
+                enable_process_poller=True
             )
             dns_trace_w.start()
             while True:
@@ -69,8 +66,7 @@ class DnsRequestResponseTrace:
             event_id_filters=[REQUEST_RESP_EVENT_ID],
             session_name=session_name,
             close_existing_session_name=close_existing_session_name,
-            enable_process_poller=True,
-            process_poller_etw_session_name=process_poller_etw_session_name
+            enable_process_poller=True
         )
 
     def start(self):

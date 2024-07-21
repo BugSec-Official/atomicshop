@@ -1,6 +1,7 @@
 import queue
 import sys
 import time
+from typing import Literal
 
 # Import FireEye Event Tracing library.
 import etw
@@ -26,7 +27,7 @@ class EventTrace(etw.ETW):
             session_name: str = None,
             close_existing_session_name: bool = True,
             enable_process_poller: bool = False,
-            process_poller_etw_session_name: str = None
+            process_poller_method: Literal['psutil', 'pywin32', 'process_dll', 'sysmon_etw', 'event_log'] = 'event_log'
     ):
         """
         :param providers: List of tuples with provider name and provider GUID.
@@ -40,7 +41,13 @@ class EventTrace(etw.ETW):
         :param enable_process_poller: Boolean to enable process poller. Gets the process PID, Name and CommandLine.
             Since the DNS events doesn't contain the process name and command line, only PID.
             Then DNS events will be enriched with the process name and command line from the process poller.
-        :param process_poller_etw_session_name: The name of the ETW session for tracing process creation.
+        :param process_poller_method: The method to get the process information. For more information, see the
+            'process_poller.ProcessPollerPool' class. Summary:
+                'psutil': Uses 'psutil' library to get the process information.
+                'pywin32': Uses 'pywin32' library to get the process information.
+                'process_dll': Uses 'process' custom DLL to get the process information.
+                'sysmon_etw': Uses 'sysmon_etw' uses sysmon and ETW to get the process information.
+                'event_log': Uses Security Windows EVent Log channel (event id 4688) to get the process information.
 
         ------------------------------------------
 
@@ -64,7 +71,6 @@ class EventTrace(etw.ETW):
         self.event_queue = queue.Queue()
         self.close_existing_session_name: bool = close_existing_session_name
         self.enable_process_poller: bool = enable_process_poller
-        self.process_poller_etw_session_name: str = process_poller_etw_session_name
 
         # If no callback function is provided, we will use the default one, which will put the event in the queue.
         if not event_callback:
@@ -78,12 +84,13 @@ class EventTrace(etw.ETW):
         for provider in providers:
             etw_format_providers.append(etw.ProviderInfo(provider[0], etw.GUID(provider[1])))
 
-        if not process_poller_etw_session_name:
+        process_poller_etw_session_name = None
+        if process_poller_method == 'sysmon_etw':
             process_poller_etw_session_name = PROCESS_POLLER_ETW_DEFAULT_SESSION_NAME
 
         if self.enable_process_poller:
             self.process_poller = process_poller.ProcessPollerPool(
-                operation='process', poller_method='sysmon_etw',
+                operation='process', poller_method=process_poller_method,
                 sysmon_etw_session_name=process_poller_etw_session_name)
 
         super().__init__(
