@@ -7,6 +7,8 @@ from .....print_api import print_api
 
 AUDITING_REG_PATH: str = r"Software\Microsoft\Windows\CurrentVersion\Policies\System\Audit"
 PROCESS_CREATION_INCLUDE_CMDLINE_VALUE: str = "ProcessCreationIncludeCmdLine_Enabled"
+LOG_CHANNEL: str = 'Security'
+EVENT_ID: int = 4688
 
 
 class ProcessCreateSubscriber(subscribe.EventLogSubscriber):
@@ -14,9 +16,9 @@ class ProcessCreateSubscriber(subscribe.EventLogSubscriber):
     Class for subscribing to Windows Event Log events related to process creation.
 
     Usage:
-        from atomicshop.wrappers.pywin32w.win_event_log.subscribes import subscribe_to_process_create
+        from atomicshop.wrappers.pywin32w.win_event_log.subscribes import process_create
 
-        process_create_subscriber = subscribe_to_process_create.ProcessCreateSubscriber()
+        process_create_subscriber = process_create.ProcessCreateSubscriber()
         process_create_subscriber.start()
 
         while True:
@@ -24,7 +26,7 @@ class ProcessCreateSubscriber(subscribe.EventLogSubscriber):
             print(event)
     """
     def __init__(self):
-        super().__init__('Security', 4688)
+        super().__init__(log_channel=LOG_CHANNEL, event_id=EVENT_ID)
 
     def start(self):
         """Start the subscription process."""
@@ -45,7 +47,40 @@ class ProcessCreateSubscriber(subscribe.EventLogSubscriber):
             If None, the function will block until an event is available.
         :return: A dictionary containing the event data.
         """
-        return super().emit(timeout=timeout)
+
+        data = super().emit(timeout=timeout)
+
+        event_dict: dict = {
+            'user_sid': data.get("SubjectUserSid", "Unknown"),
+            'user_name': data.get("SubjectUserName", "Unknown"),
+            'domain': data.get("SubjectDomainName", "Unknown"),
+            'pid_hex': data.get("NewProcessId", "0"),
+            'process_name': data.get("NewProcessName", "Unknown"),
+            'command_line': data.get("CommandLine", None),
+            'parent_pid_hex': data.get("ProcessId", "0"),
+            'parent_process_name': data.get("ParentProcessName", "Unknown")
+        }
+
+        try:
+            process_id = int(event_dict['pid_hex'], 16)
+        except ValueError:
+            process_id = "Unknown"
+
+        try:
+            parent_pid = int(event_dict['parent_pid_hex'], 16)
+        except ValueError:
+            parent_pid = "Unknown"
+
+        event_dict['pid'] = process_id
+        event_dict['parent_pid'] = parent_pid
+
+        # if user_sid != "Unknown":
+        #     try:
+        #         user_name, domain, type = win32security.LookupAccountSid(None, user_sid)
+        #     except Exception as e:
+        #         print(f"Error looking up account SID: {e}")
+
+        return event_dict
 
 
 def enable_audit_process_creation(print_kwargs: dict = None):

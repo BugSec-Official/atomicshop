@@ -5,7 +5,7 @@ from typing import Literal, Union
 from pathlib import Path
 
 from .wrappers.pywin32w import wmi_win32process
-from .wrappers.pywin32w.win_event_log.subscribes import subscribe_to_process_create
+from .wrappers.pywin32w.win_event_log.subscribes import process_create
 from .wrappers.psutilw import psutilw
 from .etws.traces import trace_sysmon_process_creation
 from .basics import dicts
@@ -279,7 +279,7 @@ def _worker(
         processes = GetProcessList(get_method='pywin32', connect_on_init=True).get_processes(as_dict=True)
         process_queue.put(processes)
     elif poller_method == 'event_log':
-        poller_instance = subscribe_to_process_create.ProcessCreateSubscriber()
+        poller_instance = process_create.ProcessCreateSubscriber()
         poller_instance.start()
 
         processes = GetProcessList(get_method='pywin32', connect_on_init=True).get_processes(as_dict=True)
@@ -290,7 +290,6 @@ def _worker(
         processes = {}
 
     exception = None
-    list_of_processes: list = list()
     while running_state:
         try:
             if poller_method == 'sysmon_etw':
@@ -330,8 +329,8 @@ def _worker(
 
             process_queue.put(processes)
 
-            # Since ETW is a blocking operation, we don't need to sleep.
-            if poller_method != 'sysmon_etw':
+            # Since ETW is a blocking operation, we don't need to sleep in tracing pollers [sysmon_etw, event_log].
+            if poller_method not in ['sysmon_etw', 'event_log']:
                 time.sleep(interval_seconds)
         except KeyboardInterrupt as e:
             running_state = False
