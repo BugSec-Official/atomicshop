@@ -8,11 +8,9 @@ import etw
 
 from ..print_api import print_api
 from . import sessions
-from .. import process_poller
+from ..process_poller import simple_process_pool
 from ..wrappers.psutilw import psutilw
 
-
-PROCESS_POLLER_ETW_DEFAULT_SESSION_NAME: str = 'AtomicShopProcessTrace'
 
 WAIT_FOR_PROCESS_POLLER_PID_SECONDS: int = 3
 WAIT_FOR_PROCESS_POLLER_PID_COUNTS: int = WAIT_FOR_PROCESS_POLLER_PID_SECONDS * 10
@@ -26,8 +24,7 @@ class EventTrace(etw.ETW):
             event_id_filters: list = None,
             session_name: str = None,
             close_existing_session_name: bool = True,
-            enable_process_poller: bool = False,
-            process_poller_method: Literal['psutil', 'pywin32', 'process_dll', 'sysmon_etw', 'event_log'] = 'event_log'
+            enable_process_poller: bool = False
     ):
         """
         :param providers: List of tuples with provider name and provider GUID.
@@ -41,13 +38,6 @@ class EventTrace(etw.ETW):
         :param enable_process_poller: Boolean to enable process poller. Gets the process PID, Name and CommandLine.
             Since the DNS events doesn't contain the process name and command line, only PID.
             Then DNS events will be enriched with the process name and command line from the process poller.
-        :param process_poller_method: The method to get the process information. For more information, see the
-            'process_poller.ProcessPollerPool' class. Summary:
-                'psutil': Uses 'psutil' library to get the process information.
-                'pywin32': Uses 'pywin32' library to get the process information.
-                'process_dll': Uses 'process' custom DLL to get the process information.
-                'sysmon_etw': Uses 'sysmon_etw' uses sysmon and ETW to get the process information.
-                'event_log': Uses Security Windows EVent Log channel (event id 4688) to get the process information.
 
         ------------------------------------------
 
@@ -84,14 +74,8 @@ class EventTrace(etw.ETW):
         for provider in providers:
             etw_format_providers.append(etw.ProviderInfo(provider[0], etw.GUID(provider[1])))
 
-        process_poller_etw_session_name = None
-        if process_poller_method == 'sysmon_etw':
-            process_poller_etw_session_name = PROCESS_POLLER_ETW_DEFAULT_SESSION_NAME
-
         if self.enable_process_poller:
-            self.process_poller = process_poller.ProcessPollerPool(
-                operation='process', poller_method=process_poller_method,
-                sysmon_etw_session_name=process_poller_etw_session_name)
+            self.process_poller = simple_process_pool.SimpleProcessPool()
 
         super().__init__(
             providers=etw_format_providers, event_callback=function_callable, event_id_filters=event_id_filters,
@@ -152,8 +136,8 @@ class EventTrace(etw.ETW):
         event: tuple = self.event_queue.get()
 
         event_dict: dict = {
-            'event_id': event[0],
-            'event': event[1],
+            'EventId': event[0],
+            'EventHeader': event[1],
             'pid': event[1]['EventHeader']['ProcessId']
         }
 

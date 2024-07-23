@@ -1,10 +1,5 @@
-import time
-
 from .. import trace, const
-from ...wrappers.psutilw import psutilw
 from ...basics import dicts
-from ...process_poller import ProcessPollerPool
-from ...print_api import print_api
 from ... import dns
 
 
@@ -24,7 +19,8 @@ class DnsRequestResponseTrace:
             self,
             attrs: list = None,
             session_name: str = None,
-            close_existing_session_name: bool = True
+            close_existing_session_name: bool = True,
+            skip_record_list: list = None
     ):
         """
         :param attrs: List of attributes to return. If None, all attributes will be returned.
@@ -35,6 +31,7 @@ class DnsRequestResponseTrace:
             False: if ETW session with 'session_name' exists, you will be notified and the new session will not be
                 created. Instead, the existing session will be used. If there is a buffer from the previous session,
                 you will get the events from the buffer.
+        :param skip_record_list: List of DNS Records to skip emitting. Example: ['PTR', 'SRV']
 
         -------------------------------------------------
 
@@ -56,6 +53,7 @@ class DnsRequestResponseTrace:
         """
 
         self.attrs = attrs
+        self.skip_record_list = skip_record_list
 
         if not session_name:
             session_name = ETW_DEFAULT_SESSION_NAME
@@ -91,23 +89,28 @@ class DnsRequestResponseTrace:
         event = self.event_trace.emit()
 
         event_dict: dict = {
-            'event_id': event['event_id'],
-            'domain': event['event']['QueryName'],
-            'query_type_id': str(event['event']['QueryType']),
-            'query_type': dns.TYPES_DICT[str(event['event']['QueryType'])],
+            'event_id': event['EventId'],
+            'domain': event['EventHeader']['QueryName'],
+            'query_type_id': str(event['EventHeader']['QueryType']),
+            'query_type': dns.TYPES_DICT[str(event['EventHeader']['QueryType'])],
             'pid': event['pid'],
             'name': event['name'],
             'cmdline': event['cmdline']
         }
 
+        # Skip emitting the record if it is in the 'skip_record_list'.
+        # Just recall the function to get the next event and return it.
+        if event_dict['query_type'] in self.skip_record_list:
+            return self.emit()
+
         # Defining list if ips and other answers, which aren't IPs.
         list_of_ips = list()
         list_of_other_domains = list()
         # Parse DNS results, only if 'QueryResults' key isn't empty, since many of the events are, mostly due errors.
-        if event['event']['QueryResults']:
+        if event['EventHeader']['QueryResults']:
             # 'QueryResults' key contains a string with all the 'Answers' divided by type and ';' character.
             # Basically, we can parse each type out of string, but we need only IPs and other answers.
-            list_of_parameters = event['event']['QueryResults'].split(';')
+            list_of_parameters = event['EventHeader']['QueryResults'].split(';')
 
             # Iterating through all the parameters that we got from 'QueryResults' key.
             for parameter in list_of_parameters:
@@ -127,11 +130,11 @@ class DnsRequestResponseTrace:
         event_dict['other_domains'] = list_of_other_domains
 
         # Getting the 'QueryStatus' key.
-        event_dict['status_id'] = event['event']['QueryStatus']
+        event_dict['status_id'] = event['EventHeader']['QueryStatus']
 
         # Getting the 'QueryStatus' key. If DNS Query Status is '0' then it was executed successfully.
         # And if not, it means there was an error. The 'QueryStatus' indicate what number of an error it is.
-        if event['event']['QueryStatus'] == '0':
+        if event['EventHeader']['QueryStatus'] == '0':
             event_dict['status'] = 'Success'
         else:
             event_dict['status'] = 'Error'

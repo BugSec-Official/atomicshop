@@ -50,29 +50,8 @@ class ProcessCreateSubscriber(subscribe.EventLogSubscriber):
 
         data = super().emit(timeout=timeout)
 
-        event_dict: dict = {
-            'user_sid': data.get("SubjectUserSid", "Unknown"),
-            'user_name': data.get("SubjectUserName", "Unknown"),
-            'domain': data.get("SubjectDomainName", "Unknown"),
-            'pid_hex': data.get("NewProcessId", "0"),
-            'process_name': data.get("NewProcessName", "Unknown"),
-            'command_line': data.get("CommandLine", None),
-            'parent_pid_hex': data.get("ProcessId", "0"),
-            'parent_process_name': data.get("ParentProcessName", "Unknown")
-        }
-
-        try:
-            process_id = int(event_dict['pid_hex'], 16)
-        except ValueError:
-            process_id = "Unknown"
-
-        try:
-            parent_pid = int(event_dict['parent_pid_hex'], 16)
-        except ValueError:
-            parent_pid = "Unknown"
-
-        event_dict['pid'] = process_id
-        event_dict['parent_pid'] = parent_pid
+        data['NewProcessIdInt'] = int(data['NewProcessId'], 16)
+        data['ParentProcessIdInt'] = int(data['ProcessId'], 16)
 
         # if user_sid != "Unknown":
         #     try:
@@ -80,7 +59,7 @@ class ProcessCreateSubscriber(subscribe.EventLogSubscriber):
         #     except Exception as e:
         #         print(f"Error looking up account SID: {e}")
 
-        return event_dict
+        return data
 
 
 def enable_audit_process_creation(print_kwargs: dict = None):

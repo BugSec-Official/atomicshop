@@ -205,8 +205,6 @@ def start_subscription(
         Context={'event_queue': event_queue}
     )
 
-    print("Listening for new process creation events...")
-
     try:
         while True:
             time.sleep(1)

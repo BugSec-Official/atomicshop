@@ -3,6 +3,8 @@ from ...wrappers import sysmonw
 from ...basics import dicts
 
 
+DEFAULT_SESSION_NAME: str = 'AtomicShopSysmonProcessCreationTrace'
+
 PROVIDER_NAME: str = const.ETW_SYSMON['provider_name']
 PROVIDER_GUID: str = const.ETW_SYSMON['provider_guid']
 PROCESS_CREATION_EVENT_ID: int = const.ETW_SYSMON['event_ids']['process_create']
@@ -53,6 +55,9 @@ class SysmonProcessCreationTrace:
         self.attrs = attrs
         self.sysmon_directory: str = sysmon_directory
 
+        if not session_name:
+            session_name = DEFAULT_SESSION_NAME
+
         self.event_trace = trace.EventTrace(
             providers=[(PROVIDER_NAME, PROVIDER_GUID)],
             # lambda x: self.event_queue.put(x),
@@ -80,32 +85,39 @@ class SysmonProcessCreationTrace:
                 print(dns_dict)
 
         :return: Dictionary with the event data.
+
+        -----------------------------------------------
+
+        Structure of the returned dictionary:
+        {
+            'event_id': int,
+            'ProcessId': int,
+            'ProcessGuid': str,
+            'Image': str,
+            'FileVersion': str,
+            'Product': str,
+            'Company': str,
+            'OriginalFileName': str,
+            'CommandLine': str,
+            'CurrentDirectory': str,
+            'User': str,
+            'LogonId': str,
+            'LogonGuid': str,
+            'TerminalSessionId': int,
+            'IntegrityLevel': str,
+            'Hashes': dict,
+            'ParentProcessGuid': str,
+            'ParentProcessId': int,
+            'ParentImage': str,
+            'ParentCommandLine': str
+        }
+
         """
 
         event = self.event_trace.emit()
 
-        event_dict: dict = {
-            'event_id': event['event_id'],
-            'pid': event['event']['ProcessId'],
-            'process_guid': event['event']['ProcessGuid'],
-            'image': event['event']['Image'],
-            'file_version': event['event']['FileVersion'],
-            'product': event['event']['Product'],
-            'company': event['event']['Company'],
-            'original_file_name': event['event']['OriginalFileName'],
-            'command_line': event['event']['CommandLine'],
-            'current_directory': event['event']['CurrentDirectory'],
-            'user': event['event']['User'],
-            'logon_id': event['event']['LogonId'],
-            'logon_guid': event['event']['LogonGuid'],
-            'terminal_session_id': event['event']['TerminalSessionId'],
-            'integrity_level': event['event']['IntegrityLevel'],
-            'hashes': event['event']['Hashes'],
-            'parent_process_guid': event['event']['ParentProcessGuid'],
-            'parent_process_id': event['event']['ParentProcessId'],
-            'parent_image': event['event']['ParentImage'],
-            'parent_command_line': event['event']['ParentCommandLine']
-        }
+        event_dict = {'EventId': event['EventId']}
+        event_dict.update(event['EventHeader'])
 
         if self.attrs:
             event_dict = dicts.reorder_keys(
