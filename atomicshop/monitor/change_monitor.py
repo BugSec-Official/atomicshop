@@ -4,6 +4,7 @@ from .checks import dns, network, file, url, process_running
 
 
 DNS__DEFAULT_SETTINGS = {
+    'skip_record_list': [],                              # List of DNS Records to skip emitting. Example: ['PTR', 'SRV']
     'learning_mode_create_unique_entries_list': True,
     'learning_hours': 24,                                   # 0 - the learning will never stop.
     'alert_about_missing_entries_after_learning': False,

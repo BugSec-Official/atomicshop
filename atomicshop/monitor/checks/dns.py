@@ -27,7 +27,8 @@ class DnsCheck:
             trace_dns.DnsRequestResponseTrace(
                 attrs=['name', 'cmdline', 'domain', 'query_type'],
                 session_name=self.etw_session_name,
-                close_existing_session_name=True
+                close_existing_session_name=True,
+                skip_record_list=self.settings['skip_record_list'],
             )
         )
 
