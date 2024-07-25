@@ -36,7 +36,7 @@ def read_csv_to_list_of_dicts_by_header(
             All the lines of the CSV file will be considered as content.
     :param file_object: file object of the 'open()' function in the decorator. Decorator executes the 'with open()'
         statement and passes to this function. That's why the default is 'None', since we get it from the decorator.
-    :return: list.
+    :return: tuple(list of entries, header(list of cell names)).
     """
 
     # The header fields will be separated to list of "csv_reader.fieldnames".

@@ -1,7 +1,7 @@
 from ..wrappers.ctyping.etw_winapi import etw_functions
 
 
-def stop_and_delete(session_name) -> tuple[bool, int]:
+def stop_and_delete(session_name: str) -> tuple[bool, int]:
     """
     Stop and delete ETW session.
 

@@ -47,7 +47,7 @@ class MonthToNumber:
         'דצמבר': '12'}
 
 
-def get_datetime_from_complex_string_by_pattern(complex_string: str, date_pattern: str):
+def get_datetime_from_complex_string_by_pattern(complex_string: str, date_pattern: str) -> tuple[datetime, str, float]:
     """
     Function will get datetime object from a complex string by pattern.
 
@@ -65,7 +65,8 @@ def get_datetime_from_complex_string_by_pattern(complex_string: str, date_patter
     if date_str:
         # Convert the date string to a datetime object based on the given pattern
         date_obj = datetime.datetime.strptime(date_str.group(), date_pattern)
-        return date_obj
+        date_timestamp = date_obj.timestamp()
+        return date_obj, date_str.group(), date_timestamp
     else:
         raise ValueError("No valid date found in the string")
 
