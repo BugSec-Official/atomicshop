@@ -1,6 +1,7 @@
 import os
 from typing import Literal, Union
 from pathlib import Path
+import datetime
 
 from ... import filesystem, datetimes
 from ...file_io import csvs
@@ -11,7 +12,6 @@ def get_logs_paths(
         log_file_path: str = None,
         file_name_pattern: str = '*.*',
         date_pattern: str = None,
-        log_type: Literal['csv'] = 'csv',
         latest_only: bool = False,
         previous_day_only: bool = False
 ):
@@ -36,7 +36,6 @@ def get_logs_paths(
     :param date_pattern: Pattern to match the date in the log file name.
         If specified, the function will get the log file by the date pattern.
         If not specified, the function will get the file date by file last modified time.
-    :param log_type: Type of log to get.
     :param latest_only: Boolean, if True, only the latest log file path will be returned.
     :param previous_day_only: Boolean, if True, only the log file path from the previous day will be returned.
     """
@@ -45,9 +44,6 @@ def get_logs_paths(
         raise ValueError('Either "log_files_directory_path" or "log_file_path" must be specified.')
     elif log_files_directory_path and log_file_path:
         raise ValueError('Both "log_files_directory_path" and "log_file_path" cannot be specified at the same time.')
-
-    if log_type != 'csv':
-        raise ValueError('Only "csv" log type is supported.')
 
     if latest_only and previous_day_only:
         raise ValueError('Both "latest_only" and "previous_day_only" cannot be True at the same time.')
@@ -75,16 +71,22 @@ def get_logs_paths(
             for file_index, single_file in enumerate(logs_files):
                 # Get file name from current loop file path.
                 current_file_name: str = Path(single_file['file_path']).name
+                logs_files[file_index]['file_name'] = current_file_name
+
                 # Get the datetime object from the file name by the date pattern.
                 try:
-                    datetime_object = datetimes.get_datetime_from_complex_string_by_pattern(
+                    datetime_object, date_string, timestamp_float = datetimes.get_datetime_from_complex_string_by_pattern(
                         current_file_name, date_pattern)
-                    timestamp_float = datetime_object.timestamp()
                 # ValueError will be raised if the date pattern does not match the file name.
                 except ValueError:
                     timestamp_float = 0
+                    datetime_object = None
+                    date_string = None
+
                 # Update the last modified time to the dictionary.
                 logs_files[file_index]['last_modified'] = timestamp_float
+                logs_files[file_index]['datetime'] = datetime_object
+                logs_files[file_index]['date_string'] = date_string
 
                 if timestamp_float > latest_timestamp:
                     latest_timestamp = timestamp_float
@@ -95,6 +97,8 @@ def get_logs_paths(
                 if single_file['last_modified'] == 0:
                     latest_timestamp += 86400
                     logs_files[file_index]['last_modified'] = latest_timestamp
+                    logs_files[file_index]['datetime'] = datetime.datetime.fromtimestamp(latest_timestamp)
+                    logs_files[file_index]['date_string'] = logs_files[file_index]['datetime'].strftime(date_pattern)
                     break
 
             # Sort the files by the last modified time.
@@ -117,7 +121,7 @@ def get_logs_paths(
     return logs_files
 
 
-def get_logs(
+def get_all_log_files_into_list(
         log_files_directory_path: str = None,
         log_file_path: str = None,
         file_name_pattern: str = '*.*',
@@ -127,9 +131,10 @@ def get_logs(
         remove_logs: bool = False,
         move_to_path: str = None,
         print_kwargs: dict = None
-):
+) -> list:
     """
-    This function gets the logs from the log files. Supports rotating files to get the logs by time.
+    This function gets the logs contents from the log files. Supports rotating files to get the logs by time.
+    All the contents will be merged into one list.
 
     :param log_files_directory_path: Path to the log files. Check the 'get_logs_paths' function for more details.
     :param log_file_path: Path to the log file. Check the 'get_logs_paths' function for more details.
@@ -144,8 +149,9 @@ def get_logs(
         'all' - Each CSV file has a header. Get the header from each file.
     :param remove_logs: Boolean, if True, the logs will be removed after getting them.
     :param move_to_path: Path to move the logs to.
-
     :param print_kwargs: Keyword arguments dict for 'print_api' function.
+
+    :return: List of dictionaries with the logs content.
     """
 
     if not print_kwargs:
@@ -162,8 +168,7 @@ def get_logs(
         log_files_directory_path=log_files_directory_path,
         log_file_path=log_file_path,
         file_name_pattern=file_name_pattern,
-        date_pattern=date_pattern,
-        log_type=log_type)
+        date_pattern=date_pattern)
 
     # Read all the logs.
     logs_content: list = list()
@@ -294,8 +299,7 @@ class LogReader:
         # If the existing logs file count is 0, it means that this is the first check. We need to get the current count.
         if self._existing_logs_file_count == 0:
             self._existing_logs_file_count = len(get_logs_paths(
-                log_file_path=self.log_file_path,
-                log_type='csv'
+                log_file_path=self.log_file_path
             ))
 
             # If the count is still 0, then there are no logs to read.
@@ -311,7 +315,6 @@ class LogReader:
         latest_statistics_file_path_object = get_logs_paths(
             log_file_path=self.log_file_path,
             date_pattern=self.date_pattern,
-            log_type='csv',
             latest_only=True
         )
 
@@ -327,7 +330,6 @@ class LogReader:
             previous_day_statistics_file_path = get_logs_paths(
                 log_file_path=self.log_file_path,
                 date_pattern=self.date_pattern,
-                log_type='csv',
                 previous_day_only=True
             )[0]['file_path']
         # If you get IndexError, it means that there are no previous day logs to read.
@@ -336,8 +338,7 @@ class LogReader:
 
         # Count all the rotated files.
         current_log_files_count: int = len(get_logs_paths(
-            log_file_path=self.log_file_path,
-            log_type='csv'
+            log_file_path=self.log_file_path
         ))
 
         # If the count of the log files is greater than the existing logs file count, it means that the rotation

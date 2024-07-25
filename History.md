@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.14.04 - 25.07.2024
+  * datetimes, etws, file_io.csvs, mitm.statistic_analyzer, wrappers.ctyping.etw_winapi, wrappers.loggingw.reading - fixes and improvements.
 * 2.14.03 - 23.07.2024
   * etws, monitor, process, wrappers.pywin32w.win_event_log, get_process_list, get_process_name_cmd_dll, process_poller - fixes and improvements.
 * 2.14.02 - 21.07.2024

@@ -6,8 +6,15 @@ from ctypes.wintypes import ULONG
 # Constants
 EVENT_TRACE_CONTROL_STOP = 1
 WNODE_FLAG_TRACED_GUID = 0x00020000
+EVENT_TRACE_REAL_TIME_MODE = 0x00000100
+EVENT_CONTROL_CODE_ENABLE_PROVIDER = 1
 
 MAXIMUM_LOGGERS = 64
+ULONG64 = ctypes.c_uint64
+
+INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+TRACEHANDLE = ULONG64
+
 
 
 """
@@ -43,7 +50,6 @@ class WNODE_HEADER(ctypes.Structure):
     ]
 
 
-# Define EVENT_TRACE_PROPERTIES structure
 class EVENT_TRACE_PROPERTIES(ctypes.Structure):
     _fields_ = [
         ("Wnode", WNODE_HEADER),
@@ -70,29 +76,32 @@ class EVENT_TRACE_PROPERTIES(ctypes.Structure):
     ]
 
 
-# Define the EVENT_TRACE_LOGFILE structure
-class EVENT_TRACE_LOGFILE(ctypes.Structure):
+class TRACE_LOGFILE_HEADER(ctypes.Structure):
     _fields_ = [
-        ("LogFileName", wintypes.LPWSTR),
-        ("LoggerName", wintypes.LPWSTR),
-        ("CurrentTime", wintypes.LARGE_INTEGER),
-        ("BuffersRead", wintypes.ULONG),
-        ("ProcessTraceMode", wintypes.ULONG),
-        ("EventRecordCallback", wintypes.LPVOID),
         ("BufferSize", wintypes.ULONG),
-        ("Filled", wintypes.ULONG),
-        ("EventsLost", wintypes.ULONG),
-        ("BuffersLost", wintypes.ULONG),
-        ("RealTimeBuffersLost", wintypes.ULONG),
-        ("LogBuffersLost", wintypes.ULONG),
-        ("BuffersWritten", wintypes.ULONG),
+        ("Version", wintypes.ULONG),
+        ("ProviderVersion", wintypes.ULONG),
+        ("NumberOfProcessors", wintypes.ULONG),
+        ("EndTime", wintypes.LARGE_INTEGER),
+        ("TimerResolution", wintypes.ULONG),
+        ("MaximumFileSize", wintypes.ULONG),
         ("LogFileMode", wintypes.ULONG),
-        ("IsKernelTrace", wintypes.ULONG),
-        ("Context", wintypes.ULONG)  # Placeholder for context pointer
+        ("BuffersWritten", wintypes.ULONG),
+        ("StartBuffers", wintypes.ULONG),
+        ("PointerSize", wintypes.ULONG),
+        ("EventsLost", wintypes.ULONG),
+        ("CpuSpeedInMHz", wintypes.ULONG),
+        ("LoggerName", wintypes.WCHAR * 256),
+        ("LogFileName", wintypes.WCHAR * 256),
+        ("TimeZone", wintypes.LPVOID),
+        ("BootTime", wintypes.LARGE_INTEGER),
+        ("PerfFreq", wintypes.LARGE_INTEGER),
+        ("StartTime", wintypes.LARGE_INTEGER),
+        ("ReservedFlags", wintypes.ULONG),
+        ("BuffersLost", wintypes.ULONG)
     ]
 
 
-# Define the EVENT_TRACE_HEADER structure
 class EVENT_TRACE_HEADER(ctypes.Structure):
     _fields_ = [
         ("Size", wintypes.USHORT),
@@ -116,10 +125,67 @@ class EVENT_TRACE_HEADER(ctypes.Structure):
     ]
 
 
-# Define the EVENT_RECORD structure
+class EVENT_TRACE(ctypes.Structure):
+    _fields_ = [
+        ("Header", EVENT_TRACE_HEADER),
+        ("InstanceId", wintypes.DWORD),
+        ("ParentInstanceId", wintypes.DWORD),
+        ("ParentGuid", GUID),
+        ("MofData", ctypes.c_void_p),
+        ("MofLength", wintypes.ULONG),
+        ("ClientContext", wintypes.ULONG)
+    ]
+
+
+class EVENT_TRACE_LOGFILEW(ctypes.Structure):
+    _fields_ = [
+        ("LogFileName", ctypes.c_wchar_p),
+        ("LoggerName", ctypes.c_wchar_p),
+        ("CurrentTime", wintypes.LARGE_INTEGER),
+        ("BuffersRead", wintypes.ULONG),
+        ("ProcessTraceMode", wintypes.ULONG),
+        ("CurrentEvent", EVENT_TRACE),
+        ("LogfileHeader", TRACE_LOGFILE_HEADER),
+        ("BufferCallback", ctypes.c_void_p),  # Placeholder for buffer callback
+        ("BufferSize", wintypes.ULONG),
+        ("Filled", wintypes.ULONG),
+        ("EventsLost", wintypes.ULONG),
+        ("EventCallback", ctypes.CFUNCTYPE(None, ctypes.POINTER(EVENT_TRACE))),
+        ("Context", ULONG64)
+    ]
+
+
+class EVENT_DESCRIPTOR(ctypes.Structure):
+    _fields_ = [
+        ("Id", wintypes.USHORT),
+        ("Version", wintypes.BYTE),
+        ("Channel", wintypes.BYTE),
+        ("Level", wintypes.BYTE),
+        ("Opcode", wintypes.BYTE),
+        ("Task", wintypes.USHORT),
+        ("Keyword", ULONG64),
+    ]
+
+
+class EVENT_HEADER(ctypes.Structure):
+    _fields_ = [
+        ("Size", wintypes.USHORT),
+        ("HeaderType", wintypes.USHORT),
+        ("Flags", wintypes.USHORT),
+        ("EventProperty", wintypes.USHORT),
+        ("ThreadId", wintypes.ULONG),
+        ("ProcessId", wintypes.ULONG),
+        ("TimeStamp", wintypes.LARGE_INTEGER),
+        ("ProviderId", GUID),
+        ("EventDescriptor", EVENT_DESCRIPTOR),
+        ("ProcessorTime", ULONG64),
+        ("ActivityId", GUID),
+        ("RelatedActivityId", GUID),
+    ]
+
 class EVENT_RECORD(ctypes.Structure):
     _fields_ = [
-        ("EventHeader", EVENT_TRACE_HEADER),
+        ("EventHeader", EVENT_HEADER),
         ("BufferContext", wintypes.ULONG),
         ("ExtendedDataCount", wintypes.USHORT),
         ("UserDataLength", wintypes.USHORT),
@@ -127,6 +193,50 @@ class EVENT_RECORD(ctypes.Structure):
         ("UserData", wintypes.LPVOID),
         ("UserContext", wintypes.LPVOID)
     ]
+
+
+# class EVENT_TRACE_LOGFILE(ctypes.Structure):
+#     _fields_ = [
+#         ("LogFileName", wintypes.LPWSTR),
+#         ("LoggerName", wintypes.LPWSTR),
+#         ("CurrentTime", wintypes.LARGE_INTEGER),
+#         ("BuffersRead", wintypes.ULONG),
+#         ("ProcessTraceMode", wintypes.ULONG),
+#         ("EventRecordCallback", wintypes.LPVOID),
+#         ("BufferSize", wintypes.ULONG),
+#         ("Filled", wintypes.ULONG),
+#         ("EventsLost", wintypes.ULONG),
+#         ("BuffersLost", wintypes.ULONG),
+#         ("RealTimeBuffersLost", wintypes.ULONG),
+#         ("LogBuffersLost", wintypes.ULONG),
+#         ("BuffersWritten", wintypes.ULONG),
+#         ("LogFileMode", wintypes.ULONG),
+#         ("IsKernelTrace", wintypes.ULONG),
+#         ("Context", wintypes.ULONG)  # Placeholder for context pointer
+#     ]
+
+
+class EVENT_TRACE_LOGFILE(ctypes.Structure):
+    _fields_ = [
+        ("LogFileName", wintypes.LPWSTR),
+        ("LoggerName", wintypes.LPWSTR),
+        ("CurrentTime", wintypes.LARGE_INTEGER),
+        ("BuffersRead", wintypes.ULONG),
+        ("ProcessTraceMode", wintypes.ULONG),
+        ("CurrentEvent", EVENT_RECORD),
+        ("LogfileHeader", TRACE_LOGFILE_HEADER),
+        ("BufferCallback", wintypes.LPVOID),
+        ("BufferSize", wintypes.ULONG),
+        ("Filled", wintypes.ULONG),
+        ("EventsLost", wintypes.ULONG),
+        ("EventCallback", ctypes.c_void_p),
+        ("IsKernelTrace", wintypes.ULONG),
+        ("Context", wintypes.LPVOID)
+    ]
+
+
+# Define the callback type for processing events
+EVENT_CALLBACK_TYPE = ctypes.WINFUNCTYPE(None, ctypes.POINTER(EVENT_RECORD))
 
 
 class PROVIDER_ENUMERATION_INFO(ctypes.Structure):

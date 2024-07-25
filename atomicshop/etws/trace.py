@@ -1,7 +1,6 @@
 import queue
 import sys
 import time
-from typing import Literal
 
 # Import FireEye Event Tracing library.
 import etw
