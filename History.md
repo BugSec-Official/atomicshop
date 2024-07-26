@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.14.05 - 26.07.2024
+  * mitm, wrappers/loggingw - fixes and improvements.
 * 2.14.04 - 25.07.2024
   * datetimes, etws, file_io.csvs, mitm.statistic_analyzer, wrappers.ctyping.etw_winapi, wrappers.loggingw.reading - fixes and improvements.
 * 2.14.03 - 23.07.2024

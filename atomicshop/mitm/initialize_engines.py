@@ -83,8 +83,14 @@ class ModuleCategory:
 
         # Initiating logger for each engine by its name
         # initiate_logger(current_module.engine_name, log_file_extension)
-        loggingw.get_logger_with_stream_handler_and_timedfilehandler(
-            logger_name=self.engine_name, directory_path=logs_path, disable_duplicate_ms=True)
+        loggingw.get_complex_logger(
+            logger_name=self.engine_name,
+            directory_path=logs_path,
+            add_stream=True,
+            add_timedfile=True,
+            formatter_streamhandler='DEFAULT',
+            formatter_filehandler='DEFAULT'
+        )
 
 
 # Assigning external class object by message domain received from client. If the domain is not in the list,

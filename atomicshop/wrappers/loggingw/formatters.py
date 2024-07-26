@@ -1,4 +1,5 @@
 import logging
+import time
 
 
 # Log formatter, means how the log will look inside the file
@@ -8,32 +9,9 @@ import logging
 
 # ".40" truncating the string to only 40 characters. Example: %(message).250s
 
-# Adding '%(asctime)s.%(msecs)06f' will print milliseconds as well as nanoseconds:
-# 2022-02-17 15:15:51,913.335562
-# If you don't use custom 'datefmt' in your 'setFormatter' function,
-# it will print duplicate milliseconds:
-# 2022-02-17 15:15:51,913.913.335562
-# The setting should be like:
-# file_handler.setFormatter(logging.Formatter(log_formatter_file, datefmt='%Y-%m-%d,%H:%M:%S'))
-# 's' stands for string. 'd' stands for digits, a.k.a. 'int'. 'f' stands for float.
 
-# Old tryouts:
-#   log_formatter_file: str = f"%(asctime)s.%(msecs)06f | " \
-#   log_formatter_file: str = f"%(asctime)s.%(msecs) | " \
-#                           f"%(levelname)-{len(log_header_level)}s | " \
-#                           f"%(name)-{len(log_header_logger)}s | " \
-#                           f"%(filename)-{len(log_header_script)}s : " \
-#                           f"%(lineno)-{len(log_header_line)}d | " \
-#                           "%(threadName)s: %(message)s"
-#   log_formatter_file: str = "{asctime}.{msecs:0<3.0f} | " \
-#   log_formatter_file: str = "{asctime}.{msecs:0>3.0f}.{msecs:0>.6f} | " \
-
-# Old tryouts for reference:
-#   file_formatter = logging.Formatter(log_formatter_file, style='{')
-#   file_formatter.default_time_format = '%Y-%m-%d %H:%M:%S'
-#   file_formatter.default_msec_format = '%s,%03d'
-#   file_formatter.default_msec_format = '%s,%03f'
-
+DEFAULT_STREAM_FORMATTER: str = "%(levelname)s | %(threadName)s | %(name)s | %(message)s"
+DEFAULT_MESSAGE_FORMATTER: str = "%(message)s"
 
 FORMAT_ELEMENT_TO_HEADER: dict = {
     'asctime': 'Event Time [Y-M-D H:M:S]',
@@ -56,7 +34,7 @@ FORMAT_ELEMENT_TO_HEADER: dict = {
 }
 
 DEFAULT_FORMATTER_TXT_FILE: str = \
-    "{asctime},{msecs:013.9f} | " \
+    "{asctime} | " \
     "{levelname:<" + f"{len(FORMAT_ELEMENT_TO_HEADER['levelname'])}" + "s} | " \
     "{name:<" + f"{len(FORMAT_ELEMENT_TO_HEADER['name'])}" + "s} | " \
     "{filename:<" + f"{len(FORMAT_ELEMENT_TO_HEADER['filename'])}" + "s} : " \
@@ -64,7 +42,53 @@ DEFAULT_FORMATTER_TXT_FILE: str = \
     "{threadName} | {message}"
 
 DEFAULT_FORMATTER_CSV_FILE: str = \
-    '\"{asctime}.{msecs:010.6f}\",{levelname},{name},{filename},{lineno},{threadName},\"{message}\"'
+    '\"{asctime}\",{levelname},{name},{filename},{lineno},{threadName},\"{message}\"'
+
+
+class NanosecondsFormatter(logging.Formatter):
+    def __init__(self, fmt=None, datefmt=None, style='%', use_nanoseconds=False):
+        super().__init__(fmt, datefmt, style)
+        self.use_nanoseconds = use_nanoseconds
+
+    def formatTime(self, record, datefmt=None):
+        ct = self.converter(record.created)
+
+        if datefmt:
+            # Remove unsupported %f from datefmt if present
+            if '%f' in datefmt:
+                datefmt = datefmt.replace('%f', '')
+                self.use_nanoseconds = True
+        else:
+            # Default time format if datefmt is not provided
+            datefmt = '%Y-%m-%d %H:%M:%S'
+
+        s = time.strftime(datefmt, ct)
+
+        if self.use_nanoseconds:
+            # Calculate nanoseconds from the fractional part of the timestamp
+            nanoseconds = f'{record.created:.9f}'.split('.')[1]
+            # Return the formatted string with nanoseconds appended
+            return f'{s}.{nanoseconds}'
+        else:
+            return s
+
+
+
+
+
+        # if datefmt is None:
+        #     # Use the default behavior if no datefmt is provided
+        #     return super().formatTime(record, datefmt)
+        # elif '%f' in datefmt:
+        #     # Format the time up to seconds
+        #     base_time = time.strftime(datefmt.replace('%f', ''), ct)
+        #     # Calculate nanoseconds from the fractional part of the timestamp
+        #     nanoseconds = f'{record.created:.9f}'.split('.')[1]
+        #     # Return the formatted string with nanoseconds appended
+        #     return base_time + nanoseconds
+        # else:
+        #     # Use the provided datefmt if it doesn't include %f
+        #     return time.strftime(datefmt, ct)
 
 
 class FormatterProcessor:
@@ -150,7 +174,11 @@ class FormatterProcessor:
 
 
 def get_logging_formatter_from_string(
-        formatter: str, style=None, datefmt=None, disable_duplicate_ms: bool = False) -> logging.Formatter:
+        formatter: str,
+        style=None,
+        datefmt=None,
+        use_nanoseconds: bool = False
+) -> logging.Formatter:
     """
     Function to get the logging formatter from the string.
 
@@ -160,12 +188,12 @@ def get_logging_formatter_from_string(
         '%': will use the '%' style.
         '{': will use the '{' style.
     :param datefmt: string, date format of 'asctime' element. Default is None.
-    :param disable_duplicate_ms: bool, if True, will disable the duplicate milliseconds in the 'asctime' element.
-        Example: If we're using '%(asctime)s.%(msecs)06f' msecs value in our time stamp, we need to use custom
-            'datefmt' to get rid of the additional duplicate milliseconds:
-            Instead of '2022-02-17 15:15:51,913.913.335562' print '2022-02-17 15:15:51,913.335562'
-            The problem with this method is that milliseconds aren't adjusted to 3 digits with zeroes (like 1 = 001).
-            We can use the regular strftime format: datefmt='%Y-%m-%d,%H:%M:%S:%f'
+        We use custom formatter that can process the date format with nanoseconds:
+        '%Y-%m-%d %H:%M:%S.%f' -> '2021-01-01 00:00:00.000000000'
+    :param use_nanoseconds: bool, if set to True, the formatter will use nanoseconds instead of milliseconds.
+        This will print 'asctime' in the following format: '2021-01-01 00:00:00.000000000', instead of
+        '2021-01-01 00:00:00.000'.
+
     :return: logging.Formatter, formatter.
     """
 
@@ -173,10 +201,8 @@ def get_logging_formatter_from_string(
     if not style:
         style = FormatterProcessor(formatter).get_style()['style']
 
-    # The regular 'datefmt' is '%Y-%m-%d,%H:%M:%S:%f'. If we want to use it with milliseconds 'msecs' element,
-    # we need to disable the duplicate milliseconds.
-    if disable_duplicate_ms:
-        datefmt = '%Y-%m-%d,%H:%M:%S'
-
     # Create the logging formatter.
-    return logging.Formatter(formatter, style=style, datefmt=datefmt)
+    if use_nanoseconds or '%f' in datefmt:
+        return NanosecondsFormatter(formatter, style=style, datefmt=datefmt, use_nanoseconds=use_nanoseconds)
+    else:
+        return logging.Formatter(formatter, style=style, datefmt=datefmt)

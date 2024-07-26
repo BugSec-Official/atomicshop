@@ -2,6 +2,11 @@ import logging
 from logging.handlers import TimedRotatingFileHandler, QueueListener, QueueHandler
 import re
 import os
+from pathlib import Path
+
+
+DEFAULT_DATE_STRING_FORMAT: str = "%Y_%m_%d"
+DEFAULT_DATE_REGEX_PATTERN: str = r"^\d{4}_\d{2}_\d{2}$"
 
 
 class TimedRotatingFileHandlerWithHeader(TimedRotatingFileHandler):
@@ -150,7 +155,20 @@ def get_handler_name(handler: logging.Handler) -> str:
     return handler.get_name()
 
 
-def change_rotated_filename(file_handler: logging.Handler, file_extension: str):
+def change_rotated_filename(
+        file_handler: logging.Handler,
+        date_format_string: str = None,
+        date_regex_pattern: str = None
+):
+    """
+    Function to change the way TimedRotatingFileHandler managing the rotating filename.
+
+    :param file_handler: FileHandler to change the rotating filename for.
+    :param date_format_string: Date format string to use for the rotated log filename.
+        If None, the default 'DEFAULT_DATE_STRING_FORMAT' will be used.
+    :param date_regex_pattern: Regex pattern to match the rotated log filenames.
+        If None, the default 'DEFAULT_DATE_REGEX_PATTERN' will be used.
+    """
     # Changing the way TimedRotatingFileHandler managing the rotating filename
     # Default file suffix is only "Year_Month_Day" with addition of the dot (".") character to the
     # "file name + extension" that you provide it. Example: log file name:
@@ -170,18 +188,40 @@ def change_rotated_filename(file_handler: logging.Handler, file_extension: str):
     # file_handler.extMatch = re.compile(r"^\d{4}_\d{2}_\d{2}" + re.escape(log_file_extension) + r"$")
     # file_handler.extMatch = re.compile(r"^\d{4}_\d{2}_\d{2}.txt$")
 
-    # Set variables that are responsible for setting TimedRotatingFileHandler filename on rotation.
-    # Log files time format, need only date
-    format_date_log_filename: str = "%Y_%m_%d"
-    # Log file suffix.
-    logfile_suffix: str = "_" + format_date_log_filename + file_extension
-    # Regex object to match the TimedRotatingFileHandler file name suffix.
-    # "re.escape" is used to "escape" strings in regex and use them as is.
-    logfile_regex_suffix = re.compile(r"^\d{4}_\d{2}_\d{2}" + re.escape(file_extension) + r"$")
+    # Update the namer function to format the rotated filename correctly
+    def namer(name):
+        # Currently the 'name' is full file path + '.' + logfile_suffix.
+        # Example: 'C:\\path\\to\\file.log._2021_12_24'
+        # Get the parent directory of the file: C:\path\to
+        parent_dir: str = str(Path(name).parent)
+        # Get the base filename without the extension: file.log
+        filename: str = Path(name).stem
+        # Get the date part of the filename: _2021_12_24
+        date_part: str = str(Path(name).suffix).replace(".", "")
+        # Get the file extension: log
+        file_extension: str = Path(filename).suffix
+        # Get the file name without the extension: file
+        file_stem: str = Path(filename).stem
 
-    # Changing the setting that we set above
+        return f"{parent_dir}{os.sep}{file_stem}{date_part}{file_extension}"
+
+    # Construct the new suffix without the file extension
+    if date_format_string is None:
+        logfile_suffix = f"_{DEFAULT_DATE_STRING_FORMAT}"
+    else:
+        logfile_suffix = f"_{date_format_string}"
+
+    # Regex pattern to match the rotated log filenames
+    if date_regex_pattern is None:
+        logfile_regex_suffix = re.compile(DEFAULT_DATE_REGEX_PATTERN)
+    else:
+        logfile_regex_suffix = re.compile(date_regex_pattern)
+
+    # Update the handler's suffix to include the date format
     file_handler.suffix = logfile_suffix
-    file_handler.namer = lambda name: name.replace(file_extension + ".", "") + file_extension
+
+    file_handler.namer = namer
+    # Update the handler's extMatch regex to match the new filename format
     file_handler.extMatch = logfile_regex_suffix
 
 
