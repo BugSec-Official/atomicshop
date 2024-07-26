@@ -41,8 +41,15 @@ def initialize_mitm_server(config_static):
             config['certificates']['sni_server_certificate_from_server_socket_download_directory'])
 
     # Create a logger that will log messages to file, Initiate System logger.
-    system_logger = loggingw.get_logger_with_stream_handler_and_timedfilehandler(
-        "system", config['log']['logs_path'], disable_duplicate_ms=True)
+    logger_name = "system"
+    system_logger = loggingw.get_complex_logger(
+        logger_name=logger_name,
+        file_path=f'{config['log']['logs_path']}{os.sep}{logger_name}.txt',
+        add_stream=True,
+        add_timedfile=True,
+        formatter_streamhandler='DEFAULT',
+        formatter_filehandler='DEFAULT'
+    )
 
     # Writing first log.
     system_logger.info("======================================")
@@ -175,14 +182,24 @@ def initialize_mitm_server(config_static):
     config_static.CONFIG_EXTENDED['certificates']['domains_all_times'] = list(domains_engine_list_full)
 
     # Creating Statistics logger.
-    statistics_logger = loggingw.get_logger_with_stream_handler_and_timedfilehandler(
-        logger_name="statistics", directory_path=config['log']['logs_path'],
-        file_extension=config_static.CSV_EXTENSION, formatter_message_only=True, header=STATISTICS_HEADER
+    statistics_logger = loggingw.get_complex_logger(
+        logger_name="statistics",
+        directory_path=config['log']['logs_path'],
+        add_timedfile=True,
+        formatter_filehandler='MESSAGE',
+        file_type='csv',
+        header=STATISTICS_HEADER
     )
 
     network_logger_name = "network"
-    network_logger = loggingw.get_logger_with_stream_handler_and_timedfilehandler(
-        logger_name=network_logger_name, directory_path=config['log']['logs_path'], disable_duplicate_ms=True)
+    network_logger = loggingw.get_complex_logger(
+        logger_name=network_logger_name,
+        directory_path=config['log']['logs_path'],
+        add_stream=True,
+        add_timedfile=True,
+        formatter_streamhandler='DEFAULT',
+        formatter_filehandler='DEFAULT'
+    )
     system_logger.info(f"Loaded network logger: {network_logger}")
 
     # Initiate Listener logger, which is a child of network logger, so he uses the same settings and handlers
