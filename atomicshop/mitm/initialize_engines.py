@@ -83,7 +83,7 @@ class ModuleCategory:
 
         # Initiating logger for each engine by its name
         # initiate_logger(current_module.engine_name, log_file_extension)
-        loggingw.get_complex_logger(
+        loggingw.create_logger(
             logger_name=self.engine_name,
             directory_path=logs_path,
             add_stream=True,

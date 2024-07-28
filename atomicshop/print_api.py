@@ -99,14 +99,15 @@ def print_api(
             # If 'logger.error' should be outputted to console, and 'color' wasn't selected, then set color to 'yellow'.
             if logger_method == 'error' and not color:
                 color = 'yellow'
-                error_type = True
             # If 'logger.critical' should be outputted to console, and 'color' wasn't selected, then set color to 'red'.
             elif logger_method == 'critical' and not color:
                 color = 'red'
-                error_type = True
 
             if color:
                 message = get_colors_basic_dict(color) + message + ColorsBasic.END
+
+        if logger_method == 'error' or logger_method == 'critical':
+            error_type = True
 
         # If exception was raised and 'stderr=True'.
         if sys.exc_info()[0] is not None and stderr:

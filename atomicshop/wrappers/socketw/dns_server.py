@@ -6,9 +6,14 @@ import socket
 
 from ...print_api import print_api
 from ..loggingw import loggingw
+from ..psutilw import networks
 
 import dnslib
 from dnslib import DNSRecord, DNSHeader, RR, A
+
+
+class DnsPortInUseError(Exception):
+    pass
 
 
 class DnsServer:
@@ -56,8 +61,12 @@ class DnsServer:
 
         # Logger that logs all the DNS Requests and responses in DNS format. These entries will not present in
         # network log of TCP Server module.
-        self.dns_full_logger = loggingw.get_logger_with_timedfilehandler(
-            logger_name="dns", directory_path=self.config['log']['logs_path'], disable_duplicate_ms=True)
+        self.dns_full_logger = loggingw.create_logger(
+            logger_name="dns",
+            directory_path=self.config['log']['logs_path'],
+            add_timedfile=True,
+            formatter_filehandler='DEFAULT'
+        )
 
     def thread_worker_empty_dns_cache(self, function_sleep_time: int):
         """
@@ -77,6 +86,11 @@ class DnsServer:
 
         :return: None.
         """
+
+        port_in_use = networks.get_processes_using_port_list([self.config['dns']['listening_port']])
+        if port_in_use:
+            for port, process_info in port_in_use.items():
+                raise DnsPortInUseError(f"Port [{port}] is already in use by process: {process_info}")
 
         self.logger.info("DNS Server Module Started.")
 
