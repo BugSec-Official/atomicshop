@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.14.08 - 28.07.2024
+  * wrappers/loggingw/handlers - fixes and improvements.
 * 2.14.06-2.14.07 - 28.07.2024
   * datetimes, mitm, print_api, wrappers/loggingw, wrappers/socketw/dns_server, wrappers/psutilw/networks - fixes and improvements.
 * 2.14.05 - 26.07.2024

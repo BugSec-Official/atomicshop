@@ -41,6 +41,7 @@ class ForceAtTimeRotationTimedRotatingFileHandler(TimedRotatingFileHandler):
             time.sleep(0.1)
 
     def doRollover(self):
+        self._last_rotated_date = datetime.now().date()
         super().doRollover()
 
 
