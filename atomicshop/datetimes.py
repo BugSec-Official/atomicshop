@@ -3,6 +3,7 @@ from datetime import timedelta
 import time
 import random
 import re
+from typing import Union
 
 
 class MonthToNumber:
@@ -47,6 +48,28 @@ class MonthToNumber:
         'דצמבר': '12'}
 
 
+# Mapping of datetime format specifiers to regex patterns
+DATE_TIME_STRING_FORMAT_SPECIFIERS_TO_REGEX: dict = {
+    '%Y': r'\d{4}',   # Year with century
+    '%m': r'\d{2}',   # Month as a zero-padded decimal number
+    '%d': r'\d{2}',   # Day of the month as a zero-padded decimal number
+    '%H': r'\d{2}',   # Hour (24-hour clock) as a zero-padded decimal number
+    '%I': r'\d{2}',   # Hour (12-hour clock) as a zero-padded decimal number
+    '%M': r'\d{2}',   # Minute as a zero-padded decimal number
+    '%S': r'\d{2}',   # Second as a zero-padded decimal number
+    '%f': r'\d{6}',   # Microsecond as a decimal number, zero-padded on the left
+    '%j': r'\d{3}',   # Day of the year as a zero-padded decimal number
+    '%U': r'\d{2}',   # Week number of the year (Sunday as the first day of the week)
+    '%W': r'\d{2}',   # Week number of the year (Monday as the first day of the week)
+    '%w': r'\d',      # Weekday as a decimal number (0 = Sunday, 6 = Saturday)
+    '%y': r'\d{2}',   # Year without century
+    '%p': r'(AM|PM)',   # AM or PM
+    '%z': r'[+-]\d{4}',  # UTC offset in the form ±HHMM
+    '%Z': r'[A-Z]+',     # Time zone name
+    '%%': r'%'           # Literal '%'
+}
+
+
 def get_datetime_from_complex_string_by_pattern(complex_string: str, date_pattern: str) -> tuple[datetime, str, float]:
     """
     Function will get datetime object from a complex string by pattern.
@@ -69,6 +92,49 @@ def get_datetime_from_complex_string_by_pattern(complex_string: str, date_patter
         return date_obj, date_str.group(), date_timestamp
     else:
         raise ValueError("No valid date found in the string")
+
+
+def datetime_format_to_regex(format_str: str) -> str:
+    """
+    Convert a datetime format string to a regex pattern.
+
+    :param format_str: The datetime format string to convert.
+    :return: The regex pattern that matches the format string.
+
+    Example:
+    datetime_format_to_regex("%Y-%m-%d")
+
+    Output:
+    '^\\d{4}-\\d{2}-\\d{2}$'
+    """
+
+    # Escape all non-format characters
+    escaped_format_str = re.escape(format_str)
+
+    # Replace escaped format specifiers with their regex equivalents
+    for specifier, regex in DATE_TIME_STRING_FORMAT_SPECIFIERS_TO_REGEX.items():
+        escaped_format_str = escaped_format_str.replace(re.escape(specifier), regex)
+
+    # Return the full regex pattern with start and end anchors
+    return f"^{escaped_format_str}$"
+
+
+def extract_datetime_format_from_string(complex_string: str) -> Union[str, None]:
+    """
+    Extract the datetime format from the suffix used in TimedRotatingFileHandler.
+
+    Args:
+    - suffix: The suffix string from the handler.
+
+    Returns:
+    - The datetime format string, or None if it cannot be determined.
+    """
+    # Regular expression to match datetime format components in the suffix
+    datetime_format_regex = r"%[a-zA-Z]"
+    matches = re.findall(datetime_format_regex, complex_string)
+    if matches:
+        return "".join(matches)
+    return None
 
 
 def convert_single_digit_to_zero_padded(string: str):

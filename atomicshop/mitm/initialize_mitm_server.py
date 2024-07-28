@@ -1,5 +1,7 @@
 import os
+import sys
 import threading
+import time
 
 # Importing atomicshop package to get the version of the package.
 import atomicshop
@@ -10,7 +12,8 @@ from .connection_thread_worker import thread_worker_main
 from .. import filesystem, queues
 from ..python_functions import get_current_python_version_string, check_python_version_compliance
 from ..wrappers.socketw.socket_wrapper import SocketWrapper
-from ..wrappers.socketw.dns_server import DnsServer
+from ..wrappers.socketw import dns_server
+from ..wrappers.psutilw import networks
 from ..basics import dicts_nested
 from ..wrappers.loggingw import loggingw
 from ..print_api import print_api
@@ -42,7 +45,7 @@ def initialize_mitm_server(config_static):
 
     # Create a logger that will log messages to file, Initiate System logger.
     logger_name = "system"
-    system_logger = loggingw.get_complex_logger(
+    system_logger = loggingw.create_logger(
         logger_name=logger_name,
         file_path=f'{config['log']['logs_path']}{os.sep}{logger_name}.txt',
         add_stream=True,
@@ -182,7 +185,7 @@ def initialize_mitm_server(config_static):
     config_static.CONFIG_EXTENDED['certificates']['domains_all_times'] = list(domains_engine_list_full)
 
     # Creating Statistics logger.
-    statistics_logger = loggingw.get_complex_logger(
+    statistics_logger = loggingw.create_logger(
         logger_name="statistics",
         directory_path=config['log']['logs_path'],
         add_timedfile=True,
@@ -192,7 +195,7 @@ def initialize_mitm_server(config_static):
     )
 
     network_logger_name = "network"
-    network_logger = loggingw.get_complex_logger(
+    network_logger = loggingw.create_logger(
         logger_name=network_logger_name,
         directory_path=config['log']['logs_path'],
         add_stream=True,
@@ -211,19 +214,41 @@ def initialize_mitm_server(config_static):
 
     # === Initialize DNS module ====================================================================================
     if config['dns']['enable_dns_server']:
+        # Check if the DNS server port is in use.
+        port_in_use = networks.get_processes_using_port_list([config['dns']['listening_port']])
+        if port_in_use:
+            for port, process_info in port_in_use.items():
+                message = f"Port [{port}] is already in use by process: {process_info}"
+                print_api(message, error_type=True, logger_method='critical', logger=system_logger)
+
+            # Wait for the message to be printed and saved to file.
+            time.sleep(1)
+            sys.exit(1)
+
         # before executing TCP sockets and after executing 'network' logger.
-        dns_server = DnsServer(config)
+        dns_server_instance = dns_server.DnsServer(config)
         # Passing the engine domain list to DNS server to work with.
         # 'list' function re-initializes the current list, or else it will be the same instance object.
-        dns_server.domain_list = list(domains_engine_list_full)
+        dns_server_instance.domain_list = list(domains_engine_list_full)
 
-        dns_server.request_domain_queue = domain_queue
+        dns_server_instance.request_domain_queue = domain_queue
         # Initiate the thread.
-        threading.Thread(target=dns_server.start).start()
+        dns_thread = threading.Thread(target=dns_server_instance.start)
+        dns_thread.daemon = True
+        dns_thread.start()
 
     # === EOF Initialize DNS module ================================================================================
     # === Initialize TCP Server ====================================================================================
     if config['tcp']['enable_tcp_server']:
+        port_in_use = networks.get_processes_using_port_list(config['tcp']['listening_port_list'])
+        if port_in_use:
+            for port, process_info in port_in_use.items():
+                print_api(f"Port [{port}] is already in use by process: {process_info}", logger=system_logger,
+                          error_type=True, logger_method='critical')
+            # Wait for the message to be printed and saved to file.
+            time.sleep(1)
+            sys.exit(1)
+
         socket_wrapper = SocketWrapper(
             config=dicts_nested.merge(config, config_static.CONFIG_EXTENDED), logger=listener_logger,
             statistics_logger=statistics_logger)

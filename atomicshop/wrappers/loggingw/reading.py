@@ -75,8 +75,8 @@ def get_logs_paths(
 
                 # Get the datetime object from the file name by the date pattern.
                 try:
-                    datetime_object, date_string, timestamp_float = datetimes.get_datetime_from_complex_string_by_pattern(
-                        current_file_name, date_pattern)
+                    datetime_object, date_string, timestamp_float = (
+                        datetimes.get_datetime_from_complex_string_by_pattern(current_file_name, date_pattern))
                 # ValueError will be raised if the date pattern does not match the file name.
                 except ValueError:
                     timestamp_float = 0
