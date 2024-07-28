@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.14.09 - 29.07.2024
+  * wrappers/loggingw - fixes and improvements.
 * 2.14.08 - 28.07.2024
   * wrappers/loggingw/handlers - fixes and improvements.
 * 2.14.06-2.14.07 - 28.07.2024

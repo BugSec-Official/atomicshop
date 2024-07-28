@@ -2,7 +2,7 @@ import logging
 import os
 from typing import Literal, Union
 
-from . import loggers, handlers, formatters
+from . import loggers, handlers
 
 
 def create_logger(
@@ -26,6 +26,10 @@ def create_logger(
             None] = None,
         formatter_streamhandler_use_nanoseconds: bool = True,
         formatter_filehandler_use_nanoseconds: bool = True,
+        filehandler_rotate_at_rollover_time: bool = True,
+        filehandler_rotation_date_format: str = None,
+        filehandler_rotation_callback_namer_function: callable = None,
+        filehandler_rotation_use_default_namer_function: bool = True,
         when: str = "midnight",
         interval: int = 1,
         delay: bool = False,
@@ -67,6 +71,20 @@ def create_logger(
         in the formatter in case you provide 'asctime' element.
     :param formatter_filehandler_use_nanoseconds: bool, If set to True, the nanoseconds will be used
         in the formatter in case you provide 'asctime' element.
+    :param filehandler_rotate_at_rollover_time: bool,
+        If set to True, the log file will be rotated at the rollover time, even if there's nothing to write.
+        If set to False, the log file will be rotated after 'when' time, but only when event occurs.
+    :param filehandler_rotation_date_format: string, Date format to use for the log file rotation.
+        Example for 'when="midnight"': the default date format is '%Y-%m-%d', resulting in filename on rotation like:
+            "test.log.2021-11-25"
+            If you want to change the date format to '%Y_%m_%d', the filename will be:
+            "test.log.2021_11_25"
+    :param filehandler_rotation_callback_namer_function: callable, Callback function to use for the log file naming
+        on rotation. If set to None, logging module default function will be used. With "when='midnight'",
+        and filename: "test.log" this will name the file on rotation similar to: "test.log.2021-11-25".
+    :param filehandler_rotation_use_default_namer_function: bool, If set to True, the default namer function will be
+        used for the log file naming on rotation. With "when='midnight'" and filename: "test.log",
+        this will name the file on rotation similar to: "test_2021-11-25.log".
     :param when: string, When to rotate the log file. Default is 'midnight'.
         [when="midnight"] is set to rotate the filename at midnight. This means that the current file name will be
         added Yesterday's date to the end of the file and today's file will continue to write at the same
@@ -159,6 +177,10 @@ def create_logger(
         handlers.add_timedfilehandler_with_queuehandler(
             logger=logger, file_path=file_path, logging_level=logging_level, formatter=formatter_filehandler,
             formatter_use_nanoseconds=formatter_filehandler_use_nanoseconds, file_type=file_type,
+            rotate_at_rollover_time=filehandler_rotate_at_rollover_time,
+            rotation_date_format=filehandler_rotation_date_format,
+            rotation_callback_namer_function=filehandler_rotation_callback_namer_function,
+            rotation_use_default_callback_namer_function=filehandler_rotation_use_default_namer_function,
             when=when, interval=interval, delay=delay, encoding=encoding, header=header)
 
     return logger

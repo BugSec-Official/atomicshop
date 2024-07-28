@@ -1,6 +1,5 @@
 import logging
 from logging.handlers import TimedRotatingFileHandler, QueueListener, QueueHandler
-from logging import FileHandler
 import time
 import re
 import os
@@ -10,66 +9,15 @@ from typing import Literal, Union
 import threading
 from datetime import datetime
 
-from . import loggers, formatters
+from . import loggers, formatters, filters
 from ... import datetimes, filesystem
 
 
-DEFAULT_DATE_STRING_FORMAT: str = "%Y_%m_%d"
+"""
 # Not used, only for the reference:
-# _DEFAULT_DATE_REGEX_PATTERN: str = r"^\d{4}_\d{2}_\d{2}$"
-
-
-class ForceAtTimeRotationTimedRotatingFileHandler(TimedRotatingFileHandler):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._last_rotated_date = None
-        self._start_rotation_check()
-
-    def _start_rotation_check(self):
-        self._rotation_thread = threading.Thread(target=self._check_for_rotation)
-        self._rotation_thread.daemon = True
-        self._rotation_thread.start()
-
-    def _check_for_rotation(self):
-        while True:
-            now = datetime.now()
-            current_date = now.date()
-            # Check if it's midnight and the logs haven't been rotated today
-            if now.hour == 0 and now.minute == 0 and current_date != self._last_rotated_date:
-                self._last_rotated_date = current_date
-                self.doRollover()
-            time.sleep(0.1)
-
-    def doRollover(self):
-        self._last_rotated_date = datetime.now().date()
-        super().doRollover()
-
-
-class TimedRotatingFileHandlerWithHeader(ForceAtTimeRotationTimedRotatingFileHandler):
-    """
-    Custom TimedRotatingFileHandler that writes a header to the log file each time there is a file rotation.
-    Useful for writing CSV files.
-
-    :param header: string, Header to write to the log file.
-        Example: "time,host,error"
-    """
-    def __init__(self, *args, **kwargs):
-        self.header = kwargs.pop('header', None)
-        super().__init__(*args, **kwargs)
-
-    def doRollover(self):
-        super().doRollover()
-        self._write_header()
-
-    def _write_header(self):
-        if self.header:
-            with open(self.baseFilename, 'a') as f:
-                f.write(self.header + '\n')
-
-    def emit(self, record):
-        if not os.path.exists(self.baseFilename) or os.path.getsize(self.baseFilename) == 0:
-            self._write_header()
-        super().emit(record)
+DEFAULT_DATE_STRING_FORMAT: str = "%Y_%m_%d"
+DEFAULT_DATE_REGEX_PATTERN: str = r"^\d{4}_\d{2}_\d{2}$"
+"""
 
 
 def _process_formatter_attribute(
@@ -134,6 +82,48 @@ def add_stream_handler(
     loggers.set_propagation(logger)
 
 
+# Function to start the interval-based rotation check
+def _start_interval_rotation(handler):
+    def check_rotation():
+        while True:
+            next_rollover = _calculate_next_rollover()
+            while datetime.now() < next_rollover:
+                time.sleep(0.1)
+
+                # Check if the next_rollover has changed (indicating a rollover by an event)
+                if _calculate_next_rollover() != next_rollover:
+                    next_rollover = _calculate_next_rollover()
+                    break
+
+            # Perform manual rollover if needed
+            if datetime.now() >= next_rollover:
+                _rotate_log()
+
+    def _calculate_next_rollover():
+        return datetime.fromtimestamp(handler.rolloverAt)
+
+    # Function to rotate logs
+    def _rotate_log():
+        handler.doRollover()
+
+    rotation_thread = threading.Thread(target=check_rotation)
+    rotation_thread.daemon = True
+    rotation_thread.start()
+
+
+def _wrap_do_rollover(handler, header):
+    original_do_rollover = handler.doRollover
+
+    def new_do_rollover():
+        original_do_rollover()
+        # After rollover, write the header
+        if header:
+            with open(handler.baseFilename, 'a') as f:
+                f.write(header + '\n')
+
+    handler.doRollover = new_do_rollover
+
+
 def add_timedfilehandler_with_queuehandler(
         logger: logging.Logger,
         file_path: str,
@@ -147,6 +137,10 @@ def add_timedfilehandler_with_queuehandler(
             str,
             None] = None,
         formatter_use_nanoseconds: bool = False,
+        rotate_at_rollover_time: bool = True,
+        rotation_date_format: str = None,
+        rotation_callback_namer_function: callable = None,
+        rotation_use_default_callback_namer_function: bool = True,
         when: str = 'midnight',
         interval: int = 1,
         delay: bool = True,
@@ -159,10 +153,6 @@ def add_timedfilehandler_with_queuehandler(
     This is needed, since TimedRotatingFileHandler is not thread-safe, though official docs say it is.
     """
 
-    # If file name wasn't provided we will use the logger name instead.
-    # if not file_name_no_extension:
-    #     file_name_no_extension = logger.name
-
     # Setting the TimedRotatingFileHandler, without adding it to the logger.
     # It will be added to the QueueListener, which will use the TimedRotatingFileHandler to write logs.
     # This is needed since there's a bug in TimedRotatingFileHandler, which won't let it be used with
@@ -173,15 +163,8 @@ def add_timedfilehandler_with_queuehandler(
 
     filesystem.create_directory(os.path.dirname(file_path))
 
-    if file_type == "csv":
-        # If file extension is CSV, we'll set the header to the file.
-        # This is needed since the CSV file will be rotated, and we'll need to set the header each time.
-        # We'll use the custom TimedRotatingFileHandlerWithHeader class.
-        file_handler = get_timed_rotating_file_handler_with_header(
-            file_path, when=when, interval=interval, delay=delay, encoding=encoding, header=header)
-    else:
-        file_handler = get_timed_rotating_file_handler(
-            file_path, when=when, interval=interval, delay=delay, encoding=encoding)
+    file_handler = get_timed_rotating_file_handler(
+        file_path, when=when, interval=interval, delay=delay, encoding=encoding)
 
     loggers.set_logging_level(file_handler, logging_level)
 
@@ -196,7 +179,23 @@ def add_timedfilehandler_with_queuehandler(
         set_formatter(file_handler, logging_formatter)
 
     # This function will change the suffix behavior of the rotated file name.
-    change_rotated_filename(file_handler)
+    change_rotated_filename(
+        file_handler=file_handler, date_format_string=rotation_date_format,
+        callback_namer_function=rotation_callback_namer_function,
+        use_default_callback_namer_function=rotation_use_default_callback_namer_function
+    )
+
+    # If header is set, we'll add the filter to the handler that will create the header on file rotation.
+    if header:
+        # Filter is added to write header on logger startup.
+        add_filter_to_handler(file_handler, filters.HeaderFilter(header, file_handler.baseFilename))
+        # Wrap the doRollover method to write the header after each rotation, since adding the filter
+        # will only write the header on log file creation.
+        _wrap_do_rollover(file_handler, header)
+
+    # Start the interval-based rotation forcing.
+    if rotate_at_rollover_time:
+        _start_interval_rotation(file_handler)
 
     queue_handler = start_queue_listener_for_file_handler_and_get_queue_handler(file_handler)
     loggers.set_logging_level(queue_handler, logging_level)
@@ -243,7 +242,7 @@ def get_stream_handler() -> logging.StreamHandler:
 
 def get_timed_rotating_file_handler(
         log_file_path: str, when: str = "midnight", interval: int = 1, delay: bool = False, encoding=None
-) -> ForceAtTimeRotationTimedRotatingFileHandler:
+) -> TimedRotatingFileHandler:
     """
     Function to get a TimedRotatingFileHandler.
     This handler will output messages to a file, rotating the log file at certain timed intervals.
@@ -261,30 +260,8 @@ def get_timed_rotating_file_handler(
     :return: TimedRotatingFileHandler.
     """
 
-    return ForceAtTimeRotationTimedRotatingFileHandler(
+    return TimedRotatingFileHandler(
         filename=log_file_path, when=when, interval=interval, delay=delay, encoding=encoding)
-
-
-def get_timed_rotating_file_handler_with_header(
-        log_file_path: str, when: str = "midnight", interval: int = 1, delay: bool = False, encoding=None,
-        header: str = None) -> TimedRotatingFileHandlerWithHeader:
-    """
-    Function to get a TimedRotatingFileHandler with header.
-    This handler will output messages to a file, rotating the log file at certain timed intervals.
-    It will write a header to the log file each time there is a file rotation.
-
-    :param log_file_path: Path to the log file.
-    :param when: When to rotate the log file. Possible
-    :param interval: Interval to rotate the log file.
-    :param delay: bool, If set to True, the log file will be created only if there's something to write.
-    :param encoding: Encoding to use for the log file. Same as for the TimeRotatingFileHandler, which uses Default None.
-    :param header: Header to write to the log file.
-        Example: "time,host,error"
-    :return: TimedRotatingFileHandlerWithHeader.
-    """
-
-    return TimedRotatingFileHandlerWithHeader(
-        filename=log_file_path, when=when, interval=interval, delay=delay, encoding=encoding, header=header)
 
 
 def start_queue_listener_for_file_handler(
@@ -351,72 +328,74 @@ def get_handler_name(handler: logging.Handler) -> str:
 
 def change_rotated_filename(
         file_handler: logging.Handler,
-        date_format_string: str = None
+        date_format_string: str = None,
+        callback_namer_function: callable = None,
+        use_default_callback_namer_function: bool = True
 ):
     """
     Function to change the way TimedRotatingFileHandler managing the rotating filename.
 
     :param file_handler: FileHandler to change the rotating filename for.
-    :param date_format_string: Date format string to use for the rotated log filename.
-        If None, the default 'DEFAULT_DATE_STRING_FORMAT' will be used.
+    :param date_format_string: Date format string to set to the handler's suffix.
+    :param callback_namer_function: Callback function to change the filename on rotation.
+    :param use_default_callback_namer_function: If set to True, the default callback namer function will be used
+        and the filename will be changed on rotation instead of using the default like this:
+        'file.log.2021-12-24' -> 'file_2021-12-24.log'.
+
+    ---------------------
+
+    At this point, 'file_handler.suffix' is already '%Y-%m-%d' if 'when' is set to 'midnight'.
+    You can change it if you wish (example: '%Y_%m_%d'), the method is described below.
     """
-    # Changing the way TimedRotatingFileHandler managing the rotating filename
-    # Default file suffix is only "Year_Month_Day" with addition of the dot (".") character to the
-    # "file name + extension" that you provide it. Example: log file name:
-    # test.log
-    # After file is rotated at midnight, by default the old filename will be:
-    # test.log.2021_12_24
-    # And the log file of 25th, now will be "test.log".
-    # So, Changing the file suffix to include the extension to the suffix, so it will be:
-    # test.log.2021_12_24.log
-    # file_handler.suffix = logfile_suffix
-    # file_handler.suffix = "_%Y_%m_%d.txt"
-    # This step will remove the created ".log." above before the suffix and the filename will look like:
-    # test.2021_12_24.log
-    # file_handler.namer = lambda name: name.replace(log_file_extension + ".", "") + log_file_extension
-    # file_handler.namer = lambda name: name.replace(".txt.", "") + log_file_extension
-    # This will recompile the string to tell the handler the length of the suffix parts
-    # file_handler.extMatch = re.compile(r"^\d{4}_\d{2}_\d{2}" + re.escape(log_file_extension) + r"$")
-    # file_handler.extMatch = re.compile(r"^\d{4}_\d{2}_\d{2}.txt$")
 
     def callback_namer(name):
         """
         Callback function to change the filename of the rotated log file on file rotation.
         """
         # Currently the 'name' is full file path + '.' + logfile_suffix.
-        # Example: 'C:\\path\\to\\file.log._2021_12_24'
+        # Example: 'C:\\path\\to\\file.log.2021-12-24'
         # Get the parent directory of the file: C:\path\to
         parent_dir: str = str(Path(name).parent)
         # Get the base filename without the extension: file.log
         filename: str = Path(name).stem
-        # Get the date part of the filename: _2021_12_24
+        # Get the date part of the filename: 2021-12-24
         date_part: str = str(Path(name).suffix).replace(".", "")
         # Get the file extension: log
         file_extension: str = Path(filename).suffix
         # Get the file name without the extension: file
         file_stem: str = Path(filename).stem
 
-        return f"{parent_dir}{os.sep}{file_stem}{date_part}{file_extension}"
+        return f"{parent_dir}{os.sep}{file_stem}_{date_part}{file_extension}"
 
-    if date_format_string is None:
-        date_format_string = DEFAULT_DATE_STRING_FORMAT
+    def change_file_handler_suffix():
+        # Get regex pattern from string format.
+        # Example: '%Y_%m_%d' -> r'\d{4}_\d{2}_\d{2}'
+        date_regex_pattern = datetimes.datetime_format_to_regex(date_format_string)
 
-    # Construct the new suffix without the file extension
-    logfile_suffix = f"_{date_format_string}"
+        # Regex pattern to match the rotated log filenames
+        logfile_regex_suffix = re.compile(date_regex_pattern)
 
-    # Get regex pattern from string format.
-    # Example: '%Y_%m_%d' -> r'\d{4}_\d{2}_\d{2}'
-    date_regex_pattern = datetimes.datetime_format_to_regex(date_format_string)
+        # Update the handler's suffix to include the date format
+        file_handler.suffix = date_format_string
 
-    # Regex pattern to match the rotated log filenames
-    logfile_regex_suffix = re.compile(date_regex_pattern)
+        # Update the handler's extMatch regex to match the new filename format
+        file_handler.extMatch = logfile_regex_suffix
 
-    # Update the handler's suffix to include the date format
-    file_handler.suffix = logfile_suffix
+    if use_default_callback_namer_function and callback_namer_function:
+        raise ValueError("You can't use both default and custom callback namer function.")
+    elif not use_default_callback_namer_function and not callback_namer_function:
+        raise ValueError(
+            "You need to provide a 'callback_namer_function' or our 'use_default_callback_namer_function'.")
 
-    file_handler.namer = callback_namer
-    # Update the handler's extMatch regex to match the new filename format
-    file_handler.extMatch = logfile_regex_suffix
+    if date_format_string:
+        change_file_handler_suffix()
+
+    # Set the callback function to change the filename on rotation.
+    if use_default_callback_namer_function:
+        file_handler.namer = callback_namer
+
+    if callback_namer_function:
+        file_handler.namer = callback_namer_function
 
 
 def has_handlers(logger: logging.Logger) -> bool:
@@ -438,7 +417,7 @@ def has_handlers(logger: logging.Logger) -> bool:
         return True
 
 
-def extract_datetime_format_from_file_handler(file_handler: FileHandler) -> Union[str, None]:
+def extract_datetime_format_from_file_handler(file_handler: logging.FileHandler) -> Union[str, None]:
     """
     Extract the datetime string formats from all TimedRotatingFileHandlers in the logger.
 
@@ -456,3 +435,13 @@ def extract_datetime_format_from_file_handler(file_handler: FileHandler) -> Unio
             return datetime_format
 
         return None
+
+
+def add_filter_to_handler(handler: logging.Handler, filter_object: logging.Filter):
+    """
+    Function to add a filter to the handler.
+    :param handler: Handler to add the filter to.
+    :param filter_object: Filter object to add to the handler.
+    """
+
+    handler.addFilter(filter_object)
