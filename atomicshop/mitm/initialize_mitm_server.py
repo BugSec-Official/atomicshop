@@ -47,7 +47,7 @@ def initialize_mitm_server(config_static):
     logger_name = "system"
     system_logger = loggingw.create_logger(
         logger_name=logger_name,
-        file_path=f'{config['log']['logs_path']}{os.sep}{logger_name}.txt',
+        file_path=f"{config['log']['logs_path']}{os.sep}{logger_name}.txt",
         add_stream=True,
         add_timedfile=True,
         formatter_streamhandler='DEFAULT',
