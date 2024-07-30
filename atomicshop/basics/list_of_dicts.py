@@ -1,5 +1,5 @@
 from operator import itemgetter
-from json import dumps, loads
+import json
 
 from . import dicts, strings
 
@@ -150,7 +150,7 @@ def convert_to_set(list_of_dicts, sort_keys: bool = False) -> set:
     :return: set.
     """
 
-    return set(dumps(x, sort_keys=sort_keys) for x in list_of_dicts)
+    return set(json.dumps(x, sort_keys=sort_keys) for x in list_of_dicts)
 
 
 def convert_from_set(set_object: set) -> list:
@@ -161,4 +161,59 @@ def convert_from_set(set_object: set) -> list:
     :return: list of dicts.
     """
 
-    return [loads(x) for x in set_object]
+    return [json.loads(x) for x in set_object]
+
+
+def summarize_entries(list_instance: list, list_of_keys_to_remove: list = None) -> list:
+    """
+    The function will summarize entries in a list of dicts.
+
+    :param list_instance: list of dicts, the entries to summarize.
+    :param list_of_keys_to_remove: list, the keys to remove from each entry before summarizing.
+    :return: list, of the summarized entries, each entry without the keys in 'list_of_keys_to_remove',
+        including the count of the entry.
+
+    --------------------------------------
+
+    Example:
+    list_instance = [
+        {'time': '2021-08-01 00:00:00', 'name': 'name1', 'cmdline': 'cmdline1', 'domain': 'domain1'},
+        {'time': '2021-08-01 00:00:00', 'name': 'name2', 'cmdline': 'cmdline2', 'domain': 'domain2'},
+        {'time': '2021-08-01 00:00:00', 'name': 'name1', 'cmdline': 'cmdline1', 'domain': 'domain1'}
+    ]
+
+    list_of_keys_to_remove = ['time', 'cmdline']
+
+    summarize_entries(list_instance, list_of_keys_to_remove)
+
+    Output:
+    [
+        {'name': 'name1', 'domain': 'domain1', 'count': 2},
+        {'name': 'name2', 'domain': 'domain2', 'count': 1}
+    ]
+    """
+
+    summed_entries: dict = dict()
+    for entry in list_instance:
+        # Copy the entry to new dict, since we're going to remove a key.
+        line_copied = entry.copy()
+
+        # Remove the keys in the 'list_of_keys_to_remove'.
+        if list_of_keys_to_remove:
+            for key in list_of_keys_to_remove:
+                _ = line_copied.pop(key, None)
+
+        line_json_string = json.dumps(line_copied)
+        if line_json_string not in summed_entries:
+            summed_entries[line_json_string] = 1
+        else:
+            summed_entries[line_json_string] += 1
+
+    result_list: list = []
+    for json_string_record, count in summed_entries.items():
+        record = json.loads(json_string_record)
+        result_list.append(
+            {**record, 'count': count}
+        )
+
+    return result_list

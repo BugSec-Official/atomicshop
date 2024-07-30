@@ -62,7 +62,7 @@ def search_for_hyperlink_in_files(directory_path: str, hyperlink: str, relative_
             input('press Enter')
         """
 
-    if not filesystem.check_directory_existence(directory_path):
+    if not filesystem.is_directory_exists(directory_path):
         raise NotADirectoryError(f"Directory doesn't exist: {directory_path}")
 
     # Get all the docx files in the specified directory.
