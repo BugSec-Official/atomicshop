@@ -1,6 +1,8 @@
 import logging
 import time
 
+from . import consts
+
 
 # Log formatter, means how the log will look inside the file
 # Format for specific object: %(levelname)s
@@ -8,41 +10,6 @@ import time
 # Format with adding spaces before the object with maximum of 10 characters: %(levelname)10s
 
 # ".40" truncating the string to only 40 characters. Example: %(message).250s
-
-
-DEFAULT_STREAM_FORMATTER: str = "%(levelname)s | %(threadName)s | %(name)s | %(message)s"
-DEFAULT_MESSAGE_FORMATTER: str = "%(message)s"
-
-FORMAT_ELEMENT_TO_HEADER: dict = {
-    'asctime': 'Event Time [Y-M-D H:M:S]',
-    'created': 'Created',
-    'filename': "ModuleFileName            ",
-    'funcName': 'Function',
-    'levelname': 'Log Level',
-    'levelno': 'Level Number',
-    'lineno': 'Line ',
-    'module': 'Module',
-    'msecs': '[MS.mS]',
-    'message': 'Message',
-    'name': 'Logger Name                     ',
-    'pathname': 'Path',
-    'process': 'Process',
-    'processName': 'Process Name',
-    'relativeCreated': 'Relative Created',
-    'thread': 'Thread',
-    'threadName': 'Thread Name'
-}
-
-DEFAULT_FORMATTER_TXT_FILE: str = \
-    "{asctime} | " \
-    "{levelname:<" + f"{len(FORMAT_ELEMENT_TO_HEADER['levelname'])}" + "s} | " \
-    "{name:<" + f"{len(FORMAT_ELEMENT_TO_HEADER['name'])}" + "s} | " \
-    "{filename:<" + f"{len(FORMAT_ELEMENT_TO_HEADER['filename'])}" + "s} : " \
-    "{lineno:<" + f"{len(FORMAT_ELEMENT_TO_HEADER['lineno'])}" + "d} | " \
-    "{threadName} | {message}"
-
-DEFAULT_FORMATTER_CSV_FILE: str = \
-    '\"{asctime}\",{levelname},{name},{filename},{lineno},{threadName},\"{message}\"'
 
 
 class NanosecondsFormatter(logging.Formatter):
@@ -71,24 +38,6 @@ class NanosecondsFormatter(logging.Formatter):
             return f'{s}.{nanoseconds}'
         else:
             return s
-
-
-
-
-
-        # if datefmt is None:
-        #     # Use the default behavior if no datefmt is provided
-        #     return super().formatTime(record, datefmt)
-        # elif '%f' in datefmt:
-        #     # Format the time up to seconds
-        #     base_time = time.strftime(datefmt.replace('%f', ''), ct)
-        #     # Calculate nanoseconds from the fractional part of the timestamp
-        #     nanoseconds = f'{record.created:.9f}'.split('.')[1]
-        #     # Return the formatted string with nanoseconds appended
-        #     return base_time + nanoseconds
-        # else:
-        #     # Use the provided datefmt if it doesn't include %f
-        #     return time.strftime(datefmt, ct)
 
 
 class FormatterProcessor:
@@ -168,7 +117,7 @@ class FormatterProcessor:
         # Iterate through all the elements and get the header list.
         header_dict: dict = dict()
         for element in self.list_of_elements:
-            header_dict.update({element: FORMAT_ELEMENT_TO_HEADER[element]})
+            header_dict.update({element: consts.FORMAT_ELEMENT_TO_HEADER[element]})
 
         return header_dict
 

@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.14.11 - 30.07.2024
+  * basics/list_of_dicts, datetimes, filesystem, wrappers/loggingw - fixes and improvements.
+  * setups - fixes.
 * 2.14.10 - 29.07.2024
   * mitm/initialize_mitm_server - fixes and improvements.
   * Added 'setups' folder to the main git repository.

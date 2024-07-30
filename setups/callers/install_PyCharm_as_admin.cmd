@@ -2,10 +2,10 @@
 setlocal
 
 rem URL to the raw CMD script file on GitHub
-set "URL=https://raw.githubusercontent.com/BugSec-Official/atomicshop/main/setups/scripts/install_PyCharm.cmd"
+set "URL=https://raw.githubusercontent.com/BugSec-Official/atomicshop/main/setups/scripts/install_PyCharm_as_admin.cmd"
 
 rem Path to save the downloaded script
-set "SCRIPT_PATH=%TEMP%\install_PyCharm.cmd"
+set "SCRIPT_PATH=%TEMP%\install_PyCharm_as_admin.cmd"
 
 rem Download the script using curl
 curl -o "%SCRIPT_PATH%" %URL%

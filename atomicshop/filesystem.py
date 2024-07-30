@@ -246,6 +246,16 @@ def check_absolute_path___add_full(filesystem_path: str, full_path_to_add: str) 
 
 
 def check_file_existence(file_path: str) -> bool:
+    """This will be removed in future versions. Use 'is_file_exists' instead."""
+    return is_file_exists(file_path)
+
+
+def check_directory_existence(directory_path: str) -> bool:
+    """This will be removed in future versions. Use 'is_directory_exists' instead."""
+    return is_directory_exists(directory_path)
+
+
+def is_file_exists(file_path: str) -> bool:
     """
     Function to check if the path is a file.
 
@@ -260,7 +270,7 @@ def check_file_existence(file_path: str) -> bool:
         return False
 
 
-def check_directory_existence(directory_path: str) -> bool:
+def is_directory_exists(directory_path: str) -> bool:
     """
     Function to check if a path is a directory.
 
@@ -459,7 +469,7 @@ def move_folder(source_directory: str, target_directory: str, overwrite: bool = 
 
     # Check if 'overwrite' is set to 'True' and if the directory exists.
     if not overwrite:
-        if check_directory_existence(target_directory):
+        if is_directory_exists(target_directory):
             raise FileExistsError(f'Directory already exists: {target_directory}')
 
     # Move directory.
@@ -545,7 +555,7 @@ def copy_directory(source_directory: str, target_directory: str, overwrite: bool
 
     # Check if 'overwrite' is set to 'True' and if the directory exists.
     if overwrite:
-        if check_directory_existence(target_directory):
+        if is_directory_exists(target_directory):
             remove_directory(target_directory)
 
     # Copy directory.
@@ -1383,7 +1393,7 @@ def backup_folder(directory_path: str, backup_directory: str) -> None:
     Final path will look like: 'C:\\Users\\user1\\Downloads\\backup\\20231003-120000-000000_folder1'
     """
 
-    if check_directory_existence(directory_path):
+    if is_directory_exists(directory_path):
         timestamp: str = datetimes.TimeFormats().get_current_formatted_time_filename_stamp(True)
         directory_name = Path(directory_path).name
         backup_directory_path: str = str(Path(backup_directory) / f"{timestamp}_{directory_name}")

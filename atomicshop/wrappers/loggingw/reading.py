@@ -65,7 +65,17 @@ def get_logs_paths(
         add_last_modified_time=True,
         sort_by_last_modified_time=True)
 
-    if len(logs_files) > 1:
+    # Get the datetime object from the first file name by the date pattern.
+    first_date_string = None
+    if logs_files:
+        first_file_name: str = Path(logs_files[0]['file_path']).name
+        first_datetime_object, first_date_string, first_timestamp_float = (
+            datetimes.get_datetime_from_complex_string_by_pattern(first_file_name, date_pattern))
+
+    # The problem here is the file name that doesn't contain the date string in the name.
+    # If it is regular log rotation, then there will be one file that doesn't have the date string in the name.
+    # If the function used to get the previous day log, then there will be no file that doesn't have the date string.
+    if len(logs_files) > 1 or (len(logs_files) == 1 and first_date_string):
         if date_pattern:
             latest_timestamp: float = 0
             for file_index, single_file in enumerate(logs_files):
@@ -74,14 +84,8 @@ def get_logs_paths(
                 logs_files[file_index]['file_name'] = current_file_name
 
                 # Get the datetime object from the file name by the date pattern.
-                try:
-                    datetime_object, date_string, timestamp_float = (
-                        datetimes.get_datetime_from_complex_string_by_pattern(current_file_name, date_pattern))
-                # ValueError will be raised if the date pattern does not match the file name.
-                except ValueError:
-                    timestamp_float = 0
-                    datetime_object = None
-                    date_string = None
+                datetime_object, date_string, timestamp_float = (
+                    datetimes.get_datetime_from_complex_string_by_pattern(current_file_name, date_pattern))
 
                 # Update the last modified time to the dictionary.
                 logs_files[file_index]['last_modified'] = timestamp_float
@@ -117,6 +121,7 @@ def get_logs_paths(
     # If the 'previous_day_only' is True, then there are no previous day logs to output.
     elif len(logs_files) == 1 and previous_day_only:
         logs_files = []
+
 
     return logs_files
 

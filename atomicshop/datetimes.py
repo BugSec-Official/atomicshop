@@ -70,13 +70,20 @@ DATE_TIME_STRING_FORMAT_SPECIFIERS_TO_REGEX: dict = {
 }
 
 
-def get_datetime_from_complex_string_by_pattern(complex_string: str, date_pattern: str) -> tuple[datetime, str, float]:
+def get_datetime_from_complex_string_by_pattern(
+        complex_string: str,
+        date_pattern: str
+) -> tuple[
+    Union[datetime, None],
+    Union[str, None],
+    Union[float, None]
+]:
     """
     Function will get datetime object from a complex string by pattern.
 
     :param complex_string: string that contains date and time.
     :param date_pattern: pattern that will be used to extract date and time from the string.
-    :return: datetime object.
+    :return: tuple(datetime object, date string, timestamp float)
     """
 
     # Convert the date pattern to regex pattern
@@ -91,7 +98,7 @@ def get_datetime_from_complex_string_by_pattern(complex_string: str, date_patter
         date_timestamp = date_obj.timestamp()
         return date_obj, date_str.group(), date_timestamp
     else:
-        raise ValueError("No valid date found in the string")
+        return None, None, None
 
 
 def datetime_format_to_regex(format_str: str) -> str:

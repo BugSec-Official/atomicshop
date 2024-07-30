@@ -9,7 +9,7 @@ from typing import Literal, Union
 import threading
 from datetime import datetime
 
-from . import loggers, formatters, filters
+from . import loggers, formatters, filters, consts
 from ... import datetimes, filesystem
 
 
@@ -34,15 +34,15 @@ def _process_formatter_attribute(
     """
 
     if formatter == 'DEFAULT' and file_type is None:
-        return formatters.DEFAULT_STREAM_FORMATTER
+        return consts.DEFAULT_STREAM_FORMATTER
     elif formatter == 'DEFAULT' and file_type == 'txt':
-        return formatters.DEFAULT_FORMATTER_TXT_FILE
+        return consts.DEFAULT_FORMATTER_TXT_FILE
     elif formatter == 'DEFAULT' and file_type == 'csv':
-        return formatters.DEFAULT_FORMATTER_CSV_FILE
+        return consts.DEFAULT_FORMATTER_CSV_FILE
     elif formatter == 'DEFAULT' and file_type == 'json':
-        return formatters.DEFAULT_MESSAGE_FORMATTER
+        return consts.DEFAULT_MESSAGE_FORMATTER
     elif formatter == 'MESSAGE':
-        return formatters.DEFAULT_MESSAGE_FORMATTER
+        return consts.DEFAULT_MESSAGE_FORMATTER
     else:
         return formatter
 
