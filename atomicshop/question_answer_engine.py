@@ -4,7 +4,7 @@ import sys
 import json
 
 # Custom class imports.
-from atomicshop.filesystem import check_file_existence
+from atomicshop import filesystem
 
 
 class QAEngine:
@@ -20,7 +20,7 @@ class QAEngine:
         # Get 'qa.json' full path.
         qa_fullpath: str = script_directory + os.sep + self.qa_filename
         # Check if it exists.
-        if not check_file_existence(qa_fullpath):
+        if not filesystem.is_file_exists(qa_fullpath):
             print(f'File non-existent: {qa_fullpath}')
             sys.exit()
 

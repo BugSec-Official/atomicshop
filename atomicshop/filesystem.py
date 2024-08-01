@@ -449,7 +449,7 @@ def move_file(source_file_path: str, target_file_path: str, overwrite: bool = Tr
 
     # Check if 'no_overwrite' is set to 'True' and if the file exists.
     if not overwrite:
-        if check_file_existence(target_file_path):
+        if is_file_exists(target_file_path):
             raise FileExistsError(f'File already exists: {target_file_path}')
 
     # Move file.
@@ -532,7 +532,7 @@ def copy_file(
 
     # Check if 'no_overwrite' is set to 'True' and if the file exists.
     if no_overwrite:
-        if check_file_existence(target_file_path):
+        if is_file_exists(target_file_path):
             raise FileExistsError(f'File already exists: {target_file_path}')
 
     # Copy file.
@@ -1432,7 +1432,7 @@ def backup_file(file_path: str, backup_directory: str, timestamp_as_prefix: bool
     Final path will look like: 'C:\\Users\\user1\\Downloads\\backup\\file_20231003-120000-000000.txt'
     """
 
-    if check_file_existence(file_path):
+    if is_file_exists(file_path):
         timestamp: str = datetimes.TimeFormats().get_current_formatted_time_filename_stamp(True)
         file_name_no_extension = Path(file_path).stem
         file_extension = Path(file_path).suffix
