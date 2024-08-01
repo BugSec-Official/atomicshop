@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.14.12 - 01.08.2024
+  * etws/traces/trace_dns, mitm/statistic_analyzer - fixes and improvements.
 * 2.14.11 - 30.07.2024
   * basics/list_of_dicts, datetimes, filesystem, wrappers/loggingw - fixes and improvements.
   * setups - fixes.

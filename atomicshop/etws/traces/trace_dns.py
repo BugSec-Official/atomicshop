@@ -53,7 +53,11 @@ class DnsRequestResponseTrace:
         """
 
         self.attrs = attrs
-        self.skip_record_list = skip_record_list
+
+        if skip_record_list:
+            self.skip_record_list: list = skip_record_list
+        else:
+            self.skip_record_list: list = list()
 
         if not session_name:
             session_name = ETW_DEFAULT_SESSION_NAME
