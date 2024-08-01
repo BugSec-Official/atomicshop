@@ -1,146 +1,17 @@
+import os
 import datetime
-import statistics
 import json
-from typing import Literal, Union
+from typing import Union
 
+from .statistic_analyzer_helper import analyzer_helper, moving_average_helper
 from .. import filesystem, domains, datetimes, urls
 from ..basics import dicts
-from ..file_io import tomls, xlsxs, csvs, jsons
-from ..wrappers.loggingw import reading, consts
+from ..file_io import tomls, xlsxs, jsons
+from ..wrappers.loggingw import reading
 from ..print_api import print_api
 
 
-def get_the_last_day_number(statistics_content: list, stop_after_lines: int = None) -> int:
-    """
-    This function gets the last day number from the statistics content.
-
-    :param statistics_content: list, of lines in the statistics content.
-    :param stop_after_lines: integer, if specified, the function will stop after the specified number of lines.
-    :return: integer, the last day number.
-    """
-
-    last_day_number = None
-    start_time_temp = None
-    for line_index, line in enumerate(statistics_content):
-        try:
-            request_time = datetime.datetime.strptime(line['request_time_sent'], '%Y-%m-%d %H:%M:%S.%f')
-        except ValueError:
-            continue
-
-        if not start_time_temp:
-            start_time_temp = request_time
-
-        if stop_after_lines:
-            if line_index == stop_after_lines:
-                break
-
-        last_day_number = datetimes.get_difference_between_dates_in_days(start_time_temp, request_time)
-    return last_day_number
-
-
-def create_empty_features_dict() -> dict:
-    """
-    This function creates an empty dictionary for the daily stats. This should be initiated for each 'host_type' of:
-        'domain', 'subdomain', 'url_no_parameters'.
-    :return: dict
-    """
-
-    return {
-        'total_count': {}, 'normal_count': {}, 'error_count': {},
-        'request_0_byte_count': {}, 'response_0_byte_count': {},
-        'request_sizes_list': {}, 'response_sizes_list': {},
-        'request_sizes_no_0_bytes_list': {}, 'response_sizes_no_0_bytes_list': {},
-        'average_request_size': {}, 'average_response_size': {},
-        'average_request_size_no_0_bytes': {}, 'average_response_size_no_0_bytes': {}}
-
-
-def add_to_count_to_daily_stats(
-        daily_stats: dict, current_day: int, last_day: int, host_type: str, feature: str, host_name: str) -> None:
-    """
-    This function adds 1 to the 'count' feature of the current day in the daily stats.
-
-    :param daily_stats: dict, the daily statistics dict.
-    :param current_day: integer, the current day number.
-    :param last_day: integer, the last day number.
-    :param host_type: string, the type of the host. Can be: 'domain', 'subdomain', 'url_no_parameters'.
-    :param feature: string, the feature to add the count to. Can be: 'total_count', 'normal_count', 'error_count',
-        'request_0_byte_count', 'response_0_byte_count'.
-    :param host_name: string, the name of the host.
-
-    :return: None.
-    """
-
-    # Aggregate daily domain hits.
-    if host_name not in daily_stats[host_type][feature].keys():
-        daily_stats[host_type][feature][host_name] = {}
-        # Iterate from first day to the last day.
-        for day in range(0, last_day + 1):
-            daily_stats[host_type][feature][host_name][day] = 0
-
-    # Add count to current day.
-    daily_stats[host_type][feature][host_name][current_day] += 1
-
-
-def add_to_list_to_daily_stats(
-        daily_stats: dict, current_day: int, last_day: int, host_type: str, feature: str, host_name: str,
-        size: float) -> None:
-    """
-    This function adds the 'size' to the 'feature' list of the current day in the daily stats.
-
-    :param daily_stats: dict, the daily statistics dict.
-    :param current_day: integer, the current day number.
-    :param last_day: integer, the last day number.
-    :param host_type: string, the type of the host. Can be: 'domain', 'subdomain', 'url_no_parameters'.
-    :param feature: string, the feature to add the count to. Can be: 'request_sizes_list', 'response_sizes_list',
-        'request_sizes_no_0_bytes_list', 'response_sizes_no_0_bytes_list'.
-    :param host_name: string, the name of the host.
-    :param size: float, the size in bytes to add to the list.
-
-    :return: None.
-    """
-
-    # Aggregate daily domain hits.
-    if host_name not in daily_stats[host_type][feature].keys():
-        daily_stats[host_type][feature][host_name] = {}
-        # Iterate from first day to the last day.
-        for day in range(0, last_day + 1):
-            daily_stats[host_type][feature][host_name][day] = []
-
-    # Add count to current day.
-    daily_stats[host_type][feature][host_name][current_day].append(size)
-
-
-def add_to_average_to_daily_stats(
-        daily_stats: dict, current_day: int, last_day: int, host_type: str, feature: str, host_name: str,
-        list_of_sizes: list) -> None:
-    """
-    This function adds the average size in bytes calculated from the 'list_of_sizes' to the 'feature' of the current
-        day in the daily stats.
-
-    :param daily_stats: dict, the daily statistics dict.
-    :param current_day: integer, the current day number.
-    :param last_day: integer, the last day number.
-    :param host_type: string, the type of the host. Can be: 'domain', 'subdomain', 'url_no_parameters'.
-    :param feature: string, the feature to add the count to. Can be: 'average_request_size', 'average_response_size',
-        'average_request_size_no_0_bytes', 'average_response_size_no_0_bytes'.
-    :param host_name: string, the name of the host.
-    :param list_of_sizes: list, the list of sizes to calculate the average from.
-
-    :return: None.
-    """
-
-    # Aggregate daily domain hits.
-    if host_name not in daily_stats[host_type][feature].keys():
-        daily_stats[host_type][feature][host_name] = {}
-        # Iterate from first day to the last day.
-        for day in range(0, last_day + 1):
-            daily_stats[host_type][feature][host_name][day] = 0
-
-    # If the list of size is empty, add 0 to the average, since we cannot divide by 0.
-    if len(list_of_sizes) == 0:
-        daily_stats[host_type][feature][host_name][current_day] = 0
-    else:
-        daily_stats[host_type][feature][host_name][current_day] = sum(list_of_sizes) / len(list_of_sizes)
+STATISTICS_FILE_NAME: str = 'statistics.csv'
 
 
 def analyze(main_file_path: str):
@@ -172,9 +43,9 @@ def analyze(main_file_path: str):
         'subdomain': {'total_count': {}, 'normal_count': {}, 'error_count': {}}
     }
     daily_stats: dict = {
-        'domain': create_empty_features_dict(),
-        'subdomain': create_empty_features_dict(),
-        'url_no_parameters': create_empty_features_dict()
+        'domain': analyzer_helper.create_empty_features_dict(),
+        'subdomain': analyzer_helper.create_empty_features_dict(),
+        'url_no_parameters': analyzer_helper.create_empty_features_dict()
     }
 
     # Start the main loop.
@@ -195,7 +66,7 @@ def analyze(main_file_path: str):
 
         # Find the last day number. If 'break_after_lines' is specified, the loop will stop after the specified line.
         if not last_day_number:
-            last_day_number = get_the_last_day_number(statistics_content, break_after_lines)
+            last_day_number = analyzer_helper.get_the_last_day_number(statistics_content, break_after_lines)
 
         if break_after_lines:
             if line_index == break_after_lines:
@@ -295,87 +166,87 @@ def analyze(main_file_path: str):
         day_number = datetimes.get_difference_between_dates_in_days(start_time, request_time)
 
         # Add 1 to the total count of the current day.
-        add_to_count_to_daily_stats(
+        analyzer_helper.add_to_count_to_daily_stats(
             daily_stats, day_number, last_day_number, 'domain', 'total_count', main_domain)
-        add_to_count_to_daily_stats(
+        analyzer_helper.add_to_count_to_daily_stats(
             daily_stats, day_number, last_day_number, 'subdomain', 'total_count', subdomain)
-        add_to_count_to_daily_stats(
+        analyzer_helper.add_to_count_to_daily_stats(
             daily_stats, day_number, last_day_number, 'url_no_parameters', 'total_count', url_no_parameters)
 
         # Handle line if it has error.
         if line['error'] != '':
-            add_to_count_to_daily_stats(
+            analyzer_helper.add_to_count_to_daily_stats(
                 daily_stats, day_number, last_day_number, 'domain', 'error_count', main_domain)
-            add_to_count_to_daily_stats(
+            analyzer_helper.add_to_count_to_daily_stats(
                 daily_stats, day_number, last_day_number, 'subdomain', 'error_count', subdomain)
-            add_to_count_to_daily_stats(
+            analyzer_helper.add_to_count_to_daily_stats(
                 daily_stats, day_number, last_day_number, 'url_no_parameters', 'error_count', url_no_parameters)
         else:
-            add_to_count_to_daily_stats(
+            analyzer_helper.add_to_count_to_daily_stats(
                 daily_stats, day_number, last_day_number, 'domain', 'normal_count', main_domain)
-            add_to_count_to_daily_stats(
+            analyzer_helper.add_to_count_to_daily_stats(
                 daily_stats, day_number, last_day_number, 'subdomain', 'normal_count', subdomain)
-            add_to_count_to_daily_stats(
+            analyzer_helper.add_to_count_to_daily_stats(
                 daily_stats, day_number, last_day_number, 'url_no_parameters', 'normal_count', url_no_parameters)
 
         if request_size == 0:
-            add_to_count_to_daily_stats(
+            analyzer_helper.add_to_count_to_daily_stats(
                 daily_stats, day_number, last_day_number, 'domain', 'request_0_byte_count',
                 main_domain)
-            add_to_count_to_daily_stats(
+            analyzer_helper.add_to_count_to_daily_stats(
                 daily_stats, day_number, last_day_number, 'subdomain', 'request_0_byte_count',
                 subdomain)
-            add_to_count_to_daily_stats(
+            analyzer_helper.add_to_count_to_daily_stats(
                 daily_stats, day_number, last_day_number, 'url_no_parameters', 'request_0_byte_count',
                 url_no_parameters)
 
         if response_size == 0:
-            add_to_count_to_daily_stats(
+            analyzer_helper.add_to_count_to_daily_stats(
                 daily_stats, day_number, last_day_number, 'domain', 'response_0_byte_count',
                 main_domain)
-            add_to_count_to_daily_stats(
+            analyzer_helper.add_to_count_to_daily_stats(
                 daily_stats, day_number, last_day_number, 'subdomain', 'response_0_byte_count',
                 subdomain)
-            add_to_count_to_daily_stats(
+            analyzer_helper.add_to_count_to_daily_stats(
                 daily_stats, day_number, last_day_number, 'url_no_parameters', 'response_0_byte_count',
                 url_no_parameters)
 
         if request_size is not None and response_size is not None:
-            add_to_list_to_daily_stats(
+            analyzer_helper.add_to_list_to_daily_stats(
                 daily_stats, day_number, last_day_number, 'domain', 'request_sizes_list', main_domain, request_size)
-            add_to_list_to_daily_stats(
+            analyzer_helper.add_to_list_to_daily_stats(
                 daily_stats, day_number, last_day_number, 'subdomain', 'request_sizes_list', subdomain, request_size)
-            add_to_list_to_daily_stats(
+            analyzer_helper.add_to_list_to_daily_stats(
                 daily_stats, day_number, last_day_number, 'url_no_parameters', 'request_sizes_list', url_no_parameters,
                 request_size)
 
-            add_to_list_to_daily_stats(
+            analyzer_helper.add_to_list_to_daily_stats(
                 daily_stats, day_number, last_day_number, 'domain', 'response_sizes_list', main_domain, response_size)
-            add_to_list_to_daily_stats(
+            analyzer_helper.add_to_list_to_daily_stats(
                 daily_stats, day_number, last_day_number, 'subdomain', 'response_sizes_list', subdomain, response_size)
-            add_to_list_to_daily_stats(
+            analyzer_helper.add_to_list_to_daily_stats(
                 daily_stats, day_number, last_day_number, 'url_no_parameters', 'response_sizes_list', url_no_parameters,
                 response_size)
 
         if request_size != 0 and request_size is not None:
-            add_to_list_to_daily_stats(
+            analyzer_helper.add_to_list_to_daily_stats(
                 daily_stats, day_number, last_day_number, 'domain', 'request_sizes_no_0_bytes_list',
                 main_domain, request_size)
-            add_to_list_to_daily_stats(
+            analyzer_helper.add_to_list_to_daily_stats(
                 daily_stats, day_number, last_day_number, 'subdomain', 'request_sizes_no_0_bytes_list',
                 subdomain, request_size)
-            add_to_list_to_daily_stats(
+            analyzer_helper.add_to_list_to_daily_stats(
                 daily_stats, day_number, last_day_number, 'url_no_parameters', 'request_sizes_no_0_bytes_list',
                 url_no_parameters, request_size)
 
         if response_size != 0 and response_size is not None:
-            add_to_list_to_daily_stats(
+            analyzer_helper.add_to_list_to_daily_stats(
                 daily_stats, day_number, last_day_number, 'domain', 'response_sizes_no_0_bytes_list',
                 main_domain, response_size)
-            add_to_list_to_daily_stats(
+            analyzer_helper.add_to_list_to_daily_stats(
                 daily_stats, day_number, last_day_number, 'subdomain', 'response_sizes_no_0_bytes_list',
                 subdomain, response_size)
-            add_to_list_to_daily_stats(
+            analyzer_helper.add_to_list_to_daily_stats(
                 daily_stats, day_number, last_day_number, 'url_no_parameters', 'response_sizes_no_0_bytes_list',
                 url_no_parameters, response_size)
 
@@ -397,7 +268,7 @@ def analyze(main_file_path: str):
 
             for host_name, days in hosts.items():
                 for day, sizes in days.items():
-                    add_to_average_to_daily_stats(
+                    analyzer_helper.add_to_average_to_daily_stats(
                         daily_stats, day, last_day_number, host_type, feature_name, host_name, sizes)
 
     # Sorting overall stats.
@@ -473,324 +344,37 @@ def analyze(main_file_path: str):
 # ======================================================================================================================
 
 
-def calculate_moving_average(
-        file_path: str,
-        moving_average_window_days,
-        top_bottom_deviation_percentage: float,
-        print_kwargs: dict = None
-) -> list:
-    """
-    This function calculates the moving average of the daily statistics.
-
-    :param file_path: string, the path to the 'statistics.csv' file.
-    :param moving_average_window_days: integer, the window size for the moving average.
-    :param top_bottom_deviation_percentage: float, the percentage of deviation from the moving average to the top or
-        bottom.
-    :param print_kwargs: dict, the print_api arguments.
-    """
-
-    date_pattern: str = consts.DEFAULT_ROTATING_SUFFIXES_FROM_WHEN['midnight']
-
-    # Get all the file paths and their midnight rotations.
-    logs_paths: list = reading.get_logs_paths(
-        log_file_path=file_path,
-        date_pattern=date_pattern
-    )
-
-    statistics_content: dict = {}
-    # Read each file to its day.
-    for log_path_dict in logs_paths:
-        date_string = log_path_dict['date_string']
-        statistics_content[date_string] = {}
-
-        statistics_content[date_string]['file'] = log_path_dict
-
-        log_file_content, log_file_header = (
-            csvs.read_csv_to_list_of_dicts_by_header(log_path_dict['file_path'], **(print_kwargs or {})))
-        statistics_content[date_string]['content'] = log_file_content
-        statistics_content[date_string]['header'] = log_file_header
-
-        statistics_content[date_string]['content_no_errors'] = get_content_without_errors(log_file_content)
-
-        # Get the data dictionary from the statistics content.
-        statistics_content[date_string]['statistics_daily'] = compute_statistics_from_content(
-            statistics_content[date_string]['content_no_errors']
-        )
-
-    moving_average_dict: dict = compute_moving_averages_from_average_statistics(
-        statistics_content,
-        moving_average_window_days
-    )
-
-    # Add the moving average to the statistics content.
-    for day, day_dict in statistics_content.items():
-        try:
-            day_dict['moving_average'] = moving_average_dict[day]
-        except KeyError:
-            day_dict['moving_average'] = {}
-
-    # Find deviation from the moving average to the bottom or top by specified percentage.
-    deviation_list: list = find_deviation_from_moving_average(
-        statistics_content, top_bottom_deviation_percentage)
-
-    return deviation_list
-
-
-def get_content_without_errors(content: list) -> list:
-    """
-    This function gets the 'statistics.csv' file content without errors from the 'content' list.
-
-    :param content: list, the content list.
-    :return: list, the content without errors.
-    """
-
-    traffic_statistics_without_errors: list = []
-    for line in content:
-        # Skip empty lines, headers and errors.
-        if line['host'] == 'host' or line['command'] == '':
-            continue
-
-        traffic_statistics_without_errors.append(line)
-
-    return traffic_statistics_without_errors
-
-
-def get_data_dict_from_statistics_content(content: list) -> dict:
-    """
-    This function gets the data dictionary from the 'statistics.csv' file content.
-
-    :param content: list, the content list.
-    :return: dict, the data dictionary.
-    """
-
-    hosts_requests_responses: dict = {}
-    for line in content:
-        # If subdomain is not in the dictionary, add it.
-        if line['host'] not in hosts_requests_responses:
-            hosts_requests_responses[line['host']] = {
-                'request_sizes': [],
-                'response_sizes': []
-            }
-
-        # Append the sizes.
-        try:
-            hosts_requests_responses[line['host']]['request_sizes'].append(int(line['request_size_bytes']))
-            hosts_requests_responses[line['host']]['response_sizes'].append(
-                int(line['response_size_bytes']))
-        except ValueError:
-            print_api(line, color='yellow')
-            raise
-
-    return hosts_requests_responses
-
-
-def compute_statistics_from_data_dict(data_dict: dict):
-    """
-    This function computes the statistics from the data dictionary.
-
-    :param data_dict: dict, the data dictionary.
-    :return: dict, the statistics dictionary.
-    """
-
-    for host, host_dict in data_dict.items():
-        count = len(host_dict['request_sizes'])
-        avg_request_size = statistics.mean(host_dict['request_sizes']) if count > 0 else 0
-        median_request_size = statistics.median(host_dict['request_sizes']) if count > 0 else 0
-        avg_response_size = statistics.mean(host_dict['response_sizes']) if count > 0 else 0
-        median_response_size = statistics.median(host_dict['response_sizes']) if count > 0 else 0
-
-        data_dict[host]['count'] = count
-        data_dict[host]['avg_request_size'] = avg_request_size
-        data_dict[host]['median_request_size'] = median_request_size
-        data_dict[host]['avg_response_size'] = avg_response_size
-        data_dict[host]['median_response_size'] = median_response_size
-
-
-def compute_statistics_from_content(content: list):
-    """
-    This function computes the statistics from the 'statistics.csv' file content.
-
-    :param content: list, the content list.
-    :return: dict, the statistics dictionary.
-    """
-
-    hosts_requests_responses: dict = get_data_dict_from_statistics_content(content)
-    compute_statistics_from_data_dict(hosts_requests_responses)
-
-    return hosts_requests_responses
-
-
-def compute_moving_averages_from_average_statistics(
-        average_statistics_dict: dict,
-        moving_average_window_days: int
-):
-    """
-    This function computes the moving averages from the average statistics dictionary.
-
-    :param average_statistics_dict: dict, the average statistics dictionary.
-    :param moving_average_window_days: integer, the window size for the moving average.
-    :return: dict, the moving averages dictionary.
-    """
-
-    moving_average: dict = {}
-    for day_index, (day, day_dict) in enumerate(average_statistics_dict.items()):
-        current_day = day_index + 1
-        if current_day < moving_average_window_days:
-            continue
-
-        # Create list of the previous 'moving_average_window_days' days.
-        previous_days_content_list = (
-            list(average_statistics_dict.values()))[current_day-moving_average_window_days:current_day]
-
-        # Compute the moving averages.
-        moving_average[day] = compute_average_for_current_day_from_past_x_days(previous_days_content_list)
-
-    return moving_average
-
-
-def compute_average_for_current_day_from_past_x_days(previous_days_content_list: list) -> dict:
-    """
-    This function computes the average for the current day from the past x days.
-
-    :param previous_days_content_list: list, the list of the previous days content.
-    :return: dict, the average dictionary.
-    """
-
-    moving_average: dict = {}
-    for entry in previous_days_content_list:
-        statistics_daily = entry['statistics_daily']
-        for host, host_dict in statistics_daily.items():
-            if host not in moving_average:
-                moving_average[host] = {
-                    'counts': [],
-                    'avg_request_sizes': [],
-                    'avg_response_sizes': [],
-                }
-
-            moving_average[host]['counts'].append(int(host_dict['count']))
-            moving_average[host]['avg_request_sizes'].append(float(host_dict['avg_request_size']))
-            moving_average[host]['avg_response_sizes'].append(float(host_dict['avg_response_size']))
-
-    # Compute the moving average.
-    moving_average_results: dict = {}
-    for host, host_dict in moving_average.items():
-        ma_count = statistics.mean(host_dict['counts'])
-        ma_request_size = statistics.mean(host_dict['avg_request_sizes'])
-        ma_response_size = statistics.mean(host_dict['avg_response_sizes'])
-
-        moving_average_results[host] = {
-            'ma_count': ma_count,
-            'ma_request_size': ma_request_size,
-            'ma_response_size': ma_response_size,
-            'counts': host_dict['counts'],
-            'avg_request_sizes': host_dict['avg_request_sizes'],
-            'avg_response_sizes': host_dict['avg_response_sizes']
-        }
-
-    return moving_average_results
-
-
-def find_deviation_from_moving_average(
-        statistics_content: dict,
-        top_bottom_deviation_percentage: float
-) -> list:
-    """
-    This function finds the deviation from the moving average to the bottom or top by specified percentage.
-
-    :param statistics_content: dict, the statistics content dictionary.
-    :param top_bottom_deviation_percentage: float, the percentage of deviation from the moving average to the top or
-        bottom.
-    :return: list, the deviation list.
-    """
-
-    def _check_deviation(
-            check_type: Literal['count', 'avg_request_size', 'avg_response_size'],
-            ma_check_type: Literal['ma_count', 'ma_request_size', 'ma_response_size'],
-            day_statistics_content_dict: dict,
-            moving_averages_dict: dict
-    ):
-        """
-        This function checks the deviation for the host.
-        """
-
-        nonlocal message
-
-        host_moving_average_by_type = moving_averages_dict[host][ma_check_type]
-        check_type_moving_by_percent = (
-                host_moving_average_by_type * top_bottom_deviation_percentage)
-        check_type_moving_above = host_moving_average_by_type + check_type_moving_by_percent
-        check_type_moving_below = host_moving_average_by_type - check_type_moving_by_percent
-
-        deviation_type = None
-        if day_statistics_content_dict[check_type] > check_type_moving_above:
-            deviation_type = 'above'
-        elif day_statistics_content_dict[check_type] < check_type_moving_below:
-            deviation_type = 'below'
-
-        if deviation_type:
-            message = f'[{check_type}] is [{deviation_type}] the moving average.'
-            deviation_list.append({
-                'day': day,
-                'host': host,
-                'message': message,
-                'value': day_statistics_content_dict[check_type],
-                'ma_value': host_moving_average_by_type,
-                'check_type': check_type,
-                'percentage': top_bottom_deviation_percentage,
-                'ma_value_checked': check_type_moving_above,
-                'deviation_type': deviation_type,
-                'data': day_statistics_content_dict,
-                'ma_data': moving_averages_dict[host]
-            })
-
-    deviation_list: list = []
-    for day_index, (day, day_dict) in enumerate(statistics_content.items()):
-        # If it's the first day, there is no previous day moving average.
-        if day_index == 0:
-            previous_day_moving_average_dict = {}
-        else:
-            previous_day_moving_average_dict = list(statistics_content.values())[day_index-1].get('moving_average', {})
-
-        # If there is no moving average for previous day continue to the next day.
-        if not previous_day_moving_average_dict:
-            continue
-
-        for host, host_dict in day_dict['statistics_daily'].items():
-            # If the host is not in the moving averages, then this is clear deviation.
-            # It means that in the current day, there were no requests for this host.
-            if host not in previous_day_moving_average_dict:
-                message = f'Host not in the moving averages: {host}'
-                deviation_list.append({
-                    'day': day,
-                    'host': host,
-                    'data': host_dict,
-                    'message': message,
-                    'type': 'clear'
-                })
-                continue
-
-            _check_deviation(
-                'count', 'ma_count', host_dict, previous_day_moving_average_dict)
-            _check_deviation(
-                'avg_request_size', 'ma_request_size', host_dict, previous_day_moving_average_dict)
-            _check_deviation(
-                'avg_response_size', 'ma_response_size', host_dict, previous_day_moving_average_dict)
-
-    return deviation_list
-
-
-def moving_average_calculator_main(
-        statistics_file_path: str,
+def deviation_calculator_by_moving_average_main(
+        statistics_file_directory: str,
         moving_average_window_days: int,
         top_bottom_deviation_percentage: float,
+        get_deviation_for_last_day_only: bool = False,
+        summary: bool = False,
         output_json_file_path: str = None
 ) -> Union[list, None]:
     """
     This function is the main function for the moving average calculator.
 
-    :param statistics_file_path: string, the statistics file path.
+    :param statistics_file_directory: string, the directory where 'statistics.csv' file resides.
+        Also, all the rotated files like: statistics_2021-01-01.csv, statistics_2021-01-02.csv, etc.
+        These will be analyzed in the order of the date in the file name.
     :param moving_average_window_days: integer, the moving average window days.
     :param top_bottom_deviation_percentage: float, the top bottom deviation percentage. Example: 0.1 for 10%.
+    :param get_deviation_for_last_day_only: bool, if True, only the last day will be analyzed.
+        Example: With 'moving_average_window_days=5', the last 6 days will be analyzed.
+        5 days for moving average and the last day for deviation.
+        File names example:
+            statistics_2021-01-01.csv
+            statistics_2021-01-02.csv
+            statistics_2021-01-03.csv
+            statistics_2021-01-04.csv
+            statistics_2021-01-05.csv
+            statistics_2021-01-06.csv
+        Files 01 to 05 will be used for moving average and the file 06 for deviation.
+        Meaning the average calculated for 2021-01-06 will be compared to the values moving average of 2021-01-01
+        to 2021-01-05.
+    :param summary: bool, if True, Only the summary will be generated without all the numbers that were used
+        to calculate the averages and the moving average data.
     :param output_json_file_path: string, if None, no json file will be written.
     -----------------------------
     :return: the deviation list of dicts.
@@ -813,6 +397,8 @@ def moving_average_calculator_main(
         sys.exit(main())
     """
 
+    statistics_file_path: str = f'{statistics_file_directory}{os.sep}{STATISTICS_FILE_NAME}'
+
     def convert_data_value_to_string(value_key: str, list_index: int) -> None:
         deviation_list[list_index]['data'][value_key] = json.dumps(deviation_list[list_index]['data'][value_key])
 
@@ -820,10 +406,11 @@ def moving_average_calculator_main(
         if value_key in deviation_list[list_index]:
             deviation_list[list_index][value_key] = json.dumps(deviation_list[list_index][value_key])
 
-    deviation_list = calculate_moving_average(
+    deviation_list = moving_average_helper.calculate_moving_average(
         statistics_file_path,
         moving_average_window_days,
-        top_bottom_deviation_percentage
+        top_bottom_deviation_percentage,
+        get_deviation_for_last_day_only
     )
 
     if deviation_list:
@@ -835,6 +422,20 @@ def moving_average_calculator_main(
 
             print_api(f'Deviation Found, saving to file: {output_json_file_path}', color='blue')
             jsons.write_json_file(deviation_list, output_json_file_path, use_default_indent=True)
+
+        if summary:
+            summary_deviation_list: list = []
+            for deviation in deviation_list:
+                summary_deviation_list.append({
+                    'day': deviation['day'],
+                    'host': deviation['host'],
+                    'message': deviation['message'],
+                    'value': deviation['value'],
+                    'ma_value': deviation['ma_value'],
+                    'total_entries_averaged': deviation['data']['count']
+                })
+
+            deviation_list = summary_deviation_list
 
         return deviation_list
 

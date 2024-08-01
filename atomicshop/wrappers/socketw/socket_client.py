@@ -344,7 +344,7 @@ class SocketClient:
         elif save_as_file and cert_file_path:
             # If certificate from socket exists, then we don't need to get it from the socket and write to file.
             # and we will return None, since no certificate was fetched.
-            if filesystem.check_file_existence(cert_file_path):
+            if filesystem.is_file_exists(cert_file_path):
                 return None
             else:
                 print_api("Certificate from socket doesn't exist, fetching.", logger=self.logger)

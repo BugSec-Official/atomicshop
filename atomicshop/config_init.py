@@ -58,7 +58,7 @@ def write_config(
 
     config_file_path = f'{script_directory}{os.sep}{config_file_name}'
 
-    if not filesystem.check_file_existence(config_file_path):
+    if not filesystem.is_file_exists(config_file_path):
         tomls.write_toml_file(config, f'{script_directory}{os.sep}{config_file_name}')
 
         if print_message:

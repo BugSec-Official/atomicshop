@@ -89,7 +89,7 @@ def is_elastic_config_file_exists(
         config_file_path = config_basic.ELASTIC_CONFIG_FILE
 
     # if not ubuntu_terminal.is_sudo_file_exists(config_file_path):
-    if not filesystem.check_file_existence(config_file_path):
+    if not filesystem.is_file_exists(config_file_path):
         if output_message:
             message = f"Configuration file does not exist at {config_file_path}."
             print_api(message, color='red', error_type=True)

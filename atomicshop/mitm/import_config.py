@@ -1,7 +1,7 @@
 import sys
 
 from ..wrappers.configparserw import ConfigParserWrapper
-from ..filesystem import check_file_existence
+from .. import filesystem
 from ..permissions import is_admin
 from ..basics.booleans import check_3_booleans_when_only_1_can_be_true
 
@@ -125,13 +125,13 @@ class ImportConfig:
         # If 'custom_certificate_usage' was set to 'True'.
         if self.config['certificates']['custom_server_certificate_usage']:
             # Check file existence.
-            if not check_file_existence(file_path=self.config['certificates']['custom_server_certificate_path']):
+            if not filesystem.is_file_exists(file_path=self.config['certificates']['custom_server_certificate_path']):
                 raise FileNotFoundError
 
             # And if 'custom_private_key_path' field was populated in [advanced] section, we'll check its existence.
             if self.config['certificates']['custom_private_key_path']:
                 # Check private key file existence.
-                if not check_file_existence(file_path=self.config['certificates']['custom_private_key_path']):
+                if not filesystem.is_file_exists(file_path=self.config['certificates']['custom_private_key_path']):
                     raise FileNotFoundError
 
         skip_extensions: list = list()
