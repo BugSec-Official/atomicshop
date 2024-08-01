@@ -1,13 +1,12 @@
-import os
 import datetime
 import statistics
 import json
-from typing import Literal
+from typing import Literal, Union
 
 from .. import filesystem, domains, datetimes, urls
 from ..basics import dicts
 from ..file_io import tomls, xlsxs, csvs, jsons
-from ..wrappers.loggingw import reading
+from ..wrappers.loggingw import reading, consts
 from ..print_api import print_api
 
 
@@ -479,7 +478,7 @@ def calculate_moving_average(
         moving_average_window_days,
         top_bottom_deviation_percentage: float,
         print_kwargs: dict = None
-):
+) -> list:
     """
     This function calculates the moving average of the daily statistics.
 
@@ -490,7 +489,7 @@ def calculate_moving_average(
     :param print_kwargs: dict, the print_api arguments.
     """
 
-    date_pattern: str = '%Y_%m_%d'
+    date_pattern: str = consts.DEFAULT_ROTATING_SUFFIXES_FROM_WHEN['midnight']
 
     # Get all the file paths and their midnight rotations.
     logs_paths: list = reading.get_logs_paths(
@@ -782,19 +781,19 @@ def find_deviation_from_moving_average(
 
 def moving_average_calculator_main(
         statistics_file_path: str,
-        output_directory: str,
         moving_average_window_days: int,
-        top_bottom_deviation_percentage: float
-) -> int:
+        top_bottom_deviation_percentage: float,
+        output_json_file_path: str = None
+) -> Union[list, None]:
     """
     This function is the main function for the moving average calculator.
 
     :param statistics_file_path: string, the statistics file path.
-    :param output_directory: string, the output directory.
     :param moving_average_window_days: integer, the moving average window days.
     :param top_bottom_deviation_percentage: float, the top bottom deviation percentage. Example: 0.1 for 10%.
-    :return: integer, the return code.
+    :param output_json_file_path: string, if None, no json file will be written.
     -----------------------------
+    :return: the deviation list of dicts.
 
     Example:
     import sys
@@ -804,9 +803,9 @@ def moving_average_calculator_main(
     def main():
         return statistic_analyzer.moving_average_calculator_main(
             statistics_file_path='statistics.csv',
-            output_directory='output',
             moving_average_window_days=7,
-            top_bottom_deviation_percentage=0.1
+            top_bottom_deviation_percentage=0.1,
+            output_json_file='C:\\output\\deviation_list.json'
         )
 
 
@@ -828,13 +827,15 @@ def moving_average_calculator_main(
     )
 
     if deviation_list:
-        for deviation_list_index, deviation in enumerate(deviation_list):
-            convert_data_value_to_string('request_sizes', deviation_list_index)
-            convert_data_value_to_string('response_sizes', deviation_list_index)
-            convert_value_to_string('ma_data', deviation_list_index)
+        if output_json_file_path:
+            for deviation_list_index, deviation in enumerate(deviation_list):
+                convert_data_value_to_string('request_sizes', deviation_list_index)
+                convert_data_value_to_string('response_sizes', deviation_list_index)
+                convert_value_to_string('ma_data', deviation_list_index)
 
-        file_path = output_directory + os.sep + 'deviation.json'
-        print_api(f'Deviation Found, saving to file: {file_path}', color='blue')
-        jsons.write_json_file(deviation_list, file_path, use_default_indent=True)
+            print_api(f'Deviation Found, saving to file: {output_json_file_path}', color='blue')
+            jsons.write_json_file(deviation_list, output_json_file_path, use_default_indent=True)
 
-    return 0
+        return deviation_list
+
+    return None
