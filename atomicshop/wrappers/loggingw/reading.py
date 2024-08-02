@@ -92,13 +92,13 @@ def get_logs_paths(
                 logs_files[file_index]['datetime'] = datetime_object
                 logs_files[file_index]['date_string'] = date_string
 
-                if timestamp_float > latest_timestamp:
+                if timestamp_float and timestamp_float > latest_timestamp:
                     latest_timestamp = timestamp_float
 
             # Now, there should be a file that doesn't have the string date pattern in the file name.
             # We will add one day to the latest date that we found and assign to that file path.
             for file_index, single_file in enumerate(logs_files):
-                if single_file['last_modified'] == 0:
+                if single_file['last_modified'] is None:
                     latest_timestamp += 86400
                     logs_files[file_index]['last_modified'] = latest_timestamp
                     logs_files[file_index]['datetime'] = datetime.datetime.fromtimestamp(latest_timestamp)
@@ -121,7 +121,6 @@ def get_logs_paths(
     # If the 'previous_day_only' is True, then there are no previous day logs to output.
     elif len(logs_files) == 1 and previous_day_only:
         logs_files = []
-
 
     return logs_files
 
