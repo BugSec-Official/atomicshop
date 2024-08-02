@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.14.14 - 02.08.2024
+  * filesystem, wrappers/loggingw/reading - fixes and improvements.
 * 2.14.13 - 01.08.2024
   * filesystem, mitm/statistic_analyzer - fixes and improvements.
 * 2.14.12 - 01.08.2024

@@ -465,6 +465,17 @@ def move_folder(source_directory: str, target_directory: str, overwrite: bool = 
     :param overwrite: boolean, if 'False', then the function will not overwrite the directory if it exists.
 
     :return: None
+
+    ------------------------------
+
+    Example:
+    source_directory = 'C:/Users/user1/Downloads/folder-to-move'
+    target_directory = 'C:/Users/user1/Documents'
+    move_folder(source_directory, target_directory)
+
+    Result path of the 'folder-to-move' will be:
+    'C:/Users/user1/Documents/folder-to-move'
+
     """
 
     # Check if 'overwrite' is set to 'True' and if the directory exists.
