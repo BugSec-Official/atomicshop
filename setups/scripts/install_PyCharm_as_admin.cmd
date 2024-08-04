@@ -1,1 +1,1 @@
-python -m atomicshop.mains.installs.pycharm
+python -m atomicshop.mains.installs.win.pycharm

@@ -15,10 +15,15 @@ def get_process_using_port(port: int) -> Union[dict, None]:
             connections = proc.connections(kind='inet')
             for conn in connections:
                 if conn.laddr.port == port:
+                    cmdline = proc.info['cmdline']
+                    if not cmdline:
+                        cmdline = '<EMPTY: TRY RUNNING AS ADMIN>'
+                    else:
+                        cmdline = shlex.join(cmdline)
                     return {
                         'pid': proc.info['pid'],
                         'name': proc.info['name'],
-                        'cmdline': shlex.join(proc.info['cmdline'])
+                        'cmdline': cmdline
                     }
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             pass
