@@ -146,7 +146,12 @@ def get_page_content(
     return result
 
 
-def download(file_url: str, target_directory: str = None, file_name: str = None, **kwargs) -> str:
+def download(
+        file_url: str,
+        target_directory: str = None,
+        file_name: str = None,
+        **kwargs
+) -> str:
     """
     The function receives url and target filesystem directory to download the file.
 

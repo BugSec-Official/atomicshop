@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.15.0 - 04.08.2024
+  * wrappers/mongodbw - initial release.
+  * urls, web, wrappers/psutilw/networks - fixes and improvements.
 * 2.14.14 - 02.08.2024
   * filesystem, wrappers/loggingw/reading - fixes and improvements.
 * 2.14.13 - 01.08.2024
