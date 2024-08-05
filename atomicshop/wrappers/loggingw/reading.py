@@ -7,6 +7,10 @@ from ... import filesystem, datetimes
 from ...file_io import csvs
 
 
+class LogReaderTimeCouldntBeFoundInFileNameError(Exception):
+    pass
+
+
 def get_logs_paths(
         log_files_directory_path: str = None,
         log_file_path: str = None,
@@ -94,6 +98,13 @@ def get_logs_paths(
 
                 if timestamp_float and timestamp_float > latest_timestamp:
                     latest_timestamp = timestamp_float
+
+            # Check timestamps, if more than 1 file is None, then the function that gets the date from the file name
+            # didn't work properly, probably because of the string datetime format or the filenames.
+            none_timestamps = [single_file['last_modified'] for single_file in logs_files].count(None)
+            if none_timestamps > 1:
+                raise LogReaderTimeCouldntBeFoundInFileNameError(
+                    'The date pattern could not be found in the file name. Check the date pattern and the file names.')
 
             # Now, there should be a file that doesn't have the string date pattern in the file name.
             # We will add one day to the latest date that we found and assign to that file path.
