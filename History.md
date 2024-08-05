@@ -1,6 +1,10 @@
 <!-- HISTORY -->
 ## History
 
+* 2.15.1 - 05.08.2024
+  * moved 'installs' out of 'mains'.
+  * re-arrangements in 'addons'.
+  * filesystem, wrappers/mongodbw, wrappers/msiw, wrappers/psutilw/processes - fixes and improvements.
 * 2.15.0 - 04.08.2024
   * wrappers/mongodbw - initial release.
   * urls, web, wrappers/psutilw/networks - fixes and improvements.

@@ -1453,3 +1453,17 @@ def backup_file(file_path: str, backup_directory: str, timestamp_as_prefix: bool
             file_name: str = f"{file_name_no_extension}_{timestamp}{file_extension}"
         backup_file_path: str = str(Path(backup_directory) / file_name)
         move_file(file_path, backup_file_path)
+
+
+def find_file(file_name: str, directory_path: str):
+    """
+    The function finds the file in the directory recursively.
+    :param file_name: string, The name of the file to find.
+    :param directory_path: string, The directory to search in.
+    :return:
+    """
+    for dirpath, dirnames, filenames in os.walk(directory_path):
+        for filename in filenames:
+            if filename == file_name:
+                return os.path.join(dirpath, filename)
+    return None
