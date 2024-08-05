@@ -1,12 +1,15 @@
 import os
-import subprocess
 import requests
+from typing import Union
 
-from ... import urls, web
+from ... import urls, web, permissions, get_process_list, filesystem
 from ...print_api import print_api
+from .. import msiw
 
 
 MONGODB_DOWNLOAD_PAGE_URL: str = 'https://www.mongodb.com/try/download/community'
+WHERE_TO_SEARCH_FOR_MONGODB_EXE: str = 'C:\\Program Files\\MongoDB\\Server\\'
+MONGODB_EXE_NAME: str = 'mongod.exe'
 
 
 class MongoDBWebPageNoSuccessCodeError(Exception):
@@ -49,6 +52,7 @@ def get_latest_mongodb_download_url(
         for url in windows_urls:
             if f'-{major_specific}.' in url:
                 windows_urls = [url]
+                break
 
     if not windows_urls:
         raise MongoDBNoDownloadLinkForWindowsError(
@@ -58,32 +62,28 @@ def get_latest_mongodb_download_url(
     return windows_urls[0]
 
 
-def install_mongodb(installer_path):
-    try:
-        subprocess.run([installer_path, '/install', '/quiet', '/norestart'], check=True)
-        print_api("MongoDB installation completed successfully.", color='green')
-    except subprocess.CalledProcessError as e:
-        raise MongoDBInstallationError(
-            f"An error occurred during the installation: {e}\n"
-            f"Try running manually: {installer_path}")
+def is_service_running() -> bool:
+    """
+    Check if the MongoDB service is running.
+    :return: bool, True if the MongoDB service is running, False otherwise.
+    """
+    current_processes: dict = (
+        get_process_list.GetProcessList(get_method='pywin32', connect_on_init=True).get_processes())
+
+    for pid, process_info in current_processes.items():
+        if MONGODB_EXE_NAME in process_info['name']:
+            return True
+
+    return False
 
 
-def is_installed() -> bool:
+def is_installed() -> Union[str, None]:
     """
     Check if MongoDB is installed.
-    :return: bool, True if MongoDB is installed, False otherwise.
+    :return: string if MongoDB executable is found, None otherwise.
     """
-    try:
-        # Run the 'mongo' command to see if MongoDB is installed
-        result = subprocess.run(['mongo', '--version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
-        # Check the return code
-        if result.returncode == 0:
-            return True
-        else:
-            return False
-    except FileNotFoundError:
-        return False
+    return filesystem.find_file(MONGODB_EXE_NAME, WHERE_TO_SEARCH_FOR_MONGODB_EXE)
 
 
 def download_install_latest_main(
@@ -99,11 +99,26 @@ def download_install_latest_main(
     :return:
     """
 
-    if is_installed():
-        print_api("MongoDB is already installed.", color='blue')
+    if not permissions.is_admin():
+        print_api("This function requires administrator privileges.", color='red')
+        return 1
+
+    if is_service_running():
+        print_api("MongoDB service is running - already installed.", color='blue')
 
         if not force:
             return 0
+    else:
+        print_api("MongoDB is service is not running.")
+
+        mongo_is_installed: Union[str, None] = is_installed()
+        if is_installed():
+            message = f"MongoDB is installed in: {mongo_is_installed}\n" \
+                      f"The service is not running. Fix the service or use the 'force' parameter to reinstall."
+            print_api(message, color='yellow')
+
+            if not force:
+                return 0
 
     print_api("Fetching the latest MongoDB download URL...")
     mongo_installer_url = get_latest_mongodb_download_url(no_rc_version=no_rc_version, major_specific=major_specific)
@@ -112,7 +127,37 @@ def download_install_latest_main(
     installer_file_path: str = web.download(mongo_installer_url)
 
     print_api("Installing MongoDB...")
-    install_mongodb(installer_file_path)
+    try:
+        msiw.install_msi(
+            installer_file_path,
+            silent_no_gui=True,
+            no_restart=True,
+            terminate_required_processes=True,
+            create_log_near_msi=True,
+            scan_log_for_errors=True,
+            additional_args='ADDLOCAL="ServerService"'
+        )
+    except msiw.MsiInstallationError as e:
+        print_api(f'{e} Exiting...', color='red')
+        return 1
+
+    # Check if MongoDB is installed.
+    message: str = ''
+    mongo_is_installed = is_installed()
+    if not mongo_is_installed:
+        message += "MongoDB Executable not found.\n"
+
+    if not is_service_running():
+        message += "MongoDB service is not running.\n"
+
+    if message:
+        message += f"MSI Path: {installer_file_path}"
+        print_api(message, color='red')
+        return 1
+    else:
+        success_message: str = f"MongoDB installed successfully to: {mongo_is_installed}\n" \
+                               f"Service is running."
+        print_api(success_message, color='green')
 
     # Clean up the installer file
     if os.path.exists(installer_file_path):
