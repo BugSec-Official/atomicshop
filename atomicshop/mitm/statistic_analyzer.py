@@ -1,12 +1,12 @@
 import os
 import datetime
 import json
-from typing import Union
+from typing import Union, Literal
 
 from .statistic_analyzer_helper import analyzer_helper, moving_average_helper
 from .. import filesystem, domains, datetimes, urls
 from ..basics import dicts
-from ..file_io import tomls, xlsxs, jsons
+from ..file_io import tomls, xlsxs, jsons, csvs
 from ..wrappers.loggingw import reading
 from ..print_api import print_api
 
@@ -350,7 +350,8 @@ def deviation_calculator_by_moving_average_main(
         top_bottom_deviation_percentage: float,
         get_deviation_for_last_day_only: bool = False,
         summary: bool = False,
-        output_json_file_path: str = None
+        output_file_path: str = None,
+        output_file_type: Literal['json', 'csv'] = 'json'
 ) -> Union[list, None]:
     """
     This function is the main function for the moving average calculator.
@@ -375,7 +376,8 @@ def deviation_calculator_by_moving_average_main(
         to 2021-01-05.
     :param summary: bool, if True, Only the summary will be generated without all the numbers that were used
         to calculate the averages and the moving average data.
-    :param output_json_file_path: string, if None, no json file will be written.
+    :param output_file_path: string, if None, no file will be written.
+    :param output_file_type: string, the type of the output file. 'json' or 'csv'.
     -----------------------------
     :return: the deviation list of dicts.
 
@@ -397,6 +399,9 @@ def deviation_calculator_by_moving_average_main(
         sys.exit(main())
     """
 
+    if output_file_type not in ['json', 'csv']:
+        raise ValueError(f'output_file_type must be "json" or "csv", not [{output_file_type}]')
+
     statistics_file_path: str = f'{statistics_file_directory}{os.sep}{STATISTICS_FILE_NAME}'
 
     def convert_data_value_to_string(value_key: str, list_index: int) -> None:
@@ -414,28 +419,40 @@ def deviation_calculator_by_moving_average_main(
     )
 
     if deviation_list:
-        if output_json_file_path:
-            for deviation_list_index, deviation in enumerate(deviation_list):
-                convert_data_value_to_string('request_sizes', deviation_list_index)
-                convert_data_value_to_string('response_sizes', deviation_list_index)
-                convert_value_to_string('ma_data', deviation_list_index)
-
-            print_api(f'Deviation Found, saving to file: {output_json_file_path}', color='blue')
-            jsons.write_json_file(deviation_list, output_json_file_path, use_default_indent=True)
-
         if summary:
             summary_deviation_list: list = []
             for deviation in deviation_list:
+                value = deviation.get('value', None)
+                ma_value = deviation.get('ma_value', None)
+                if not value or not ma_value:
+                    total_entries_averaged = None
+                else:
+                    total_entries_averaged = deviation['data']['count']
+                    
                 summary_deviation_list.append({
                     'day': deviation['day'],
                     'host': deviation['host'],
                     'message': deviation['message'],
-                    'value': deviation['value'],
-                    'ma_value': deviation['ma_value'],
-                    'total_entries_averaged': deviation['data']['count']
+                    'value': deviation.get('value', None),
+                    'ma_value': deviation.get('ma_value', None),
+                    'total_entries_averaged': total_entries_averaged
                 })
 
             deviation_list = summary_deviation_list
+
+        if output_file_path:
+            if not summary:
+                for deviation_list_index, deviation in enumerate(deviation_list):
+                    convert_data_value_to_string('request_sizes', deviation_list_index)
+                    convert_data_value_to_string('response_sizes', deviation_list_index)
+                    convert_value_to_string('ma_data', deviation_list_index)
+
+            print_api(f'Deviation Found, saving to file: {output_file_path}', color='blue')
+
+            if output_file_type == 'csv':
+                csvs.write_list_to_csv(output_file_path, deviation_list)
+            elif output_file_type == 'json':
+                jsons.write_json_file(deviation_list, output_file_path, use_default_indent=True)
 
         return deviation_list
 

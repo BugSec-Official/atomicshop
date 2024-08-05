@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.15.3-2.15.4 - 05.08.2024
+  * mitm/statistic_analyzer, wrappers/loggingw/reading - fixes and improvements.
 * 2.15.2 - 05.08.2024
   * wrappers/mongodbw - fixes and improvements.
 * 2.15.1 - 05.08.2024
