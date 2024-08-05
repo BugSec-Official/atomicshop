@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.15.2 - 05.08.2024
+  * wrappers/mongodbw - fixes and improvements.
 * 2.15.1 - 05.08.2024
   * moved 'installs' out of 'mains'.
   * re-arrangements in 'addons'.
