@@ -48,7 +48,7 @@ def is_sysmon_running():
     :return: boolean, True if Sysmon is running, False otherwise.
     """
 
-    process_list: list = process.match_pattern_against_running_processes_cmdlines(
+    process_list: list = process.get_running_processes_by_cmdline_pattern(
         pattern=SYSMON_FILE_NAME, first=True, process_name_case_insensitive=True)
 
     if process_list:
