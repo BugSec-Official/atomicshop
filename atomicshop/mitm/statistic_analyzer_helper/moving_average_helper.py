@@ -273,11 +273,17 @@ def find_deviation_from_moving_average(
         check_type_moving_below = host_moving_average_by_type - check_type_moving_by_percent
 
         deviation_type = None
+        deviation_percentage = None
         if day_statistics_content_dict[check_type] > check_type_moving_above:
             deviation_type = 'above'
+            deviation_percentage = (
+                    (day_statistics_content_dict[check_type] - host_moving_average_by_type) /
+                    host_moving_average_by_type)
         elif day_statistics_content_dict[check_type] < check_type_moving_below:
             deviation_type = 'below'
-
+            deviation_percentage = (
+                    (host_moving_average_by_type - day_statistics_content_dict[check_type]) /
+                    host_moving_average_by_type)
         if deviation_type:
             message = f'[{check_type}] is [{deviation_type}] the moving average.'
             deviation_list.append({
@@ -289,6 +295,7 @@ def find_deviation_from_moving_average(
                 'check_type': check_type,
                 'percentage': top_bottom_deviation_percentage,
                 'ma_value_checked': check_type_moving_above,
+                'deviation_percentage': deviation_percentage,
                 'deviation_type': deviation_type,
                 'data': day_statistics_content_dict,
                 'ma_data': moving_averages_dict[host]
