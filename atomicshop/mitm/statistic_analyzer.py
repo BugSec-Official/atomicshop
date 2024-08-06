@@ -450,7 +450,7 @@ def deviation_calculator_by_moving_average_main(
             print_api(f'Deviation Found, saving to file: {output_file_path}', color='blue')
 
             if output_file_type == 'csv':
-                csvs.write_list_to_csv(output_file_path, deviation_list)
+                csvs.write_list_to_csv(deviation_list, output_file_path)
             elif output_file_type == 'json':
                 jsons.write_json_file(deviation_list, output_file_path, use_default_indent=True)
 
