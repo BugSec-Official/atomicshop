@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.15.5 - 06.08.2024
+  * file_io/csvs, mitm/statistic_analyzer, wrappers/factw - fixes and improvements.
 * 2.15.3-2.15.4 - 05.08.2024
   * mitm/statistic_analyzer, wrappers/loggingw/reading - fixes and improvements.
 * 2.15.2 - 05.08.2024

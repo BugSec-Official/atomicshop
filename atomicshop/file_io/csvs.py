@@ -1,4 +1,5 @@
 import csv
+import io
 from typing import Tuple, List
 
 from .file_io import read_file_decorator
@@ -100,8 +101,8 @@ def read_csv_to_list_of_lists(
 
 
 def write_list_to_csv(
-        file_path: str,
         content_list: list,
+        file_path: str,
         mode: str = 'w'
 ) -> None:
     """
@@ -111,8 +112,8 @@ def write_list_to_csv(
     The dictionary inside the function will be identified by the first iteration of the list.
     Other objects (inside the provided list) than dictionary will be identified as regular objects.
 
-    :param file_path: Full file path to CSV file.
     :param content_list: List object that each iteration contains dictionary with same keys and different values.
+    :param file_path: Full file path to CSV file.
     :param mode: String, file writing mode. Default is 'w'.
     :return: None.
     """
@@ -155,3 +156,101 @@ def get_header(file_path: str, print_kwargs: dict = None) -> list:
     # Split the header to list of keys.
     header = header.split(',')
     return header
+
+
+def _escape_csv_value_ref(text):
+    """
+    FOR REFERENCE ONLY, better use csv module to do it natively.
+    Function to escape text for CSV file.
+    This function escapes commas (,) and double quotes (") for csv cell (between commas).
+
+    Example:
+        test1 = 'test1'
+        test2 = 'test,2'
+        test3 = 'test3,"3",3'
+
+        csv_line = f'{escape_csv_value(test1)},{escape_csv_value(test2)},{escape_csv_value(test3)}'
+
+        Output: 'test1,"test,2","test3,""3"",3"'
+    """
+
+    if '"' in text:
+        text = text.replace('"', '""')  # Escape double quotes
+    if ',' in text or '"' in text:
+        text = f'"{text}"'  # Enclose in double quotes if there are commas or double quotes
+    return text
+
+
+def escape_csv_value(value):
+    """
+    Function to escape text for CSV file.
+    This function escapes commas (,) and double quotes (") for csv cell (between commas).
+
+    Example:
+        test1 = 'test1'
+        test2 = 'test,2'
+        test3 = 'test3,"3",3'
+
+        csv_line = f'{escape_csv_value(test1)},{escape_csv_value(test2)},{escape_csv_value(test3)}'
+
+        Output: 'test1,"test,2","test3,""3"",3"'
+    """
+    output = io.StringIO()
+    writer = csv.writer(output, quoting=csv.QUOTE_MINIMAL)
+    writer.writerow([value])
+    return output.getvalue().strip()
+
+
+def escape_csv_line_to_string(csv_line: list) -> str:
+    """
+    Function to escape list of strings for CSV file.
+    This function escapes commas (,) and double quotes (") for csv cell (between commas).
+
+    Example:
+        test1 = 'test1'
+        test2 = 'test,2'
+        test3 = 'test3,"3",3'
+
+        csv_line = escape_csv_line_to_string([test1, test2, test3])
+
+        Output:
+        csv_line == 'test1,"test,2","test3,""3"",3"'
+    """
+
+    # Prepare the data as a list of lists
+    data = [csv_line]
+
+    # Use StringIO to create an in-memory file-like object
+    output = io.StringIO()
+    writer = csv.writer(output, quoting=csv.QUOTE_MINIMAL)
+
+    # Write the data to the CSV writer
+    writer.writerows(data)
+
+    # Get the CSV string from the StringIO object, Strip to remove any trailing newlines.
+    csv_line = output.getvalue().strip()
+
+    return csv_line
+
+
+def escape_csv_line_to_list(csv_line: list) -> list:
+    """
+    Function to escape list of strings for CSV file.
+    This function escapes commas (,) and double quotes (") for csv cell (between commas).
+
+    Example:
+        test1 = 'test1'
+        test2 = 'test,2'
+        test3 = 'test3,"3",3'
+
+        csv_entries_list = escape_csv_line_to_list([test1, test2, test3])
+
+        Output:
+        csv_entries_list == ['test1', '"test,2"', '"test3,""3"",3"']
+    """
+
+    result_csv_entries: list = []
+    for entry in csv_line:
+        result_csv_entries.append(escape_csv_value(entry))
+
+    return result_csv_entries
