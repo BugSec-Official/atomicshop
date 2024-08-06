@@ -9,9 +9,14 @@ from .print_api import print_api
 from .inspect_wrapper import get_target_function_default_args_and_combine_with_current
 from .basics import strings
 from .wrappers import ubuntu_terminal
+from .wrappers.psutilw import processes
 
 if os.name == 'nt':
     from . import get_process_list
+
+
+class MultipleProcessesFound(Exception):
+    pass
 
 
 def is_command_exists(cmd: str) -> bool:
@@ -247,25 +252,28 @@ def safe_terminate(popen_process: subprocess.Popen):
     popen_process.wait()
 
 
-def match_pattern_against_running_processes_cmdlines(
+def get_running_processes_by_cmdline_pattern(
         pattern: str,
-        process_name_case_insensitive: bool = False,
+        cmdline_case_insensitive: bool = False,
         first: bool = False,
         prefix_suffix: bool = False
-):
+) -> list:
     """
     The function matches specified string pattern including wildcards against all the currently running processes'
     command lines.
 
     :param pattern: string, the pattern that we will search in the command line list of currently running processes.
-    :param process_name_case_insensitive: boolean, if True, the process name will be matched case insensitive.
+    :param cmdline_case_insensitive: boolean,
+        True, the pattern and the command line will be matched case-insensitive.
     :param first: boolean, that will set if first pattern match found the iteration will stop, or we will return
         the list of all command lines that contain the pattern.
     :param prefix_suffix: boolean. Check the description in 'match_pattern_against_string' function.
+
+    :return: list, of command lines that contain the pattern.
     """
 
     # Get the list of all the currently running processes.
-    get_process_list_instance = get_process_list.GetProcessList(get_method='pywin32', connect_on_init=True)
+    get_process_list_instance = get_process_list.GetProcessList(get_method='psutil', connect_on_init=True)
     processes = get_process_list_instance.get_processes(as_dict=False)
 
     # Iterate through all the current process, while fetching executable file 'name' and the command line.
@@ -273,16 +281,28 @@ def match_pattern_against_running_processes_cmdlines(
     matched_cmdlines: list = list()
     for process in processes:
         # Check if command line isn't empty and that string pattern is matched against command line.
-        if process['cmdline'] and \
-                strings.match_pattern_against_string(
-                    pattern, process['cmdline'], case_insensitive=process_name_case_insensitive,
-                    prefix_suffix=prefix_suffix):
-            matched_cmdlines.append(process['cmdline'])
-            # If 'first' was set to 'True' we will stop, since we found the first match.
-            if first:
-                break
+        if process['cmdline']:
+            is_pattern_matched = strings.match_pattern_against_string(
+                pattern, process['cmdline'], case_insensitive=cmdline_case_insensitive, prefix_suffix=prefix_suffix)
+            if is_pattern_matched:
+                matched_cmdlines.append(process)
+                # If 'first' was set to 'True' we will stop, since we found the first match.
+                if first:
+                    break
 
     return matched_cmdlines
+
+
+def kill_process_by_filename_pattern(pattern: str):
+    running_processes = get_running_processes_by_cmdline_pattern(
+        pattern, first=False, prefix_suffix=True, cmdline_case_insensitive=True)
+
+    processes_found: int = len(running_processes)
+
+    if processes_found > 1:
+        raise MultipleProcessesFound(f"[{processes_found}] processes found with pattern '{pattern}'.")
+    elif processes_found == 1:
+        processes.kill_process_by_pid(running_processes[0]['pid'])
 
 
 def run_powershell_command(command):

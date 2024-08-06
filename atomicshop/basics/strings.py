@@ -108,7 +108,7 @@ def is_any_string_from_list_in_string(string_list: list, check_string: str) -> b
     return any(test_string in check_string for test_string in string_list)
 
 
-def match_pattern_against_string(
+def _match_pattern_against_string(
         pattern: str,
         check_string: str,
         case_insensitive: bool = False,
@@ -212,6 +212,73 @@ def match_pattern_against_string(
                 return True
 
     return False
+
+
+def match_pattern_against_string(
+        pattern: str,
+        check_string: str,
+        case_insensitive: bool = False,
+        prefix_suffix: bool = False
+) -> bool:
+    """
+    Function checks the 'pattern' against 'check_string' and returns 'True' if pattern matches and 'False' if not.
+
+    Example:
+        pattern_string = "*ffmpeg*full_build.zip"
+        check_string = "https://github.com/GyanD/codexffmpeg/releases/download/5.1.2/ffmpeg-5.1.2-full_build.zip"
+        match_pattern_against_string(pattern_string, check_string)
+    Result:
+        True
+
+    :param pattern: string, can include wildcards as '*'.
+    :param check_string: string, to check the pattern against.
+    :param case_insensitive: boolean, if 'True' will treat the 'pattern' and 'check_string' as case-insensitive.
+    :param prefix_suffix: boolean, that sets if the function should return 'True' also for all the cases that wildcard
+        in the beginning of the pattern and in the end of the pattern, since the default behavior of regex to return
+        'False' on these cases.
+
+        Example:
+            pattern: *test
+            check_string: testblabla
+        Default regex behavior will return 'False' with 'prefix_suffix' switch set to 'True',
+        this case will return 'True'. Same will go for:
+        pattern: test*
+            check_string: blablatest
+
+        Why this is good?
+        Let's say you have a python script 'example.py' and you want to find all the executed command lines,
+        and you want to make sure that this was executed by 'python'. Your python is installed
+        in 'c:\\Python310\\python.exe', and you want to match all the possible patterns of 'python' and 'example.py'.
+        Pattern:
+            *python*example.py
+        You want to match 'True' for the next cases:
+            python example.py
+            c:\\Python310\\python.exe example.py
+
+        Default regex behavior is to return 'False' on 'python example.py'.
+
+    :return: boolean.
+    """
+    # Determine the regex flags based on case_insensitive.
+    flags = re.IGNORECASE if case_insensitive else 0
+
+    # Escape the pattern for regex, then replace '*' with '.*' to match any characters.
+    escaped_pattern = re.escape(pattern).replace(r'\*', '.*')
+
+    # Adjust the pattern to match from the start and/or end based on prefix_suffix.
+    if prefix_suffix:
+        if not pattern.startswith('*'):
+            escaped_pattern = '.*' + escaped_pattern
+        if not pattern.endswith('*'):
+            escaped_pattern = escaped_pattern + '.*'
+    else:
+        escaped_pattern = '^' + escaped_pattern + '$'
+
+    # Compile the regex pattern with the appropriate flags.
+    regex_pattern = re.compile(escaped_pattern, flags)
+
+    # Perform the search and return the result.
+    return bool(regex_pattern.search(check_string))
 
 
 def match_list_of_patterns_against_string(
