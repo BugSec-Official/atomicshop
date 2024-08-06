@@ -435,6 +435,7 @@ def deviation_calculator_by_moving_average_main(
                     'message': deviation['message'],
                     'value': deviation.get('value', None),
                     'ma_value': deviation.get('ma_value', None),
+                    'deviation_percentage': deviation.get('deviation_percentage', None),
                     'total_entries_averaged': total_entries_averaged
                 })
 
