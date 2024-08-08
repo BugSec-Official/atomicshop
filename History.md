@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.15.8 - 08.08.2024
+  * filesystem - fixes and improvements.
 * 2.15.7 - 06.08.2024
   * basics/strings, process, wrappers/psutilw/processes, wrappers/sysmonw - fixes and improvements.
 * 2.15.6 - 06.08.2024
