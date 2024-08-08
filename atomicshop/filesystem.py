@@ -6,7 +6,7 @@ import shutil
 import stat
 import errno
 from contextlib import contextmanager
-from typing import Literal
+from typing import Literal, Union
 import tempfile
 
 import psutil
@@ -1412,12 +1412,16 @@ def backup_folder(directory_path: str, backup_directory: str) -> None:
         move_folder(directory_path, backup_directory_path)
 
 
-def backup_file(file_path: str, backup_directory: str, timestamp_as_prefix: bool = False) -> None:
+def backup_file(
+        file_path: str,
+        backup_directory: str,
+        timestamp_as_prefix: bool = False
+) -> Union[str, None]:
     """
     Backup the specified file.
 
-    :param file_path: The file path to backup.
-    :param backup_directory: The directory to backup the file to.
+    :param file_path: The file path to back up.
+    :param backup_directory: The directory to back up the file to.
     :param timestamp_as_prefix: boolean, if
         True, then the timestamp will be added as a prefix to the file name.
         False, then the timestamp will be added as a suffix to the file name.
@@ -1453,6 +1457,10 @@ def backup_file(file_path: str, backup_directory: str, timestamp_as_prefix: bool
             file_name: str = f"{file_name_no_extension}_{timestamp}{file_extension}"
         backup_file_path: str = str(Path(backup_directory) / file_name)
         move_file(file_path, backup_file_path)
+
+        return backup_file_path
+    else:
+        return None
 
 
 def find_file(file_name: str, directory_path: str):
