@@ -80,26 +80,28 @@ def extract_files_from_msi_main(
 
     # If not provided, raise an error.
     if not msi_filepath:
-        print_api("The path to the MSI file is not provided.", color="red")
-        sys.exit()
+        print_api("The path to the MSI file is not provided with [-m].", color="red")
+        return 1
     if not main_out_directory:
-        print_api("The main output directory is not provided.", color="red")
+        print_api("The main output directory is not provided with [-o].", color="red")
+        return 1
     if not sevenz_path:
         print_api(
             "The path to the 7z executable is not provided. Assuming 7z is in the PATH environment variable.",
             color="yellow")
+        sevenz_path = "7z"
 
     if not sevenz_app_w.is_path_contains_7z_executable(sevenz_path):
         print_api("The path to 7z does not contain 7z executable", color="red")
-        sys.exit()
+        return 1
 
-    if not os.path.isfile(sevenz_path):
+    if sevenz_path != "7z" and not os.path.isfile(sevenz_path):
         print_api("The path to 7z executable doesn't exist.", color="red")
-        sys.exit()
+        return 1
 
     if not sevenz_app_w.is_executable_a_7z(sevenz_path):
         print_api("Provided 7z executable is not 7z.", color="red")
-        sys.exit()
+        return 1
 
     # Create the main output directory.
     os.makedirs(main_out_directory, exist_ok=True)
@@ -134,3 +136,5 @@ def extract_files_from_msi_main(
 
     # Extract OLE metadata from the MSI file.
     olefilew.extract_ole_metadata(msi_filepath, os.path.join(embedded_files_directory, OLE_METADATA))
+
+    return 0

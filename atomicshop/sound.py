@@ -280,11 +280,13 @@ class StereoMixRecorder:
         # when playback can start before the input interface is initialized, since thread runs in parallel.
         self.loopback_input = self._initialize_input_interface()
 
-        threading.Thread(
+        thread = threading.Thread(
             target=self._thread_record,
             args=(split_emit_buffers, emit_type, file_path, record_until_zero_array, seconds),
             kwargs=kwargs
-        ).start()
+        )
+        thread.daemon = True
+        thread.start()
 
     def _thread_record(
             self, split_emit_buffers: int, emit_type: str, file_path: str, record_until_zero_array: bool, seconds,

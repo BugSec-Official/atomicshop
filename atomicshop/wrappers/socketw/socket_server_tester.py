@@ -117,10 +117,11 @@ def execute_test(config_static):
                     requests_bytes_list,
                     config['interval_between_request_custom_list_seconds'],
                     config['interval_between_requests_defaults_seconds'],))
-            # Append to list of threads, so they can be "joined" later
-            threads_list.append(thread_current)
+            thread_current.daemon = True
             # Start the thread
             thread_current.start()
+            # Append to list of threads, so they can be "joined" later
+            threads_list.append(thread_current)
 
         # Joining all the threads.
         for thread in threads_list:

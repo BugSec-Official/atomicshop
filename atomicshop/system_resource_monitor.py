@@ -166,6 +166,7 @@ class SystemResourceMonitor:
                 self.interval, self.get_cpu, self.get_memory, self.get_disk_io_bytes, self.get_disk_files_count,
                 self.get_disk_busy_time, self.get_disk_used_percent, self.calculate_maximum_changed_disk_io,
                 self.maximum_disk_io, self.queue_list, self.manager_dict))
+            self.thread.daemon = True
             self.thread.start()
         else:
             print_api("Monitoring is already running.", color='yellow', **print_kwargs)

@@ -82,10 +82,10 @@ class SocketWrapper:
     def send_accepted_socket_to_thread(self, thread_function_name, reference_args=()):
         # Creating thread for each socket
         thread_current = threading.Thread(target=thread_function_name, args=(*reference_args,))
+        thread_current.daemon = True
+        thread_current.start()
         # Append to list of threads, so they can be "joined" later
         self.threads_list.append(thread_current)
-        # Start the thread
-        thread_current.start()
 
         # 'reference_args[0]' is the client socket.
         client_address = base.get_source_address_from_socket(reference_args[0])

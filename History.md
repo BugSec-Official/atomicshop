@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.15.9-2.15.10 - 08.08.2024
+  * archiver/sevenz_app_w, basics/tracebacks, wrappers/ctyping/msi_windows_installer/extract_msi_main - fixes and improvements.
 * 2.15.8 - 08.08.2024
   * filesystem - fixes and improvements.
 * 2.15.7 - 06.08.2024

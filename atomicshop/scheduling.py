@@ -22,7 +22,7 @@ def threaded_periodic_task(interval, function_ref, args=(), kwargs=None, thread_
     :param args: tuple, of arguments to provide for the 'function_ref' to execute.
     :param kwargs: dictionary, of keyword arguments to provide for the 'function_ref' to execute.
     :param thread_name: the name of the thread that will be created:
-        threading.Thread(target=thread_timer, name=thread_name).start()
+        threading.Thread(target=thread_timer, name=thread_name)
         The default parameter for 'Thread' 'name' is 'None', so if you don't specify the name it works as default.
     :param daemon: bool, if True, the thread will be a daemon thread. Default is True.
         Since this is a periodic task, we don't need to wait for the thread to finish, so we can set it to True.
@@ -70,7 +70,14 @@ class ThreadLooper:
     def __init__(self):
         self.loop_queue = queue.Queue()
 
-    def run_loop(self, function_reference, args=(), kwargs=None, interval_seconds=0, thread_name: str = None):
+    def run_loop(
+            self,
+            function_reference,
+            args=(),
+            kwargs=None,
+            interval_seconds=0,
+            thread_name: str = None
+    ):
         """
         The function executes referenced function 'function_ref' with arguments 'args' each 'interval' in a new thread.
 
@@ -96,7 +103,9 @@ class ThreadLooper:
                 self.loop_queue.put(result_list)
                 time.sleep(interval_seconds)
 
-        threading.Thread(target=thread_function, name=thread_name).start()
+        thread = threading.Thread(target=thread_function, name=thread_name)
+        thread.daemon = True
+        thread.start()
 
     def emit_from_loop(self):
         """
