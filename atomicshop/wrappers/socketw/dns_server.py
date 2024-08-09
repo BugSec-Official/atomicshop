@@ -125,10 +125,11 @@ class DnsServer:
         # Starting a thread that will empty the DNS Cache lists
         thread_current = threading.Thread(target=self.thread_worker_empty_dns_cache,
                                           args=(self.config['dns']['cache_timeout_minutes'],))
-        # Append to list of threads, so they can be "joined" later
-        threads_list.append(thread_current)
+        thread_current.daemon = True
         # Start the thread
         thread_current.start()
+        # Append to list of threads, so they can be "joined" later
+        threads_list.append(thread_current)
 
         # To handle DNS requests UDP socket is needed.
         # AF_INET - Socket family of IPv4

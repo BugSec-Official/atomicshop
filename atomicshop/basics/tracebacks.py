@@ -1,4 +1,3 @@
-# v1.0.0 - 02.04.2023 16:20
 import traceback
 
 

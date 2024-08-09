@@ -108,7 +108,9 @@ class DiffChecker:
                     statistics = diff_checker.statistics_queue.get()
                     print(statistics)
 
-            threading.Thread(target=process_statistics_queue).start()
+            thread = threading.Thread(target=process_statistics_queue)
+            thread.daemon = True
+            thread.start()
 
             <... Your checking operation for the object ...>
         :param new_objects_hours_then_difference: float, This is only for the 'new_objects' operation type.

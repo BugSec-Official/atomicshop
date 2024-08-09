@@ -3,7 +3,7 @@ import subprocess
 from pathlib import Path
 
 from ..print_api import print_api
-from .. import process, filesystem
+from .. import process
 
 
 def is_path_contains_7z_executable(sevenz_path: str) -> bool:
