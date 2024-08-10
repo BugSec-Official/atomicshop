@@ -16,6 +16,9 @@ class DnsPortInUseError(Exception):
     pass
 
 
+OUTBOUND_DNS_PORT: int = 53
+
+
 class DnsServer:
     """
     DnsServer class is responsible to handle DNS Requests on port 53 based on configuration and send DNS Response back.
@@ -379,7 +382,7 @@ class DnsServer:
                                     self.dns_full_logger.info(
                                         f"Forwarding request. Creating UDP socket to: "
                                         f"{self.config['dns']['forwarding_dns_service_ipv4']}:"
-                                        f"{self.config['dns']['listening_port']}")
+                                        f"{OUTBOUND_DNS_PORT}")
                                     try:
                                         google_dns_ipv4_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                                         google_dns_ipv4_socket.settimeout(5)
@@ -390,7 +393,7 @@ class DnsServer:
 
                                         google_dns_ipv4_socket.sendto(client_data, (
                                             self.config['dns']['forwarding_dns_service_ipv4'],
-                                            self.config['dns']['listening_port']
+                                            OUTBOUND_DNS_PORT
                                         ))
                                         # The script needs to wait a second or receive can hang
                                         message = "Request sent to the forwarding DNS, Receiving the answer..."

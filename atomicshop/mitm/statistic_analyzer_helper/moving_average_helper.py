@@ -125,9 +125,15 @@ def get_data_dict_from_statistics_content(content: list) -> dict:
 
         # Append the sizes.
         try:
-            hosts_requests_responses[line['host']]['request_sizes'].append(int(line['request_size_bytes']))
-            hosts_requests_responses[line['host']]['response_sizes'].append(
-                int(line['response_size_bytes']))
+            request_size_bytes = line['request_size_bytes']
+            response_size_bytes = line['response_size_bytes']
+            if request_size_bytes == '':
+                request_size_bytes = '0'
+            if response_size_bytes == '':
+                response_size_bytes = '0'
+
+            hosts_requests_responses[line['host']]['request_sizes'].append(int(request_size_bytes))
+            hosts_requests_responses[line['host']]['response_sizes'].append(int(response_size_bytes))
         except ValueError:
             print_api(line, color='yellow')
             raise
