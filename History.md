@@ -1,7 +1,9 @@
 <!-- HISTORY -->
 ## History
 
-* 2.15.9-2.15.10 - 08.08.2024
+* 2.15.11 - 10.08.2024
+  * mitm/statistic_analyzer_helper/moving_average_helper, wrappers/ctyping/msi_windows_installer/tables, wrappers/socketw/dns_server - fixes and improvements.
+* 2.15.9-2.15.10 - 09.08.2024
   * archiver/sevenz_app_w, basics/tracebacks, wrappers/ctyping/msi_windows_installer/extract_msi_main - fixes and improvements.
 * 2.15.8 - 08.08.2024
   * filesystem - fixes and improvements.

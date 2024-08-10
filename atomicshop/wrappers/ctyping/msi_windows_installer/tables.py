@@ -417,3 +417,38 @@ def get_directory_table_info(db_handle):
     msi.MsiCloseHandle(view_handle)
 
     return directory_info
+
+
+def _get_stream_table_info(db_handle):
+    """
+    Get stream table info.
+    Basically this function gets all the file names and their binaries from the _Streams table.
+    All the above functions already do this in a more structured way.
+    There is nothing more in this function that you will find, unless there is a file that will not be in other tables,
+    which is very unlikely.
+
+    The only thing that may be of interest is the '\x05SummaryInformation' stream, which is a special stream that
+    contains information about the MSI package. But we already use the 'wrappers.olefilew.extract_ole_metadata'
+    function to get this information in the parsed way.
+    :param db_handle:
+    :return:
+    """
+    query = "SELECT `Name`, `Data` FROM `_Streams`"
+    view_handle = base.create_open_execute_view_handle(db_handle, query)
+
+    stream_info = {}
+
+    while True:
+        record_handle = base.create_fetch_record_from_view_handle(view_handle)
+        if not record_handle:
+            break
+
+        stream_name = base.get_table_field_data_from_record(record_handle, field_index=1, data_type='stringw')
+        stream_data = base.get_table_field_data_from_record(record_handle, field_index=2, data_type='stream')
+
+        stream_info[stream_name] = stream_data
+
+    msi.MsiCloseHandle(record_handle)
+    msi.MsiCloseHandle(view_handle)
+
+    return stream_info
