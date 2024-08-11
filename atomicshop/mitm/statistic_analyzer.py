@@ -457,4 +457,4 @@ def deviation_calculator_by_moving_average_main(
 
         return deviation_list
 
-    return None
+    return []

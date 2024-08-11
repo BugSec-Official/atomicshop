@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.15.12 - 11.08.2024
+  * mitm/statistic_analyzer - fixes and improvements.
 * 2.15.11 - 10.08.2024
   * mitm/statistic_analyzer_helper/moving_average_helper, wrappers/ctyping/msi_windows_installer/tables, wrappers/socketw/dns_server - fixes and improvements.
 * 2.15.9-2.15.10 - 09.08.2024
