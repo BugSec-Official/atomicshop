@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.15.13 - 12.08.2024
+  * wrappers/socketw/dns_server - fixes and improvements.
 * 2.15.12 - 11.08.2024
   * mitm/statistic_analyzer - fixes and improvements.
 * 2.15.11 - 10.08.2024
