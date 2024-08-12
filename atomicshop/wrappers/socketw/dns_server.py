@@ -477,7 +477,8 @@ class DnsServer:
                         # Reinitializing the ipv4 addresses list.
                         ipv4_addresses = list()
 
-                        if dns_response_parsed.a:
+                        # If the DNS answer section isn't empty, and log the returned IPv4 addresses.
+                        if dns_response_parsed.rr:
                             for rr in dns_response_parsed.rr:
                                 if isinstance(rr.rdata, A):
                                     self.dns_full_logger.info(f"Response IP: {rr.rdata}")
