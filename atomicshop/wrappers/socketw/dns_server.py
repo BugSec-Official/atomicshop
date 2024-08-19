@@ -7,8 +7,12 @@ import socket
 from ...print_api import print_api
 from ..loggingw import loggingw
 from ..psutilw import networks
+from ... import queues
+from ...basics import booleans
 
+# noinspection PyPackageRequirements
 import dnslib
+# noinspection PyPackageRequirements
 from dnslib import DNSRecord, DNSHeader, RR, A
 
 
@@ -16,7 +20,8 @@ class DnsPortInUseError(Exception):
     pass
 
 
-OUTBOUND_DNS_PORT: int = 53
+class DnsConfigurationValuesError(Exception):
+    pass
 
 
 class DnsServer:
@@ -25,32 +30,88 @@ class DnsServer:
     """
     logger = loggingw.get_logger_with_level("network." + __name__.rpartition('.')[2])
 
-    def __init__(self, config):
+    def __init__(
+            self,
+            listening_interface: str,
+            listening_port: int,
+            log_directory_path: str,
+            forwarding_dns_service_ipv4: str = '8.8.8.8',
+            forwarding_dns_service_port: int = 53,
+            resolve_to_tcp_server_only_tcp_resolve_domains: bool = False,
+            resolve_to_tcp_server_all_domains: bool = False,
+            resolve_regular: bool = False,
+            offline_mode: bool = False,
+            tcp_target_server_ipv4: str = '127.0.0.1',
+            tcp_resolve_domain_list: list = None,
+            request_domain_queue: queues.NonBlockQueue = None,
+            buffer_size_receive: int = 8192,
+            response_ttl: int = 60,
+            dns_service_retries: int = 5,
+            cache_timeout_minutes: int = 60,
+    ):
+        """
+        Initialize the DNS Server object with all the necessary settings.
+
+        :param listening_interface: str: Interface that the DNS Server will listen on.
+            Example: '0.0.0.0'. For all interfaces.
+        :param listening_port: int: Port number that the DNS Server will listen on.
+        :param log_directory_path: str: Path to the directory where the logs will be saved.
+        :param forwarding_dns_service_ipv4: str: IPv4 address of the DNS Service that will be used for resolving.
+            Example: '8.8.8.8'. For Google DNS Service.
+        :param forwarding_dns_service_port: int: Port number of the DNS Service that will be used for resolving.
+            Default is 53.
+        :param resolve_to_tcp_server_only_tcp_resolve_domains: bool: If the DNS Server should route only the
+            domains from 'tcp_resolve_domain_list' to the TCP Server in 'tcp_target_server_ipv4'.
+        :param resolve_to_tcp_server_all_domains: bool: If the DNS Server should route all domains to the TCP Server.
+        :param resolve_regular: bool: If the DNS Server should resolve all the domains to the Live DNS Service.
+        :param offline_mode: bool: If the DNS Server should work in offline mode.
+        :param tcp_target_server_ipv4: str: IPv4 address of the TCP Server that the specified booleans will resolve
+            the domains to.
+        :param tcp_resolve_domain_list: list: List of domains that will be resolved to the TCP Server.
+            This means that all the requests will be resolved to the specified offline IPv4 address.
+        :param request_domain_queue: queues.NonBlockQueue: Queue to pass all the requested domains that hit the DNS
+        :param buffer_size_receive: int: Buffer size of the connection while receiving messages.
+        :param response_ttl: int, Time to live of the DNS Response that will be returned. Default is 60 seconds.
+        :param dns_service_retries: int, How many times the request will be sent to forwarded DNS Service on errors:
+            (socket connect / request send / response receive).
+        :param cache_timeout_minutes: int: Timeout in minutes to clear the DNS Cache.
+            server. Each domain will be pass in the queue as a string.
+        """
+
+        self.listening_interface: str = listening_interface
+        self.listening_port: int = listening_port
+        self.log_directory_path: str = log_directory_path
+        self.forwarding_dns_service_ipv4: str = forwarding_dns_service_ipv4
+        self.forwarding_dns_service_port: int = forwarding_dns_service_port
+        self.tcp_target_server_ipv4: str = tcp_target_server_ipv4
+        self.tcp_resolve_domain_list: list = tcp_resolve_domain_list
+        self.offline_mode: bool = offline_mode
+        self.resolve_to_tcp_server_only_tcp_resolve_domains: bool = resolve_to_tcp_server_only_tcp_resolve_domains
+        self.resolve_to_tcp_server_all_domains: bool = resolve_to_tcp_server_all_domains
+        self.resolve_regular: bool = resolve_regular
+        self.request_domain_queue: queues.NonBlockQueue = request_domain_queue
+        self.buffer_size_receive: int = buffer_size_receive
+        self.response_ttl: int = response_ttl
+        self.dns_service_retries: int = dns_service_retries
+        self.cache_timeout_minutes: int = cache_timeout_minutes
+
+        if not tcp_resolve_domain_list:
+            self.tcp_resolve_domain_list = list()
+        else:
+            self.tcp_resolve_domain_list = tcp_resolve_domain_list
+
         # Settings for static DNS Responses in offline mode.
-        self.offline_route_ipv4 = '10.10.10.10'
-        self.offline_route_ipv6 = 'fe80::3c09:df29:d52b:af39'
-        self.offline_route_domain = 'domain.com'
-        self.offline_srv_answer = \
+        self.offline_route_ipv4: str = '10.10.10.10'
+        self.offline_route_ipv6: str = 'fe80::3c09:df29:d52b:af39'
+        self.offline_route_domain: str = 'domain.com'
+        self.offline_srv_answer: str = \
             '.                       86391   IN      SOA     domain.com. domain.com. 2022012500 1800 900 604800 86400'
+        # self.offline_https_answer: str = str()
 
-        # Other settings.
-        # Full domain list to pass to TCP Server module.
-        self.domain_list: list = list()
-
-        # Set Buffer size of the connection while receiving messages. The function uses this variable right away.
-        self.buffer_size_receive: int = 8192
-        # TTL variable that is going to be returned in DNS response.
-        self.response_ttl: int = 60
-        # How many times the DNS Service will retry on errors (socket connect / request send / response receive)
-        self.dns_service_retries: int = 5
         # If forwarding to Live DNS Service fails. Currently, we didn't send anything, so it's 'False'.
         self.retried: bool = False
         # Defining cache dictionary for assigning DNS Questions to DNS Answers
         self.dns_questions_to_answers_cache: dict = dict()
-
-        # Queue for all the requested domains that hit the dns server.
-        # self.request_domain_queue: queue.Queue = queue.Queue()
-        self.request_domain_queue = None
 
         # Filename to save all the known domains and their relative IPv4 addresses.
         self.known_domains_filename: str = 'dns_known_domains.txt'
@@ -59,17 +120,34 @@ class DnsServer:
         # Filename to save domains and their IPv4 addresses by time they hit the DNS server.
         self.known_dns_ipv4_by_time_filename: str = 'dns_ipv4_by_time.txt'
 
-        # Configuration object with all the settings.
-        self.config = config
-
         # Logger that logs all the DNS Requests and responses in DNS format. These entries will not present in
         # network log of TCP Server module.
         self.dns_full_logger = loggingw.create_logger(
             logger_name="dns",
-            directory_path=self.config['log']['logs_path'],
+            directory_path=self.log_directory_path,
             add_timedfile=True,
             formatter_filehandler='DEFAULT'
         )
+
+        self.test_config()
+
+    def test_config(self):
+        try:
+            booleans.check_3_booleans_when_only_1_can_be_true(
+                (self.resolve_to_tcp_server_only_tcp_resolve_domains,
+                 'resolve_to_tcp_server_only_tcp_resolve_domains'),
+                (self.resolve_to_tcp_server_all_domains, 'resolve_to_tcp_server_all_domains'),
+                (self.resolve_regular, 'resolve_regular')
+            )
+        except ValueError as e:
+            raise DnsConfigurationValuesError(e)
+
+        port_in_use = networks.get_processes_using_port_list([self.listening_port])
+        if port_in_use:
+            error_messages: list = list()
+            for port, process_info in port_in_use.items():
+                error_messages.append(f"Port [{port}] is already in use by process: {process_info}")
+            raise DnsPortInUseError("\n".join(error_messages))
 
     def thread_worker_empty_dns_cache(self, function_sleep_time: int):
         """
@@ -90,11 +168,6 @@ class DnsServer:
         :return: None.
         """
 
-        port_in_use = networks.get_processes_using_port_list([self.config['dns']['listening_port']])
-        if port_in_use:
-            for port, process_info in port_in_use.items():
-                raise DnsPortInUseError(f"Port [{port}] is already in use by process: {process_info}")
-
         self.logger.info("DNS Server Module Started.")
 
         # Define objects for global usage
@@ -107,19 +180,19 @@ class DnsServer:
         known_a_records_ipv4_dict: dict = dict()
 
         # Check if 'route_to_tcp_server_only_engine_domains' was set to 'True' and output message accordingly.
-        if self.config['dns']['route_to_tcp_server_only_engine_domains']:
+        if self.resolve_to_tcp_server_only_tcp_resolve_domains:
             message = "Routing only engine domains to Built-in TCP Server."
             print_api(message, logger=self.logger)
 
-            message = f"Current engine domains: {self.domain_list}"
+            message = f"Current engine domains: {self.tcp_resolve_domain_list}"
             print_api(message, logger=self.logger, color='green')
 
-        if self.config['dns']['route_to_tcp_server_all_domains']:
+        if self.resolve_to_tcp_server_all_domains:
             message = "Routing all domains to Built-in TCP Server."
             print_api(message, logger=self.logger, color='green')
 
-        if self.config['dns']['regular_resolving']:
-            message = f"Routing all domains to Live DNS Service: {self.config['dns']['forwarding_dns_service_ipv4']}"
+        if self.resolve_regular:
+            message = f"Routing all domains to Live DNS Service: {self.forwarding_dns_service_ipv4}"
             print_api(message, logger=self.logger, color='green')
 
         # The list that will hold all the threads that can be joined later
@@ -127,7 +200,7 @@ class DnsServer:
 
         # Starting a thread that will empty the DNS Cache lists
         thread_current = threading.Thread(target=self.thread_worker_empty_dns_cache,
-                                          args=(self.config['dns']['cache_timeout_minutes'],))
+                                          args=(self.cache_timeout_minutes,))
         thread_current.daemon = True
         # Start the thread
         thread_current.start()
@@ -142,12 +215,13 @@ class DnsServer:
 
             # Binding / assigning the port to the server / this script, that is going to be used for
             # receiving connections.
-            main_socket_object.bind((self.config['dns']['listening_interface'], self.config['dns']['listening_port']))
+            main_socket_object.bind((self.listening_interface, self.listening_port))
 
             while True:
                 # Needed this logging line when DNS was separate process.
                 # self.logger.info("Waiting to receive new requests...")
 
+                # noinspection PyBroadException
                 try:
                     client_data, client_address = main_socket_object.recvfrom(self.buffer_size_receive)
                     client_data: bytes
@@ -171,6 +245,7 @@ class DnsServer:
                     pass
                     continue
 
+                # noinspection PyBroadException
                 try:
                     # This is the real point when the request received was logged, but since it takes too much place
                     # on the screen, moved it to full request logging position.
@@ -180,11 +255,11 @@ class DnsServer:
 
                     # Received DNS request that needs to be parsed to readable format
                     dns_object: dnslib.dns.DNSRecord = DNSRecord.parse(client_data)
-                    # "qtype" returns as numeric identification, we need to convert it to Readable QType (DNS Record Type)
-                    # provided by the dnslib
+                    # "qtype" returns as numeric identification, we need to convert it to
+                    # Readable QType (DNS Record Type) provided by the dnslib
                     # "dns_object.q" is the Question from the client that holds all the DNS question data,
-                    # like which domain was
-                    # questioned for resolving, the class (example: IN), DNS Record Type that was questioned and a header.
+                    # like which domain was questioned for resolving,
+                    # the class (example: IN), DNS Record Type that was questioned and a header.
                     # "dns_object.q.qtype" returns only QType of the Question
                     qtype_string: str = dnslib.QTYPE[dns_object.q.qtype]
                     # "qclass" returns as numeric identification, we need to convert it
@@ -204,7 +279,8 @@ class DnsServer:
                     self.dns_full_logger.info(f"QTYPE: {qtype_string}")
                     self.dns_full_logger.info(f"Question Domain: {question_domain}")
 
-                    message = f"Received request from: {client_address}. Full Request: {dns_object.q}"
+                    message = (f"Received DNS request: {question_domain} | {qclass_string} | {qtype_string} |   "
+                               f"From: {client_address}.")
                     self.logger.info(message)
                     self.dns_full_logger.info(message)
 
@@ -229,12 +305,12 @@ class DnsServer:
                     else:
                         # Check if the incoming Record is "A" record.
                         if qtype_string == "A":
-                            # Check if 'route_to_tcp_server_only_engine_domains' is set to 'True' in 'config.ini'.
-                            # If so, we need to check if the incoming domain contain any of the 'engine_domains'.
-                            if self.config['dns']['route_to_tcp_server_only_engine_domains']:
+                            # Check if 'resolve_to_tcp_server_only_tcp_resolve_domains' is set to 'True'.
+                            # If so, we need to check if the incoming domain contain any of the domains in the list.
+                            if self.resolve_to_tcp_server_only_tcp_resolve_domains:
                                 # If current query domain (+ subdomains) CONTAIN any of the domains from modules config
                                 # files and current request contains "A" (IPv4) record.
-                                if any(x in question_domain for x in self.domain_list):
+                                if any(x in question_domain for x in self.tcp_resolve_domain_list):
                                     # If incoming domain contains any of the 'engine_domains' then domain will
                                     # be forwarded to our TCP Server.
                                     forward_to_tcp_server = True
@@ -243,12 +319,12 @@ class DnsServer:
 
                             # If 'route_to_tcp_server_all_domains' was set to 'False' in 'config.ini' file then
                             # we'll forward all 'A' records domains to the Built-in TCP Server.
-                            if self.config['dns']['route_to_tcp_server_all_domains']:
+                            if self.resolve_to_tcp_server_all_domains:
                                 forward_to_tcp_server = True
 
                             # If 'regular_resolving' was set to 'True' in 'config.ini' file then
                             # we'll forward all 'A' records domains to the Live DNS Service.
-                            if self.config['dns']['regular_resolving']:
+                            if self.resolve_regular:
                                 forward_to_tcp_server = False
 
                         # If incoming record is not an "A" record, then it will not be forwarded to our TCP Server.
@@ -268,7 +344,7 @@ class DnsServer:
                                 # q=DNSQuestion(question_domain),
                                 q=dns_object.q,
                                 a=RR(question_domain,
-                                     rdata=A(self.config['dns']['target_tcp_server_ipv4']),
+                                     rdata=A(self.tcp_target_server_ipv4),
                                      ttl=self.response_ttl)
                             )
                             # Encode the response that was built above to legit DNS Response
@@ -279,7 +355,7 @@ class DnsServer:
                         # any of the domains from modules config files
                         else:
                             # If we're in offline mode
-                            if self.config['dns']['offline_mode']:
+                            if self.offline_mode:
                                 # Make DNS response that will refer TCP traffic to our server
                                 # dns_question = DNSRecord.question(question_domain)
                                 dns_built_response = dns_object.reply()
@@ -290,8 +366,8 @@ class DnsServer:
                                     if qtype_string == "AAAA":
                                         dns_built_response.add_answer(
                                             *RR.fromZone(
-                                                question_domain + " " + str(self.response_ttl) + " " + qtype_string + " " +
-                                                self.offline_route_ipv6)
+                                                f'{question_domain} {str(self.response_ttl)} {qtype_string} '
+                                                f'{self.offline_route_ipv6}')
                                         )
 
                                         message = f"!!! Question / Answer is in offline mode returning " \
@@ -308,7 +384,7 @@ class DnsServer:
                                     # com. domain.com. 2022012500 1800 900 604800 86400
                                     # Basically SOA is the same, but can be with additional fields.
                                     # Since, it's offline and not online - we don't really care.
-                                    elif qtype_string == "SRV" or qtype_string == "SOA":
+                                    elif qtype_string == "SRV" or qtype_string == "SOA" or qtype_string == "HTTPS":
                                         dns_built_response.add_answer(*RR.fromZone(self.offline_srv_answer))
 
                                         message = f"!!! Question / Answer is in offline mode returning: " \
@@ -317,8 +393,6 @@ class DnsServer:
                                         self.dns_full_logger.info(message)
                                     elif qtype_string == "ANY":
                                         dns_built_response.add_answer(
-                                            # *RR.fromZone(question_domain + " " + str(response_ttl) + " " + qclass_string +
-                                            #             " CNAME " + dns_server_offline_route_domain)
                                             *RR.fromZone(question_domain + " " + str(self.response_ttl) + " CNAME " +
                                                          self.offline_route_domain)
                                         )
@@ -330,8 +404,8 @@ class DnsServer:
                                     else:
                                         dns_built_response.add_answer(
                                             *RR.fromZone(
-                                                question_domain + " " + str(self.response_ttl) + " " + qtype_string + " " +
-                                                self.offline_route_ipv4)
+                                                question_domain + " " + str(self.response_ttl) + " " + qtype_string +
+                                                " " + self.offline_route_ipv4)
                                         )
 
                                         message = f"!!! Question / Answer is in offline mode returning " \
@@ -353,7 +427,8 @@ class DnsServer:
                                 # General exception in response creation.
                                 except Exception:
                                     message = \
-                                        f"Unknown exception while creating response for QTYPE: {qtype_string}. Response: "
+                                        (f"Unknown exception while creating response for QTYPE: {qtype_string}. "
+                                         f"Response: ")
                                     print_api(message, logger=self.logger, logger_method='critical',
                                               traceback_string=True, oneline=True)
                                     print_api(f"{dns_built_response}", logger=self.logger, logger_method='critical',
@@ -381,8 +456,8 @@ class DnsServer:
                                         self.logger.info(f"Retry #: {counter}/{self.dns_service_retries}")
                                     self.dns_full_logger.info(
                                         f"Forwarding request. Creating UDP socket to: "
-                                        f"{self.config['dns']['forwarding_dns_service_ipv4']}:"
-                                        f"{OUTBOUND_DNS_PORT}")
+                                        f"{self.forwarding_dns_service_ipv4}:"
+                                        f"{self.forwarding_dns_service_port}")
                                     try:
                                         google_dns_ipv4_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                                         google_dns_ipv4_socket.settimeout(5)
@@ -392,8 +467,8 @@ class DnsServer:
                                         self.dns_full_logger.info(message)
 
                                         google_dns_ipv4_socket.sendto(client_data, (
-                                            self.config['dns']['forwarding_dns_service_ipv4'],
-                                            OUTBOUND_DNS_PORT
+                                            self.forwarding_dns_service_ipv4,
+                                            self.forwarding_dns_service_port
                                         ))
                                         # The script needs to wait a second or receive can hang
                                         message = "Request sent to the forwarding DNS, Receiving the answer..."
@@ -417,7 +492,7 @@ class DnsServer:
                                             self.logger.info(
                                                 f"Retried {self.dns_service_retries} times. "
                                                 f"Couldn't forward DNS request to: "
-                                                f"[{self.config['dns']['forwarding_dns_service_ipv4']}]. "
+                                                f"[{self.forwarding_dns_service_ipv4}]. "
                                                 f"Continuing to next request.")
                                             self.dns_full_logger.info("==========")
 
@@ -433,7 +508,7 @@ class DnsServer:
                                     continue
 
                                 self.dns_full_logger.info(
-                                    f"Answer received from: {self.config['dns']['forwarding_dns_service_ipv4']}")
+                                    f"Answer received from: {self.forwarding_dns_service_ipv4}")
 
                                 # Closing the socket to forwarding service
                                 google_dns_ipv4_socket.close()
@@ -442,20 +517,11 @@ class DnsServer:
                                 # Appending current DNS Request and DNS Answer to the Cache
                                 self.dns_questions_to_answers_cache.update({client_data: dns_response})
 
-                            # if dns_object.q.qtype == dnslib.QTYPE.AAAA:
-
-                            # dns_response = dns_object.reply()
-                            # dns_response.add_answer(*RR.fromZone(f"{question_domain} 60 {qtype_object} 8.8.8.8"))
-
-                            # dns_built_response = \
-                            #     DNSRecord(
-                            #         DNSHeader(id=dns_object.header.id, qr=1, aa=1, ra=1), q=DNSQuestion(question_domain),
-                            #     a=RR.fromZone(question_domain + " 60 " + qtype_object + " " + dns_server_offline_ipv4))
-
-                    # If 'forward_to_tcp_server' it means that we built the response, and we don't need to reparse it, since
-                    # we already have all the data.
+                    # If 'forward_to_tcp_server' it means that we built the response, and we don't need to reparse it,
+                    # since we already have all the data.
                     if forward_to_tcp_server:
                         self.dns_full_logger.info(f"Response IP: {dns_built_response.short()}")
+                        self.logger.info(f"Response {dns_built_response.short()}")
 
                         message = f"Response Details: {dns_built_response.rr}"
                         print_api(message, logger=self.dns_full_logger, logger_method='info', oneline=True)
@@ -501,7 +567,7 @@ class DnsServer:
                     # for index, ip_address in enumerate(ipv4_addresses):
                     #     ipv4_addresses[index] = str(ip_address)
 
-                    # ==============================================================================================================
+                    # ==================================================================================================
                     # # Known domain dictionary of last 2 A records' management.
                     #
                     # # Sorting the addresses, so it will be easier to compare dictionaries in the list.
@@ -523,7 +589,7 @@ class DnsServer:
                     #
                     # dns.logger.info(f"Latest known list: {known_a_records_domains_list_last_entries}")
 
-                    # ==============================================================================================================
+                    # ==================================================================================================
                     # Known domain list management (A Records only)
 
                     # If current request is in the cache,
@@ -569,20 +635,20 @@ class DnsServer:
 
                                 # Save this string object as log file.
                                 with open(
-                                        self.config['log']['logs_path'] + os.sep + self.known_domains_filename, 'w'
+                                        self.log_directory_path + os.sep + self.known_domains_filename, 'w'
                                 ) as output_file:
                                     output_file.write(record_string_line)
 
                                 self.dns_full_logger.info(
                                     f"Saved new known domains file: "
-                                    f"{self.config['log']['logs_path'] + os.sep + self.known_domains_filename}")
+                                    f"{self.log_directory_path}{os.sep}{self.known_domains_filename}")
 
                     # Known domain list managements EOF
-                    # ==============================================================================================================
+                    # ==================================================================================================
                     # Known IPv4 address to domains list management (A Records only)
 
                     # If DNS Server 'offline_mode' was set to 'False'.
-                    if not self.config['dns']['offline_mode']:
+                    if not self.offline_mode:
                         dump_ipv4_dictionary_to_file = False
                         # If IPv4 address list is not empty, meaning this DNS request was A type.
                         if ipv4_addresses:
@@ -595,9 +661,9 @@ class DnsServer:
                                     # If so, get the list of current domains for current ipv4 address.
                                     current_domains_list = known_a_records_ipv4_dict[current_ip_address]
 
-                                    # If current question domain is not in the known domains that we had from previous DNS
-                                    # requests for the same IPv4 address, then we'll add this domain to the known domains
-                                    # list for this IPv4.
+                                    # If current question domain is not in the known domains that we had from
+                                    # previous DNS requests for the same IPv4 address, then we'll add this domain
+                                    # to the known domains list for this IPv4.
                                     # And update the dictionary of known IPv4 addresses and their domains.
                                     if question_domain not in current_domains_list:
                                         current_domains_list.append(question_domain)
@@ -628,16 +694,16 @@ class DnsServer:
 
                                     # Save this string object as log file.
                                     with open(
-                                            self.config['log']['logs_path'] + os.sep + self.known_ipv4_filename, 'w'
+                                            self.log_directory_path + os.sep + self.known_ipv4_filename, 'w'
                                     ) as output_file:
                                         output_file.write(record_string_line)
 
                                     self.dns_full_logger.info(
                                         f"Saved new known IPv4 addresses file: "
-                                        f"{self.config['log']['logs_path'] + os.sep + self.known_ipv4_filename}")
+                                        f"{self.log_directory_path}{os.sep}{self.known_ipv4_filename}")
 
                     # Known IPv4 address to domains list management EOF
-                    # ==============================================================================================================
+                    # ==================================================================================================
                     # Writing IPs by time.
 
                     # If IPv4 address list is not empty, meaning this DNS request was A type.
@@ -648,25 +714,12 @@ class DnsServer:
 
                             # Save this string object as log file.
                             with open(
-                                    self.config['log']['logs_path'] + os.sep + self.known_dns_ipv4_by_time_filename, 'a'
+                                    self.log_directory_path + os.sep + self.known_dns_ipv4_by_time_filename, 'a'
                             ) as output_file:
                                 output_file.write(record_string_line + '\n')
 
                     # EOF Writing IPs by time.
-                    # ==============================================================================================================
-                    # SSH Remote / LOCALHOST script execution to identify process section
-
-                    # Starting a thread that will query IPs of the last DNS request.
-                    # thread_current = \
-                    #     threading.Thread(
-                    #         target=thread_worker_check_process_by_ip, args=(ipv4_addresses, client_address[0],))
-                    # # Append to list of threads, so they can be "joined" later
-                    # threads_list.append(thread_current)
-                    # # Start the thread
-                    # thread_current.start()
-
-                    # EOF SSH / LOCALHOST executing process command line harvesting.
-                    # ==================================================================================================================
+                    # ==================================================================================================
 
                     self.dns_full_logger.info("==========")
                 except Exception:

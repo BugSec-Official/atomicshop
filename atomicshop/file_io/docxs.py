@@ -26,6 +26,14 @@ def get_hyperlinks(docx_path):
         if not paragraph.hyperlinks:
             continue
         for hyperlink in paragraph.hyperlinks:
+            # Hyperlinks are stored in docx (document.xml) without the fragment part.
+            # Fragment is the anchor of the link, for example: 'https://www.example.com#anchor'.
+            # So the hyperlink.address is stored as 'https://www.example.com'.
+            # And the fragment is stored in the hyperlink.fragment as 'anchor'.
+            # For the full hyperlink, we need to concatenate the address and the fragment.
+            # If there is no anchor in the link the fragment will be empty string ('').
+            if hyperlink.fragment:
+                hyperlinks.append(hyperlink.address + "#" + hyperlink.fragment)
             hyperlinks.append(hyperlink.address)
 
     return hyperlinks

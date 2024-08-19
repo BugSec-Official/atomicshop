@@ -1,6 +1,6 @@
 from typing import Union, Literal
 
-from .wrappers.pywin32w import wmi_win32process
+from .wrappers.pywin32w.wmis import win32process
 from .wrappers.psutilw import psutilw
 from .basics import dicts
 from . import get_process_name_cmd_dll
@@ -36,7 +36,7 @@ class GetProcessList:
             self.process_polling_instance = psutilw.PsutilProcesses()
             self.connected = True
         elif self.get_method == 'pywin32':
-            self.process_polling_instance = wmi_win32process.Pywin32Processes()
+            self.process_polling_instance = win32process.Pywin32Processes()
         elif self.get_method == 'process_dll':
             self.process_polling_instance = get_process_name_cmd_dll.ProcessNameCmdline()
 

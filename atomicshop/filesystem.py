@@ -240,7 +240,7 @@ def check_absolute_path___add_full(filesystem_path: str, full_path_to_add: str) 
     """
 
     if not check_absolute_path(filesystem_path):
-        return f'{full_path_to_add}{os.sep}{remove_first_separator(filesystem_path)}'
+        return f'{full_path_to_add}{os.sep}{remove_last_separator(filesystem_path)}'
     else:
         return filesystem_path
 
@@ -815,10 +815,11 @@ def remove_last_separator(directory_path: str) -> str:
     return directory_path.removesuffix(os.sep)
 
 
-def remove_first_separator(filesystem_path: str) -> str:
+def remove_last_separator(filesystem_path: str) -> str:
     """
-    The function removes the first character in 'filesystem_path' if it is a separator returning the processed string.
-    If the first character is not a separator, nothing is happening.
+    The function removes the last character in 'filesystem_path' if it is a system separator ('/' or '\')
+    returning the processed string.
+    If the character is not a separator, nothing happens.
 
     :param filesystem_path:
     :return:

@@ -1,7 +1,7 @@
 import socket
 import ssl
 
-from . import base, sni, certificator, exception_wrapper
+from . import base, exception_wrapper
 from ...print_api import print_api
 
 
@@ -101,17 +101,16 @@ def create_server_ssl_context___load_certificate_and_key(certificate_file_path: 
 
 
 @exception_wrapper.connection_exception_decorator
-def wrap_socket_with_ssl_context_server(socket_object, ssl_context, dns_domain: str = None, print_kwargs: dict = None):
+def wrap_socket_with_ssl_context_server(
+        socket_object,
+        ssl_context,
+        domain_from_dns_server,
+        print_kwargs: dict = None
+):
     """
     This function is wrapped with exception wrapper.
     After you execute the function, you can get the error message if there was any with:
         error_message = wrap_socket_with_ssl_context_server.message
-
-    :param socket_object:
-    :param ssl_context:
-    :param dns_domain:
-    :param print_kwargs:
-    :return:
     """
 
     # Wrapping the server socket with SSL context. This should happen right after setting up the raw socket.
@@ -122,10 +121,16 @@ def wrap_socket_with_ssl_context_server(socket_object, ssl_context, dns_domain: 
 
 
 def wrap_socket_with_ssl_context_server_with_error_message(
-        socket_object, ssl_context, dns_domain: str = None, print_kwargs: dict = None):
+        socket_object,
+        ssl_context,
+        domain_from_dns_server,
+        print_kwargs: dict = None
+):
 
     ssl_socket = wrap_socket_with_ssl_context_server(
-        socket_object, ssl_context, dns_domain=dns_domain, print_kwargs=print_kwargs)
+        socket_object=socket_object, ssl_context=ssl_context, domain_from_dns_server=domain_from_dns_server,
+        print_kwargs=print_kwargs)
+
     error_message = wrap_socket_with_ssl_context_server.message
 
     return ssl_socket, error_message
@@ -190,28 +195,3 @@ def wrap_socket_with_ssl_context_client___default_certs___ignore_verification(
         socket_object, ssl_context, server_hostname=server_hostname)
 
     return ssl_socket
-
-
-def wrap_socket_with_ssl_context_server_sni_extended(
-        socket_object, config: dict, dns_domain: str = None, print_kwargs: dict = None):
-
-    ssl_context = create_ssl_context_for_server()
-
-    sni.add_sni_callback_function_reference_to_ssl_context(
-        ssl_context=ssl_context, config=config, dns_domain=dns_domain, use_default_sni_function=True,
-        use_sni_extended=True, print_kwargs=print_kwargs)
-
-    server_certificate_file_path, server_private_key_file_path = \
-        certificator.select_server_ssl_context_certificate(config=config, print_kwargs=print_kwargs)
-
-    # If the user chose 'sni_create_server_certificate_for_each_domain = 1' in the configuration file,
-    # it means that 'self.server_certificate_file_path' will be empty, which is OK, since we'll inject
-    # dynamically created certificate from certs folder through SNI.
-    if server_certificate_file_path:
-        load_certificate_and_key_into_server_ssl_context(
-            ssl_context, server_certificate_file_path, server_private_key_file_path,
-            print_kwargs=print_kwargs)
-
-    ssl_socket, error_message = wrap_socket_with_ssl_context_server_with_error_message(
-        socket_object, ssl_context, dns_domain=dns_domain, print_kwargs=print_kwargs)
-    return ssl_socket, error_message

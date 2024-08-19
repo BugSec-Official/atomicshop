@@ -1,5 +1,6 @@
 from typing import Union
 import shlex
+import socket
 
 import psutil
 
@@ -14,7 +15,10 @@ def get_process_using_port(port: int) -> Union[dict, None]:
         try:
             connections = proc.connections(kind='inet')
             for conn in connections:
-                if conn.laddr.port == port:
+                # if conn.laddr.port == port:
+                # Status LISTEN is for TCP sockets and NONE is for UDP sockets.
+                # Sometimes after socket close, the port will be in TIME_WAIT state.
+                if conn.laddr.port == port and (conn.status == 'LISTEN' or conn.status == 'NONE'):
                     cmdline = proc.info['cmdline']
                     if not cmdline:
                         cmdline = '<EMPTY: TRY RUNNING AS ADMIN>'
@@ -43,3 +47,23 @@ def get_processes_using_port_list(ports: list) -> Union[dict, None]:
             port_process_map[port] = process_info
 
     return port_process_map
+
+
+def get_default_connection_name() -> Union[dict, None]:
+    """
+    Function to get the default network interface.
+    :return: dict[interface_name: details] or None.
+    """
+    # Get all interfaces.
+    interfaces: dict = psutil.net_if_addrs()
+    default_ip_address: str = socket.gethostbyname(socket.gethostname())
+
+    for interface, details in interfaces.items():
+        for address in details:
+            # Check if the address is an IPv4 address (AF_INET) and not a loopback (127.0.0.1)
+            if address.family == socket.AF_INET and not address.address.startswith('127.'):
+                # Check if the address is the default IP address.
+                if address.address == default_ip_address:
+                    return {interface: details}
+
+    return None

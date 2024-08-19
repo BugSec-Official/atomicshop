@@ -80,7 +80,7 @@ def convert_pem_to_x509_object(certificate: Union[str, bytes]) -> x509.Certifica
     return x509.load_pem_x509_certificate(certificate)
 
 
-def convert_der_to_x509_object(certificate: bytes):
+def convert_der_to_x509_object(certificate: bytes) -> x509.Certificate:
     """Convert DER certificate from socket to x509 object.
 
     :param certificate: bytes, certificate to convert.
@@ -151,8 +151,8 @@ def copy_extensions_from_old_cert_to_new_cert(
     builder = x509.CertificateBuilder()
     builder = builder.subject_name(certificate.subject)
     builder = builder.issuer_name(certificate.issuer)
-    builder = builder.not_valid_before(certificate.not_valid_before)
-    builder = builder.not_valid_after(certificate.not_valid_after)
+    builder = builder.not_valid_before(certificate.not_valid_before_utc)
+    builder = builder.not_valid_after(certificate.not_valid_after_utc)
     builder = builder.serial_number(certificate.serial_number)
 
     # We're using the new private key that we will sign with the new certificate later.

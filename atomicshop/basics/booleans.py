@@ -1,14 +1,23 @@
-def check_3_booleans_when_only_1_can_be_true(boolean1: tuple, boolean2: tuple, boolean3: tuple) -> None:
+def check_3_booleans_when_only_1_can_be_true(
+        boolean1: tuple,
+        boolean2: tuple,
+        boolean3: tuple
+) -> None:
     """
+    Check if only one boolean can be 'True' from 3 booleans
+
+    :param boolean1: tuple, (value, string name of the setting you want to print to the user to be aware of).
+    :param boolean2: tuple, (value, string name of the setting you want to print to the user to be aware of).
+    :param boolean3: tuple, (value, string name of the setting you want to print to the user to be aware of).
+    :return:
+
+    ------------------------------------------------
+
     Example:
         check_3_booleans_when_only_1_can_be_true(
             (self.config['section']['default_usage'], 'default_usage'),
             (self.config['section']['create_usage'], 'create_usage'),
             (self.config['section']['custom_usage'], 'custom_usage'))
-    :param boolean1: tuple, (value, string name of the setting you want to print to the user to be aware of).
-    :param boolean2: tuple, (value, string name of the setting you want to print to the user to be aware of).
-    :param boolean3: tuple, (value, string name of the setting you want to print to the user to be aware of).
-    :return:
     """
 
     check_if_3_booleans_are_false(boolean1, boolean2, boolean3)

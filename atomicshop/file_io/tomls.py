@@ -10,6 +10,10 @@ except ModuleNotFoundError:
 from . import file_io
 
 
+class TomlValueNotImplementedError(Exception):
+    pass
+
+
 @file_io.read_file_decorator
 def read_toml_file(file_path: str,
                    file_mode: str = 'rb',
@@ -84,3 +88,132 @@ def dumps(toml_dict: dict):
         toml_string += process_item(key, value)
 
     return toml_string
+
+
+def update_toml_file_with_new_config(
+        main_config_file_path: str,
+        changes_config_file_path: str = None,
+        changes_dict: dict = None,
+        new_config_file_path: str = None
+) -> None:
+    """
+    Update the old toml config file with the new values from the new toml config file.
+    This will update only the changed values.
+    If the values from the changes file aren't present in the main config file, they will not be added.
+
+    :param main_config_file_path: string, path to the main config file that you want to use as the main reference.
+        If you provide the 'new_config_file_path', then changes to the 'main_config_file_path' will be written there.
+    :param changes_config_file_path: string, the config file path that have the changes.
+        Only changed values will be updated to the 'main_config_file_path'.
+    :param changes_dict: dict, the dictionary with the changes.
+        Instead of providing the 'changes_config_file_path', you can provide only the dictionary with the changes.
+    :param new_config_file_path: string, path to the new config file.
+        If provided, the changes will be written to this file.
+        If not, the changes will be written to the 'main_config_file_path'.
+    """
+
+    # Sync the config files.
+    with open(main_config_file_path, 'r') as file:
+        main_config_file_text_lines: list = file.readlines()
+
+    main_config_file_text_lines_backup: list = list(main_config_file_text_lines)
+
+    # Read the new config file.
+    main_config_file_dict: dict = read_toml_file(main_config_file_path)
+
+    if changes_dict:
+        changes_config_file_dict = changes_dict
+    else:
+        changes_config_file_dict: dict = read_toml_file(changes_config_file_path)
+
+    # Update the config text lines.
+    for category, settings in main_config_file_dict.items():
+        if category not in changes_config_file_dict:
+            continue
+
+        for key, value in settings.items():
+            # If the key is in the old config file, use the old value.
+            if key not in changes_config_file_dict[category]:
+                continue
+
+            if main_config_file_dict[category][key] != changes_config_file_dict[category][key]:
+                # Get the line of the current category line.
+                current_category_line_index_in_text = None
+                for current_category_line_index_in_text, line in enumerate(main_config_file_text_lines):
+                    if f"[{category}]" in line:
+                        break
+
+                # current_category_line_index_in_text = main_config_file_text_lines.index(f"[{category}]\n")
+                current_category_index_in_main_config_dict = list(main_config_file_dict.keys()).index(category)
+
+                try:
+                    next_category_name = list(
+                        main_config_file_dict.keys())[current_category_index_in_main_config_dict + 1]
+                except IndexError:
+                    next_category_name = list(main_config_file_dict.keys())[-1]
+
+                next_category_line_index_in_text = None
+                for next_category_line_index_in_text, line in enumerate(main_config_file_text_lines):
+                    if f"[{next_category_name}]" in line:
+                        break
+
+                # In case the current and the next categories are the same and the last in the file.
+                if next_category_line_index_in_text == current_category_line_index_in_text:
+                    next_category_line_index_in_text = len(main_config_file_text_lines)
+
+                string_to_check_list: list = list()
+                if isinstance(value, bool):
+                    string_to_check_list.append(f"{key} = {str(value).lower()}")
+                elif isinstance(value, int):
+                    string_to_check_list.append(f"{key} = {value}")
+                elif isinstance(value, str):
+                    string_to_check_list.append(f"{key} = '{value}'")
+                    string_to_check_list.append(f'{key} = "{value}"')
+                else:
+                    raise TomlValueNotImplementedError(f"Value type '{type(value)}' not implemented.")
+
+                # next_category_line_index_in_text = main_config_file_text_lines.index(f"[{next_category_name}]\n")
+                # Find the index of this line in the text file between current category line and
+                # the next category line.
+                line_index = None
+                found_line = False
+                for line_index in range(current_category_line_index_in_text, next_category_line_index_in_text):
+                    if found_line:
+                        line_index = line_index - 1
+                        break
+                    for string_to_check in string_to_check_list:
+                        if string_to_check in main_config_file_text_lines[line_index]:
+                            found_line = True
+                            break
+
+                if found_line:
+                    # If there are comments, get only them from the line. Comment will also get the '\n' character.
+                    # noinspection PyUnboundLocalVariable
+                    comment = main_config_file_text_lines[line_index].replace(string_to_check, '')
+
+                    object_type = type(changes_config_file_dict[category][key])
+                    if object_type == bool:
+                        value_string_to_set = str(changes_config_file_dict[category][key]).lower()
+                    elif object_type == str:
+                        value_string_to_set = f"'{changes_config_file_dict[category][key]}'"
+                    elif object_type == int:
+                        value_string_to_set = str(changes_config_file_dict[category][key])
+
+                    # noinspection PyUnboundLocalVariable
+                    line_to_set = f"{key} = {value_string_to_set}{comment}"
+                    # Replace the line with the old value.
+                    main_config_file_text_lines[line_index] = line_to_set
+
+                    main_config_file_dict[category][key] = changes_config_file_dict[category][key]
+
+    if new_config_file_path:
+        file_path_to_write = new_config_file_path
+    else:
+        file_path_to_write = main_config_file_path
+
+    if not main_config_file_text_lines == main_config_file_text_lines_backup:
+        # Write the final config file.
+        with open(file_path_to_write, 'w') as file:
+            file.writelines(main_config_file_text_lines)
+    else:
+        print("No changes to the config file.")

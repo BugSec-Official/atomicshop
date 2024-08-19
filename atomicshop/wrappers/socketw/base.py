@@ -1,6 +1,11 @@
 import socket
 
 
+LOCALHOST_IPV4: str = '127.0.0.1'
+DEFAULT_IPV4: str = socket.gethostbyname(socket.gethostname())
+THIS_DEVICE_IP_LIST: list = [LOCALHOST_IPV4, DEFAULT_IPV4]
+
+
 def get_local_network_interfaces_ip_address(family_type: str = None, ip_only: bool = False) -> list:
     """
     Return list of IP addresses of local network interfaces.
@@ -57,3 +62,11 @@ def get_source_destination(socket_object):
 def set_socket_timeout(socket_object, seconds: int = 1):
     # Setting timeout on the socket before "accept()" drastically slows down connections.
     socket_object.settimeout(seconds)
+
+
+def get_default_ip_address() -> str:
+    """
+    Get the default IP address of the system.
+    :return: string.
+    """
+    return socket.gethostbyname(socket.gethostname())

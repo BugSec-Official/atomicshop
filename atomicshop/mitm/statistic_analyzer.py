@@ -346,6 +346,7 @@ def analyze(main_file_path: str):
 
 def deviation_calculator_by_moving_average_main(
         statistics_file_directory: str,
+        by_type: Literal['host', 'url'],
         moving_average_window_days: int,
         top_bottom_deviation_percentage: float,
         get_deviation_for_last_day_only: bool = False,
@@ -359,6 +360,9 @@ def deviation_calculator_by_moving_average_main(
     :param statistics_file_directory: string, the directory where 'statistics.csv' file resides.
         Also, all the rotated files like: statistics_2021-01-01.csv, statistics_2021-01-02.csv, etc.
         These will be analyzed in the order of the date in the file name.
+    :param by_type: string, 'host' or 'url'. The type of the deviation calculation.
+        'host' will calculate the deviation by the host name. Example: maps.google.com, yahoo.com, etc.
+        'url' will calculate the deviation by the URL. Example: maps.google.com/maps, yahoo.com/news, etc.
     :param moving_average_window_days: integer, the moving average window days.
     :param top_bottom_deviation_percentage: float, the top bottom deviation percentage. Example: 0.1 for 10%.
     :param get_deviation_for_last_day_only: bool, if True, only the last day will be analyzed.
@@ -402,6 +406,9 @@ def deviation_calculator_by_moving_average_main(
     if output_file_type not in ['json', 'csv']:
         raise ValueError(f'output_file_type must be "json" or "csv", not [{output_file_type}]')
 
+    if by_type not in ['host', 'url']:
+        raise ValueError(f'by_type must be "host" or "url", not [{by_type}]')
+
     statistics_file_path: str = f'{statistics_file_directory}{os.sep}{STATISTICS_FILE_NAME}'
 
     def convert_data_value_to_string(value_key: str, list_index: int) -> None:
@@ -413,6 +420,7 @@ def deviation_calculator_by_moving_average_main(
 
     deviation_list = moving_average_helper.calculate_moving_average(
         statistics_file_path,
+        by_type,
         moving_average_window_days,
         top_bottom_deviation_percentage,
         get_deviation_for_last_day_only
@@ -436,7 +444,11 @@ def deviation_calculator_by_moving_average_main(
                     'value': deviation.get('value', None),
                     'ma_value': deviation.get('ma_value', None),
                     'deviation_percentage': deviation.get('deviation_percentage', None),
-                    'total_entries_averaged': total_entries_averaged
+                    'total_entries_averaged': total_entries_averaged,
+                    'median_request_size': deviation.get('median_request_size', None),
+                    'median_response_size': deviation.get('median_response_size', None),
+                    'mm_request_size': deviation.get('mm_request_size', None),
+                    'mm_response_size': deviation.get('mm_response_size', None),
                 })
 
             deviation_list = summary_deviation_list
