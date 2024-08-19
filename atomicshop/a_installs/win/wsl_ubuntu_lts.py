@@ -1,6 +1,7 @@
 from atomicshop.wrappers import wslw
 
 
+# Run as admin
 def main():
     wslw.install_wsl()
 

@@ -4,7 +4,8 @@ from typing import Union
 import argparse
 import subprocess
 
-from ... import urls, web, permissions
+from ... import urls, web
+from ...permissions import permissions
 from ...print_api import print_api
 from .. import msiw
 from . import infrastructure

@@ -1,8 +1,8 @@
-from atomicshop.wrappers import pycharmw
+from atomicshop.wrappers.pycharmw import win
 
 
 def main():
-    pycharmw.download_install_main()
+    win.download_install_main()
 
 
 if __name__ == "__main__":

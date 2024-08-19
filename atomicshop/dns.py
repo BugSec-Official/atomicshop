@@ -3,7 +3,7 @@ import argparse
 import dns.resolver
 
 from .print_api import print_api
-from . import permissions
+from .permissions import permissions
 from .wrappers.pywin32w.wmis import win32networkadapter
 
 

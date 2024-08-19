@@ -2,8 +2,8 @@ import requests
 from bs4 import BeautifulSoup
 import subprocess
 
-from .. import web, filesystem
-from ..print_api import print_api
+from ... import web, filesystem
+from ...print_api import print_api
 
 
 # URL to the PyCharm Community Edition download page

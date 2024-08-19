@@ -2,7 +2,8 @@ import sys
 import subprocess
 import getpass
 
-from ... import process, filesystem, permissions
+from ... import process, filesystem
+from ...permissions import permissions, ubuntu_permissions
 from ...print_api import print_api
 from .. import ubuntu_terminal
 
@@ -38,7 +39,7 @@ def add_current_user_to_docker_group(print_kwargs: dict = None):
     :return:
     """
     # Check if current user that executed the script is a sudo user. If not, use the current user.
-    sudo_executer_username: str = permissions.get_ubuntu_sudo_executer_username()
+    sudo_executer_username: str = ubuntu_permissions.get_sudo_executer_username()
     if sudo_executer_username:
         current_user = sudo_executer_username
     else:
@@ -145,7 +146,7 @@ def install_docker_ubuntu(
             ubuntu_terminal.update_system_packages()
             ubuntu_terminal.install_packages(['uidmap'])
 
-        with permissions.temporary_regular_permissions():
+        with ubuntu_permissions.temporary_regular_permissions():
             # After 'get-docker.sh' execution, we will install docker in rootless mode.
             # process.execute_script('dockerd-rootless-setuptool.sh install', shell=True, as_regular_user=True)
             process.execute_script(
@@ -164,13 +165,13 @@ def install_docker_ubuntu(
         process.execute_script(docker_enable_command, shell=True, executable=None)
 
         print_api('Executing "loginctl enable-linger" to enable Docker to run when the user is not logged in...')
-        non_sudo_executer = permissions.get_ubuntu_sudo_executer_username()
+        non_sudo_executer = ubuntu_permissions.get_sudo_executer_username()
         # Enable lingering so Docker runs when the user is not logged in
         process.execute_script(f'sudo loginctl enable-linger {non_sudo_executer}', shell=True)
 
         print_api('Adding $HOME/bin to your PATH...')
         # Add $HOME/bin to your PATH if it's not already there.
-        with permissions.temporary_regular_permissions():
+        with ubuntu_permissions.temporary_regular_permissions():
             ubuntu_terminal.add_path_to_bashrc(as_regular_user=True)
 
         # Add appropriate permissions to the docker socket, so the user can run docker commands without sudo in python.
