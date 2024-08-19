@@ -1,6 +1,9 @@
 import socket
 import ssl
 import time
+from typing import Literal, Union
+
+from cryptography import x509
 
 from . import creator
 from .receiver import Receiver
@@ -10,7 +13,6 @@ from .. import cryptographyw
 from ..loggingw import loggingw
 from ...print_api import print_api
 from ...file_io import file_io
-from ... import filesystem
 
 import dns.resolver
 
@@ -323,9 +325,9 @@ class SocketClient:
             self,
             save_as_file: bool = False,
             cert_file_path: str = None,
-            cert_output_type: str = 'der',
+            cert_output_type: Literal['der', 'cryptography'] = 'der',
             **kwargs
-    ):
+    ) -> Union[x509.Certificate]:
         """
         This function will get the certificate from the server and return it.
 
@@ -339,15 +341,6 @@ class SocketClient:
         # If "save_as_file" is True, then "cert_file_path" must be provided, if not, raise an exception.
         if save_as_file and not cert_file_path:
             raise ValueError("If 'save_as_file' is True, then 'cert_file_path' must be provided.")
-        # If 'save_as_file' is True and 'cert_file_path' is provided, then check if the file exists.
-        # Since there is no point fetching the certificate from the socket if it already exists.
-        elif save_as_file and cert_file_path:
-            # If certificate from socket exists, then we don't need to get it from the socket and write to file.
-            # and we will return None, since no certificate was fetched.
-            if filesystem.is_file_exists(cert_file_path):
-                return None
-            else:
-                print_api("Certificate from socket doesn't exist, fetching.", logger=self.logger)
 
         # Connect and get the connected socket.
         server_socket_for_certificate = self.service_connection()

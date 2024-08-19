@@ -1,6 +1,7 @@
 """Loading resources using stdlib importlib.resources APIs (Python 3.7+)
 https://docs.python.org/3/library/importlib.html#module-importlib.resources"""
 import importlib.resources
+from typing import Literal
 
 from .print_api import print_api
 
@@ -13,7 +14,10 @@ class ScriptAsStringProcessor:
         self.exchange_input_variable_string: str = "exchange_input_variable"
         self.script_string: str = str()
 
-    def read_script_to_string(self, script_file_name: str):
+    def read_script_to_string(
+            self,
+            script_file_name: Literal['process_from_port', 'process_from_ipv4']
+    ):
         self.script_string = importlib.resources.read_text(
             f'{__package__}.{self.resources_directory_name}',
             f'{script_file_name}.py')

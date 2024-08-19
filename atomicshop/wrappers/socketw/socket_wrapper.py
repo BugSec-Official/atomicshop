@@ -1,34 +1,180 @@
 import threading
 import select
+from typing import Literal, Union
 
-from . import base, creator, get_process, accepter, statistics_csv, ssl_base
+from ..psutilw import networks
 from ...script_as_string_processor import ScriptAsStringProcessor
-from ... import queues
+from ... import queues, filesystem
+from ...basics import booleans
 from ...print_api import print_api
+
+from . import base, creator, get_process, accepter, statistics_csv, ssl_base, sni
+
+
+class SocketWrapperPortInUseError(Exception):
+    pass
+
+
+class SocketWrapperConfigurationValuesError(Exception):
+    pass
 
 
 SNI_QUEUE = queues.NonBlockQueue()
 
 
-# === Socket Wrapper ===================================================================================================
 class SocketWrapper:
     def __init__(
             self,
+            listening_interface: str,
+            listening_port_list: list[int],
+            forwarding_dns_service_ipv4_list___only_for_localhost: list = None,
+            ca_certificate_name: str = None,
+            ca_certificate_filepath: str = None,
+            default_server_certificate_usage: bool = False,
+            default_server_certificate_name: str = None,
+            default_certificate_domain_list: list = None,
+            default_server_certificate_directory: str = None,
+            sni_custom_callback_function: callable = None,
+            sni_use_default_callback_function: bool = False,
+            sni_use_default_callback_function_extended: bool = False,
+            sni_add_new_domains_to_default_server_certificate: bool = False,
+            sni_create_server_certificate_for_each_domain: bool = False,
+            sni_server_certificates_cache_directory: str = None,
+            sni_get_server_certificate_from_server_socket: bool = False,
+            sni_server_certificate_from_server_socket_download_directory: str = None,
+            skip_extension_id_list: list = None,
+            custom_server_certificate_usage: bool = False,
+            custom_server_certificate_path: str = None,
+            custom_private_key_path: str = None,
+            get_process_name: bool = False,
+            ssh_user: str = None,
+            ssh_pass: str = None,
+            ssh_script_to_execute: Union[
+                Literal[
+                    'process_from_port',
+                    'process_from_ipv4'
+                ],
+                None
+            ] = None,
             logger=None,
-            statistics_logger=None,
-            config=None,
-            domains_list: list = None
+            statistics_logs_directory: str = None,
+            request_domain_queue: queues.NonBlockQueue = None
     ):
+        """
+        Socket Wrapper class that will be used to create sockets, listen on them, accept connections and send them to
+        new threads.
 
+        :param listening_interface: string, interface that will be listened on.
+            Example: '0.0.0.0'. For all interfaces.
+        :param listening_port_list: list, of ports that will be listened on.
+        :param ca_certificate_name: CA certificate name.
+        :param ca_certificate_filepath: CA certificate file path.
+        :param default_server_certificate_usage: boolean, if True, default server certificate will be used
+            for each incoming socket.
+        :param sni_custom_callback_function: callable, custom callback function that will be executed when
+            there is a SNI present in the request.
+
+            Example: custom callback function to set the 'server_hostname' for the socket with the domain name from SNI:
+                    def sni_handle(
+                            sni_ssl_socket: ssl.SSLSocket,
+                            sni_destination_name: str,
+                            sni_ssl_context: ssl.SSLContext):
+                        # Set 'server_hostname' for the socket.
+                        sni_ssl_socket.server_hostname = sni_destination_name
+
+                        return sni_handle
+
+            The function should accept 3 arguments:
+                sni_ssl_socket: ssl.SSLSocket, SSL socket object.
+                sni_destination_name: string, domain name from SNI.
+                sni_ssl_context: ssl.SSLContext, SSL context object.
+
+            These parameters are default for any SNI handler function, so you can use them in your custom function.
+
+        :param sni_use_default_callback_function: boolean, if True, default callback function will be used.
+            The function will set the 'server_hostname' for the socket with the domain name from SNI.
+            The example in 'sni_custom_callback_function' parameter is the function that will be used.
+        :param sni_use_default_callback_function_extended: boolean, if True, default callback function will be used
+            with extended functionality. This feature will handle all the features and parameters that are set in
+            the SocketWrapper object that are related to SNI. THis includes certificate management for each domain,
+            adding new domains to the default certificate, creating new certificates for each domain, etc.
+            This feature also utilizes the 'request_domain_queue' parameter to get the domain name that was requested
+            from the DNS server (atomicshop.wrappers.socketw.dns_server).
+        :param sni_add_new_domains_to_default_server_certificate: boolean, if True, new domains that hit the tcp
+            server will be added to default server certificate.
+        :param sni_create_server_certificate_for_each_domain: boolean, if True, server certificate will be
+            created and used for each domain that hit the tcp server.
+        :param sni_get_server_certificate_from_server_socket: boolean, if True, server certificate will be
+            downloaded from the server socket.
+        :param sni_server_certificate_from_server_socket_download_directory: string, path to directory where
+            server certificate will be downloaded from the server socket.
+        :param default_server_certificate_name: default server certificate name.
+        :param default_certificate_domain_list: list of string, domains to create the default certificate with.
+        :param default_server_certificate_directory: string, path to directory where default certificate file
+            will be stored.
+        :param sni_server_certificates_cache_directory: string, path to directory where all server certificates for
+            each domain will be created.
+        :param skip_extension_id_list: list of string, list of extension IDs that will be skipped when processing
+            the certificate from the server socket.
+            Example: ['1.3.6.1.5.5.7.3.2', '2.5.29.31', '1.3.6.1.5.5.7.1.1']
+        :param custom_server_certificate_usage: boolean, if True, custom server certificate will be used.
+        :param custom_server_certificate_path: string, path to custom server certificate.
+        :param custom_private_key_path: string, path to custom private key.
+            server certificates from the server socket.
+        :param get_process_name: boolean, if the process name and command line should be gathered from the socket.
+            If the socket came from remote host we will try ti get the process name from the remote host by SSH.
+            By default, we don't get the process name, because we're using psutil to get the process name and command
+            line, but if the process is protected by the system, then command line will be empty.
+            It's up to user to decide if to run the script with root privileges or not, this is only relevant if
+            the script is running on the same host.
+        :param ssh_user: string, SSH username that will be used to connect to remote host.
+        :param ssh_pass: string, SSH password that will be used to connect to remote host.
+        :param ssh_script_to_execute: string, script that will be executed to get the process name on ssh remote host.
+        :param logger: logging.Logger object, logger object that will be used to log messages.
+        :param statistics_logs_directory: string, path to directory where daily statistics.csv files will be stored.
+            After you initialize the SocketWrapper object, you can get the statistics_writer object from it and use it
+            to write statistics to the file in a worker thread.
+
+            socket_wrapper_instance = SocketWrapper(...)
+            statistics_writer = socket_wrapper_instance.statistics_writer
+
+            statistics_writer: statistics_csv.StatisticsCSVWriter object, there is a logger object that
+                will be used to write the statistics file.
+        :param request_domain_queue: queues.NonBlockQueue object, non-blocking queue that will be used to get
+            the domain name that was requested from the DNS server (atomicshop.wrappers.socketw.dns_server).
+            This is used to get the domain name that got to the DNS server and set it to the socket in case SNI
+            was empty (in the SNIHandler class to set the 'server_hostname' for the socket).
+        """
+
+        self.listening_interface: str = listening_interface
+        self.listening_port_list: list[int] = listening_port_list
+        self.ca_certificate_name: str = ca_certificate_name
+        self.ca_certificate_filepath: str = ca_certificate_filepath
+        self.default_server_certificate_usage: bool = default_server_certificate_usage
+        self.default_server_certificate_name: str = default_server_certificate_name
+        self.default_certificate_domain_list: list = default_certificate_domain_list
+        self.default_server_certificate_directory: str = default_server_certificate_directory
+        self.sni_custom_callback_function: callable = sni_custom_callback_function
+        self.sni_use_default_callback_function: bool = sni_use_default_callback_function
+        self.sni_use_default_callback_function_extended: bool = sni_use_default_callback_function_extended
+        self.sni_add_new_domains_to_default_server_certificate: bool = sni_add_new_domains_to_default_server_certificate
+        self.sni_create_server_certificate_for_each_domain: bool = sni_create_server_certificate_for_each_domain
+        self.sni_server_certificates_cache_directory: str = sni_server_certificates_cache_directory
+        self.sni_get_server_certificate_from_server_socket: bool = sni_get_server_certificate_from_server_socket
+        self.sni_server_certificate_from_server_socket_download_directory: str = \
+            sni_server_certificate_from_server_socket_download_directory
+        self.skip_extension_id_list: list = skip_extension_id_list
+        self.custom_server_certificate_usage: bool = custom_server_certificate_usage
+        self.custom_server_certificate_path: str = custom_server_certificate_path
+        self.custom_private_key_path: str = custom_private_key_path
+        self.get_process_name: bool = get_process_name
+        self.ssh_user: str = ssh_user
+        self.ssh_pass: str = ssh_pass
+        self.ssh_script_to_execute = ssh_script_to_execute
         self.logger = logger
-        self.statistics = statistics_logger
-        self.config: dict = config
-
-        # If 'domains_list' wasn't passed, but 'config' did.
-        if not domains_list and config:
-            self.domains_list: list = config['certificates']['domains_all_times']
-        else:
-            self.domains_list: list = domains_list
+        self.statistics_logs_directory: str = statistics_logs_directory
+        self.forwarding_dns_service_ipv4_list___only_for_localhost = (
+            forwarding_dns_service_ipv4_list___only_for_localhost)
 
         self.socket_object = None
 
@@ -49,9 +195,80 @@ class SocketWrapper:
 
         # Defining 'ssh_script_processor' variable, which will be used to process SSH scripts.
         self.ssh_script_processor = None
-        if self.config['ssh']['get_process_name']:
+        if self.get_process_name:
+            # noinspection PyTypeChecker
             self.ssh_script_processor = \
-                ScriptAsStringProcessor().read_script_to_string(self.config['ssh']['script_to_execute'])
+                ScriptAsStringProcessor().read_script_to_string(self.ssh_script_to_execute)
+
+        self.statistics_writer = statistics_csv.StatisticsCSVWriter(
+            statistics_directory_path=self.statistics_logs_directory)
+
+        self.test_config()
+
+    def test_config(self):
+        if self.sni_custom_callback_function and (
+                self.sni_use_default_callback_function or self.sni_use_default_callback_function_extended):
+            message = "You can't use both custom and default SNI function at the same time."
+            raise SocketWrapperConfigurationValuesError(message)
+
+        if self.sni_use_default_callback_function_extended and not self.sni_use_default_callback_function:
+            message = "You can't use extended SNI function without default SNI function."
+            raise SocketWrapperConfigurationValuesError(message)
+
+        if self.sni_use_default_callback_function and self.sni_custom_callback_function:
+            message = \
+                "You can't set both [sni_use_default_callback_function = True] and [sni_custom_callback_function]."
+            raise SocketWrapperConfigurationValuesError(message)
+
+        try:
+            booleans.check_3_booleans_when_only_1_can_be_true(
+                (self.default_server_certificate_usage, 'default_server_certificate_usage'),
+                (self.sni_create_server_certificate_for_each_domain,
+                 'sni_create_server_certificate_for_each_domain'),
+                (self.custom_server_certificate_usage, 'custom_server_certificate_usage'))
+        except ValueError as e:
+            raise SocketWrapperConfigurationValuesError(str(e))
+
+        if not self.default_server_certificate_usage and \
+                self.sni_add_new_domains_to_default_server_certificate:
+            message = "No point setting [sni_add_new_domains_to_default_server_certificate = True]\n" \
+                      "If you're not going to use default certificates [default_server_certificate_usage = False]"
+            raise SocketWrapperConfigurationValuesError(message)
+
+        if self.sni_get_server_certificate_from_server_socket and \
+                not self.sni_create_server_certificate_for_each_domain:
+            message = "You set [sni_get_server_certificate_from_server_socket = True],\n" \
+                      "But you didn't set [sni_create_server_certificate_for_each_domain = True]."
+            raise SocketWrapperConfigurationValuesError(message)
+
+        if self.custom_server_certificate_usage and \
+                not self.custom_server_certificate_path:
+            message = "You set [custom_server_certificate_usage = True],\n" \
+                      "But you didn't set [custom_server_certificate_path]."
+            raise SocketWrapperConfigurationValuesError(message)
+
+        # If 'custom_certificate_usage' was set to 'True'.
+        if self.custom_server_certificate_usage:
+            # Check file existence.
+            if not filesystem.is_file_exists(file_path=self.custom_server_certificate_path):
+                message = f"File not found: {self.custom_server_certificate_path}"
+                print_api(message, color='red')
+                return 1
+
+            # And if 'custom_private_key_path' field was populated in [advanced] section, we'll check its existence.
+            if self.custom_private_key_path:
+                # Check private key file existence.
+                if not filesystem.is_file_exists(file_path=self.custom_private_key_path):
+                    message = f"File not found: {self.custom_private_key_path}"
+                    print_api(message, color='red')
+                    return 1
+
+        port_in_use = networks.get_processes_using_port_list(self.listening_port_list)
+        if port_in_use:
+            error_messages: list = list()
+            for port, process_info in port_in_use.items():
+                error_messages.append(f"Port [{port}] is already in use by process: {process_info}")
+            raise SocketWrapperPortInUseError("\n".join(error_messages))
 
     # Creating listening sockets.
     def create_socket_ipv4_tcp(self, ip_address: str, port: int):
@@ -60,9 +277,6 @@ class SocketWrapper:
         creator.add_reusable_address_option(self.socket_object)
         creator.bind_socket_with_ip_port(self.socket_object, ip_address, port, logger=self.logger)
         creator.set_listen_on_socket(self.socket_object, logger=self.logger)
-
-        # self.socket_object, accept_error_message = creator.wrap_socket_with_ssl_context_server_sni_extended(
-        #     self.socket_object, config=self.config, print_kwargs={'logger': self.logger})
 
         return self.socket_object
 
@@ -73,41 +287,41 @@ class SocketWrapper:
             self.listening_sockets = list()
 
         # Creating a socket for each port in the list set in configuration file
-        for port in self.config['tcp']['listening_port_list']:
+        for port in self.listening_port_list:
             socket_by_port = self.create_socket_ipv4_tcp(
-                self.config['tcp']['listening_interface'], port)
+                self.listening_interface, port)
 
             self.listening_sockets.append(socket_by_port)
 
-    def send_accepted_socket_to_thread(self, thread_function_name, reference_args=()):
-        # Creating thread for each socket
-        thread_current = threading.Thread(target=thread_function_name, args=(*reference_args,))
-        thread_current.daemon = True
-        thread_current.start()
-        # Append to list of threads, so they can be "joined" later
-        self.threads_list.append(thread_current)
-
-        # 'reference_args[0]' is the client socket.
-        client_address = base.get_source_address_from_socket(reference_args[0])
-
-        self.logger.info(f"Accepted connection, thread created {client_address}. Continue listening...")
-
     def loop_for_incoming_sockets(
-            self, function_reference, listening_socket_list: list = None,
-            pass_function_reference_to_thread: bool = True, reference_args=(), *args, **kwargs):
+            self,
+            reference_function_name,
+            reference_function_args=(),
+            listening_socket_list: list = None,
+            pass_function_reference_to_thread: bool = True
+    ):
         """
         Loop to wait for new connections, accept them and send to new threads.
         The boolean variable was declared True in the beginning of the script and will be set to False if the process
         will be killed or closed.
 
-        :param function_reference: callable, function reference that you want to execute when client
-            socket received by 'accept()' and connection been made.
+        :param reference_function_name: callable, function reference that you want to execute when client
+            socket received by 'accept()' and connection has been made.
+        :param reference_function_args: tuple, that will be passed to 'function_reference' when it will be called.
+            Your function should be able to accept these arguments before the 'reference_function_args' tuple:
+            (client_socket, process_name, is_tls, domain_from_dns_server).
+            Meaning that 'reference_function_args' will be added to the end of the arguments tuple like so:
+            (client_socket, process_name, is_tls, tls_type, tls_version, domain_from_dns_server,
+            *reference_function_args).
+
+            client_socket: socket, client socket that was accepted.
+            process_name: string, process name that was gathered from the socket.
+            is_tls: boolean, if the socket is SSL/TLS.
+            domain_from_dns_server: string, domain that was requested from DNS server.
         :param listening_socket_list: list, of sockets that you want to listen on.
         :param pass_function_reference_to_thread: boolean, that sets if 'function_reference' will be
             executed as is, or passed to thread. 'function_reference' can include passing to a thread,
             but you don't have to use it, since SocketWrapper can do it for you.
-        :param reference_args: tuple, that will be passed to 'function_reference' when it will be called.
-        :param kwargs:
         :return:
         """
 
@@ -116,10 +330,8 @@ class SocketWrapper:
             # Then assign 'self.listening_sockets'.
             listening_socket_list = self.listening_sockets
 
-        # Socket accept infinite loop run variable. When the process is closed, the loop will break and the threads will
-        # be joined and garbage collection cleaned if there is any
-        socket_infinite_loop_run: bool = True
-        while socket_infinite_loop_run:
+        while True:
+            # noinspection PyBroadException
             try:
                 # Using "select.select" which is currently the only API function that works on all
                 # operating system types: Windows / Linux / BSD.
@@ -138,17 +350,20 @@ class SocketWrapper:
                 # Wait from any connection on "accept()".
                 # 'client_socket' is socket or ssl socket, 'client_address' is a tuple (ip_address, port).
                 client_socket, client_address, accept_error_message = accepter.accept_connection_with_error(
-                    listening_socket_object, dns_domain=domain_from_dns_server, print_kwargs={'logger': self.logger})
+                    listening_socket_object, domain_from_dns_server=domain_from_dns_server, print_kwargs={'logger': self.logger})
 
                 # This is the earliest stage to ask for process name.
                 # SSH Remote / LOCALHOST script execution to identify process section.
-                # If 'config.tcp['get_process_name']' was set to True in 'config.ini', then this will be executed.
+                # If 'get_process_name' was set to True, then this will be executed.
                 process_name = None
-                if self.config['ssh']['get_process_name']:
+                if self.get_process_name:
                     # Get the process name from the socket.
-                    process_name = get_process.get_process_name(
-                        client_socket=client_socket, config=self.config, ssh_script_processor=self.ssh_script_processor,
-                        print_kwargs={'logger': self.logger})
+                    get_command_instance = get_process.GetCommandLine(
+                        client_socket=client_socket,
+                        ssh_script_processor=self.ssh_script_processor,
+                        ssh_user=self.ssh_user,
+                        ssh_pass=self.ssh_pass)
+                    process_name = get_command_instance.get_process_name(print_kwargs={'logger': self.logger})
 
                 # If 'accept()' function worked well, SSL worked well, then 'client_socket' won't be empty.
                 if client_socket:
@@ -157,31 +372,56 @@ class SocketWrapper:
                     tls_properties = ssl_base.is_tls(client_socket)
                     if tls_properties:
                         is_tls = True
+                        tls_type, tls_version = tls_properties
+                    else:
+                        tls_type, tls_version = None, None
 
                     # If 'is_tls' is True.
                     ssl_client_socket = None
                     if is_tls:
+                        sni_handler = sni.SNISetup(
+                            default_server_certificate_usage=self.default_server_certificate_usage,
+                            default_server_certificate_name=self.default_server_certificate_name,
+                            default_certificate_domain_list=self.default_certificate_domain_list,
+                            default_server_certificate_directory=self.default_server_certificate_directory,
+                            sni_custom_callback_function=self.sni_custom_callback_function,
+                            sni_use_default_callback_function=self.sni_use_default_callback_function,
+                            sni_use_default_callback_function_extended=self.sni_use_default_callback_function_extended,
+                            sni_add_new_domains_to_default_server_certificate=(
+                                self.sni_add_new_domains_to_default_server_certificate),
+                            sni_server_certificates_cache_directory=self.sni_server_certificates_cache_directory,
+                            sni_create_server_certificate_for_each_domain=(
+                                self.sni_create_server_certificate_for_each_domain),
+                            sni_get_server_certificate_from_server_socket=(
+                                self.sni_get_server_certificate_from_server_socket),
+                            sni_server_certificate_from_server_socket_download_directory=(
+                                self.sni_server_certificate_from_server_socket_download_directory),
+                            skip_extension_id_list=self.skip_extension_id_list,
+                            ca_certificate_name=self.ca_certificate_name,
+                            ca_certificate_filepath=self.ca_certificate_filepath,
+                            custom_server_certificate_usage=self.custom_server_certificate_usage,
+                            custom_server_certificate_path=self.custom_server_certificate_path,
+                            custom_private_key_path=self.custom_private_key_path,
+                            domain_from_dns_server=domain_from_dns_server,
+                            forwarding_dns_service_ipv4_list___only_for_localhost=(
+                                self.forwarding_dns_service_ipv4_list___only_for_localhost),
+                            tls=is_tls
+                        )
+
                         ssl_client_socket, accept_error_message = \
-                            creator.wrap_socket_with_ssl_context_server_sni_extended(
-                                client_socket, config=self.config, dns_domain=domain_from_dns_server,
-                                print_kwargs={'logger': self.logger})
+                            sni_handler.wrap_socket_with_ssl_context_server_sni_extended(
+                                client_socket,
+                                print_kwargs={'logger': self.logger}
+                            )
 
                         if accept_error_message:
                             # Write statistics after wrap is there was an error.
-                            statistics_csv.write_accept_error(
-                                error_message=accept_error_message, host=domain_from_dns_server,
-                                process_name=process_name,
-                                statistics_logger=self.statistics, print_kwargs={'logger': self.logger})
+                            self.statistics_writer.write_accept_error(
+                                error_message=accept_error_message,
+                                host=domain_from_dns_server,
+                                process_name=process_name)
 
                             continue
-
-                        # ready_to_read, _, _ = select.select([client_socket], [], [])
-                        # if ready_to_read:
-                        #     try:
-                        #         # self.socket_object.do_handshake()
-                        #         self.socket_object.accept()
-                        #     except Exception:
-                        #         raise
 
                     # Create new arguments tuple that will be passed, since client socket and process_name
                     # are gathered from SocketWrapper.
@@ -189,26 +429,42 @@ class SocketWrapper:
                         # In order to use the same object, it needs to get nullified first, since the old instance
                         # will not get overwritten. Though it still will show in the memory as SSLSocket, it will not
                         # be handled as such, but as regular raw socket.
+                        # noinspection PyUnusedLocal
                         client_socket = None
                         client_socket = ssl_client_socket
                     thread_args = \
-                        (client_socket, process_name, is_tls, domain_from_dns_server) + reference_args
+                        ((client_socket, process_name, is_tls, tls_type, tls_version, domain_from_dns_server) +
+                         reference_function_args)
                     # If 'pass_function_reference_to_thread' was set to 'False', execute the callable passed function
                     # as is.
                     if not pass_function_reference_to_thread:
-                        function_reference(thread_args, *args, **kwargs)
+                        reference_function_name(thread_args)
                     # If 'pass_function_reference_to_thread' was set to 'True', execute the callable function reference
                     # in a new thread.
                     else:
-                        self.send_accepted_socket_to_thread(function_reference, thread_args)
+                        self._send_accepted_socket_to_thread(reference_function_name, thread_args)
                 # Else, if no client_socket was opened during, accept, then print the error.
                 else:
                     # Write statistics after accept.
-                    statistics_csv.write_accept_error(
-                        error_message=accept_error_message, host=domain_from_dns_server, process_name=process_name,
-                        statistics_logger=self.statistics, print_kwargs={'logger': self.logger})
+                    self.statistics_writer.write_accept_error(
+                        error_message=accept_error_message,
+                        host=domain_from_dns_server,
+                        process_name=process_name)
             except Exception:
                 print_api("Undocumented exception in while loop of listening sockets.", error_type=True,
-                          logger_method="error", traceback_string=True, oneline=True, logger=self.logger)
+                          logger_method="error", traceback_string=True, logger=self.logger)
                 pass
                 continue
+
+    def _send_accepted_socket_to_thread(self, thread_function_name, reference_args=()):
+        # Creating thread for each socket
+        thread_current = threading.Thread(target=thread_function_name, args=(*reference_args,))
+        thread_current.daemon = True
+        thread_current.start()
+        # Append to list of threads, so they can be "joined" later
+        self.threads_list.append(thread_current)
+
+        # 'reference_args[0]' is the client socket.
+        client_address = base.get_source_address_from_socket(reference_args[0])
+
+        self.logger.info(f"Accepted connection, thread created {client_address}. Continue listening...")

@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.16.0 - 19.08.2024
+  * mitm, wrappers.socketw - Major Refactoring.
+  * basics.booleans, dns, file_io.docxs, file_io.tomls, filesystem, get_process_list, wrappers.pywin32w.wmis - fixes and improvements.
 * 2.15.13 - 12.08.2024
   * wrappers/socketw/dns_server - fixes and improvements.
 * 2.15.12 - 11.08.2024

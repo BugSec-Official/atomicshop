@@ -96,7 +96,12 @@ class ModuleCategory:
 # Assigning external class object by message domain received from client. If the domain is not in the list,
 # the reference general module will be assigned.
 def assign_class_by_domain(
-        engines_list: list, message_domain_name: str, reference_module, config, logger=None):
+        engines_usage: bool,
+        engines_list: list,
+        message_domain_name: str,
+        reference_module,
+        logger=None
+):
     # Defining return variables:
     function_parser = None
     function_responder = None
@@ -106,7 +111,7 @@ def assign_class_by_domain(
     if message_domain_name:
         # If the engines_usage is set to True in the config file, then we'll iterate through the list of engines
         # to find the domain in the list of domains of the engine.
-        if config['tcp']['engines_usage']:
+        if engines_usage:
             # Checking if current domain is in engines' domain list to activate domain specific engine
             for function_module in engines_list:
                 # The list: matches_list = ["domain1.com", "domain2.com", "domain3.com"]

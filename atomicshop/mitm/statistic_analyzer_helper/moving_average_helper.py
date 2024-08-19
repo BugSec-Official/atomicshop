@@ -4,10 +4,12 @@ from typing import Literal
 from ...print_api import print_api
 from ...wrappers.loggingw import reading, consts
 from ...file_io import csvs
+from ... import urls
 
 
 def calculate_moving_average(
         file_path: str,
+        by_type: Literal['host', 'url'],
         moving_average_window_days,
         top_bottom_deviation_percentage: float,
         get_deviation_for_last_day_only: bool = False,
@@ -17,6 +19,7 @@ def calculate_moving_average(
     This function calculates the moving average of the daily statistics.
 
     :param file_path: string, the path to the 'statistics.csv' file.
+    :param by_type: string, the type to calculate the moving average by. Can be 'host' or 'url'.
     :param moving_average_window_days: integer, the window size for the moving average.
     :param top_bottom_deviation_percentage: float, the percentage of deviation from the moving average to the top or
         bottom.
@@ -65,8 +68,7 @@ def calculate_moving_average(
 
         # Get the data dictionary from the statistics content.
         statistics_content[date_string]['statistics_daily'] = compute_statistics_from_content(
-            statistics_content[date_string]['content_no_errors']
-        )
+            statistics_content[date_string]['content_no_errors'], by_type)
 
     moving_average_dict: dict = compute_moving_averages_from_average_statistics(
         statistics_content,
@@ -106,19 +108,36 @@ def get_content_without_errors(content: list) -> list:
     return traffic_statistics_without_errors
 
 
-def get_data_dict_from_statistics_content(content: list) -> dict:
+def get_data_dict_from_statistics_content(
+        content: list,
+        by_type: Literal['host', 'url']
+) -> dict:
     """
     This function gets the data dictionary from the 'statistics.csv' file content.
 
     :param content: list, the content list.
+    :param by_type: string, the type to calculate the moving average by. Can be 'host' or 'url'.
     :return: dict, the data dictionary.
     """
 
     hosts_requests_responses: dict = {}
     for line in content:
+        if by_type == 'host':
+            type_to_check: str = line['host']
+        elif by_type == 'url':
+            # Combine host and path to URL.
+            type_to_check: str = line['host'] + line['path']
+            # Remove the parameters from the URL.
+            url_parsed = urls.url_parser(type_to_check)
+            type_to_check = url_parsed['path']
+            # Remove the last slash from the URL.
+            type_to_check = type_to_check.removesuffix('/')
+        else:
+            raise ValueError(f'Invalid by_type: {by_type}')
+
         # If subdomain is not in the dictionary, add it.
-        if line['host'] not in hosts_requests_responses:
-            hosts_requests_responses[line['host']] = {
+        if type_to_check not in hosts_requests_responses:
+            hosts_requests_responses[type_to_check] = {
                 'request_sizes': [],
                 'response_sizes': []
             }
@@ -132,8 +151,8 @@ def get_data_dict_from_statistics_content(content: list) -> dict:
             if response_size_bytes == '':
                 response_size_bytes = '0'
 
-            hosts_requests_responses[line['host']]['request_sizes'].append(int(request_size_bytes))
-            hosts_requests_responses[line['host']]['response_sizes'].append(int(response_size_bytes))
+            hosts_requests_responses[type_to_check]['request_sizes'].append(int(request_size_bytes))
+            hosts_requests_responses[type_to_check]['response_sizes'].append(int(response_size_bytes))
         except ValueError:
             print_api(line, color='yellow')
             raise
@@ -163,18 +182,22 @@ def compute_statistics_from_data_dict(data_dict: dict):
         data_dict[host]['median_response_size'] = median_response_size
 
 
-def compute_statistics_from_content(content: list):
+def compute_statistics_from_content(
+        content: list,
+        by_type: Literal['host', 'url']
+):
     """
     This function computes the statistics from the 'statistics.csv' file content.
 
     :param content: list, the content list.
+    :param by_type: string, the type to calculate the moving average by. Can be 'host' or 'url'.
     :return: dict, the statistics dictionary.
     """
 
-    hosts_requests_responses: dict = get_data_dict_from_statistics_content(content)
-    compute_statistics_from_data_dict(hosts_requests_responses)
+    requests_responses: dict = get_data_dict_from_statistics_content(content, by_type)
+    compute_statistics_from_data_dict(requests_responses)
 
-    return hosts_requests_responses
+    return requests_responses
 
 
 def compute_moving_averages_from_average_statistics(
@@ -200,12 +223,15 @@ def compute_moving_averages_from_average_statistics(
             list(average_statistics_dict.values()))[current_day-moving_average_window_days:current_day]
 
         # Compute the moving averages.
-        moving_average[day] = compute_average_for_current_day_from_past_x_days(last_x_window_days_content_list)
+        moving_average[day] = compute_average_for_current_day_from_past_x_days(
+            last_x_window_days_content_list)
 
     return moving_average
 
 
-def compute_average_for_current_day_from_past_x_days(previous_days_content_list: list) -> dict:
+def compute_average_for_current_day_from_past_x_days(
+        previous_days_content_list: list
+) -> dict:
     """
     This function computes the average for the current day from the past x days.
 
@@ -222,11 +248,15 @@ def compute_average_for_current_day_from_past_x_days(previous_days_content_list:
                     'counts': [],
                     'avg_request_sizes': [],
                     'avg_response_sizes': [],
+                    'median_request_sizes': [],
+                    'median_response_sizes': []
                 }
 
             moving_average[host]['counts'].append(int(host_dict['count']))
             moving_average[host]['avg_request_sizes'].append(float(host_dict['avg_request_size']))
             moving_average[host]['avg_response_sizes'].append(float(host_dict['avg_response_size']))
+            moving_average[host]['median_request_sizes'].append(float(host_dict['median_request_size']))
+            moving_average[host]['median_response_sizes'].append(float(host_dict['median_response_size']))
 
     # Compute the moving average.
     moving_average_results: dict = {}
@@ -234,14 +264,20 @@ def compute_average_for_current_day_from_past_x_days(previous_days_content_list:
         ma_count = statistics.mean(host_dict['counts'])
         ma_request_size = statistics.mean(host_dict['avg_request_sizes'])
         ma_response_size = statistics.mean(host_dict['avg_response_sizes'])
+        mm_request_size = statistics.median(host_dict['median_request_sizes'])
+        mm_response_size = statistics.median(host_dict['median_response_sizes'])
 
         moving_average_results[host] = {
             'ma_count': ma_count,
             'ma_request_size': ma_request_size,
             'ma_response_size': ma_response_size,
+            'mm_request_size': mm_request_size,
+            'mm_response_size': mm_response_size,
             'counts': host_dict['counts'],
             'avg_request_sizes': host_dict['avg_request_sizes'],
-            'avg_response_sizes': host_dict['avg_response_sizes']
+            'avg_response_sizes': host_dict['avg_response_sizes'],
+            'median_request_sizes': host_dict['median_request_sizes'],
+            'median_response_sizes': host_dict['median_response_sizes']
         }
 
     return moving_average_results
@@ -303,6 +339,10 @@ def find_deviation_from_moving_average(
                 'ma_value_checked': check_type_moving_above,
                 'deviation_percentage': deviation_percentage,
                 'deviation_type': deviation_type,
+                'median_request_size': day_statistics_content_dict['median_request_size'],
+                'median_response_size': day_statistics_content_dict['median_response_size'],
+                'mm_request_size': moving_averages_dict[host]['mm_request_size'],
+                'mm_response_size': moving_averages_dict[host]['mm_response_size'],
                 'data': day_statistics_content_dict,
                 'ma_data': moving_averages_dict[host]
             })

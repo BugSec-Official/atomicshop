@@ -1,13 +1,13 @@
 from datetime import datetime
 
-from .message import ClientMessage
-from .initialize_engines import assign_class_by_domain
-from ..wrappers.socketw.receiver import Receiver
-from ..wrappers.socketw.sender import Sender
-from ..wrappers.socketw.socket_client import SocketClient
+from ..wrappers.socketw import receiver, sender, socket_client, base
 from ..http_parse import HTTPRequestParse, HTTPResponseParse
 from ..basics.threads import current_thread_id
 from ..print_api import print_api
+
+from .message import ClientMessage
+from .initialize_engines import assign_class_by_domain
+from . import config_static
 
 
 # Thread function on client connect.
@@ -15,72 +15,31 @@ def thread_worker_main(
         function_client_socket_object,
         process_commandline: str,
         is_tls: bool,
+        tls_type: str,
+        tls_version: str,
         domain_from_dns,
         network_logger,
-        statistics_logger,
+        statistics_writer,
         engines_list,
-        reference_module,
-        config):
+        reference_module
+):
     def output_statistics_csv_row():
-        statistics_dict['host'] = client_message.server_name
-        try:
-            statistics_dict['path'] = client_message.request_raw_decoded.path
-        except Exception:
-            pass
-        try:
-            statistics_dict['status_code'] = \
-                ','.join([str(x.code) for x in client_message.response_list_of_raw_decoded])
-        except Exception:
-            pass
-        try:
-            statistics_dict['command'] = client_message.request_raw_decoded.command
-        except Exception:
-            pass
-        try:
-            statistics_dict['request_time_sent'] = client_message.request_time_received
-        except Exception:
-            pass
-        try:
-            statistics_dict['request_size_bytes'] = len(client_message.request_raw_bytes)
-        except Exception:
-            pass
-        try:
-            statistics_dict['response_size_bytes'] = \
-                ','.join([str(len(x)) for x in client_message.response_list_of_raw_bytes])
-        except Exception:
-            pass
-        # try:
-        #     statistics_dict['request_hex'] = client_message.request_raw_hex
-        # except Exception:
-        #     pass
-        # try:
-        #     statistics_dict['response_hex'] = \
-        #         f'"' + ','.join([x for x in client_message.response_list_of_raw_hex]) + '"'
-        # except Exception:
-        #     pass
-        try:
-            statistics_dict['file_path'] = recorded_file
-        except Exception:
-            pass
-        try:
-            statistics_dict['process_cmd'] = process_commandline
-        except Exception:
-            pass
-        statistics_dict['error'] = str()
+        status_code = ','.join([str(x.code) for x in client_message.response_list_of_raw_decoded])
+        response_size_bytes = ','.join([str(len(x)) for x in client_message.response_list_of_raw_bytes])
 
-        statistics_logger.info(f"{statistics_dict['request_time_sent']},"
-                               f"{statistics_dict['host']},"
-                               f"\"{statistics_dict['path']}\","
-                               f"{statistics_dict['command']},"
-                               f"{statistics_dict['status_code']},"
-                               f"{statistics_dict['request_size_bytes']},"
-                               f"{statistics_dict['response_size_bytes']},"
-                               # f"{statistics_dict['request_hex']},"
-                               # f"{statistics_dict['response_hex']},"
-                               f"\"{statistics_dict['file_path']}\","
-                               f"\"{statistics_dict['process_cmd']}\","
-                               f"{statistics_dict['error']}"
-                               )
+        statistics_writer.write_row(
+            host=client_message.server_name,
+            tls_type=tls_type,
+            tls_version=tls_version,
+            path=client_message.request_raw_decoded.path,
+            status_code=status_code,
+            command=client_message.request_raw_decoded.command,
+            request_time_sent=client_message.request_time_received,
+            request_size_bytes=len(client_message.request_raw_bytes),
+            response_size_bytes=response_size_bytes,
+            recorded_file_path=recorded_file,
+            process_cmd=process_commandline,
+            error=str())
 
     try:
         # Defining variables before assignment
@@ -113,8 +72,12 @@ def thread_worker_main(
         # Loading parser by domain, if there is no parser for current domain - general reference parser is loaded.
         # These should be outside any loop and initialized only once entering the thread.
         parser, responder, recorder = assign_class_by_domain(
-            engines_list, client_message.server_name, reference_module=reference_module, config=config,
-            logger=network_logger)
+            engines_usage=config_static.TCPServer.engines_usage,
+            engines_list=engines_list,
+            message_domain_name=client_message.server_name,
+            reference_module=reference_module,
+            logger=network_logger
+        )
 
         # Defining client connection boolean variable to enter the loop
         client_connection_boolean: bool = True
@@ -128,22 +91,22 @@ def thread_worker_main(
             client_message.reinitialize()
 
             # Initialize statistics_dict for the same reason as 'client_message.reinitialize()'.
-            statistics_dict: dict = dict()
-            statistics_dict['host'] = client_message.server_name
-            statistics_dict['path'] = str()
-            statistics_dict['status_code'] = str()
-            statistics_dict['command'] = str()
-            statistics_dict['request_time_sent'] = str()
-            statistics_dict['request_size_bytes'] = str()
-            # statistics_dict['response_time_sent'] = str()
-            statistics_dict['response_size_bytes'] = str()
-            statistics_dict['file_path'] = str()
-            statistics_dict['process_cmd'] = str()
-            statistics_dict['error'] = str()
+            # statistics_dict: dict = dict()
+            # statistics_dict['host'] = client_message.server_name
+            # statistics_dict['path'] = str()
+            # statistics_dict['status_code'] = str()
+            # statistics_dict['command'] = str()
+            # statistics_dict['request_time_sent'] = str()
+            # statistics_dict['request_size_bytes'] = str()
+            # # statistics_dict['response_time_sent'] = str()
+            # statistics_dict['response_size_bytes'] = str()
+            # statistics_dict['file_path'] = str()
+            # statistics_dict['process_cmd'] = str()
+            # statistics_dict['error'] = str()
 
             network_logger.info("Initializing Receiver")
             # Getting message from the client over the socket using specific class.
-            client_received_raw_data = Receiver(function_client_socket_object).receive()
+            client_received_raw_data = receiver.Receiver(function_client_socket_object).receive()
 
             # If the message is empty, then the connection was closed already by the other side,
             # so we can close the socket as well.
@@ -214,7 +177,7 @@ def thread_worker_main(
                     pass
 
                 # If we're in response mode, execute responder.
-                if config['tcp']['server_response_mode']:
+                if config_static.TCPServer.server_response_mode:
                     # Since we're in response mode, we'll record the request anyway, after the responder did its job.
                     client_message.info = "In Server Response Mode"
 
@@ -251,14 +214,15 @@ def thread_worker_main(
                     if not service_client:
                         # If we're on localhost, then use external services list in order to resolve the domain:
                         # config['tcp']['forwarding_dns_service_ipv4_list___only_for_localhost']
-                        if client_message.client_ip == "127.0.0.1":
-                            service_client = SocketClient(
+                        if client_message.client_ip in base.THIS_DEVICE_IP_LIST:
+                            service_client = socket_client.SocketClient(
                                 service_name=client_message.server_name, service_port=client_message.destination_port,
                                 tls=is_tls,
-                                dns_servers_list=config['tcp']['forwarding_dns_service_ipv4_list___only_for_localhost'])
+                                dns_servers_list=
+                                config_static.TCPServer.forwarding_dns_service_ipv4_list___only_for_localhost)
                         # If we're not on localhost, then connect to domain directly.
                         else:
-                            service_client = SocketClient(
+                            service_client = socket_client.SocketClient(
                                 service_name=client_message.server_name, service_port=client_message.destination_port,
                                 tls=is_tls)
 
@@ -289,7 +253,7 @@ def thread_worker_main(
                 # Recording the message, doesn't matter what type of mode this is.
                 try:
                     recorded_file = recorder(class_client_message=client_message,
-                                             record_path=config['recorder']['recordings_path']).record()
+                                             record_path=config_static.Recorder.recordings_path).record()
                 except Exception:
                     message = "Exception in Recorder"
                     print_api(
@@ -315,7 +279,7 @@ def thread_worker_main(
 
                         # Iterate through the list of byte responses.
                         for response_raw_bytes in client_message.response_list_of_raw_bytes:
-                            function_data_sent = Sender(function_client_socket_object, response_raw_bytes).send()
+                            function_data_sent = sender.Sender(function_client_socket_object, response_raw_bytes).send()
 
                             # If there was problem with sending data, we'll break current loop.
                             if not function_data_sent:
@@ -348,7 +312,7 @@ def thread_worker_main(
         if not function_recorded:
             try:
                 recorded_file = recorder(
-                    class_client_message=client_message, record_path=config['recorder']['recordings_path']).record()
+                    class_client_message=client_message, record_path=config_static.Recorder.recordings_path).record()
             except Exception:
                 message = "Exception in Recorder"
                 print_api(

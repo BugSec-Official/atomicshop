@@ -1,5 +1,4 @@
 import json
-# Needed to get the function caller module.
 import inspect
 
 from ..wrappers.loggingw import loggingw

@@ -37,7 +37,7 @@ def get_key_values_from_json(json_dict: dict, extract_keys: list):
 def execute_test(config_static):
     # Import config ini file and read it to dict.
     config_importer = ConfigParserWrapper(
-        file_name=config_static.CONFIG_INI_TESTER_FILE_NAME, directory_path=config_static.WORKING_DIRECTORY)
+        file_name=config_static.CONFIG_INI_TESTER_FILE_NAME, directory_path=config_static.SCRIPT_DIRECTORY)
     config_importer.read_to_dict()
     # Convert keys.
     config_importer.convert_string_values(
