@@ -2,7 +2,8 @@ import sys
 import subprocess
 from pathlib import Path
 
-from .... import permissions, filesystem
+from .... import filesystem
+from ....permissions import ubuntu_permissions
 from ....archiver import zips
 from ....print_api import print_api
 from ... import githubw, pipw, ubuntu_terminal
@@ -42,7 +43,7 @@ def install_before_restart(
     #     sys.exit(1)
 
     # # Install docker in rootless mode.
-    # with permissions.temporary_regular_permissions():
+    # with ubuntu_permissions.temporary_regular_permissions():
     #     install_docker.install_docker_ubuntu(
     #         use_docker_installer=True, rootless=True, add_current_user_to_docker_group_bool=False)
 
@@ -59,7 +60,7 @@ def install_before_restart(
         filesystem.remove_directory(installation_directory)
 
     # Since you run the script with sudo, we need to change the permissions to the current user.
-    # with permissions.temporary_regular_permissions():
+    # with ubuntu_permissions.temporary_regular_permissions():
     # Create the FACT_core directory.
     filesystem.create_directory(installation_directory)
 
@@ -78,7 +79,7 @@ def install_before_restart(
             remove_first_directory=True, **(print_kwargs or {}))
 
     # Set the executable permission on the pre-installation file.
-    permissions.set_executable_permission(fact_core_pre_install_file_path)
+    ubuntu_permissions.set_executable(fact_core_pre_install_file_path)
 
     if use_built_in_fact_installer:
         # Run the shell script

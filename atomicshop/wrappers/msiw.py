@@ -1,8 +1,7 @@
 import subprocess
-import sys
 
 from ..print_api import print_api
-from .. import permissions
+from ..permissions import permissions
 from ..import get_process_list
 from .psutilw import processes
 
@@ -124,7 +123,7 @@ def install_msi(
         command = f"{command} {additional_args}"
 
     # if as_admin:
-    #     command = permissions.get_command_to_run_as_admin_windows(command)
+    #     command = win_permissions.get_command_to_run_as_admin_windows(command)
 
     # Run the command
     result = subprocess.run(command, capture_output=True, text=True)

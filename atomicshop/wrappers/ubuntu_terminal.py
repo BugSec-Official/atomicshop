@@ -5,7 +5,7 @@ import shutil
 import time
 
 from ..print_api import print_api
-from .. import permissions
+from ..permissions import ubuntu_permissions
 
 
 def install_packages(package_list: list[str]):
@@ -231,11 +231,11 @@ def add_path_to_bashrc(as_regular_user: bool = False):
 
     if as_regular_user:
         # Get the current non-sudo user
-        with permissions.temporary_regular_permissions():
+        with ubuntu_permissions.temporary_regular_permissions():
             current_non_sudo_user = os.getlogin()
 
         # Get the home path of the current non-sudo user
-        user_bashrc_path = permissions.expand_user_path(current_non_sudo_user, home_path_bashrc)
+        user_bashrc_path = ubuntu_permissions.expand_user_path(current_non_sudo_user, home_path_bashrc)
     else:
         user_bashrc_path = os.path.expanduser(home_path_bashrc)
 
@@ -258,11 +258,11 @@ def add_line_to_bashrc(line: str, as_regular_user: bool = False):
 
     if as_regular_user:
         # Get the current non-sudo user
-        with permissions.temporary_regular_permissions():
+        with ubuntu_permissions.temporary_regular_permissions():
             current_non_sudo_user = os.getlogin()
 
         # Get the home path of the current non-sudo user
-        user_bashrc_path = permissions.expand_user_path(current_non_sudo_user, home_path_bashrc)
+        user_bashrc_path = ubuntu_permissions.expand_user_path(current_non_sudo_user, home_path_bashrc)
     else:
         user_bashrc_path = os.path.expanduser(home_path_bashrc)
 
@@ -293,7 +293,7 @@ def get_command_execution_as_sudo_executer(command: str, add_bash_exec: bool = F
 
         command = command.replace('sudo ', '').strip()
 
-    sudo_executer_username: str = permissions.get_ubuntu_sudo_executer_username()
+    sudo_executer_username: str = ubuntu_permissions.get_sudo_executer_username()
 
     if sudo_executer_username:
         if add_bash_exec:

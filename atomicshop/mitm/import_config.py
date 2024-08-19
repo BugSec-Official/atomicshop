@@ -1,7 +1,8 @@
 from pathlib import Path
 
 from ..print_api import print_api
-from .. import config_init, permissions, filesystem, dns
+from .. import config_init, filesystem, dns
+from ..permissions import permissions
 from ..wrappers.socketw import base
 from ..basics import booleans
 

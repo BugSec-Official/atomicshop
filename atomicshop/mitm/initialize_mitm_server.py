@@ -4,7 +4,8 @@ import time
 
 import atomicshop   # Importing atomicshop package to get the version of the package.
 
-from .. import filesystem, queues, dns, on_exit, permissions
+from .. import filesystem, queues, dns, on_exit
+from ..permissions import permissions
 from ..python_functions import get_current_python_version_string, check_python_version_compliance
 from ..wrappers.socketw import socket_wrapper, dns_server, base
 from ..wrappers.loggingw import loggingw

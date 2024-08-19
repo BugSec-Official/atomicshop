@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.16.1 - 19.08.2024
+  * permissions - refactoring, meaning the depending modules were also refactored.
 * 2.16.0 - 19.08.2024
   * mitm, wrappers.socketw - Major Refactoring.
   * basics.booleans, dns, file_io.docxs, file_io.tomls, filesystem, get_process_list, wrappers.pywin32w.wmis - fixes and improvements.

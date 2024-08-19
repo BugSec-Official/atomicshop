@@ -1,7 +1,8 @@
 import sys
 
 from ...print_api import print_api
-from ... import process, permissions
+from ... import process
+from ...permissions import permissions
 from .. import ubuntu_terminal
 from . import config_basic, infrastructure
 

@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 
 from ..import process, permissions, virtualization
+from ..permissions import permissions
 from ..print_api import print_api
 
 
