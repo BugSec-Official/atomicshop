@@ -1,6 +1,7 @@
 import os
 import threading
 import time
+import datetime
 
 import atomicshop   # Importing atomicshop package to get the version of the package.
 
@@ -13,7 +14,7 @@ from ..print_api import print_api
 
 from .initialize_engines import ModuleCategory
 from .connection_thread_worker import thread_worker_main
-from . import config_static
+from . import config_static, recs_files
 
 
 def exit_cleanup():
@@ -46,6 +47,9 @@ def initialize_mitm_server(config_file_path: str):
     if config_static.Certificates.sni_get_server_certificate_from_server_socket:
         filesystem.create_directory(
             config_static.Certificates.sni_server_certificate_from_server_socket_download_directory)
+
+    # Compress recordings of the previous days if there are any.
+    recs_files.recs_archiver_in_process(config_static.Recorder.recordings_path)
 
     # Create a logger that will log messages to file, Initiate System logger.
     logger_name = "system"
@@ -317,6 +321,25 @@ def initialize_mitm_server(config_file_path: str):
             message = f"Unhandled Exception occurred in 'loop_for_incoming_sockets' function"
             print_api(message, error_type=True, color="red", logger=network_logger, traceback_string=True, oneline=True)
 
+        # Compress recordings each day in a separate process.
+        recs_archiver_thread = threading.Thread(target=_loop_at_midnight_recs_archive)
+        recs_archiver_thread.daemon = True
+        recs_archiver_thread.start()
+
         # This is needed for Keyboard Exception.
         while True:
             time.sleep(1)
+
+
+def _loop_at_midnight_recs_archive():
+    previous_date = datetime.datetime.now().strftime('%d')
+    while True:
+        # Get current time.
+        current_date = datetime.datetime.now().strftime('%d')
+        # If it's midnight, start the archiving process.
+        if current_date != previous_date:
+            recs_files.recs_archiver_in_process(config_static.Recorder.recordings_path)
+            # Update the previous date.
+            previous_date = current_date
+        # Sleep for 1 minute.
+        time.sleep(60)

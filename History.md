@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.16.6 - 20.08.2024
+  * archiver/zips, mitm - fixes and improvements.
 * 2.16.5 - 20.08.2024
   * Returned Compatibility to >= python 3.10
 * 2.16.4 - 20.08.2024

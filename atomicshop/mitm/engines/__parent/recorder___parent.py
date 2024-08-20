@@ -2,7 +2,7 @@ import os
 from datetime import datetime
 
 from ...shared_functions import build_module_names, create_custom_logger, get_json
-from ...message import ClientMessage
+from ... import message, recs_files
 from ....urls import url_parser
 from .... import filesystem
 
@@ -13,8 +13,8 @@ class RecorderParent:
     # in the script these lines will not be called again, only the "init" function.
     logger = create_custom_logger()
 
-    def __init__(self, class_client_message: ClientMessage, record_path: str):
-        self.class_client_message: ClientMessage = class_client_message
+    def __init__(self, class_client_message: message.ClientMessage, record_path: str):
+        self.class_client_message: message.ClientMessage = class_client_message
         self.record_path: str = record_path
         self.file_extension: str = ".json"
         self.engine_name = None
@@ -41,7 +41,7 @@ class RecorderParent:
         # current date and time in object
         now = datetime.now()
         # Formatting the date and time and converting it to string object
-        day_time_format: str = now.strftime("%Y_%m_%d-%H_%M_%S_%f")
+        day_time_format: str = now.strftime(recs_files.REC_FILE_DATE_TIME_FORMAT)
 
         # Build the record path with file name
         self.build_record_path_to_engine()
