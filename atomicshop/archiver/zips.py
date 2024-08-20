@@ -2,7 +2,7 @@ import os
 import time
 import zipfile
 from io import BytesIO
-from typing import Union
+from typing import Union, Literal
 
 from .. import filesystem
 from ..print_api import print_api
@@ -140,6 +140,67 @@ def get_file_list_from_zip(file_path: str) -> list:
 
     with zipfile.ZipFile(file_path, 'r') as zip_object:
         return zip_object.namelist()
+
+
+def archive_directory(
+        directory_path: str,
+        compression: Literal[
+            'store',
+            'deflate',
+            'bzip2',
+            'lzma'] = 'deflate',
+        include_root_directory: bool = True,
+        remove_original: bool = False
+) -> str:
+    """
+    Function archives the directory.
+    :param directory_path: string, full path to the directory.
+    :param compression: string, default is 'deflate'.
+        'store': No compression.
+        'deflate': Standard ZIP compression.
+        'bzip2': BZIP2 compression.
+            Provides better compression than Deflate but is typically slower. This method might not be supported by
+            all ZIP utilities.
+        'lzma': LZMA compression.
+            high compression ratios but is also slower compared to Deflate. This method is less commonly used and
+            may not be supported by all ZIP utilities.
+    :param include_root_directory: boolean, default is 'True'.
+        'True': The root directory will be included in the archive.
+        'False': The root directory will not be included in the archive.
+        True is usually the case in most archiving utilities.
+    :param remove_original: boolean, default is 'False'. If 'True', the original directory will be removed.
+    :return: string, full path to the archived file.
+    """
+
+    if compression == 'store':
+        compression_method = zipfile.ZIP_STORED
+    elif compression == 'deflate':
+        compression_method = zipfile.ZIP_DEFLATED
+    elif compression == 'bzip2':
+        compression_method = zipfile.ZIP_BZIP2
+    elif compression == 'lzma':
+        compression_method = zipfile.ZIP_LZMA
+    else:
+        raise ValueError(f"Unsupported compression method: {compression}")
+
+    archive_path: str = directory_path + '.zip'
+    with zipfile.ZipFile(archive_path, 'w', compression_method) as zip_object:
+        for root, _, files in os.walk(directory_path):
+            for file in files:
+                file_path = os.path.join(root, file)
+
+                # If including the root directory, use the relative path from the parent directory of the root
+                if include_root_directory:
+                    arcname = os.path.relpath(file_path, os.path.dirname(directory_path))
+                else:
+                    arcname = os.path.relpath(file_path, directory_path)
+
+                zip_object.write(file_path, arcname)
+
+    if remove_original:
+        filesystem.remove_directory(directory_path)
+
+    return archive_path
 
 
 # def search_file_in_zip(
