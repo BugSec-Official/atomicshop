@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.16.5 - 20.08.2024
+  * Returned Compatibility to >= python 3.10
 * 2.16.4 - 20.08.2024
   * mitm, wrappers/socketw - fixes and improvements.
 * 2.16.3 - 20.08.2024
