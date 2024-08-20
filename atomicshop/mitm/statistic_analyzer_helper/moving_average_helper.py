@@ -40,12 +40,12 @@ def calculate_moving_average(
     :param print_kwargs: dict, the print_api arguments.
     """
 
-    date_pattern: str = consts.DEFAULT_ROTATING_SUFFIXES_FROM_WHEN['midnight']
+    date_format: str = consts.DEFAULT_ROTATING_SUFFIXES_FROM_WHEN['midnight']
 
     # Get all the file paths and their midnight rotations.
     logs_paths: list = reading.get_logs_paths(
         log_file_path=file_path,
-        date_pattern=date_pattern
+        date_format=date_format
     )
 
     if get_deviation_for_last_day_only:
