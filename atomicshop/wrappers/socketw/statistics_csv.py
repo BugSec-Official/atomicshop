@@ -7,8 +7,8 @@ from ..loggingw import loggingw
 
 LOGGER_NAME: str = 'statistics'
 STATISTICS_HEADER: str = \
-    ('request_time_sent,tls,host,path,command,status_code,request_size_bytes,response_size_bytes,file_path,process_cmd,'
-     'error')
+    ('request_time_sent,tls,protocol,host,path,command,status_code,request_size_bytes,response_size_bytes,file_path,'
+     'process_cmd,error')
 
 
 class StatisticsCSVWriter:
@@ -36,6 +36,7 @@ class StatisticsCSVWriter:
             host: str,
             tls_type: str,
             tls_version: str,
+            protocol: str,
             path: str,
             status_code: str,
             command: str,
@@ -57,6 +58,7 @@ class StatisticsCSVWriter:
         escaped_line_string: str = csvs.escape_csv_line_to_string([
             request_time_sent,
             tls_info,
+            protocol,
             host,
             path,
             command,
@@ -90,6 +92,7 @@ class StatisticsCSVWriter:
             host=host,
             tls_type='',
             tls_version='',
+            protocol='',
             path='',
             status_code='',
             command='',

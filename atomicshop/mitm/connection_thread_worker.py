@@ -31,6 +31,7 @@ def thread_worker_main(
             host=client_message.server_name,
             tls_type=tls_type,
             tls_version=tls_version,
+            protocol=client_message.protocol,
             path=client_message.request_raw_decoded.path,
             status_code=status_code,
             command=client_message.request_raw_decoded.command,
@@ -145,6 +146,7 @@ def thread_worker_main(
 
                 # If the request is HTTP protocol.
                 if request_is_http:
+                    client_message.protocol = 'HTTP'
                     network_logger.info(f"Method: {request_decoded.command}")
                     network_logger.info(f"Path: {request_decoded.path}")
                     # statistics.dict['path'] = request_decoded.path
