@@ -8,6 +8,11 @@ def url_parser(url):
     directories = parts.path.strip('/').split('/')
     queries = parts.query.strip('&').split('&')
 
+    if len(directories) > 1 and '.' in directories[-1]:
+        file = directories[-1]
+    else:
+        file = ''
+
     elements = {
         'scheme': parts.scheme,
         'netloc': parts.netloc,
@@ -17,6 +22,7 @@ def url_parser(url):
         'fragment': parts.fragment,
         'directories': directories,
         'queries': queries,
+        'file': file
     }
 
     return elements
