@@ -20,6 +20,7 @@ class ClientMessage:
         self.thread_id = None
         self.info: str = str()
         self.error: str = str()
+        self.protocol: str = str()
 
     def reinitialize(self) -> None:
         """

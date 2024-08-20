@@ -58,7 +58,7 @@ class SocketWrapper:
             ] = None,
             logger=None,
             statistics_logs_directory: str = None,
-            request_domain_queue: queues.NonBlockQueue = None
+            request_domain_from_dns_server_queue: queues.NonBlockQueue = None
     ):
         """
         Socket Wrapper class that will be used to create sockets, listen on them, accept connections and send them to
@@ -140,8 +140,8 @@ class SocketWrapper:
 
             statistics_writer: statistics_csv.StatisticsCSVWriter object, there is a logger object that
                 will be used to write the statistics file.
-        :param request_domain_queue: queues.NonBlockQueue object, non-blocking queue that will be used to get
-            the domain name that was requested from the DNS server (atomicshop.wrappers.socketw.dns_server).
+        :param request_domain_from_dns_server_queue: queues.NonBlockQueue object, non-blocking queue that will be used
+            to get the domain name that was requested from the DNS server (atomicshop.wrappers.socketw.dns_server).
             This is used to get the domain name that got to the DNS server and set it to the socket in case SNI
             was empty (in the SNIHandler class to set the 'server_hostname' for the socket).
         """
@@ -175,6 +175,7 @@ class SocketWrapper:
         self.statistics_logs_directory: str = statistics_logs_directory
         self.forwarding_dns_service_ipv4_list___only_for_localhost = (
             forwarding_dns_service_ipv4_list___only_for_localhost)
+        self.request_domain_from_dns_server_queue = request_domain_from_dns_server_queue
 
         self.socket_object = None
 
@@ -184,7 +185,6 @@ class SocketWrapper:
 
         self.sni_received_dict: dict = dict()
         self.sni_execute_extended: bool = False
-        self.requested_domain_from_dns_server = None
         self.certauth_wrapper = None
 
         # Defining list of threads, so we can "join()" them in the end all at once.
@@ -343,9 +343,10 @@ class SocketWrapper:
                 # Get the domain queue. Tried using "Queue.Queue" object, but it stomped the SSL Sockets
                 # from accepting connections.
                 domain_from_dns_server = None
-                if self.requested_domain_from_dns_server.queue:
-                    domain_from_dns_server = self.requested_domain_from_dns_server.queue
-                    self.logger.info(f"Requested domain from DNS Server: {self.requested_domain_from_dns_server.queue}")
+                if self.request_domain_from_dns_server_queue.queue:
+                    domain_from_dns_server = self.request_domain_from_dns_server_queue.queue
+                    self.logger.info(
+                        f"Requested domain from DNS Server: {self.request_domain_from_dns_server_queue.queue}")
 
                 # Wait from any connection on "accept()".
                 # 'client_socket' is socket or ssl socket, 'client_address' is a tuple (ip_address, port).

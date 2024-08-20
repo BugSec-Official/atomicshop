@@ -33,7 +33,7 @@ def initialize_mitm_server(config_file_path: str):
     # Main function should return integer with error code, 0 is successful.
     # Since listening server is infinite, this will not be reached.
     # After modules import - we check for python version.
-    check_python_version_compliance(minimum_version='3.11')
+    check_python_version_compliance(minimum_version='3.12')
 
     # Import the configuration file.
     result = config_static.load_config(config_file_path)
@@ -267,7 +267,8 @@ def initialize_mitm_server(config_file_path: str):
                 statistics_logs_directory=config_static.Log.logs_path,
                 forwarding_dns_service_ipv4_list___only_for_localhost=(
                     config_static.TCPServer.forwarding_dns_service_ipv4_list___only_for_localhost),
-                skip_extension_id_list=config_static.SkipExtensions.SKIP_EXTENSION_ID_LIST
+                skip_extension_id_list=config_static.SkipExtensions.SKIP_EXTENSION_ID_LIST,
+                request_domain_from_dns_server_queue=domain_queue
             )
         except socket_wrapper.SocketWrapperPortInUseError as e:
             print_api(e, error_type=True, color="red", logger=system_logger)
@@ -278,8 +279,6 @@ def initialize_mitm_server(config_file_path: str):
         statistics_writer = socket_wrapper_instance.statistics_writer
 
         socket_wrapper_instance.create_tcp_listening_socket_list()
-
-        socket_wrapper_instance.requested_domain_from_dns_server = domain_queue
 
         # Before we start the loop. we can set the default gateway if specified.
         set_dns_gateway = False
