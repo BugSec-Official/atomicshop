@@ -4,6 +4,7 @@ from pathlib import Path
 import datetime
 
 from ... import filesystem, datetimes
+from ...basics import booleans
 from ...file_io import csvs
 
 
@@ -15,9 +16,10 @@ def get_logs_paths(
         log_files_directory_path: str = None,
         log_file_path: str = None,
         file_name_pattern: str = '*.*',
-        date_pattern: str = None,
+        date_format: str = None,
         latest_only: bool = False,
-        previous_day_only: bool = False
+        previous_day_only: bool = False,
+        specific_date: str = None
 ):
     """
     This function gets the logs file paths from the directory. Supports rotating files to get the logs by time.
@@ -37,11 +39,18 @@ def get_logs_paths(
         log_files_directory_path = 'C:/logs'
     :param file_name_pattern: Pattern to match the log files names.
         Default file_name_pattern will match all the files.
-    :param date_pattern: Pattern to match the date in the log file name.
+    :param date_format: date format string pattern to match the date in the log file name.
         If specified, the function will get the log file by the date pattern.
         If not specified, the function will get the file date by file last modified time.
+
+        Example:
+        date_format = '%Y-%m-%d'
     :param latest_only: Boolean, if True, only the latest log file path will be returned.
     :param previous_day_only: Boolean, if True, only the log file path from the previous day will be returned.
+    :param specific_date: Specific date to get the log file path.
+        If specified, the function will get the log file by the specific date.
+        Meaning that 'date_format' must be specified.
+
     """
 
     if not log_files_directory_path and not log_file_path:
@@ -49,8 +58,14 @@ def get_logs_paths(
     elif log_files_directory_path and log_file_path:
         raise ValueError('Both "log_files_directory_path" and "log_file_path" cannot be specified at the same time.')
 
-    if latest_only and previous_day_only:
-        raise ValueError('Both "latest_only" and "previous_day_only" cannot be True at the same time.')
+    if latest_only or previous_day_only or specific_date:
+        booleans.check_3_booleans_when_only_1_can_be_true(
+                (latest_only, 'latest_only'),
+                (previous_day_only, 'previous_day_only'),
+                (specific_date, 'specific_date'))
+
+    if not date_format and specific_date:
+        raise ValueError('If "specific_date" is specified, "date_format" must be specified.')
 
     # If log file path is specified, get the file_name_pattern from the file name.
     if log_file_path:
@@ -74,22 +89,22 @@ def get_logs_paths(
     if logs_files:
         first_file_name: str = Path(logs_files[0]['file_path']).name
         first_datetime_object, first_date_string, first_timestamp_float = (
-            datetimes.get_datetime_from_complex_string_by_pattern(first_file_name, date_pattern))
+            datetimes.get_datetime_from_complex_string_by_pattern(first_file_name, date_format))
 
     # The problem here is the file name that doesn't contain the date string in the name.
     # If it is regular log rotation, then there will be one file that doesn't have the date string in the name.
     # If the function used to get the previous day log, then there will be no file that doesn't have the date string.
     if len(logs_files) > 1 or (len(logs_files) == 1 and first_date_string):
-        if date_pattern:
+        if date_format:
             latest_timestamp: float = 0
             for file_index, single_file in enumerate(logs_files):
                 # Get file name from current loop file path.
                 current_file_name: str = Path(single_file['file_path']).name
                 logs_files[file_index]['file_name'] = current_file_name
 
-                # Get the datetime object from the file name by the date pattern.
+                # Get the datetime object from the file name by the date format pattern.
                 datetime_object, date_string, timestamp_float = (
-                    datetimes.get_datetime_from_complex_string_by_pattern(current_file_name, date_pattern))
+                    datetimes.get_datetime_from_complex_string_by_pattern(current_file_name, date_format))
 
                 # Update the last modified time to the dictionary.
                 logs_files[file_index]['last_modified'] = timestamp_float
@@ -113,7 +128,7 @@ def get_logs_paths(
                     latest_timestamp += 86400
                     logs_files[file_index]['last_modified'] = latest_timestamp
                     logs_files[file_index]['datetime'] = datetime.datetime.fromtimestamp(latest_timestamp)
-                    logs_files[file_index]['date_string'] = logs_files[file_index]['datetime'].strftime(date_pattern)
+                    logs_files[file_index]['date_string'] = logs_files[file_index]['datetime'].strftime(date_format)
                     break
 
             # Sort the files by the last modified time.
@@ -128,6 +143,10 @@ def get_logs_paths(
                 logs_files = []
             else:
                 logs_files = [logs_files[-2]]
+
+        if specific_date:
+            # Check if there is a specific date log file.
+            logs_files = [single_file for single_file in logs_files if single_file['date_string'] == specific_date]
     # If there is only one file, meaning it is the current day log.
     # If the 'previous_day_only' is True, then there are no previous day logs to output.
     elif len(logs_files) == 1 and previous_day_only:
@@ -140,7 +159,7 @@ def get_all_log_files_into_list(
         log_files_directory_path: str = None,
         log_file_path: str = None,
         file_name_pattern: str = '*.*',
-        date_pattern: str = None,
+        date_format: str = None,
         log_type: Literal['csv'] = 'csv',
         header_type_of_files: Literal['first', 'all'] = 'first',
         remove_logs: bool = False,
@@ -155,9 +174,12 @@ def get_all_log_files_into_list(
     :param log_file_path: Path to the log file. Check the 'get_logs_paths' function for more details.
     :param file_name_pattern: Pattern to match the log files names.
         Default file_name_pattern will match all the files.
-    :param date_pattern: Pattern to match the date in the log file name.
+    :param date_format: date format string pattern to match the date in the log file name.
         If specified, the function will get the log file by the date pattern.
         If not specified, the function will get the file date by file last modified time.
+
+        Example:
+        date_format = '%Y-%m-%d'
     :param log_type: Type of log to get.
     :param header_type_of_files: Type of header to get from the files.
         'first' - Only the first file has a header for CSV. This header will be used for the rest of the files.
@@ -183,7 +205,7 @@ def get_all_log_files_into_list(
         log_files_directory_path=log_files_directory_path,
         log_file_path=log_file_path,
         file_name_pattern=file_name_pattern,
-        date_pattern=date_pattern)
+        date_format=date_format)
 
     # Read all the logs.
     logs_content: list = list()
@@ -263,16 +285,19 @@ class LogReader:
     def __init__(
             self,
             log_file_path: str,
-            date_pattern: str = None,
+            date_format: str = None,
             log_type: Literal['csv'] = 'csv',
             get_previous_file: bool = False,
             header: list = None
     ):
         """
         :param log_file_path: Path to the log file.
-        :param date_pattern: Pattern to match the date in the log file name.
+        :param date_format: date format string pattern to match the date in the log file name.
             If specified, the function will get the log file by the date pattern.
             If not specified, the function will get the file date by file last modified time.
+
+            Example:
+            date_format = '%Y-%m-%d'
         :param log_type: Type of log to get.
         :param get_previous_file: Boolean, if True, the function will get the previous log file.
             For example, your log is set to rotate every Midnight.
@@ -287,7 +312,7 @@ class LogReader:
         """
 
         self.log_file_path: str = log_file_path
-        self.date_pattern: str = date_pattern
+        self.date_format: str = date_format
         self.log_type: Literal['csv'] = log_type
         self.get_previous_file: bool = get_previous_file
         self.header: list = header
@@ -329,7 +354,7 @@ class LogReader:
         # Get the latest statistics file path.
         latest_statistics_file_path_object = get_logs_paths(
             log_file_path=self.log_file_path,
-            date_pattern=self.date_pattern,
+            date_format=self.date_format,
             latest_only=True
         )
 
@@ -344,7 +369,7 @@ class LogReader:
         try:
             previous_day_statistics_file_path = get_logs_paths(
                 log_file_path=self.log_file_path,
-                date_pattern=self.date_pattern,
+                date_format=self.date_format,
                 previous_day_only=True
             )[0]['file_path']
         # If you get IndexError, it means that there are no previous day logs to read.
