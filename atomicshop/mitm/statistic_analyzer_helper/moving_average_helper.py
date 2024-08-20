@@ -1,4 +1,5 @@
 import statistics
+from pathlib import Path
 from typing import Literal
 
 from ...print_api import print_api
@@ -129,7 +130,12 @@ def get_data_dict_from_statistics_content(
             type_to_check: str = line['host'] + line['path']
             # Remove the parameters from the URL.
             url_parsed = urls.url_parser(type_to_check)
-            type_to_check = url_parsed['path']
+
+            if url_parsed['file'] and Path(url_parsed['file']).suffix in ['.gz', '.gzip', '.zip']:
+                type_to_check = '/'.join(url_parsed['directories'][:-1])
+            else:
+                type_to_check = url_parsed['path']
+
             # Remove the last slash from the URL.
             type_to_check = type_to_check.removesuffix('/')
         else:

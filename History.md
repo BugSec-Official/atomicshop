@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.16.2 - 20.08.2024
+  * mitm/statistic_analyzer_helper/moving_average_helper, urls - fixes and improvements. 
 * 2.16.1 - 19.08.2024
   * permissions - refactoring, meaning the depending modules were also refactored.
 * 2.16.0 - 19.08.2024
