@@ -113,4 +113,4 @@ def find_and_replace_in_file(
             for index in found_string_indexes:
                 file_data[index] = file_data[index].replace(single_find.find_what, single_find.replace_to)
 
-    file_io.write_file(content=file_data, file_path=file_path, encoding=encoding, convert_list_to_string=True)
+    file_io.write_file(content=file_data, file_path=file_path, encoding=encoding)
