@@ -78,7 +78,6 @@ def write_file(
         file_path: str,
         file_mode: str = 'w',
         encoding: str = None,
-        convert_list_to_string: bool = False,
         file_object=None,
         **kwargs) -> None:
     """
@@ -90,18 +89,13 @@ def write_file(
         Default is 'w'.
     :param encoding: string, write the file with encoding. Example: 'utf-8'. 'None' is default, since it is default
         in 'open()' function.
-    :param convert_list_to_string: Boolean, if True, the list of strings will be converted to one string with '\n'
-        separator between the lines.
     :param file_object: file object of the 'open()' function in the decorator. Decorator executes the 'with open()'
         statement and passes to this function. That's why the default is 'None', since we get it from the decorator.
     :return:
     """
 
     if isinstance(content, list):
-        if convert_list_to_string:
-            content = '\n'.join(content)
-        else:
-            file_object.writelines(content)
+        file_object.writelines(content)
     elif isinstance(content, str):
         file_object.write(content)
     # THis will happen if the content is bytes and the file mode is 'wb'.
