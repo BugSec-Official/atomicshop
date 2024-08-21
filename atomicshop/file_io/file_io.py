@@ -95,7 +95,11 @@ def write_file(
     """
 
     if isinstance(content, list):
-        file_object.writelines(content)
+        for line in content:
+            if not line.endswith("\n"):
+                file_object.write(line + "\n")
+            else:
+                file_object.write(line)
     elif isinstance(content, str):
         file_object.write(content)
     # THis will happen if the content is bytes and the file mode is 'wb'.
