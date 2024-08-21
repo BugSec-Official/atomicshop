@@ -74,7 +74,7 @@ def get_datetime_from_complex_string_by_pattern(
         complex_string: str,
         date_pattern: str
 ) -> tuple[
-    Union[datetime, None],
+    Union[datetime.datetime, None],
     Union[str, None],
     Union[float, None]
 ]:
