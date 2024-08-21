@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.16.9 - 21.08.2024
+  * file_io/file_io - fixes and improvements.
 * 2.16.8 - 21.08.2024
   * file_io/file_io, python_file_patcher - fixes and improvements.
 * 2.16.7 - 21.08.2024
