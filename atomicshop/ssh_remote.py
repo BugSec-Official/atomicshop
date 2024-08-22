@@ -126,24 +126,24 @@ class SSHRemote:
         except paramiko.ssh_exception.NoValidConnectionsError as e:
             error = str(e)
             # Logging the error also. Since the process name isn't critical, we'll continue script execution.
-            print_api(error, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
+            print_api(error, logger=self.logger, logger_method='error', traceback_string=True)
             pass
         except paramiko.ssh_exception.SSHException as e:
             error = str(e)
             # Logging the error also. Since the process name isn't critical, we'll continue script execution.
-            print_api(error, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
+            print_api(error, logger=self.logger, logger_method='error', traceback_string=True)
             pass
         except ConnectionResetError:
             # Returning the error.
             error = "An existing connection was forcibly closed by the remote host."
             # Logging the error also. Since the process name isn't critical, we'll continue script execution.
-            print_api(error, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
+            print_api(error, logger=self.logger, logger_method='error', traceback_string=True)
             pass
         except TimeoutError:
             # Returning the error.
             error = "Connection timed out."
             # Logging the error also. Since the process name isn't critical, we'll continue script execution.
-            print_api(error, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
+            print_api(error, logger=self.logger, logger_method='error', traceback_string=True)
             pass
 
         return error
@@ -165,24 +165,24 @@ class SSHRemote:
         except AttributeError as function_exception_object:
             if function_exception_object.name == "open_session":
                 result_exception = "'SSHRemote().connect' wasn't executed."
-                print_api(result_exception, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
+                print_api(result_exception, logger=self.logger, logger_method='error', traceback_string=True)
 
                 # Since getting Process name is not the main feature of the server, we can pass the exception
                 pass
             else:
                 result_exception = f"Couldn't execute script over SSH. Unknown yet exception with 'AttributeError' " \
                                    f"and name: {function_exception_object.name}"
-                print_api(result_exception, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
+                print_api(result_exception, logger=self.logger, logger_method='error', traceback_string=True)
                 # Since getting Process name is not the main feature of the server, we can pass the exception
                 pass
         except socket.error:
             result_exception = "Couldn't execute script over SSH. SSH socket closed."
-            print_api(result_exception, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
+            print_api(result_exception, logger=self.logger, logger_method='error', traceback_string=True)
             # Since getting Process name is not the main feature of the server, we can pass the exception
             pass
         except Exception:
             result_exception = "Couldn't execute script over SSH. Unknown yet exception."
-            print_api(result_exception, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
+            print_api(result_exception, logger=self.logger, logger_method='error', traceback_string=True)
             # Since getting Process name is not the main feature of the server, we can pass the exception
             pass
 
@@ -334,7 +334,7 @@ class SSHRemote:
             # Basically we don't care much about SSH exceptions. Just log them and pass to record.
             except Exception as function_exception_object:
                 execution_error = function_exception_object
-                print_api(execution_error, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
+                print_api(execution_error, logger=self.logger, logger_method='error', traceback_string=True)
                 pass
 
             # Closing SSH connection at this stage.

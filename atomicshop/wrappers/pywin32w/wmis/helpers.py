@@ -114,7 +114,11 @@ def call_method(
     # Check if the method executed successfully.
     for result in results:
         if result != 0:
-            raise WmiMethodExecutionError(f"Failed to execute method '{method_name}' with error code: {result}")
+            if result == 91:
+                raise PermissionError(f"Failed to execute method '{method_name}' with error code: {result}, "
+                                      f"Try with Admin rights.")
+            else:
+                raise WmiMethodExecutionError(f"Failed to execute method '{method_name}' with error code: {result}")
 
 
 """

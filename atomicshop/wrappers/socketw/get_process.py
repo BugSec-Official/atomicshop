@@ -67,20 +67,20 @@ class GetCommandLine:
                 except ModuleNotFoundError as function_exception_object:
                     execution_error = f"Module not installed: {function_exception_object}"
                     print_api(
-                        execution_error, error_type=True, logger_method="error", traceback_string=True, oneline=True,
+                        execution_error, error_type=True, logger_method="error", traceback_string=True,
                         **print_kwargs)
                     pass
                 except psutil.AccessDenied:
                     execution_error = f"Access Denied for 'psutil' to read system process command line. " \
                                       f"Run script with Admin Rights."
                     print_api(
-                        execution_error, error_type=True, logger_method="error", traceback_string=True, oneline=True,
+                        execution_error, error_type=True, logger_method="error", traceback_string=True,
                         **print_kwargs)
                     pass
                 except Exception:
                     execution_error = "There was undocumented exception in localhost script execution."
                     print_api(
-                        execution_error, error_type=True, logger_method="error", traceback_string=True, oneline=True,
+                        execution_error, error_type=True, logger_method="error", traceback_string=True,
                         **print_kwargs)
                     pass
 

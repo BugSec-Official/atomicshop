@@ -17,15 +17,19 @@ from .connection_thread_worker import thread_worker_main
 from . import config_static, recs_files
 
 
+NETWORK_INTERFACE_IS_DYNAMIC: bool = bool()
+NETWORK_INTERFACE_IPV4_ADDRESS_LIST: list[str] = list()
+
+
 def exit_cleanup():
-    if config_static.DNSServer.set_default_dns_gateway:
+    if permissions.is_admin():
         is_dns_dynamic, current_dns_gateway = dns.get_default_dns_gateway()
         print_api(f'Current DNS Gateway: {current_dns_gateway}')
 
-        if current_dns_gateway == config_static.DNSServer.set_default_dns_gateway and not is_dns_dynamic:
-            if permissions.is_admin():
-                dns.set_connection_dns_gateway_dynamic(use_default_connection=True)
-                print_api("Returned default DNS gateway...", color='blue')
+        if is_dns_dynamic != NETWORK_INTERFACE_IS_DYNAMIC or \
+                (not is_dns_dynamic and current_dns_gateway != NETWORK_INTERFACE_IPV4_ADDRESS_LIST):
+            dns.set_connection_dns_gateway_dynamic(use_default_connection=True)
+            print_api("Returned default DNS gateway...", color='blue')
 
 
 def initialize_mitm_server(config_file_path: str):
@@ -42,20 +46,22 @@ def initialize_mitm_server(config_file_path: str):
         return result
 
     # Create folders.
-    filesystem.create_directory(config_static.Log.logs_path)
-    filesystem.create_directory(config_static.Recorder.recordings_path)
+    filesystem.create_directory(config_static.LogRec.logs_path)
+
+    if config_static.LogRec.enable_request_response_recordings_in_logs:
+        filesystem.create_directory(config_static.LogRec.recordings_path)
+        # Compress recordings of the previous days if there are any.
+        recs_files.recs_archiver_in_process(config_static.LogRec.recordings_path)
+
     if config_static.Certificates.sni_get_server_certificate_from_server_socket:
         filesystem.create_directory(
             config_static.Certificates.sni_server_certificate_from_server_socket_download_directory)
-
-    # Compress recordings of the previous days if there are any.
-    recs_files.recs_archiver_in_process(config_static.Recorder.recordings_path)
 
     # Create a logger that will log messages to file, Initiate System logger.
     logger_name = "system"
     system_logger = loggingw.create_logger(
         logger_name=logger_name,
-        file_path=f"{config_static.Log.logs_path}{os.sep}{logger_name}.txt",
+        file_path=f"{config_static.LogRec.logs_path}{os.sep}{logger_name}.txt",
         add_stream=True,
         add_timedfile=True,
         formatter_streamhandler='DEFAULT',
@@ -68,8 +74,9 @@ def initialize_mitm_server(config_file_path: str):
     system_logger.info(f"Python Version: {get_current_python_version_string()}")
     system_logger.info(f"Script Version: {config_static.SCRIPT_VERSION}")
     system_logger.info(f"Atomic Workshop Version: {atomicshop.__version__}")
-    system_logger.info(f"Log folder: {config_static.Log.logs_path}")
-    system_logger.info(f"Recordings folder for Requests/Responses: {config_static.Recorder.recordings_path}")
+    system_logger.info(f"Log folder: {config_static.LogRec.logs_path}")
+    if config_static.LogRec.enable_request_response_recordings_in_logs:
+        system_logger.info(f"Recordings folder for Requests/Responses: {config_static.LogRec.recordings_path}")
     system_logger.info(f"Loaded system logger: {system_logger}")
 
     system_logger.info(f"TCP Server Target IP: {config_static.DNSServer.target_tcp_server_ipv4}")
@@ -114,7 +121,7 @@ def initialize_mitm_server(config_file_path: str):
         # Initialize engine.
         current_module = ModuleCategory(config_static.MainConfig.SCRIPT_DIRECTORY)
         current_module.fill_engine_fields_from_config(engine_config_path)
-        current_module.initialize_engine(logs_path=config_static.Log.logs_path,
+        current_module.initialize_engine(logs_path=config_static.LogRec.logs_path,
                                          logger=system_logger)
 
         # Extending the full engine domain list with this list.
@@ -125,7 +132,7 @@ def initialize_mitm_server(config_file_path: str):
     # ==== Initialize Reference Module =============================================================================
     reference_module = ModuleCategory(config_static.MainConfig.SCRIPT_DIRECTORY)
     reference_module.fill_engine_fields_from_general_reference(config_static.MainConfig.ENGINES_DIRECTORY_PATH)
-    reference_module.initialize_engine(logs_path=config_static.Log.logs_path,
+    reference_module.initialize_engine(logs_path=config_static.LogRec.logs_path,
                                        logger=system_logger, stdout=False, reference_general=True)
     # === EOF Initialize Reference Module ==========================================================================
     # === Engine logging ===========================================================================================
@@ -151,8 +158,12 @@ def initialize_mitm_server(config_file_path: str):
             message = f"[*] Engine domains found, but the DNS routing is set not to use them for routing."
             print_api(message, color="yellow", logger=system_logger)
         elif not engines_list and config_static.DNSServer.resolve_to_tcp_server_only_engine_domains:
-            raise ValueError("No engines were found, but the DNS routing is set to use them for routing.\n"
-                             "Please check your DNS configuration in the 'config.ini' file.")
+            error_message = (
+                f"No engines were found in: [{config_static.MainConfig.ENGINES_DIRECTORY_PATH}]\n"
+                f"But the DNS routing is set to use them for routing.\n"
+                f"Please check your DNS configuration in the 'config.ini' file.")
+            print_api(error_message, color="red")
+            return 1
 
         if config_static.DNSServer.resolve_to_tcp_server_all_domains:
             print_api("All domains will be routed by the DNS server to Built-in TCP Server.", logger=system_logger)
@@ -175,8 +186,12 @@ def initialize_mitm_server(config_file_path: str):
             message = f"Engines found, and the TCP server is set to use them for processing."
             print_api(message, logger=system_logger)
         elif not engines_list and config_static.TCPServer.engines_usage:
-            raise ValueError("No engines were found, but the TCP server is set to use them for processing.\n"
-                             "Please check your TCP configuration in the 'config.ini' file.")
+            error_message = (
+                f"No engines were found in: [{config_static.MainConfig.ENGINES_DIRECTORY_PATH}]\n"
+                f"But the TCP server is set to use them for processing.\n"
+                f"Please check your TCP configuration in the 'config.ini' file.")
+            print_api(error_message, color="red")
+            return 1
     else:
         print_api("TCP Server is disabled.", logger=system_logger, color="yellow")
 
@@ -188,7 +203,7 @@ def initialize_mitm_server(config_file_path: str):
     network_logger_name = "network"
     network_logger = loggingw.create_logger(
         logger_name=network_logger_name,
-        directory_path=config_static.Log.logs_path,
+        directory_path=config_static.LogRec.logs_path,
         add_stream=True,
         add_timedfile=True,
         formatter_streamhandler='DEFAULT',
@@ -216,7 +231,7 @@ def initialize_mitm_server(config_file_path: str):
                 # Passing the engine domain list to DNS server to work with.
                 # 'list' function re-initializes the current list, or else it will be the same instance object.
                 tcp_resolve_domain_list=list(config_static.Certificates.domains_all_times),
-                log_directory_path=config_static.Log.logs_path,
+                log_directory_path=config_static.LogRec.logs_path,
                 offline_mode=config_static.DNSServer.offline_mode,
                 resolve_to_tcp_server_only_tcp_resolve_domains=(
                     config_static.DNSServer.resolve_to_tcp_server_only_engine_domains),
@@ -268,7 +283,7 @@ def initialize_mitm_server(config_file_path: str):
                 ssh_pass=config_static.ProcessName.ssh_pass,
                 ssh_script_to_execute=config_static.ProcessName.ssh_script_to_execute,
                 logger=listener_logger,
-                statistics_logs_directory=config_static.Log.logs_path,
+                statistics_logs_directory=config_static.LogRec.logs_path,
                 forwarding_dns_service_ipv4_list___only_for_localhost=(
                     config_static.TCPServer.forwarding_dns_service_ipv4_list___only_for_localhost),
                 skip_extension_id_list=config_static.SkipExtensions.SKIP_EXTENSION_ID_LIST,
@@ -298,11 +313,18 @@ def initialize_mitm_server(config_file_path: str):
             set_dns_gateway = True
 
         if set_dns_gateway:
-            # noinspection PyTypeChecker
-            dns.set_connection_dns_gateway_static(
-                dns_servers=dns_gateway_server_list,
-                use_default_connection=True
-            )
+            # Get current network interface state.
+            global NETWORK_INTERFACE_IS_DYNAMIC, NETWORK_INTERFACE_IPV4_ADDRESS_LIST
+            NETWORK_INTERFACE_IS_DYNAMIC, NETWORK_INTERFACE_IPV4_ADDRESS_LIST = dns.get_default_dns_gateway()
+
+            # Set the DNS gateway to the specified one only if the DNS gateway is dynamic or it is static but different
+            # from the one specified in the configuration file.
+            if (NETWORK_INTERFACE_IS_DYNAMIC or (not NETWORK_INTERFACE_IS_DYNAMIC and
+                                                 NETWORK_INTERFACE_IPV4_ADDRESS_LIST != dns_gateway_server_list)):
+                dns.set_connection_dns_gateway_static(
+                    dns_servers=dns_gateway_server_list,
+                    use_default_connection=True
+                )
 
         # General exception handler will catch all the exceptions that occurred in the threads and write it to the log.
         # noinspection PyBroadException
@@ -319,13 +341,14 @@ def initialize_mitm_server(config_file_path: str):
             socket_thread.start()
         except Exception:
             message = f"Unhandled Exception occurred in 'loop_for_incoming_sockets' function"
-            print_api(message, error_type=True, color="red", logger=network_logger, traceback_string=True, oneline=True)
+            print_api(message, error_type=True, color="red", logger=network_logger, traceback_string=True)
 
         # Compress recordings each day in a separate process.
         recs_archiver_thread = threading.Thread(target=_loop_at_midnight_recs_archive)
         recs_archiver_thread.daemon = True
         recs_archiver_thread.start()
 
+    if config_static.DNSServer.enable or config_static.TCPServer.enable:
         # This is needed for Keyboard Exception.
         while True:
             time.sleep(1)
@@ -338,7 +361,8 @@ def _loop_at_midnight_recs_archive():
         current_date = datetime.datetime.now().strftime('%d')
         # If it's midnight, start the archiving process.
         if current_date != previous_date:
-            recs_files.recs_archiver_in_process(config_static.Recorder.recordings_path)
+            if config_static.LogRec.enable_request_response_recordings_in_logs:
+                recs_files.recs_archiver_in_process(config_static.LogRec.recordings_path)
             # Update the previous date.
             previous_date = current_date
         # Sleep for 1 minute.

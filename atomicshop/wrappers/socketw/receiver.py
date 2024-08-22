@@ -49,17 +49,17 @@ class Receiver:
             class_data = self.ssl_socket.recv(self.buffer_size_receive)
         except ConnectionAbortedError:
             message = "* Connection was aborted by the client. Exiting..."
-            print_api(message, logger=self.logger, logger_method='critical', traceback_string=True, oneline=True)
+            print_api(message, logger=self.logger, logger_method='critical', traceback_string=True)
             # This will be treated as empty message - indicate that socket was closed and will be handled properly.
             pass
         except ConnectionResetError:
             message = "* Connection was forcibly closed by the client. Exiting..."
-            print_api(message, logger=self.logger, logger_method='critical', traceback_string=True, oneline=True)
+            print_api(message, logger=self.logger, logger_method='critical', traceback_string=True)
             # This will be treated as empty message - indicate that socket was closed and will be handled properly.
             pass
         except ssl.SSLError:
             message = "* Encountered SSL error on packet receive. Exiting..."
-            print_api(message, logger=self.logger, logger_method='critical', traceback_string=True, oneline=True)
+            print_api(message, logger=self.logger, logger_method='critical', traceback_string=True)
             # This will be treated as empty message - indicate that socket was closed and will be handled properly.
             pass
 

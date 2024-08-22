@@ -1,4 +1,3 @@
-# v1.0.0 - 26.03.2023 14:20
 # Using to convert status code to status phrase / string.
 from http import HTTPStatus
 # Parsing PATH template to variables.

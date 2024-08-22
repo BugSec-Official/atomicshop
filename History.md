@@ -1,8 +1,11 @@
 <!-- HISTORY -->
 ## History
 
+* 2.16.11 - 21.08.2024
+  * dns, file_io/file_io, mitm, ssh_remote, wrappers/pywin32w/wmis, wrappers/socketw - fixes and improvements.
+  * wrappers/winregw - new release.
 * 2.16.10 - 21.08.2024
-  * 
+  * mitm/recs_files - fixes and improvements.
 * 2.16.9 - 21.08.2024
   * file_io/file_io - fixes and improvements.
 * 2.16.8 - 21.08.2024
@@ -475,7 +478,7 @@
   * 'etw.dns_trace' - changed cycles in ProcessPoller.
   * pywintrace - added latest WHL from GitHub Releases.
 * 2.1.4 - 03.09.2023
-  * 'socketsw' - fixed bug in tls / non-tls connection handling.
+  * 'socketw' - fixed bug in tls / non-tls connection handling.
 * 2.1.3 - 31.08.2023
   * 'etw.dns_trace' - added more cycles to ProcessPoller.
 * 2.1.2 - 31.08.2023

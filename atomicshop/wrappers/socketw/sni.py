@@ -267,7 +267,7 @@ class SNIHandler:
             print_api(message, **(print_kwargs or {}))
         except Exception as exception_object:
             message = f"SNI Handler: Undocumented exception general settings section: {exception_object}"
-            print_api(message, error_type=True, logger_method="error", traceback_string=True, oneline=True,
+            print_api(message, error_type=True, logger_method="error", traceback_string=True,
                       **(print_kwargs or {}))
             pass
 

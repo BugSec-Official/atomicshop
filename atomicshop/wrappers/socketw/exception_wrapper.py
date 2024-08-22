@@ -27,14 +27,12 @@ def connection_exception_decorator(function_name):
             message = f"Socket Accept: {kwargs['domain_from_dns_server']}:{port}: " \
                       f"* Established connection was aborted by software on the host..."
             wrapper_handle_connection_exceptions.message = message
-            print_api(message, logger_method='error', traceback_string=True, **kwargs['print_kwargs'])
-            pass
+            print_api(message, logger_method='error', traceback_string=True, oneline=True, **kwargs['print_kwargs'])
         except ConnectionResetError:
             message = f"Socket Accept: {kwargs['domain_from_dns_server']}:{port}: " \
                       f"* An existing connection was forcibly closed by the remote host..."
             wrapper_handle_connection_exceptions.message = message
             print_api(message, logger_method='error', traceback_string=True, oneline=True, **kwargs['print_kwargs'])
-            pass
         except ssl.SSLEOFError as e:
             # A subclass of SSLError raised when the SSL connection has been terminated abruptly. Generally, you
             # shouldn't try to reuse the underlying transport when this error is encountered.
@@ -47,7 +45,7 @@ def connection_exception_decorator(function_name):
                 message = \
                     f"Socket Accept: {kwargs['domain_from_dns_server']}:{port}: {message}"
                 wrapper_handle_connection_exceptions.message = message
-                print_api(message, error_type=True, logger_method='error', **kwargs['print_kwargs'])
+                print_api(message, error_type=True, logger_method='error', oneline=True, **kwargs['print_kwargs'])
             except Exception:
                 message = f"Socket Accept: port {port}: {message}"
                 wrapper_handle_connection_exceptions.message = message
@@ -61,7 +59,7 @@ def connection_exception_decorator(function_name):
                 message = \
                     f"Socket Accept: {kwargs['domain_from_dns_server']}:{port}: {message}"
                 wrapper_handle_connection_exceptions.message = message
-                print_api(message, logger_method='error', **kwargs['print_kwargs'])
+                print_api(message, logger_method='error', oneline=True, **kwargs['print_kwargs'])
             except Exception:
                 message = f"Socket Accept: port {port}: {message}"
                 wrapper_handle_connection_exceptions.message = message
@@ -88,14 +86,14 @@ def connection_exception_decorator(function_name):
 
                 message = "SSLError on accept. Not documented..."
                 wrapper_handle_connection_exceptions.message = message
-                print_api(message, logger_method='error', **kwargs['print_kwargs'])
+                print_api(message, logger_method='error', oneline=True, **kwargs['print_kwargs'])
 
                 message = f'ssl.SSLError:{exception_object}'
                 wrapper_handle_connection_exceptions.message = message
                 message = \
                     f"Socket Accept: {kwargs['domain_from_dns_server']}:{port}: {message}"
                 wrapper_handle_connection_exceptions.message = message
-                print_api(message, logger_method='error', **kwargs['print_kwargs'])
+                print_api(message, logger_method='error', oneline=True, **kwargs['print_kwargs'])
             pass
         except FileNotFoundError:
             message = "'SSLSocket.accept()' crashed: 'FileNotFoundError'. Some problem with SSL during Handshake - " \

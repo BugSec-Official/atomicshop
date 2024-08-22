@@ -230,17 +230,16 @@ class DnsServer:
                     # This error happens when the client closes the connection before the server.
                     # This is not an error for a DNS Server, but we'll log it anyway only with the full DNS logger.
                     message = "Error: to receive DNS request, An existing connection was forcibly closed"
-                    # print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
+                    # print_api(message, logger=self.logger, logger_method='error', traceback_string=True)
                     print_api(
-                        message, logger=self.dns_full_logger, logger_method='error', traceback_string=True,
-                        oneline=True)
+                        message, logger=self.dns_full_logger, logger_method='error', traceback_string=True)
                     self.dns_full_logger.info("==========")
                     pass
                     continue
                 except Exception:
                     message = "Unknown Exception: to receive DNS request"
                     print_api(
-                        message, logger=self.logger, logger_method='critical', traceback_string=True, oneline=True)
+                        message, logger=self.logger, logger_method='critical', traceback_string=True)
                     self.logger.info("==========")
                     pass
                     continue
@@ -417,9 +416,9 @@ class DnsServer:
                                 except ValueError:
                                     message = f"Looks like wrong type of response for QTYPE: {qtype_string}. Response: "
                                     print_api(message, logger=self.logger, logger_method='critical',
-                                              traceback_string=True, oneline=True)
+                                              traceback_string=True)
                                     print_api(f"{dns_built_response}", logger=self.logger, logger_method='critical',
-                                              traceback_string=True, oneline=True)
+                                              traceback_string=True)
                                     # Pass the exception.
                                     pass
                                     # Continue to the next DNS request, since there's nothing to do here right now.
@@ -430,9 +429,9 @@ class DnsServer:
                                         (f"Unknown exception while creating response for QTYPE: {qtype_string}. "
                                          f"Response: ")
                                     print_api(message, logger=self.logger, logger_method='critical',
-                                              traceback_string=True, oneline=True)
+                                              traceback_string=True)
                                     print_api(f"{dns_built_response}", logger=self.logger, logger_method='critical',
-                                              traceback_string=True, oneline=True)
+                                              traceback_string=True)
                                     # Pass the exception.
                                     pass
                                     # Continue to the next DNS request, since there's nothing to do here right now.
@@ -479,7 +478,7 @@ class DnsServer:
                                             google_dns_ipv4_socket.recvfrom(self.buffer_size_receive)
                                     except TimeoutError as function_exception_object:
                                         print_api(function_exception_object, logger=self.logger, logger_method='error',
-                                                  traceback_string=True, oneline=True)
+                                                  traceback_string=True)
                                         google_dns_ipv4_socket.close()
                                         counter += 1
                                         # Pass the exception.
@@ -725,7 +724,7 @@ class DnsServer:
                 except Exception:
                     message = "Unknown Exception: to parse DNS request"
                     print_api(
-                        message, logger=self.logger, logger_method='critical', traceback_string=True, oneline=True)
+                        message, logger=self.logger, logger_method='critical', traceback_string=True)
                     self.logger.info("==========")
                     pass
                     continue

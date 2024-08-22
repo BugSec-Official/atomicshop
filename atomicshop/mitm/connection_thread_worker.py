@@ -24,7 +24,25 @@ def thread_worker_main(
         reference_module
 ):
     def output_statistics_csv_row():
-        status_code = ','.join([str(x.code) for x in client_message.response_list_of_raw_decoded])
+        # If there is no '.code' attribute in HTTPResponse, this means that this is not a HTTP message, so there is no
+        # status code.
+        try:
+            http_status_code: str = ','.join([str(x.code) for x in client_message.response_list_of_raw_decoded])
+        except AttributeError:
+            http_status_code: str = str()
+
+        # Same goes for the '.path' attribute, if it is not HTTP message then there will be no path.
+        try:
+            http_path: str = client_message.request_raw_decoded.path
+        except AttributeError:
+            http_path: str = str()
+
+        # Same goes for the '.command' attribute, if it is not HTTP message then there will be no command.
+        try:
+            http_command: str = client_message.request_raw_decoded.command
+        except AttributeError:
+            http_command: str = str()
+
         response_size_bytes = ','.join([str(len(x)) for x in client_message.response_list_of_raw_bytes])
 
         statistics_writer.write_row(
@@ -32,13 +50,13 @@ def thread_worker_main(
             tls_type=tls_type,
             tls_version=tls_version,
             protocol=client_message.protocol,
-            path=client_message.request_raw_decoded.path,
-            status_code=status_code,
-            command=client_message.request_raw_decoded.command,
+            path=http_path,
+            status_code=http_status_code,
+            command=http_command,
             request_time_sent=client_message.request_time_received,
             request_size_bytes=len(client_message.request_raw_bytes),
             response_size_bytes=response_size_bytes,
-            recorded_file_path=recorded_file,
+            recorded_file_path=client_message.recorded_file_path,
             process_cmd=process_commandline,
             error=str())
 
@@ -126,7 +144,7 @@ def thread_worker_main(
                     message = "There was an exception in HTTP Parsing module!"
                     print_api(
                         message, error_type=True, logger=network_logger, logger_method='critical',
-                        traceback_string=True, oneline=True)
+                        traceback_string=True)
                     # Socket connection can be closed since we have a problem in current thread and break the loop
                     client_connection_boolean = False
                     break
@@ -160,10 +178,10 @@ def thread_worker_main(
                     message = "Exception in Parser"
                     print_api(
                         message, error_type=True, logger=parser.logger, logger_method='critical',
-                        traceback_string=True, oneline=True)
+                        traceback_string=True)
                     print_api(
                         message, error_type=True, logger=network_logger, logger_method='critical',
-                        traceback_string=True, oneline=True)
+                        traceback_string=True)
                     # At this point we can pass the exception and continue the script.
                     pass
                     # Socket connection can be closed since we have a problem in current thread and break the loop
@@ -193,10 +211,10 @@ def thread_worker_main(
                         message = "Exception in Responder"
                         print_api(
                             message, error_type=True, logger=responder.logger, logger_method='critical',
-                            traceback_string=True, oneline=True)
+                            traceback_string=True)
                         print_api(
                             message, error_type=True, logger=network_logger, logger_method='critical',
-                            traceback_string=True, oneline=True)
+                            traceback_string=True)
                         pass
                         # Socket connection can be closed since we have a problem in current thread and break the loop.
                         client_connection_boolean = False
@@ -220,8 +238,9 @@ def thread_worker_main(
                             service_client = socket_client.SocketClient(
                                 service_name=client_message.server_name, service_port=client_message.destination_port,
                                 tls=is_tls,
-                                dns_servers_list=
-                                config_static.TCPServer.forwarding_dns_service_ipv4_list___only_for_localhost)
+                                dns_servers_list=(
+                                    config_static.TCPServer.forwarding_dns_service_ipv4_list___only_for_localhost)
+                            )
                         # If we're not on localhost, then connect to domain directly.
                         else:
                             service_client = socket_client.SocketClient(
@@ -253,18 +272,19 @@ def thread_worker_main(
 
                 # This is the point after the response mode check was finished.
                 # Recording the message, doesn't matter what type of mode this is.
-                try:
-                    recorded_file = recorder(class_client_message=client_message,
-                                             record_path=config_static.Recorder.recordings_path).record()
-                except Exception:
-                    message = "Exception in Recorder"
-                    print_api(
-                        message, error_type=True, logger=recorder.logger, logger_method='critical',
-                        traceback_string=True, oneline=True)
-                    print_api(
-                        message, error_type=True, logger=network_logger, logger_method='critical',
-                        traceback_string=True, oneline=True)
-                    pass
+                if config_static.LogRec.enable_request_response_recordings_in_logs:
+                    try:
+                        recorded_file = recorder(class_client_message=client_message,
+                                                 record_path=config_static.LogRec.recordings_path).record()
+                        client_message.recorded_file_path = recorded_file
+                    except Exception:
+                        message = "Exception in Recorder"
+                        print_api(
+                            message, error_type=True, logger=recorder.logger, logger_method='critical',
+                            traceback_string=True)
+                        print_api(
+                            message, error_type=True, logger=network_logger, logger_method='critical',
+                            traceback_string=True)
 
                 function_recorded = True
 
@@ -294,7 +314,7 @@ def thread_worker_main(
                     message = "Not sending anything to the client, since there is no response available"
                     print_api(
                         message, error_type=True, logger=network_logger, logger_method='critical',
-                        traceback_string=True, oneline=True)
+                        traceback_string=True)
                     # Pass the exception
                     pass
                     # Break the while loop
@@ -312,18 +332,19 @@ def thread_worker_main(
         # === At this point while loop of 'client_connection_boolean' was broken =======================================
         # If recorder wasn't executed before, then execute it now
         if not function_recorded:
-            try:
-                recorded_file = recorder(
-                    class_client_message=client_message, record_path=config_static.Recorder.recordings_path).record()
-            except Exception:
-                message = "Exception in Recorder"
-                print_api(
-                    message, error_type=True, logger=recorder.logger, logger_method='critical',
-                    traceback_string=True, oneline=True)
-                print_api(
-                    message, error_type=True, logger=network_logger, logger_method='critical',
-                    traceback_string=True, oneline=True)
-                pass
+            if config_static.LogRec.enable_request_response_recordings_in_logs:
+                try:
+                    recorded_file = recorder(
+                        class_client_message=client_message, record_path=config_static.LogRec.recordings_path).record()
+                    client_message.recorded_file_path = recorded_file
+                except Exception:
+                    message = "Exception in Recorder"
+                    print_api(
+                        message, error_type=True, logger=recorder.logger, logger_method='critical',
+                        traceback_string=True)
+                    print_api(
+                        message, error_type=True, logger=network_logger, logger_method='critical',
+                        traceback_string=True)
 
             # Save statistics file.
             output_statistics_csv_row()
@@ -343,5 +364,4 @@ def thread_worker_main(
     except Exception:
         message = "Undocumented exception in thread worker"
         print_api(
-            message, error_type=True, logger=network_logger, logger_method='critical',
-            traceback_string=True, oneline=True)
+            message, error_type=True, logger=network_logger, logger_method='critical', traceback_string=True)

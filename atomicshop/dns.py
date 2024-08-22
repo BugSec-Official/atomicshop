@@ -5,6 +5,7 @@ import dns.resolver
 from .print_api import print_api
 from .permissions import permissions
 from .wrappers.pywin32w.wmis import win32networkadapter
+from .wrappers.winregw import winreg_network
 
 
 # Defining Dictionary of Numeric to String DNS Query Types.
@@ -71,10 +72,7 @@ def get_default_dns_gateway() -> tuple[bool, list[str]]:
     :return: tuple(is dynamic boolean, list of DNS server IPv4s).
     """
 
-    resolver = dns.resolver.Resolver()
-    dns_servers = list(resolver.nameservers)
-
-    is_dynamic = win32networkadapter.is_adapter_dns_gateway_from_dhcp(use_default_interface=True)
+    is_dynamic, dns_servers = winreg_network.get_default_dns_gateway()
     return is_dynamic, dns_servers
 
 

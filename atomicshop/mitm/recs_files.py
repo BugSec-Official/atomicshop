@@ -71,4 +71,3 @@ def recs_archiver_in_process(recs_directory: str):
 
     process = multiprocessing.Process(target=recs_archiver, args=(recs_directory,))
     process.start()
-
