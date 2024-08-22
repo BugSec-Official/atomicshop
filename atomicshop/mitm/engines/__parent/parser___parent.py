@@ -1,4 +1,3 @@
-# v1.0.0 - 26.03.2023 14:00
 from ...shared_functions import create_custom_logger
 from ...message import ClientMessage
 

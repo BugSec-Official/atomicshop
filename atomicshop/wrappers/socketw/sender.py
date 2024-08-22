@@ -50,7 +50,7 @@ class Sender:
             self.logger.info(f"Sent the message to destination.")
         except ConnectionResetError:
             message = "* Couldn't reach the server - Connection was reset. Exiting..."
-            print_api(message, logger=self.logger, logger_method='critical', traceback_string=True, oneline=True)
+            print_api(message, logger=self.logger, logger_method='critical', traceback_string=True)
             # Since the connection is down, it will be handled in thread_worker_main
             function_result = False
             pass

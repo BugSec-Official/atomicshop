@@ -21,6 +21,7 @@ class ClientMessage:
         self.info: str = str()
         self.error: str = str()
         self.protocol: str = str()
+        self.recorded_file_path: str = str()
 
     def reinitialize(self) -> None:
         """

@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from ..print_api import print_api
@@ -131,12 +132,13 @@ def manipulations_after_import():
     config_static.SkipExtensions.SKIP_EXTENSION_ID_LIST = skip_extensions
 
     # If the paths are relative, convert them to absolute paths.
-    config_static.Log.logs_path = filesystem.check_absolute_path___add_full(
-        config_static.Log.logs_path, config_static.MainConfig.SCRIPT_DIRECTORY)
-    config_static.Recorder.recordings_path = filesystem.check_absolute_path___add_full(
-        config_static.Recorder.recordings_path, config_static.MainConfig.SCRIPT_DIRECTORY)
+    config_static.LogRec.logs_path = filesystem.check_absolute_path___add_full(
+        config_static.LogRec.logs_path, config_static.MainConfig.SCRIPT_DIRECTORY)
     config_static.Certificates.custom_server_certificate_path = filesystem.check_absolute_path___add_full(
         config_static.Certificates.custom_server_certificate_path, config_static.MainConfig.SCRIPT_DIRECTORY)
+
+    config_static.LogRec.recordings_path = (
+            config_static.LogRec.logs_path + os.sep + config_static.LogRec.recordings_directory_name)
 
     # At this point the user that sets the config can set it to null or empty string ''. We will make sure
     # that the path is None if it's empty.

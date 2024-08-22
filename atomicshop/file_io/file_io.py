@@ -21,6 +21,15 @@ def write_file_decorator(function_name):
 
         print_api(message=f"Writing file: {kwargs['file_path']}", **kwargs)
 
+        if kwargs['enable_long_file_path']:
+            # A simpler string method would be to add '\\?\' to the beginning of the file path.
+            # kwargs['file_path'] = rf"\\?\{kwargs['file_path']}"
+
+            # Enable long file path.
+            from ctypes import windll
+            # Enable long file path.
+            windll.kernel32.SetFileAttributesW(kwargs['file_path'], 0x80)
+
         try:
             with open(kwargs['file_path'], kwargs['file_mode'], encoding=kwargs['encoding']) as output_file:
                 # Pass the 'output_file' object to kwargs that will pass the object to the executing function.
@@ -78,6 +87,7 @@ def write_file(
         file_path: str,
         file_mode: str = 'w',
         encoding: str = None,
+        enable_long_file_path: bool = False,
         file_object=None,
         **kwargs) -> None:
     """
@@ -89,6 +99,8 @@ def write_file(
         Default is 'w'.
     :param encoding: string, write the file with encoding. Example: 'utf-8'. 'None' is default, since it is default
         in 'open()' function.
+    :param enable_long_file_path: Boolean, by default Windows has a limit of 260 characters for file path. If True,
+        the long file path will be enabled, and the limit will be 32,767 characters.
     :param file_object: file object of the 'open()' function in the decorator. Decorator executes the 'with open()'
         statement and passes to this function. That's why the default is 'None', since we get it from the decorator.
     :return:

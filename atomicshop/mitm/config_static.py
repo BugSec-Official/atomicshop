@@ -19,6 +19,7 @@ LIST_OF_BOOLEANS: list = [
     ('tcp', 'enable'),
     ('tcp', 'engines_usage'),
     ('tcp', 'server_response_mode'),
+    ('logrec', 'enable_request_response_recordings_in_logs'),
     ('certificates', 'default_server_certificate_usage'),
     ('certificates', 'sni_add_new_domains_to_default_server_certificate'),
     ('certificates', 'custom_server_certificate_usage'),
@@ -34,8 +35,7 @@ LIST_OF_BOOLEANS: list = [
 TOML_TO_STATIC_CATEGORIES: dict = {
     'dns': 'DNSServer',
     'tcp': 'TCPServer',
-    'log': 'Log',
-    'recorder': 'Recorder',
+    'logrec': 'LogRec',
     'certificates': 'Certificates',
     'skip_extensions': 'SkipExtensions',
     'process_name': 'ProcessName'
@@ -101,13 +101,12 @@ class TCPServer:
 
 
 @dataclass
-class Log:
+class LogRec:
     logs_path: str
-
-
-@dataclass
-class Recorder:
     recordings_path: str
+    enable_request_response_recordings_in_logs: bool
+
+    recordings_directory_name: str = 'recs'
 
 
 @dataclass

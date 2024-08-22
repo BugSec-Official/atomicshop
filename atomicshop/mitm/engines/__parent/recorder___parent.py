@@ -3,8 +3,8 @@ from datetime import datetime
 
 from ...shared_functions import build_module_names, create_custom_logger, get_json
 from ... import message, recs_files
-from ....urls import url_parser
-from .... import filesystem
+from .... import filesystem, urls
+from ....file_io import file_io
 
 
 # The class that is responsible for Recording Requests / Responses.
@@ -52,7 +52,7 @@ class RecorderParent:
         # This will happen if the message is not HTTP.
         try:
             # Parse the url to components.
-            http_path_parsed = url_parser(self.class_client_message.request_raw_decoded.path)
+            http_path_parsed = urls.url_parser(self.class_client_message.request_raw_decoded.path)
             # Get only directories.
             http_path_directories_string = '-'.join(http_path_parsed['directories'])
             # Add '_' character before 'http_path' to look better on the file name.
@@ -64,7 +64,7 @@ class RecorderParent:
         # If HTTP Path is not defined, 'http_path' will be empty, and it will not interfere with file name.
         self.record_file_path: str = \
             self.engine_record_path + os.sep + \
-            day_time_format + "_" + self.class_client_message.server_name + http_path + self.file_extension
+            day_time_format + "_" + self.class_client_message.server_name + self.file_extension
 
     def convert_messages(self):
         """
@@ -91,8 +91,7 @@ class RecorderParent:
         record_message = get_json(self.class_client_message)
 
         # Since we already dumped the object to dictionary string, we'll just save the object to regular file.
-        with open(self.record_file_path, 'w') as output_file:
-            output_file.write(record_message)
+        file_io.write_file(record_message, self.record_file_path, enable_long_file_path=True)
 
         self.logger.info(f"Recorded to file: {self.record_file_path}")
 
