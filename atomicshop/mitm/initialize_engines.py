@@ -52,12 +52,12 @@ class ModuleCategory:
             raise ValueError(f"Engine Configuration file doesn't contain any domains: {engine_config_file_path}")
 
         # Full path to file
-        self.parser_file_path = filesystem.get_file_paths_from_directory(
-            engine_directory_path, file_name_check_pattern=configuration_data['parser_file'])[0]
-        self.responder_file_path = filesystem.get_file_paths_from_directory(
-            engine_directory_path, file_name_check_pattern=configuration_data['responder_file'])[0]
-        self.recorder_file_path = filesystem.get_file_paths_from_directory(
-            engine_directory_path, file_name_check_pattern=configuration_data['recorder_file'])[0]
+        self.parser_file_path = filesystem.get_paths_from_directory(
+            engine_directory_path, get_file=True, file_name_check_pattern=configuration_data['parser_file'])[0].path
+        self.responder_file_path = filesystem.get_paths_from_directory(
+            engine_directory_path, get_file=True, file_name_check_pattern=configuration_data['responder_file'])[0].path
+        self.recorder_file_path = filesystem.get_paths_from_directory(
+            engine_directory_path, get_file=True, file_name_check_pattern=configuration_data['recorder_file'])[0].path
 
     def initialize_engine(self, logs_path: str, logger=None, reference_general: bool = False, **kwargs):
         if not reference_general:

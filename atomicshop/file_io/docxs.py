@@ -74,20 +74,20 @@ def search_for_hyperlink_in_files(directory_path: str, hyperlink: str, relative_
         raise NotADirectoryError(f"Directory doesn't exist: {directory_path}")
 
     # Get all the docx files in the specified directory.
-    files = filesystem.get_file_paths_from_directory(
-        directory_path, file_name_check_pattern="*\.docx",
+    files = filesystem.get_paths_from_directory(
+        directory_path, get_file=True, file_name_check_pattern="*\.docx",
         add_relative_directory=True, relative_file_name_as_directory=True)
 
     found_in_files: list = list()
     for file_path in files:
-        hyperlinks = get_hyperlinks(file_path['file_path'])
+        hyperlinks = get_hyperlinks(file_path.path)
         if hyperlink in hyperlinks:
             found_in_files.append(file_path)
 
     if relative_paths:
         result_list = list()
         for found_file in found_in_files:
-            result_list.append(found_file['relative_dir'])
+            result_list.append(found_file.relative_dir)
     else:
         result_list = found_in_files
 
