@@ -4,7 +4,10 @@ from dataclasses import dataclass
 from . import import_config
 
 
-SCRIPT_VERSION: str = '1.7.4'
+SCRIPT_VERSION: str = '1.7.5'
+"""
+Added logs backup days
+"""
 
 
 # CONFIG = None
@@ -105,6 +108,7 @@ class LogRec:
     logs_path: str
     recordings_path: str
     enable_request_response_recordings_in_logs: bool
+    store_logs_for_x_days: int
 
     recordings_directory_name: str = 'recs'
 

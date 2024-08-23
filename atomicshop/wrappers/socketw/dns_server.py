@@ -35,6 +35,7 @@ class DnsServer:
             listening_interface: str,
             listening_port: int,
             log_directory_path: str,
+            backupCount_log_files_x_days: int = 0,
             forwarding_dns_service_ipv4: str = '8.8.8.8',
             forwarding_dns_service_port: int = 53,
             resolve_to_tcp_server_only_tcp_resolve_domains: bool = False,
@@ -56,6 +57,9 @@ class DnsServer:
             Example: '0.0.0.0'. For all interfaces.
         :param listening_port: int: Port number that the DNS Server will listen on.
         :param log_directory_path: str: Path to the directory where the logs will be saved.
+        :param backupCount_log_files_x_days: int: How many days the log files will be kept.
+            Default is 0, which means that the log files will be kept indefinitely.
+            More than 0 means that the log files will be deleted after the specified days.
         :param forwarding_dns_service_ipv4: str: IPv4 address of the DNS Service that will be used for resolving.
             Example: '8.8.8.8'. For Google DNS Service.
         :param forwarding_dns_service_port: int: Port number of the DNS Service that will be used for resolving.
@@ -126,7 +130,8 @@ class DnsServer:
             logger_name="dns",
             directory_path=self.log_directory_path,
             add_timedfile=True,
-            formatter_filehandler='DEFAULT'
+            formatter_filehandler='DEFAULT',
+            backupCount=backupCount_log_files_x_days
         )
 
         self.test_config()
