@@ -66,7 +66,7 @@ def install_before_restart(
 
     if not fact_source_archive_path:
         # Download the FACT_core repo.
-        if not filesystem.get_file_paths_from_directory(installation_directory):
+        if not filesystem.get_paths_from_directory(installation_directory, get_file=True):
             git_wrapper = githubw.GitHubWrapper(repo_url=config_install.FACT_CORE_GITHUB_URL)
             git_wrapper.build_links_from_repo_url()
             git_wrapper.download_and_extract_branch(

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from . import import_config
 
 
-SCRIPT_VERSION: str = '1.7.0'
+SCRIPT_VERSION: str = '1.7.4'
 
 
 # CONFIG = None

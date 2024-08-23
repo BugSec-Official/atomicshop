@@ -9,10 +9,11 @@ from contextlib import contextmanager
 from typing import Literal, Union
 import tempfile
 
+# noinspection PyPackageRequirements
 import psutil
 
 from .print_api import print_api, print_status_of_list
-from .basics import strings, list_of_dicts
+from .basics import strings, list_of_dicts, list_of_classes
 from .file_io import file_io
 from . import hashing, datetimes
 
@@ -65,14 +66,18 @@ FILE_NAME_REPLACEMENT_DICT: dict = {
 }
 
 
+# class TimeCouldNotBeFoundInFileNameError(Exception):
+#     pass
+
+
 def get_home_directory(return_sudo_user: bool = False) -> str:
     """
     Returns the home directory of the current user or the user who invoked sudo.
 
     :param return_sudo_user: bool, if 'False', then the function will return the home directory of the user who invoked
         sudo (if the script was invoked with sudo).
-        If 'True', then the function will return the home directory of the current user, doesn't matter if the script was
-        invoked with sudo or not, if so home directory of the sudo user will be returned.
+        If 'True', then the function will return the home directory of the current user, doesn't matter if the script
+        was invoked with sudo or not, if so home directory of the sudo user will be returned.
     """
 
     def return_home_directory_of_current_user():
@@ -209,16 +214,6 @@ def get_list_of_directories_in_file_path(
     return directory_list
 
 
-def get_file_name(file_path: str) -> str:
-    """
-    The function will return file name of the file.
-
-    :param file_path: string, full file path.
-    :return: string.
-    """
-    return str(Path(file_path).name)
-
-
 def check_absolute_path(filesystem_path) -> bool:
     """
     The function checks if the path provided is a full path (absolute) or relative.
@@ -243,16 +238,6 @@ def check_absolute_path___add_full(filesystem_path: str, full_path_to_add: str) 
         return f'{full_path_to_add}{os.sep}{remove_last_separator(filesystem_path)}'
     else:
         return filesystem_path
-
-
-def check_file_existence(file_path: str) -> bool:
-    """This will be removed in future versions. Use 'is_file_exists' instead."""
-    return is_file_exists(file_path)
-
-
-def check_directory_existence(directory_path: str) -> bool:
-    """This will be removed in future versions. Use 'is_directory_exists' instead."""
-    return is_directory_exists(directory_path)
 
 
 def is_file_exists(file_path: str) -> bool:
@@ -369,25 +354,26 @@ def rename_file(source_file_path: str, target_file_path: str) -> None:
 
 @contextmanager
 def temporary_rename(file_path: str, temp_file_path) -> None:
+    # noinspection GrazieInspection
     """
-    The function will rename the file to temporary name and then rename it back to original name.
+        The function will rename the file to temporary name and then rename it back to original name.
 
-    :param file_path: string, full path to file.
-    :param temp_file_path: string, temporary name to rename the file to.
-    :return: None.
+        :param file_path: string, full path to file.
+        :param temp_file_path: string, temporary name to rename the file to.
+        :return: None.
 
-    Usage:
-        original_file = 'example.txt'
-        temporary_file = 'temp_example.txt'
+        Usage:
+            original_file = 'example.txt'
+            temporary_file = 'temp_example.txt'
 
-        with temporary_rename(original_file, temporary_file):
-            # Inside this block, the file exists as 'temp_example.txt'
-            print(f"File is temporarily renamed to {temporary_file}")
-            # Perform operations with the temporarily named file here
+            with temporary_rename(original_file, temporary_file):
+                # Inside this block, the file exists as 'temp_example.txt'
+                print(f"File is temporarily renamed to {temporary_file}")
+                # Perform operations with the temporarily named file here
 
-        # Outside the block, it's back to 'example.txt'
-        print(f"File is renamed back to {original_file}")
-    """
+            # Outside the block, it's back to 'example.txt'
+            print(f"File is renamed back to {original_file}")
+        """
 
     original_name = file_path
     try:
@@ -511,17 +497,17 @@ def move_files_from_folder_to_folder(
         move_file(source_file_path=source_item, target_file_path=destination_item, overwrite=overwrite)
 
     # # Get all file names without full paths in source folder.
-    # file_list_in_source: list = get_file_paths_from_directory(source_directory)
+    # file_list_in_source: list = get_paths_from_directory(source_directory, get_file=True)
     #
     # # Iterate through all the files.
     # for file_path in file_list_in_source:
     #     # Move the file from source to target.
-    #     if file_path['relative_dir']:
-    #         create_directory(target_directory + os.sep + file_path['relative_dir'])
-    #         relative_file_path: str = file_path['relative_dir'] + os.sep + Path(file_path['path']).name
+    #     if file_path.relative_dir:
+    #         create_directory(target_directory + os.sep + file_path.relative_dir)
+    #         relative_file_path: str = file_path.relative_dir + os.sep + Path(file_path.path).name
     #     else:
-    #         relative_file_path: str = Path(file_path['path']).name
-    #     move_file(file_path['path'], target_directory + os.sep + relative_file_path)
+    #         relative_file_path: str = Path(file_path.path).name
+    #     move_file(file_path.path, target_directory + os.sep + relative_file_path)
 
 
 def copy_file(
@@ -601,49 +587,101 @@ def copy_files_from_folder_to_folder(source_directory: str, target_directory: st
                 shutil.copy2(s, d)
 
 
-def get_directory_paths_from_directory(
+class AtomicPath:
+    def __init__(self, path: str):
+        self.path: str = path
+
+        self.is_file: bool = os.path.isfile(path)
+        self.is_directory: bool = os.path.isdir(path)
+        self.name: str = Path(path).name
+
+        self.queried_directory: str = ''
+        # noinspection PyTypeChecker
+        self.last_modified: float = None
+        self.relative_dir: str = ''
+        self.binary: bytes = b''
+        self.hash: str = ''
+        self.datetime_datetime = None
+        self.datetime_string: str = ''
+        # noinspection PyTypeChecker
+        self.datetime_float: float = None
+        self.datetime_format: str = ''
+
+    def __str__(self):
+        return self.path
+
+    def update(
+            self,
+            path: str = None,
+            datetime_format: str = None,
+            update_datetime: bool = False,
+            update_last_modified: bool = False,
+            update_binary: bool = False,
+            update_hash: bool = False
+    ):
+        if path:
+            if path != self.path:
+                self.queried_directory = ''
+                self.last_modified = None
+                self.relative_dir = ''
+                self.binary = b''
+                self.hash = ''
+                self.datetime_datetime = None
+                self.datetime_string = ''
+                self.datetime_float = None
+                self.datetime_format = ''
+
+                self.path = path
+                self.is_file = os.path.isfile(path)
+                self.is_directory = os.path.isdir(path)
+                self.name = Path(path).name
+
+        # Update the datetime format only if it is provided without the update_datetime boolean.
+        # Since, we don't want this variable if there is no relation between the datetime format and the filename.
+        # If the user want to put it manually, then we will not stop him, but this case is useless if filename
+        # doesn't contain the datetime.
+        if datetime_format and not update_datetime:
+            self.datetime_format = datetime_format
+
+        if update_datetime and not datetime_format and not self.datetime_format:
+            raise ValueError('If "update_datetime" is True, then "datetime_format" must be provided.')
+
+        if update_datetime:
+            self.datetime_datetime, self.datetime_string, self.datetime_float = (
+                datetimes.get_datetime_from_complex_string_by_pattern(self.name, datetime_format))
+            # If the provided datetime format is correct, then we will update the datetime format.
+            if self.datetime_string:
+                self.datetime_format = datetime_format
+
+        if update_last_modified:
+            self.last_modified = get_file_modified_time(self.path)
+
+        if update_binary:
+            self.binary = file_io.read_file(self.path, file_mode='rb', stdout=False)
+
+        if update_hash:
+            if self.binary:
+                self.hash = hashing.hash_bytes(self.binary)
+            else:
+                self.hash = hashing.hash_file(self.path)
+
+
+def get_paths_from_directory(
         directory_path: str,
-        recursive: bool = True
-) -> list:
-    """
-    Recursive, by option.
-    The function receives a filesystem directory as string, scans it recursively for directories and returns list of
-    full paths to that directory (including).
-
-    :param directory_path: string to full path to directory on the filesystem to scan.
-    :param recursive: boolean.
-        'True', then the function will scan recursively in subdirectories.
-        'False', then the function will scan only in the directory that was passed.
-
-    :return: list of all found directory names with full paths.
-    """
-
-    # Define locals.
-    directory_list: list = list()
-
-    # "Walk" over all the directories and subdirectories - make list of full directory paths inside the directory
-    # recursively.
-    for dirpath, subdirs, files in os.walk(directory_path):
-        # Iterate through all the directory names that were found in the folder.
-        for directory in subdirs:
-            # Get full directory path.
-            directory_list.append(os.path.join(dirpath, directory))
-
-        if not recursive:
-            break
-
-    return directory_list
-
-
-def get_file_paths_from_directory(
-        directory_path: str,
+        simple_list: bool = False,
+        get_file: bool = False,
+        get_directory: bool = False,
         recursive: bool = True,
         file_name_check_pattern: str = '*',
+        datetime_format: str = None,
+        specific_date: str = None,
         add_relative_directory: bool = False,
         relative_file_name_as_directory: bool = False,
         add_last_modified_time: bool = False,
-        sort_by_last_modified_time: bool = False
-):
+        sort_by_last_modified_time: bool = False,
+        add_file_binary: bool = False,
+        add_file_hash: bool = False,
+) -> list[AtomicPath]:
     """
     Recursive, by option.
     The function receives a filesystem directory as string, scans it recursively for files and returns list of
@@ -652,15 +690,23 @@ def get_file_paths_from_directory(
     of that tuple.
 
     :param directory_path: string to full path to directory on the filesystem to scan.
+    :param simple_list: boolean, if 'True', then the function will return only full file paths.
+    :param get_file: boolean, if 'True', then the function will return files.
+    :param get_directory: boolean, if 'True', then the function will return directories.
     :param recursive: boolean.
         'True', then the function will scan recursively in subdirectories.
         'False', then the function will scan only in the directory that was passed.
     :param file_name_check_pattern: string, if specified, the function will return only files that match the pattern.
         The string can contain part of file name to check or full file name with extension.
         Can contain wildcards.
-        If you need to specify a "." in the pattern, you need to escape it with a backslash:
-        Example: "*\.txt" will return all files with the extension ".txt".
-        While "*.txt" will return all files that contain "txt" in the name.
+    :param datetime_format: datetime format string pattern to match the date in the file name.
+        If specified, the function will get the files by the date pattern.
+
+        Example:
+        datetime_format = '%Y-%m-%d'
+    :param specific_date: Specific date to get the file path.
+        If specified, the function will get the file by the specific date.
+        Meaning that 'datetime_format' must be specified.
     :param add_relative_directory: boolean, if
         'True', then the function will add relative directory to the output list.
             In this case the output list will contain dictionaries with keys 'path' and 'relative_dir'.
@@ -672,47 +718,72 @@ def get_file_paths_from_directory(
         to the output list.
     :param sort_by_last_modified_time: boolean, if 'True', then the function will sort the output list by last
         modified time of the file.
+    :param add_file_binary: boolean, if 'True', then the function will add binary content of the file to each file
+        object of the output list.
+    :param add_file_hash: boolean, if 'True', then the function will add hash of the file to each file object of the
+        output list.
 
     :return: list of all found filenames with full file paths, list with relative folders to file excluding the
         main folder.
     """
 
-    def get_file():
+    def get_path(file_or_directory: str):
         """
         Function gets the full file path, adds it to the found 'object_list' and gets the relative path to that
         file, against the main path to directory that was passed to the parent function.
         """
 
-        file_path: str = os.path.join(dirpath, file)
+        if strings.match_pattern_against_string(file_name_check_pattern, file_or_directory):
+            file_or_dir_path: str = os.path.join(dir_path, file_or_directory)
 
-        if not add_relative_directory and not add_last_modified_time:
-            file_result: str = file_path
-        else:
-            file_result: dict = dict()
+            if simple_list:
+                object_list.append(file_or_dir_path)
+                return
 
-            # Get full file path of the file.
-            file_result['file_path'] = file_path
+            path_object: AtomicPath = AtomicPath(path=file_or_dir_path)
+            path_object.queried_directory = directory_path
 
             if add_relative_directory:
                 # if 'relative_file_name_as_directory' was passed.
                 if relative_file_name_as_directory:
                     # Output the path with filename.
-                    file_result['relative_dir'] = _get_relative_output_path_from_input_path(
-                        directory_path, dirpath, file)
+                    path_object.relative_dir = _get_relative_output_path_from_input_path(
+                        directory_path, dir_path, file_or_directory)
                 # if 'relative_file_name_as_directory' wasn't passed.
                 else:
                     # Output the path without filename.
-                    file_result['relative_dir'] = _get_relative_output_path_from_input_path(directory_path, dirpath)
+                    path_object.relative_dir = _get_relative_output_path_from_input_path(
+                        directory_path, dir_path)
 
                 # Remove separator from the beginning if exists.
-                file_result['relative_dir'] = file_result['relative_dir'].removeprefix(os.sep)
+                path_object.relative_dir = path_object.relative_dir.removeprefix(os.sep)
 
             # If 'add_last_modified_time' was passed.
             if add_last_modified_time:
                 # Get last modified time of the file.
-                file_result['last_modified'] = get_file_modified_time(file_result['file_path'])
+                path_object.update(update_last_modified=True)
 
-        object_list.append(file_result)
+            if datetime_format:
+                # Get the datetime object from the file name by the date format pattern.
+                path_object.update(datetime_format=datetime_format, update_datetime=True)
+                # If the datetime string is empty, then the file doesn't contain the date in the filename.
+                if not path_object.datetime_string:
+                    return
+
+            if specific_date:
+                if path_object.datetime_string != specific_date:
+                    return
+
+            object_list.append(path_object)
+
+    if get_file and get_directory:
+        raise ValueError('Parameters "get_file" and "get_directory" cannot be both "True".')
+    elif not get_file and not get_directory:
+        raise ValueError('Parameters "get_file" and "get_directory" cannot be both "False".')
+
+    if get_directory and (add_file_binary or add_file_hash):
+        raise ValueError(
+            'While "get_directory" is True, Parameters "add_file_binary" or "add_file_hash" cannot be "True".')
 
     if sort_by_last_modified_time and not add_last_modified_time:
         raise ValueError('Parameter "sort_by_last_modified_time" cannot be "True" if parameter '
@@ -721,18 +792,25 @@ def get_file_paths_from_directory(
         raise ValueError('Parameter "relative_file_name_as_directory" cannot be "True" if parameter '
                          '"add_relative_directory" is not "True".')
 
+    if not datetime_format and specific_date:
+        raise ValueError('If "specific_date" is specified, "datetime_format" must be specified.')
+
     # === Function main ================
     # Define locals.
     object_list: list = list()
 
     # "Walk" over all the directories and subdirectories - make list of full file paths inside the directory
     # recursively.
-    for dirpath, subdirs, files in os.walk(directory_path):
-        # Iterate through all the file names that were found in the folder.
-        for file in files:
-            # If 'file_name_check_pattern' was passed.
-            if strings.match_pattern_against_string(file_name_check_pattern, file):
-                get_file()
+    for dir_path, sub_dirs, files in os.walk(directory_path):
+        if get_file:
+            # Iterate through all the file names that were found in the folder.
+            for path in files:
+                # If 'file_name_check_pattern' was passed.
+                get_path(path)
+        elif get_directory:
+            # Iterate through all the directory names that were found in the folder.
+            for path in sub_dirs:
+                get_path(path)
 
         if not recursive:
             break
@@ -740,7 +818,34 @@ def get_file_paths_from_directory(
     # If 'sort_by_last_modified_time' was passed.
     if sort_by_last_modified_time:
         # Sort the list by last modified time.
-        object_list = list_of_dicts.sort_by_keys(object_list, key_list=['last_modified'])
+        object_list = list_of_classes.sort_by_attributes(object_list, attribute_list=['last_modified'])
+
+    if add_file_binary or add_file_hash:
+        if add_file_binary and not add_file_hash:
+            prefix_string = 'Reading Binary of File: '
+        elif add_file_hash and not add_file_binary:
+            prefix_string = 'Reading Hash of File: '
+        elif add_file_binary and add_file_hash:
+            prefix_string = 'Reading Binary and Hash of File: '
+        else:
+            prefix_string = 'Reading File: '
+
+        for file_index, file_path in enumerate(object_list):
+            print_status_of_list(
+                list_instance=object_list, prefix_string=prefix_string, current_state=(file_index + 1))
+
+            # If 'add_binary' was passed.
+            if add_file_binary and file_path.is_file:
+                # Get binary content of the file.
+                object_list[file_index].binary = file_io.read_file(file_path.path, file_mode='rb', stdout=False)
+
+            # If 'add_file_hash' was passed.
+            if add_file_hash and file_path.is_file:
+                # Get hash of the file.
+                if file_path.binary:
+                    object_list[file_index].hash = hashing.hash_bytes(file_path.binary)
+                else:
+                    object_list[file_index].hash = hashing.hash_file(file_path.path)
 
     return object_list
 
@@ -815,18 +920,6 @@ def remove_last_separator(directory_path: str) -> str:
     return directory_path.removesuffix(os.sep)
 
 
-def remove_last_separator(filesystem_path: str) -> str:
-    """
-    The function removes the last character in 'filesystem_path' if it is a system separator ('/' or '\')
-    returning the processed string.
-    If the character is not a separator, nothing happens.
-
-    :param filesystem_path:
-    :return:
-    """
-    return filesystem_path.removesuffix(os.sep)
-
-
 def add_last_separator(filesystem_path: str) -> str:
     """
     The function adds a separator to the end of the path if it doesn't exist.
@@ -862,14 +955,14 @@ def get_files_and_folders(directory_path: str, string_contains: str = str()):
     return files_folders_list
 
 
-def get_file_modified_time(file_path: str) -> float:
+def get_file_modified_time(file_or_dir_path: str) -> float:
     """
     The function returns the time of last modification of the file in seconds since the epoch.
 
-    :param file_path: string, full path to file.
+    :param file_or_dir_path: string, full path to file or directory.
     :return: float, time of last modification of the file in seconds since the epoch.
     """
-    return os.path.getmtime(file_path)
+    return os.path.getmtime(file_or_dir_path)
 
 
 def change_last_modified_date_of_file(file_path: str, new_date: float) -> None:
@@ -891,43 +984,6 @@ def change_last_modified_date_of_file(file_path: str, new_date: float) -> None:
     os.utime(file_path, (new_date, new_date))
 
 
-def get_file_hashes_from_directory(directory_path: str, recursive: bool = False, add_binary: bool = False) -> list:
-    """
-    The function scans a directory for files and returns a list of dictionaries with file path and hash of the file.
-    Binary option can be specified.
-
-    :param directory_path: string, of full path to directory you want to return file names of.
-    :param recursive: boolean.
-        'True', then the function will scan recursively in subdirectories.
-        'False', then the function will scan only in the directory that was passed.
-    :param add_binary: boolean, if 'True', then the function will add the binary of the file to the output list.
-
-    :return: list of dicts with full file paths, hashes and binaries (if specified).
-    """
-
-    # Get all the files.
-    file_paths_list = get_file_paths_from_directory(directory_path, recursive=recursive)
-
-    # Create a list of dictionaries, each dictionary is a file with its hash.
-    files: list = list()
-    for file_index, file_path in enumerate(file_paths_list):
-        print_status_of_list(
-            list_instance=file_paths_list, prefix_string=f'Reading File: ', current_state=(file_index + 1))
-
-        file_info: dict = dict()
-        file_info['path'] = file_path['path']
-
-        if add_binary:
-            file_info['binary'] = file_io.read_file(file_path['path'], file_mode='rb', stdout=False)
-            file_info['hash'] = hashing.hash_bytes(file_info['binary'])
-        else:
-            file_info['hash'] = hashing.hash_file(file_path['path'])
-
-        files.append(file_info)
-
-    return files
-
-
 def find_duplicates_by_hash(
         directory_path: str,
         recursive: bool = False,
@@ -946,33 +1002,34 @@ def find_duplicates_by_hash(
     """
 
     # Get all the files.
-    files: list = get_file_hashes_from_directory(directory_path, recursive=recursive, add_binary=add_binary)
+    files: list = get_paths_from_directory(
+        directory_path, get_file=True, recursive=recursive, add_file_binary=add_binary)
 
     same_hash_files: list = list()
     # Check if there are files that have exactly the same hash.
-    for file_dict in files:
+    for atomic_path in files:
         # Create a list of files that have the same hash for current 'firmware'.
         current_run_list: list = list()
-        for file_dict_compare in files:
+        for atomic_path_compare in files:
             # Add all the 'firmware_compare' that have the same hash to the list.
-            if (file_dict['hash'] == file_dict_compare['hash'] and
-                    file_dict['path'] != file_dict_compare['path']):
+            if (atomic_path.hash == atomic_path_compare.hash and
+                    atomic_path.path != atomic_path_compare.path):
                 # Check if current 'firmware' is already in the 'same_hash_files' list. If not, add 'firmware_compare'
                 # to the 'current_run_list'.
                 if not any(list_of_dicts.is_value_exist_in_key(
-                        list_of_dicts=test_hash, key='path', value_to_match=file_dict['path']) for
+                        list_of_dicts=test_hash, key='path', value_to_match=atomic_path.path) for
                            test_hash in same_hash_files):
                     current_run_list.append({
-                        'path': file_dict_compare['path'],
-                        'hash': file_dict_compare['hash']
+                        'path': atomic_path_compare.path,
+                        'hash': atomic_path_compare.hash
                     })
 
         if current_run_list:
             # After the iteration of the 'firmware_compare' finished and the list is not empty, add the 'firmware'
             # to the list.
             current_run_list.append({
-                'path': file_dict['path'],
-                'hash': file_dict['hash']
+                'path': atomic_path.path,
+                'hash': atomic_path.hash
             })
             same_hash_files.append(current_run_list)
 
@@ -1053,39 +1110,40 @@ def get_directory_size(directory_path: str):
 
 
 def get_subpaths_between(start_path: str, end_path: str) -> list[str]:
+    # noinspection GrazieInspection
     """
-    Get the subpaths between two paths.
-    :param start_path: string, start path.
-    :param end_path: string, end path.
-    :return:
+        Get the subpaths between two paths.
+        :param start_path: string, start path.
+        :param end_path: string, end path.
+        :return:
 
-    Example Linux:
-        start_path = '/test/1'
-        end_path = '/test/1/2/3/4'
+        Example Linux:
+            start_path = '/test/1'
+            end_path = '/test/1/2/3/4'
 
-        subpaths = get_subpaths_between(start_path, end_path)
+            subpaths = get_subpaths_between(start_path, end_path)
 
-        subpaths = [
-            '/test/1'
-            '/test/1/2',
-            '/test/1/2/3',
-            '/test/1/2/3/4',
-        ]
+            subpaths = [
+                '/test/1'
+                '/test/1/2',
+                '/test/1/2/3',
+                '/test/1/2/3/4',
+            ]
 
 
-    Example Windows:
-        start_path = 'C:\\test\\1'
-        end_path = 'C:\\test\\1\\2\\3\\4'
+        Example Windows:
+            start_path = 'C:\\test\\1'
+            end_path = 'C:\\test\\1\\2\\3\\4'
 
-        subpaths = get_subpaths_between(start_path, end_path)
+            subpaths = get_subpaths_between(start_path, end_path)
 
-        subpaths = [
-            'C:\\test\\1',
-            'C:\\test\\1\\2',
-            'C:\\test\\1\\2\\3',
-            'C:\\test\\1\\2\\3\\4',
-        ]
-    """
+            subpaths = [
+                'C:\\test\\1',
+                'C:\\test\\1\\2',
+                'C:\\test\\1\\2\\3',
+                'C:\\test\\1\\2\\3\\4',
+            ]
+        """
 
     # Detect slash type based on the input (default to forward slash)
     slash_type = "\\" if "\\" in start_path else "/"
@@ -1126,13 +1184,13 @@ def get_subpaths_between(start_path: str, end_path: str) -> list[str]:
     # else:
     #     raise ValueError("Start path must be a parent of the end path")
     #
-    # # Reverse the list so it goes from start to end.
+    # # Reverse the list, so it goes from start to end.
     # subpaths.reverse()
     #
     # return subpaths
 
 
-def create_dict_of_paths_list(list_of_paths: list) -> dict:
+def create_dict_of_paths_list(list_of_paths: list) -> list:
     """
     The function receives a list of paths and returns a dictionary with keys as the paths and values as the
     subpaths of the key path.
@@ -1168,7 +1226,7 @@ def create_dict_of_paths_list(list_of_paths: list) -> dict:
     :return: dictionary.
     """
 
-    structure = []
+    structure: list = []
     for path in list_of_paths:
         create_dict_of_path(path, structure)
     return structure
@@ -1251,6 +1309,7 @@ def create_dict_of_path(
         is_last_part = (i == len(parts) - 1)
 
         # Try to find an existing entry for this part
+        # noinspection PyTypeChecker
         existing_entry = next((item for item in current_level if item["entry"] == part), None)
 
         if existing_entry is None:
@@ -1285,6 +1344,7 @@ def list_open_files_in_directory(directory):
             proc_open_files = proc.open_files()
             for file in proc_open_files:
                 if file.path.startswith(directory):
+                    # noinspection PyUnresolvedReferences
                     open_files.append((proc.info['pid'], proc.info['name'], file.path))
         except (psutil.AccessDenied, psutil.NoSuchProcess):
             # Ignore processes that can't be accessed
@@ -1363,7 +1423,13 @@ def is_file_open_by_process(file_path: str) -> bool:
     return False
 
 
-def get_download_directory(place: Literal['temp', 'script', 'working'] = 'temp', script_path: str = None) -> str:
+def get_download_directory(
+        place: Literal[
+            'temp',
+            'script',
+            'working'] = 'temp',
+        script_path: str = None
+) -> str:
     """
     The function returns the default download directory based on place.
 
@@ -1395,11 +1461,12 @@ def backup_folder(directory_path: str, backup_directory: str) -> None:
     """
     Backup the specified directory.
 
-    :param directory_path: The directory path to backup.
-    :param backup_directory: The directory to backup the directory to.
+    :param directory_path: The directory path to back up.
+    :param backup_directory: The directory to back up the directory to.
 
     Example:
-    backup_folder(directory_path='C:\\Users\\user1\\Downloads\\folder1', backup_directory='C:\\Users\\user1\\Downloads\\backup')
+    backup_folder(
+        directory_path='C:\\Users\\user1\\Downloads\\folder1', backup_directory='C:\\Users\\user1\\Downloads\\backup')
 
     Backed up folder will be moved to 'C:\\Users\\user1\\Downloads\\backup' with timestamp in the name.
     Final path will look like: 'C:\\Users\\user1\\Downloads\\backup\\20231003-120000-000000_folder1'
@@ -1471,8 +1538,8 @@ def find_file(file_name: str, directory_path: str):
     :param directory_path: string, The directory to search in.
     :return:
     """
-    for dirpath, dirnames, filenames in os.walk(directory_path):
+    for dir_path, dir_names, filenames in os.walk(directory_path):
         for filename in filenames:
             if filename == file_name:
-                return os.path.join(dirpath, filename)
+                return os.path.join(dir_path, filename)
     return None

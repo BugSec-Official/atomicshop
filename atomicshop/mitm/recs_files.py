@@ -22,43 +22,44 @@ def recs_archiver(recs_directory: str) -> list:
     today_date_string = datetime.datetime.now().strftime(REC_FILE_DATE_FORMAT)
 
     # There should not be recording json files in recs root.
-    files_in_recs_root: list = filesystem.get_file_paths_from_directory(
-        recs_directory, file_name_check_pattern='*.json', recursive=False)
+    files_in_recs_root: list = filesystem.get_paths_from_directory(
+        recs_directory, get_file=True, file_name_check_pattern='*\\.json', recursive=False)
     if files_in_recs_root:
         raise NotImplementedError("The files in recs root directory are not implemented yet.")
 
     # Each engine should have its own directory inside recordings. We will find all the directories inside recs folder.
-    directory_paths_in_recs: list = filesystem.get_directory_paths_from_directory(recs_directory, recursive=False)
+    directory_paths_in_recs: list = filesystem.get_paths_from_directory(
+        recs_directory, get_directory=True, recursive=False)
 
     file_list_per_directory: list = list()
     for directory_path in directory_paths_in_recs:
-        all_recs_files = reading.get_logs_paths(
-            log_files_directory_path=directory_path,
-            file_name_pattern='*.json',
-            date_format=REC_FILE_DATE_FORMAT
+        all_recs_files = filesystem.get_paths_from_directory(
+            directory_path=directory_path.path,
+            get_file=True,
+            file_name_check_pattern='*.json',
+            datetime_format=REC_FILE_DATE_FORMAT,
+            recursive=False
         )
         file_list_per_directory.append((directory_path, all_recs_files))
 
     archived_files: list = list()
     for directory_path, all_recs_files in file_list_per_directory:
-        archive_directories: list = list()
-        for recs_file_dict in all_recs_files:
+        for recs_atomic_path in all_recs_files:
             # We don't need to archive today's files.
-            if today_date_string == recs_file_dict['date_string']:
+            if today_date_string == recs_atomic_path.datetime_string:
                 continue
 
-            target_directory_path: str = f"{directory_path}{os.sep}{recs_file_dict['date_string']}"
-            if target_directory_path not in archive_directories:
-                archive_directories.append(target_directory_path)
-
+            target_directory_path: str = f"{directory_path.path}{os.sep}{recs_atomic_path.datetime_string}"
             filesystem.create_directory(target_directory_path)
             filesystem.move_file(
-                recs_file_dict['file_path'], f'{target_directory_path}{os.sep}{recs_file_dict["file_name"]}')
+                recs_atomic_path.path, f'{target_directory_path}{os.sep}{recs_atomic_path.name}')
 
         # Archive directories.
+        archive_directories: list = filesystem.get_paths_from_directory(
+            directory_path.path, get_directory=True, recursive=False)
         for archive_directory in archive_directories:
             archived_file: str = zips.archive_directory(
-                archive_directory, remove_original=True, include_root_directory=True)
+                archive_directory.path, remove_original=True, include_root_directory=True)
             archived_files.append(archived_file)
 
     return archived_files

@@ -32,7 +32,7 @@ def exit_cleanup():
             print_api("Returned default DNS gateway...", color='blue')
 
 
-def initialize_mitm_server(config_file_path: str):
+def mitm_server_main(config_file_path: str):
     on_exit.register_exit_handler(exit_cleanup)
 
     # Main function should return integer with error code, 0 is successful.
@@ -110,8 +110,9 @@ def initialize_mitm_server(config_file_path: str):
     system_logger.info("Importing engine modules.")
 
     # Get full paths of all the 'engine_config.ini' files.
-    engine_config_path_list = filesystem.get_file_paths_from_directory(
+    engine_config_path_list = filesystem.get_paths_from_directory(
         directory_path=config_static.MainConfig.ENGINES_DIRECTORY_PATH,
+        get_file=True,
         file_name_check_pattern=config_static.MainConfig.ENGINE_CONFIG_FILE_NAME)
 
     # Iterate through all the 'engine_config.ini' file paths.
@@ -120,7 +121,7 @@ def initialize_mitm_server(config_file_path: str):
     for engine_config_path in engine_config_path_list:
         # Initialize engine.
         current_module = ModuleCategory(config_static.MainConfig.SCRIPT_DIRECTORY)
-        current_module.fill_engine_fields_from_config(engine_config_path)
+        current_module.fill_engine_fields_from_config(engine_config_path.path)
         current_module.initialize_engine(logs_path=config_static.LogRec.logs_path,
                                          logger=system_logger)
 

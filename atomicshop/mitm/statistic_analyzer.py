@@ -28,9 +28,9 @@ def analyze(main_file_path: str):
     summary_path: str = filesystem.check_absolute_path___add_full(config['report_file_path'], script_directory)
 
     # Get the content from statistics files.
+    log_file_path_pattern: str = f"{config['statistic_files_path']}{os.sep}statistics.csv"
     statistics_content: list = reading.get_all_log_files_into_list(
-        config['statistic_files_path'],
-        file_name_pattern='statistics*.csv',
+        log_file_path=log_file_path_pattern,
         log_type='csv'
     )
 
