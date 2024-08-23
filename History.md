@@ -1,7 +1,7 @@
 <!-- HISTORY -->
 ## History
 
-* 2.16.12 - 23.08.2024
+* 2.16.12-2.16.13 - 23.08.2024
   * file_io/docxs, filesystem, mitm, wrappers/loggingw/reading, wrappers/socketw/socket_server_tester - fixes and improvements. 
 * 2.16.11 - 21.08.2024
   * dns, file_io/file_io, mitm, ssh_remote, wrappers/pywin32w/wmis, wrappers/socketw - fixes and improvements.
