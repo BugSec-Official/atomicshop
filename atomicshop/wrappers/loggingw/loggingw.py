@@ -32,6 +32,7 @@ def create_logger(
         filehandler_rotation_use_default_namer_function: bool = True,
         when: str = "midnight",
         interval: int = 1,
+        backupCount: int = 0,
         delay: bool = False,
         encoding=None,
         header: str = None
@@ -95,6 +96,9 @@ def create_logger(
     :param interval: int, Interval to rotate the log file. Default is 1.
         If 'when="midnight"' and 'interval=1', then the log file will be rotated every midnight.
         If 'when="midnight"' and 'interval=2', then the log file will be rotated every 2nd midnights.
+    :param backupCount: int, Number of backup files to keep. Default is 0.
+        If backupCount is > 0, when rollover is done, no more than backupCount files are kept, the oldest are deleted.
+        If backupCount is == 0, all the backup files will be kept.
     :param delay: bool, If set to True, the log file will be created only if there's something to write.
     :param encoding: string, Encoding to use for the log file. Default is None.
     :param header: string, Header to write to the log file.
@@ -181,7 +185,7 @@ def create_logger(
             rotation_date_format=filehandler_rotation_date_format,
             rotation_callback_namer_function=filehandler_rotation_callback_namer_function,
             rotation_use_default_callback_namer_function=filehandler_rotation_use_default_namer_function,
-            when=when, interval=interval, delay=delay, encoding=encoding, header=header)
+            when=when, interval=interval, delay=delay, backupCount=backupCount, encoding=encoding, header=header)
 
     return logger
 

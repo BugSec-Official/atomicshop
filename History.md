@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.16.14 - 23.08.2024
+  * mitm, wrappers/socketw, wrappers/loggingw - fixes and improvements.
 * 2.16.12-2.16.13 - 23.08.2024
   * file_io/docxs, filesystem, mitm, wrappers/loggingw/reading, wrappers/socketw/socket_server_tester - fixes and improvements. 
 * 2.16.11 - 21.08.2024

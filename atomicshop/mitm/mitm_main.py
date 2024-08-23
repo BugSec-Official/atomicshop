@@ -65,7 +65,8 @@ def mitm_server_main(config_file_path: str):
         add_stream=True,
         add_timedfile=True,
         formatter_streamhandler='DEFAULT',
-        formatter_filehandler='DEFAULT'
+        formatter_filehandler='DEFAULT',
+        backupCount=config_static.LogRec.store_logs_for_x_days
     )
 
     # Writing first log.
@@ -208,7 +209,8 @@ def mitm_server_main(config_file_path: str):
         add_stream=True,
         add_timedfile=True,
         formatter_streamhandler='DEFAULT',
-        formatter_filehandler='DEFAULT'
+        formatter_filehandler='DEFAULT',
+        backupCount=config_static.LogRec.store_logs_for_x_days
     )
     system_logger.info(f"Loaded network logger: {network_logger}")
 
@@ -227,12 +229,13 @@ def mitm_server_main(config_file_path: str):
             dns_server_instance = dns_server.DnsServer(
                 listening_interface=config_static.DNSServer.listening_interface,
                 listening_port=config_static.DNSServer.listening_port,
+                log_directory_path=config_static.LogRec.logs_path,
+                backupCount_log_files_x_days=config_static.LogRec.store_logs_for_x_days,
                 forwarding_dns_service_ipv4=config_static.DNSServer.forwarding_dns_service_ipv4,
                 tcp_target_server_ipv4=config_static.DNSServer.target_tcp_server_ipv4,
                 # Passing the engine domain list to DNS server to work with.
                 # 'list' function re-initializes the current list, or else it will be the same instance object.
                 tcp_resolve_domain_list=list(config_static.Certificates.domains_all_times),
-                log_directory_path=config_static.LogRec.logs_path,
                 offline_mode=config_static.DNSServer.offline_mode,
                 resolve_to_tcp_server_only_tcp_resolve_domains=(
                     config_static.DNSServer.resolve_to_tcp_server_only_engine_domains),

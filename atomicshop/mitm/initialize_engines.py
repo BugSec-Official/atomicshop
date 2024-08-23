@@ -9,6 +9,8 @@ from ..wrappers.loggingw import loggingw
 from .engines.__reference_general import parser___reference_general, responder___reference_general, \
     recorder___reference_general
 
+from . import config_static
+
 
 class ModuleCategory:
     def __init__(self, script_directory: str):
@@ -89,7 +91,8 @@ class ModuleCategory:
             add_stream=True,
             add_timedfile=True,
             formatter_streamhandler='DEFAULT',
-            formatter_filehandler='DEFAULT'
+            formatter_filehandler='DEFAULT',
+            backupCount=config_static.LogRec.store_logs_for_x_days
         )
 
 

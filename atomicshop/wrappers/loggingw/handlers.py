@@ -124,6 +124,7 @@ def _wrap_do_rollover(handler, header):
     handler.doRollover = new_do_rollover
 
 
+# noinspection PyPep8Naming
 def add_timedfilehandler_with_queuehandler(
         logger: logging.Logger,
         file_path: str,
@@ -144,6 +145,7 @@ def add_timedfilehandler_with_queuehandler(
         when: str = 'midnight',
         interval: int = 1,
         delay: bool = True,
+        backupCount: int = 0,
         encoding=None,
         header: str = None
 ):
@@ -164,15 +166,16 @@ def add_timedfilehandler_with_queuehandler(
     filesystem.create_directory(os.path.dirname(file_path))
 
     file_handler = get_timed_rotating_file_handler(
-        file_path, when=when, interval=interval, delay=delay, encoding=encoding)
+        file_path, when=when, interval=interval, delay=delay, backupCount=backupCount, encoding=encoding)
 
     loggers.set_logging_level(file_handler, logging_level)
 
     formatter = _process_formatter_attribute(formatter, file_type=file_type)
 
     # If formatter was passed to the function we'll add it to handler.
+    # noinspection GrazieInspection
     if formatter:
-        # Convert string to Formatter object. Moved to newer styling of python 3: style='{'
+        # Convert string to Formatter object. Moved to newer styling of python 3: style='{'.
         logging_formatter = formatters.get_logging_formatter_from_string(
             formatter=formatter, use_nanoseconds=formatter_use_nanoseconds)
         # Setting the formatter in file handler.
@@ -240,8 +243,14 @@ def get_stream_handler() -> logging.StreamHandler:
     return logging.StreamHandler()
 
 
+# noinspection PyPep8Naming
 def get_timed_rotating_file_handler(
-        log_file_path: str, when: str = "midnight", interval: int = 1, delay: bool = False, encoding=None
+        log_file_path: str,
+        when: str = "midnight",
+        interval: int = 1,
+        backupCount: int = 0,
+        delay: bool = False,
+        encoding=None
 ) -> TimedRotatingFileHandler:
     """
     Function to get a TimedRotatingFileHandler.
@@ -255,13 +264,16 @@ def get_timed_rotating_file_handler(
         "D" - Days
         "midnight" - Roll over at midnight
     :param interval: Interval to rotate the log file.
+    :param backupCount: int, Number of backup files to keep. Default is 0.
+        If backupCount is > 0, when rollover is done, no more than backupCount files are kept, the oldest are deleted.
+        If backupCount is == 0, all the backup files will be kept.
     :param delay: bool, If set to True, the log file will be created only if there's something to write.
     :param encoding: Encoding to use for the log file. Same as for the TimeRotatingFileHandler, which uses Default None.
     :return: TimedRotatingFileHandler.
     """
 
     return TimedRotatingFileHandler(
-        filename=log_file_path, when=when, interval=interval, delay=delay, encoding=encoding)
+        filename=log_file_path, when=when, interval=interval, backupCount=backupCount, delay=delay, encoding=encoding)
 
 
 def start_queue_listener_for_file_handler(
