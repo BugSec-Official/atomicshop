@@ -3,7 +3,6 @@ import multiprocessing
 import time
 from typing import Literal, Union
 
-from ..print_api import print_api
 from .tracers import sysmon_etw, event_log
 from .pollers import psutil_pywin32wmi_dll
 from ..wrappers.pywin32w.win_event_log.subscribes import process_terminate

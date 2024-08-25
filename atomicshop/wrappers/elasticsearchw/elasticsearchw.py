@@ -6,10 +6,8 @@ from typing import Union
 from . import config_basic
 from ...basics import dicts
 
-ELASTIC_WRAPPER = None
 
-
-def get_elastic_wrapper(url: str = None, overwrite: bool = False):
+def get_elastic_wrapper(url: str = config_basic.DEFAULT_ELASTIC_URL, overwrite: bool = False):
     """
     The function initializes the Elasticsearch wrapper.
 
@@ -19,25 +17,9 @@ def get_elastic_wrapper(url: str = None, overwrite: bool = False):
 
     Usage:
         elastic_wrapper = get_elastic_wrapper()
-    or after you initialize it once, you can use it like:
-        atomicshop.wrappers.elasticsearchw.elasticsearchw.ELASTIC_WRAPPER
     """
 
-    # If no url is provided, use the default url.
-    if url is None:
-        url = config_basic.DEFAULT_ELASTIC_URL
-
-    # Get the global variable.
-    global ELASTIC_WRAPPER
-    # If the wrapper is not initialized, initialize it.
-    if ELASTIC_WRAPPER is None:
-        ELASTIC_WRAPPER = Elasticsearch([url])
-    # If the wrapper is already initialized, check if it should be overwritten.
-    else:
-        if overwrite:
-            ELASTIC_WRAPPER = Elasticsearch([url])
-
-    return ELASTIC_WRAPPER
+    return Elasticsearch([url])
 
 
 def test_connection(elastic_wrapper: Elasticsearch = None):

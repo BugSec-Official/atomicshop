@@ -4,7 +4,6 @@ import time
 
 from ..wrappers.pywin32w.win_event_log.subscribes import process_create, process_terminate
 from .. import get_process_list
-from ..print_api import print_api
 
 
 WAIT_BEFORE_PROCESS_TERMINATION_CHECK_SECONDS: float = 3

@@ -33,11 +33,18 @@ def get_file_data(directory_path: str, firmwares: list = None):
     """
 
     if not firmwares:
-        firmwares: list = filesystem.get_file_hashes_from_directory(directory_path, recursive=False, add_binary=True)
+        firmwares: list = filesystem.get_paths_from_directory(
+            directory_path, get_file=True, recursive=False, add_file_binary=True, add_file_hash=True)
 
     # Add UIDs to the list.
+    final_firmwares: list = []
     for firmware in firmwares:
-        if 'uid' not in firmware:
-            firmware['uid'] = get_uid_from_file(file_binary=firmware['binary'], sha256_hash=firmware['hash'])
+        uid = get_uid_from_file(file_binary=firmware.binary, sha256_hash=firmware.hash)
+        final_firmwares.append({
+            'path': firmware.path,
+            'hash': firmware.hash,
+            'binary': firmware.binary,
+            'uid': uid
+        })
 
-    return firmwares
+    return final_firmwares

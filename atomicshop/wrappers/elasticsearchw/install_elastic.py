@@ -4,7 +4,7 @@ from ...print_api import print_api
 from ... import process
 from ...permissions import permissions
 from .. import ubuntu_terminal
-from . import config_basic, infrastructure
+from . import config_basic, elastic_infra
 
 
 def install_elastic_kibana_ubuntu(install_elastic: bool = True, install_kibana: bool = True):
@@ -202,29 +202,29 @@ def install_elastic_kibana_ubuntu(install_elastic: bool = True, install_kibana: 
             sys.exit(1)
 
         # Check if the configuration file exists.
-        infrastructure.is_elastic_config_file_exists(exit_on_error=True, output_message=True)
+        elastic_infra.is_elastic_config_file_exists(exit_on_error=True, output_message=True)
 
         # Check if the specific setting exists or not and set it to false.
-        infrastructure.modify_xpack_security_setting(setting=False, output_message=True)
+        elastic_infra.modify_xpack_security_setting(setting=False, output_message=True)
 
         # Check if the setting was really set to false.
-        if infrastructure.check_xpack_security_setting() is False:
+        if elastic_infra.check_xpack_security_setting() is False:
             print_api(f"The setting is confirmed to be [{config_basic.XPACK_SECURITY_SETTING_NAME}: false].")
         else:
             print_api(f"Failed to set [{config_basic.XPACK_SECURITY_SETTING_NAME}: false].")
             sys.exit(1)
 
-        infrastructure.start_elastic_and_check_service_availability()
+        elastic_infra.start_elastic_and_check_service_availability()
 
         print_api("Creating custom JVM options file with 4GB memory usage.")
-        infrastructure.create_jvm_options_custom_4gb_memory_heap_file()
+        elastic_infra.create_jvm_options_custom_4gb_memory_heap_file()
 
     if install_kibana:
         # Install Kibana.
         ubuntu_terminal.install_packages([config_basic.UBUNTU_KIBANA_PACKAGE_NAME])
 
         # Start and enable Kibana service.
-        infrastructure.start_kibana_and_check_service_availability()
+        elastic_infra.start_kibana_and_check_service_availability()
 
     print_api("Installation completed.", color='green')
     if install_elastic:

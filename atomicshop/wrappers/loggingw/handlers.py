@@ -84,27 +84,42 @@ def add_stream_handler(
 
 # Function to start the interval-based rotation check
 def _start_interval_rotation(handler):
+    # def check_rotation():
+    #     while True:
+    #         next_rollover = _calculate_next_rollover()
+    #         while datetime.now() < next_rollover:
+    #             time.sleep(0.1)
+    #
+    #             # Check if the next_rollover has changed (indicating a rollover by an event)
+    #             if _calculate_next_rollover() != next_rollover:
+    #                 next_rollover = _calculate_next_rollover()
+    #                 break
+    #
+    #         # Perform manual rollover if needed
+    #         if datetime.now() >= next_rollover:
+    #             handler.doRollover()
+    #
+    #         # handler.doRollover()
+    #
+    # def _calculate_next_rollover():
+    #     return datetime.fromtimestamp(handler.rolloverAt)
     def check_rotation():
+        last_rollover_at = handler.rolloverAt  # Initial rollover time
+
         while True:
-            next_rollover = _calculate_next_rollover()
-            while datetime.now() < next_rollover:
-                time.sleep(0.1)
+            current_time = datetime.now()
+            next_rollover = datetime.fromtimestamp(handler.rolloverAt)
 
-                # Check if the next_rollover has changed (indicating a rollover by an event)
-                if _calculate_next_rollover() != next_rollover:
-                    next_rollover = _calculate_next_rollover()
-                    break
+            # Check if the rollover time has passed and it hasn't been handled yet
+            if current_time >= next_rollover and handler.rolloverAt == last_rollover_at:
+                # Perform manual rollover
+                handler.doRollover()
 
-            # Perform manual rollover if needed
-            if datetime.now() >= next_rollover:
-                _rotate_log()
+                # Update last_rollover_at to the new rolloverAt
+                last_rollover_at = handler.rolloverAt
 
-    def _calculate_next_rollover():
-        return datetime.fromtimestamp(handler.rolloverAt)
-
-    # Function to rotate logs
-    def _rotate_log():
-        handler.doRollover()
+            # Sleep for a short interval before checking again
+            time.sleep(0.1)
 
     rotation_thread = threading.Thread(target=check_rotation)
     rotation_thread.daemon = True

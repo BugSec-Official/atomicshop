@@ -5,6 +5,7 @@ from typing import Literal, Union
 from . import loggers, handlers
 
 
+# noinspection PyPep8Naming
 def create_logger(
         logger_name: str,
         file_path: str = None,
@@ -74,7 +75,9 @@ def create_logger(
         in the formatter in case you provide 'asctime' element.
     :param filehandler_rotate_at_rollover_time: bool,
         If set to True, the log file will be rotated at the rollover time, even if there's nothing to write.
+            This behavior overrides the TimedRotatingFileHandler default behavior on doRollover.
         If set to False, the log file will be rotated after 'when' time, but only when event occurs.
+            This is the default doRollover behavior of the TimedRotatingFileHandler.
     :param filehandler_rotation_date_format: string, Date format to use for the log file rotation.
         Example for 'when="midnight"': the default date format is '%Y-%m-%d', resulting in filename on rotation like:
             "test.log.2021-11-25"
