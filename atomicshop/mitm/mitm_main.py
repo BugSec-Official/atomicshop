@@ -263,6 +263,10 @@ def mitm_server_main(config_file_path: str):
                 listening_port_list=config_static.TCPServer.listening_port_list,
                 ca_certificate_name=config_static.MainConfig.ca_certificate_name,
                 ca_certificate_filepath=config_static.MainConfig.ca_certificate_filepath,
+                ca_certificate_crt_filepath=config_static.MainConfig.ca_certificate_crt_filepath,
+                install_ca_certificate_to_root_store=config_static.Certificates.install_ca_certificate_to_root_store,
+                uninstall_unused_ca_certificates_with_ca_certificate_name=(
+                    config_static.Certificates.uninstall_unused_ca_certificates_with_mitm_ca_name),
                 default_server_certificate_usage=config_static.Certificates.default_server_certificate_usage,
                 default_server_certificate_name=config_static.MainConfig.default_server_certificate_name,
                 default_certificate_domain_list=config_static.Certificates.domains_all_times,
@@ -316,11 +320,10 @@ def mitm_server_main(config_file_path: str):
             dns_gateway_server_list = [base.DEFAULT_IPV4]
             set_dns_gateway = True
 
+        # Get current network interface state.
+        global NETWORK_INTERFACE_IS_DYNAMIC, NETWORK_INTERFACE_IPV4_ADDRESS_LIST
+        NETWORK_INTERFACE_IS_DYNAMIC, NETWORK_INTERFACE_IPV4_ADDRESS_LIST = dns.get_default_dns_gateway()
         if set_dns_gateway:
-            # Get current network interface state.
-            global NETWORK_INTERFACE_IS_DYNAMIC, NETWORK_INTERFACE_IPV4_ADDRESS_LIST
-            NETWORK_INTERFACE_IS_DYNAMIC, NETWORK_INTERFACE_IPV4_ADDRESS_LIST = dns.get_default_dns_gateway()
-
             # Set the DNS gateway to the specified one only if the DNS gateway is dynamic or it is static but different
             # from the one specified in the configuration file.
             if (NETWORK_INTERFACE_IS_DYNAMIC or (not NETWORK_INTERFACE_IS_DYNAMIC and

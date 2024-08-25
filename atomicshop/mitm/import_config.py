@@ -117,6 +117,14 @@ def check_configurations() -> int:
             print_api(message, color='red')
             return 1
 
+    # This is checked directly in the SocketWrapper.
+    # if (config_static.Certificates.install_ca_certificate_to_root_store and not is_admin) or \
+    #         (config_static.Certificates.uninstall_unused_ca_certificates_with_mitm_ca_name and not is_admin):
+    #     message: str = \
+    #         "Need to run the script with administrative rights to install or uninstall CA certificate.\nExiting..."
+    #     print_api(message, color='red')
+    #     return 1
+
     return 0
 
 

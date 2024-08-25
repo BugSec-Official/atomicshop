@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from . import import_config
 
 
-SCRIPT_VERSION: str = '1.7.5'
+SCRIPT_VERSION: str = '1.7.6'
 """
-Added logs backup days
+added ca cert check and installation
 """
 
 
@@ -23,6 +23,8 @@ LIST_OF_BOOLEANS: list = [
     ('tcp', 'engines_usage'),
     ('tcp', 'server_response_mode'),
     ('logrec', 'enable_request_response_recordings_in_logs'),
+    ('certificates', 'install_ca_certificate_to_root_store'),
+    ('certificates', 'uninstall_unused_ca_certificates_with_mitm_ca_name'),
     ('certificates', 'default_server_certificate_usage'),
     ('certificates', 'sni_add_new_domains_to_default_server_certificate'),
     ('certificates', 'custom_server_certificate_usage'),
@@ -55,8 +57,11 @@ class MainConfig:
     # Certificates.
     default_server_certificate_name: str = 'default'
     ca_certificate_name: str = 'ElaborateCA'
+    ca_certificate_pem_filename: str = f'{ca_certificate_name}.pem'
+    ca_certificate_crt_filename: str = f'{ca_certificate_name}_for_manual_installation_not_used_by_script.crt'
     # CA Certificate name and file name without extension.
     ca_certificate_filepath: str = None
+    ca_certificate_crt_filepath: str = None
     # Default server certificate file name and path.
     default_server_certificate_filename = f'{default_server_certificate_name}.pem'
     default_server_certificate_filepath: str = None
@@ -65,7 +70,8 @@ class MainConfig:
     def update(cls):
         # This runs after the dataclass is initialized
         cls.ENGINES_DIRECTORY_PATH = cls.SCRIPT_DIRECTORY + os.sep + cls.ENGINES_DIRECTORY_NAME
-        cls.ca_certificate_filepath = f'{cls.SCRIPT_DIRECTORY}{os.sep}{cls.ca_certificate_name}.pem'
+        cls.ca_certificate_filepath = f'{cls.SCRIPT_DIRECTORY}{os.sep}{cls.ca_certificate_pem_filename}'
+        cls.ca_certificate_crt_filepath = f'{cls.SCRIPT_DIRECTORY}{os.sep}{cls.ca_certificate_crt_filename}'
         cls.default_server_certificate_filepath = \
             f'{cls.SCRIPT_DIRECTORY}{os.sep}{cls.default_server_certificate_filename}'
 
@@ -115,6 +121,9 @@ class LogRec:
 
 @dataclass
 class Certificates:
+    install_ca_certificate_to_root_store: bool
+    uninstall_unused_ca_certificates_with_mitm_ca_name: bool
+
     default_server_certificate_usage: bool
     sni_add_new_domains_to_default_server_certificate: bool
 
