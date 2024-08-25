@@ -9,7 +9,6 @@ from typing import Literal
 
 from .wrappers import cryptographyw
 from .wrappers.pywin32w import cert_store
-from .print_api import print_api
 
 
 # Valid for 3 years from now

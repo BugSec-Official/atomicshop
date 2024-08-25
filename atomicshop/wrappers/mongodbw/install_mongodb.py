@@ -8,7 +8,7 @@ from ... import urls, web
 from ...permissions import permissions
 from ...print_api import print_api
 from .. import msiw
-from . import infrastructure
+from . import mongo_infra
 
 
 MONGODB_DOWNLOAD_PAGE_URL: str = 'https://www.mongodb.com/try/download/community'
@@ -111,7 +111,7 @@ def download_install_latest_main(
         print_api("This function requires administrator privileges.", color='red')
         return 1
 
-    if infrastructure.is_service_running():
+    if mongo_infra.is_service_running():
         print_api("MongoDB service is running - already installed.", color='blue')
 
         if not force:
@@ -119,8 +119,8 @@ def download_install_latest_main(
     else:
         print_api("MongoDB is service is not running.")
 
-        mongo_is_installed: Union[str, None] = infrastructure.is_installed()
-        if infrastructure.is_installed():
+        mongo_is_installed: Union[str, None] = mongo_infra.is_installed()
+        if mongo_infra.is_installed():
             message = f"MongoDB is installed in: {mongo_is_installed}\n" \
                       f"The service is not running. Fix the service or use the 'force' parameter to reinstall."
             print_api(message, color='yellow')
@@ -151,11 +151,11 @@ def download_install_latest_main(
 
     # Check if MongoDB is installed.
     message: str = ''
-    mongo_is_installed = infrastructure.is_installed()
+    mongo_is_installed = mongo_infra.is_installed()
     if not mongo_is_installed:
         message += "MongoDB Executable not found.\n"
 
-    if not infrastructure.is_service_running():
+    if not mongo_infra.is_service_running():
         message += "MongoDB service is not running.\n"
 
     if message:

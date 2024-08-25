@@ -3,7 +3,6 @@ import fnmatch
 
 from .. import web, urls
 from ..print_api import print_api
-from ..basics import strings
 
 
 class GitHubWrapper:

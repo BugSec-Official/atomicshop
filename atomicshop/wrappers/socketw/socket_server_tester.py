@@ -54,7 +54,11 @@ def execute_test(config_static):
     config = config_importer.config['config']
 
     # SocketClient is working with 'network' logger by default, so we will initialize it.
-    loggingw.get_logger_with_stream_handler("network")
+    loggingw.create_logger(
+        logger_name="network",
+        add_stream=True,
+        formatter_streamhandler='DEFAULT'
+    )
 
     # Get all the files in requests folder recursively.
     request_file_list = filesystem.get_paths_from_directory(config['requests_directory'], get_file=True)

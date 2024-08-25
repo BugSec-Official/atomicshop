@@ -2,7 +2,6 @@ import datetime
 import os
 import multiprocessing
 
-from ..wrappers.loggingw import reading
 from ..archiver import zips
 from .. import filesystem
 
