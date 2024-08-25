@@ -36,7 +36,9 @@ def convert_object_to_x509(certificate):
     """
 
     # Check if 'certificate' is a string and a path.
-    if isinstance(certificate, str) and os.path.isfile(certificate):
+    if isinstance(certificate, str):
+        if not os.path.isfile(certificate):
+            raise FileNotFoundError(f'File not found: {certificate}')
         # Import the certificate from the path.
         certificate = file_io.read_file(certificate, file_mode='rb')
 

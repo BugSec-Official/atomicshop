@@ -1,10 +1,13 @@
 import threading
 import select
 from typing import Literal, Union
+from pathlib import Path
 
 from ..psutilw import networks
+from ..certauthw import certauthw
 from ...script_as_string_processor import ScriptAsStringProcessor
-from ... import queues, filesystem
+from ...permissions import permissions
+from ... import queues, filesystem, certificates
 from ...basics import booleans
 from ...print_api import print_api
 
@@ -30,6 +33,9 @@ class SocketWrapper:
             forwarding_dns_service_ipv4_list___only_for_localhost: list = None,
             ca_certificate_name: str = None,
             ca_certificate_filepath: str = None,
+            ca_certificate_crt_filepath: str = None,
+            install_ca_certificate_to_root_store: bool = False,
+            uninstall_unused_ca_certificates_with_ca_certificate_name: bool = False,
             default_server_certificate_usage: bool = False,
             default_server_certificate_name: str = None,
             default_certificate_domain_list: list = None,
@@ -68,7 +74,13 @@ class SocketWrapper:
             Example: '0.0.0.0'. For all interfaces.
         :param listening_port_list: list, of ports that will be listened on.
         :param ca_certificate_name: CA certificate name.
-        :param ca_certificate_filepath: CA certificate file path.
+        :param ca_certificate_filepath: CA certificate file path with '.pem' extension.
+        :param ca_certificate_crt_filepath: CA certificate file path with '.crt' extension.
+            This file will be created from the PEM file 'ca_certificate_filepath' for manual installation.
+        :param install_ca_certificate_to_root_store: boolean, if True, CA certificate will be installed
+            to the root store.
+        :param uninstall_unused_ca_certificates_with_ca_certificate_name: boolean, if True, unused CA certificates
+            with provided 'ca_certificate_name' will be uninstalled.
         :param default_server_certificate_usage: boolean, if True, default server certificate will be used
             for each incoming socket.
         :param sni_custom_callback_function: callable, custom callback function that will be executed when
@@ -150,6 +162,10 @@ class SocketWrapper:
         self.listening_port_list: list[int] = listening_port_list
         self.ca_certificate_name: str = ca_certificate_name
         self.ca_certificate_filepath: str = ca_certificate_filepath
+        self.ca_certificate_crt_filepath: str = ca_certificate_crt_filepath
+        self.install_ca_certificate_to_root_store: bool = install_ca_certificate_to_root_store
+        self.uninstall_unused_ca_certificates_with_ca_certificate_name: bool = \
+            uninstall_unused_ca_certificates_with_ca_certificate_name
         self.default_server_certificate_usage: bool = default_server_certificate_usage
         self.default_server_certificate_name: str = default_server_certificate_name
         self.default_certificate_domain_list: list = default_certificate_domain_list
@@ -269,6 +285,59 @@ class SocketWrapper:
             for port, process_info in port_in_use.items():
                 error_messages.append(f"Port [{port}] is already in use by process: {process_info}")
             raise SocketWrapperPortInUseError("\n".join(error_messages))
+
+        if not filesystem.is_file_exists(file_path=self.ca_certificate_filepath):
+            # Initialize CertAuthWrapper.
+            ca_certificate_directory: str = str(Path(self.ca_certificate_filepath).parent)
+            certauth_wrapper = certauthw.CertAuthWrapper(
+                ca_certificate_name=self.ca_certificate_name,
+                ca_certificate_filepath=self.ca_certificate_filepath,
+                server_certificate_directory=ca_certificate_directory
+            )
+
+            # Create CA certificate if it doesn't exist.
+            certauth_wrapper.create_use_ca_certificate()
+
+            certificates.write_crt_certificate_file_in_pem_format_from_pem_file(
+                pem_file_path=self.ca_certificate_filepath,
+                crt_file_path=self.ca_certificate_crt_filepath)
+
+        if self.install_ca_certificate_to_root_store:
+            if not self.ca_certificate_filepath:
+                message = "You set [install_ca_certificate_to_root_store = True],\n" \
+                          "But you didn't set [ca_certificate_filepath]."
+                raise SocketWrapperConfigurationValuesError(message)
+
+            # Before installation check if there are any unused certificates with the same name.
+            if self.uninstall_unused_ca_certificates_with_ca_certificate_name:
+                # Check how many certificates with our ca certificate name are installed.
+                is_installed_by_name, certificate_list_by_name = certificates.is_certificate_in_store(
+                    issuer_name=self.ca_certificate_name)
+                # If there is more than one certificate with the same name, delete them all.
+                if is_installed_by_name and len(certificate_list_by_name) > 1:
+                    certificates.delete_certificate_by_issuer_name(self.ca_certificate_name)
+                # If there is only one certificate with the same name, check if it is the same certificate.
+                elif is_installed_by_name and len(certificate_list_by_name) == 1:
+                    is_installed_by_file, certificate_list_by_file = certificates.is_certificate_in_store(
+                        certificate=self.ca_certificate_filepath, by_cert_thumbprint=True, by_cert_issuer=True)
+                    # If the certificate is not the same, delete it.
+                    if not is_installed_by_file:
+                        if not permissions.is_admin():
+                            raise SocketWrapperConfigurationValuesError(
+                                "You need to run the script with admin rights to uninstall the unused certificates.")
+                        certificates.delete_certificate_by_issuer_name(
+                            self.ca_certificate_name, store_location="ROOT", print_kwargs={'logger': self.logger})
+
+            if self.install_ca_certificate_to_root_store:
+                # Install CA certificate to the root store if it is not installed.
+                is_installed_by_file, certificate_list_by_file = certificates.is_certificate_in_store(
+                    certificate=self.ca_certificate_filepath, by_cert_thumbprint=True, by_cert_issuer=True)
+                if not is_installed_by_file:
+                    if not permissions.is_admin():
+                        raise SocketWrapperConfigurationValuesError(
+                            "You need to run the script with admin rights to install the CA certificate.")
+                    certificates.install_certificate_file(
+                        self.ca_certificate_filepath, store_location="ROOT", print_kwargs={'logger': self.logger})
 
     # Creating listening sockets.
     def create_socket_ipv4_tcp(self, ip_address: str, port: int):

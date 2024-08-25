@@ -60,7 +60,7 @@ def is_tls(client_socket) -> Optional[Tuple[str, str]]:
     }
 
     # Get the tuple of the type and version as strings.
-    tls_content_and_version_tuple: tuple =\
+    tls_content_and_version_tuple: tuple = \
         content_type_map.get(content_type), version_map.get((version_major, version_minor))
 
     # If both parts of the tuple are not None, return the protocol type.

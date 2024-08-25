@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.16.15 - 25.08.2024
+  * certificates, mitm, wrappers/cryptographyw, wrappers/socketw, /wrappers/pywin32w/cert_store - fixes and improvements.
 * 2.16.14 - 23.08.2024
   * mitm, wrappers/socketw, wrappers/loggingw - fixes and improvements.
 * 2.16.12-2.16.13 - 23.08.2024
