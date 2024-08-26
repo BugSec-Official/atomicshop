@@ -14,7 +14,7 @@ def get_logs_paths(
         latest_only: bool = False,
         previous_day_only: bool = False,
         specific_date: str = None
-):
+) -> list[filesystem.AtomicPath]:
     """
     This function gets the logs file paths from the directory. Supports rotating files to get the logs by time.
 
@@ -61,7 +61,7 @@ def get_logs_paths(
     log_files_directory_path: str = str(Path(log_file_path).parent)
 
     # Get all the log file paths by the file_name_pattern and the date_format string.
-    logs_files: list = filesystem.get_paths_from_directory(
+    logs_files: list[filesystem.AtomicPath] = filesystem.get_paths_from_directory(
         log_files_directory_path,
         get_file=True,
         file_name_check_pattern=file_name_pattern,
