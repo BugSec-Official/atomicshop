@@ -8,6 +8,7 @@ from . import loggers, handlers
 # noinspection PyPep8Naming
 def create_logger(
         logger_name: str,
+        get_existing_if_exists: bool = True,
         file_path: str = None,
         directory_path: str = None,
         add_stream: bool = False,
@@ -42,6 +43,8 @@ def create_logger(
     Function to get a logger and add StreamHandler and TimedRotatingFileHandler to it.
 
     :param logger_name: Name of the logger.
+    :param get_existing_if_exists: bool, If set to True, the logger will be returned if it already exists.
+        If set to False, the new stream/file handler will be added to existing logger again.
     :param file_path: full path to the log file. If you don't want to use the file, set it to None.
         You can set the directory_path only and then the 'logger_name' will be used as the file name with the
         'file_type' as the file extension.
@@ -173,7 +176,14 @@ def create_logger(
 
         file_path = f"{directory_path}{os.sep}{logger_name}.{file_type}"
 
+    # Check if the logger exists before creating it/getting the existing.
+    is_logger_exists = loggers.is_logger_exists(logger_name)
+
     logger = get_logger_with_level(logger_name, logging_level)
+
+    # If the logger already exists, and we don't want to add the handlers again, return the logger.
+    if get_existing_if_exists and is_logger_exists:
+        return logger
 
     if add_stream:
         handlers.add_stream_handler(

@@ -14,6 +14,17 @@ import logging
 """
 
 
+def is_logger_exists(
+        logger_name: str
+) -> bool:
+    """
+    Function to check if the logger exists.
+    :param logger_name: str, Name of the logger.
+    :return: bool, True if the logger exists, False otherwise.
+    """
+    return logger_name in logging.Logger.manager.loggerDict
+
+
 def get_logger(logger_name: str) -> logging.Logger:
     """
     Function to get a logger.

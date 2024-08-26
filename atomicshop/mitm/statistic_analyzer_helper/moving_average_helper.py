@@ -5,7 +5,7 @@ from typing import Literal
 from ...print_api import print_api
 from ...wrappers.loggingw import reading, consts
 from ...file_io import csvs
-from ... import urls
+from ... import urls, filesystem
 
 
 def calculate_moving_average(
@@ -43,7 +43,7 @@ def calculate_moving_average(
     date_format: str = consts.DEFAULT_ROTATING_SUFFIXES_FROM_WHEN['midnight']
 
     # Get all the file paths and their midnight rotations.
-    logs_paths: list = reading.get_logs_paths(
+    logs_paths: list[filesystem.AtomicPath] = reading.get_logs_paths(
         log_file_path=file_path,
         date_format=date_format
     )
@@ -54,14 +54,14 @@ def calculate_moving_average(
 
     statistics_content: dict = {}
     # Read each file to its day.
-    for log_path_dict in logs_paths:
-        date_string = log_path_dict['date_string']
+    for log_atomic_path in logs_paths:
+        date_string = log_atomic_path.datetime_string
         statistics_content[date_string] = {}
 
-        statistics_content[date_string]['file'] = log_path_dict
+        statistics_content[date_string]['file'] = log_atomic_path
 
         log_file_content, log_file_header = (
-            csvs.read_csv_to_list_of_dicts_by_header(log_path_dict['file_path'], **(print_kwargs or {})))
+            csvs.read_csv_to_list_of_dicts_by_header(log_atomic_path.path, **(print_kwargs or {})))
         statistics_content[date_string]['content'] = log_file_content
         statistics_content[date_string]['header'] = log_file_header
 
