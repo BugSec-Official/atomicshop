@@ -422,16 +422,32 @@ def temporary_change_working_directory(new_working_directory: str) -> None:
         os.chdir(original_working_directory)
 
 
-def move_file(source_file_path: str, target_file_path: str, overwrite: bool = True) -> None:
+def move_file(source_file_path: str, target_directory: str, overwrite: bool = True) -> None:
     """
     The function moves file from source to target.
 
     :param source_file_path: string, full path to source file.
-    :param target_file_path: string, full path to target file.
+    :param target_directory: string, full path to target directory.
     :param overwrite: boolean, if 'False', then the function will not overwrite the file if it exists.
+
+    Example:
+        Before move:
+        Source file = 'C:/Users/user1/Downloads/file-to-move.txt'
+        Move to directory = 'C:/Users/user1/Documents'
+
+        Move:
+        source_file_path = 'C:/Users/user1/Downloads/file-to-move.txt'
+        target_directory = 'C:/Users/user1/Documents'
+        move_file(source_file_path, target_file_path)
+
+        After move:
+        'C:/Users/user1/Downloads'
+        'C:/Users/user1/Documents/file-to-move.txt'
 
     :return: None
     """
+
+    target_file_path = target_directory + os.sep + Path(source_file_path).name
 
     # Check if 'no_overwrite' is set to 'True' and if the file exists.
     if not overwrite:
@@ -455,12 +471,17 @@ def move_folder(source_directory: str, target_directory: str, overwrite: bool = 
     ------------------------------
 
     Example:
-    source_directory = 'C:/Users/user1/Downloads/folder-to-move'
-    target_directory = 'C:/Users/user1/Documents'
-    move_folder(source_directory, target_directory)
+        Before move:
+        Source folder = 'C:/Users/user1/Downloads/folder-to-move'
+        Move to directory = 'C:/Users/user1/Documents'
 
-    Result path of the 'folder-to-move' will be:
-    'C:/Users/user1/Documents/folder-to-move'
+        Move:
+        source_directory = 'C:/Users/user1/Downloads/folder-to-move'
+        target_directory = 'C:/Users/user1/Documents'
+        move_folder(source_directory, target_directory)
+
+        Result path of the 'folder-to-move' will be:
+        'C:/Users/user1/Documents/folder-to-move'
 
     """
 
@@ -473,14 +494,14 @@ def move_folder(source_directory: str, target_directory: str, overwrite: bool = 
     shutil.move(source_directory, target_directory)
 
 
-def move_files_from_folder_to_folder(
+def move_top_level_files_from_folder_to_folder(
         source_directory: str,
         target_directory: str,
         overwrite: bool = True
 ):
     """
-    The function is currently non-recursive and not tested with directories inside the source directories.
-    The function will move all the files from source directory to target directory overwriting existing files.
+    The function is non-recursive to move only top level files from source directory to target directory
+    overwriting existing files.
 
     :param source_directory: string, full path to source directory.
     :param target_directory: string, full path to target directory.
@@ -488,26 +509,50 @@ def move_files_from_folder_to_folder(
     """
 
     # Iterate over each item in the source directory
-    for item in os.listdir(source_directory):
-        # Construct full file path
-        source_item = os.path.join(source_directory, item)
-        destination_item = os.path.join(target_directory, item)
+    top_level_files: list[str] = get_paths_from_directory(
+        directory_path=source_directory, get_file=True, recursive=False, simple_list=True)
 
+    for source_item in top_level_files:
         # Move each item to the destination directory
-        move_file(source_file_path=source_item, target_file_path=destination_item, overwrite=overwrite)
+        move_file(source_file_path=source_item, target_directory=target_directory, overwrite=overwrite)
 
-    # # Get all file names without full paths in source folder.
-    # file_list_in_source: list = get_paths_from_directory(source_directory, get_file=True)
-    #
-    # # Iterate through all the files.
-    # for file_path in file_list_in_source:
-    #     # Move the file from source to target.
-    #     if file_path.relative_dir:
-    #         create_directory(target_directory + os.sep + file_path.relative_dir)
-    #         relative_file_path: str = file_path.relative_dir + os.sep + Path(file_path.path).name
-    #     else:
-    #         relative_file_path: str = Path(file_path.path).name
-    #     move_file(file_path.path, target_directory + os.sep + relative_file_path)
+
+def move_folder_contents_to_folder(
+        source_directory: str,
+        target_directory: str,
+        overwrite: bool = True
+):
+    """
+    The function moves all the contents of the source directory to the target directory.
+    If target directory is inside the source directory, this folder will be skipped.
+
+    :param source_directory: string, full path to source directory.
+    :param target_directory: string, full path to target directory.
+    :param overwrite: boolean, if 'True', then the function will overwrite the files if they exist.
+    """
+
+    # Make sure the destination directory exists, if not create it
+    os.makedirs(target_directory, exist_ok=True)
+
+    # Move contents of the source directory to the destination directory
+    for item in os.listdir(source_directory):
+        s = os.path.join(source_directory, item)
+        d = os.path.join(target_directory, item)
+
+        # if the target directory is inside the source directory, skip it
+        if os.path.abspath(target_directory).startswith(os.path.abspath(s)):
+            continue
+
+        if os.path.isdir(s):
+            if os.path.exists(d) and not overwrite:
+                print(f"Directory {d} already exists. Skipping due to overwrite=False.")
+            else:
+                shutil.move(s, d)
+        else:
+            if os.path.exists(d) and not overwrite:
+                print(f"File {d} already exists. Skipping due to overwrite=False.")
+            else:
+                shutil.move(s, d)
 
 
 def copy_file(
@@ -681,7 +726,7 @@ def get_paths_from_directory(
         sort_by_last_modified_time: bool = False,
         add_file_binary: bool = False,
         add_file_hash: bool = False,
-) -> list[AtomicPath]:
+) -> Union[list[AtomicPath], list[str]]:
     """
     Recursive, by option.
     The function receives a filesystem directory as string, scans it recursively for files and returns list of
@@ -1524,7 +1569,7 @@ def backup_file(
         else:
             file_name: str = f"{file_name_no_extension}_{timestamp}{file_extension}"
         backup_file_path: str = str(Path(backup_directory) / file_name)
-        move_file(file_path, backup_file_path)
+        move_file(file_path, backup_directory)
 
         return backup_file_path
     else:

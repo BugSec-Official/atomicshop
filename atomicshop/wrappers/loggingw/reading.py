@@ -207,8 +207,7 @@ def get_all_log_files_into_list(
         filesystem.create_directory(move_to_path_with_timestamp)
         # Move the statistics files.
         for single_file in logs_files:
-            move_to_path_with_file = f'{move_to_path_with_timestamp}{os.sep}{single_file.name}'
-            filesystem.move_file(single_file.path, move_to_path_with_file)
+            filesystem.move_file(single_file.path, move_to_path_with_timestamp)
 
     return logs_content
 

@@ -51,7 +51,7 @@ def recs_archiver(recs_directory: str) -> list:
             target_directory_path: str = f"{directory_path.path}{os.sep}{recs_atomic_path.datetime_string}"
             filesystem.create_directory(target_directory_path)
             filesystem.move_file(
-                recs_atomic_path.path, f'{target_directory_path}{os.sep}{recs_atomic_path.name}')
+                recs_atomic_path.path, target_directory_path)
 
         # Archive directories.
         archive_directories: list = filesystem.get_paths_from_directory(
