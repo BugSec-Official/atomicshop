@@ -2,6 +2,7 @@ import os
 import datetime
 import json
 from typing import Union, Literal
+import argparse
 
 from .statistic_analyzer_helper import analyzer_helper, moving_average_helper
 from .. import filesystem, domains, datetimes, urls
@@ -344,7 +345,7 @@ def analyze(main_file_path: str):
 # ======================================================================================================================
 
 
-def deviation_calculator_by_moving_average_main(
+def deviation_calculator_by_moving_average(
         statistics_file_directory: str,
         by_type: Literal['host', 'url'],
         moving_average_window_days: int,
@@ -470,3 +471,64 @@ def deviation_calculator_by_moving_average_main(
         return deviation_list
 
     return []
+
+
+def deviation_calculator_by_moving_average_main():
+    def parse_args():
+        description_full: str = (
+            f'Description: Calculate deviation by moving average.')
+
+        parser = argparse.ArgumentParser(
+            description=description_full)
+
+        parser.add_argument(
+            '-d', '--directory', type=str, required=True,
+            help='Provide full path to directory with statistics.csv files.')
+        parser.add_argument(
+            '-of', '--output_file', type=str, required=True, help='Provide full path to output file.')
+        parser.add_argument(
+            '-ot', '--output_type', type=str, required=True, help='Provide output type: [json] or [csv].')
+        parser.add_argument(
+            '-by', '--by_type', type=str, required=True, help='Calculate by [host] or [url].')
+        parser.add_argument(
+            '-f', '--full_details', action='store_true', required=False,
+            help='(OPTIONAL) Output full processing details instead of summary.')
+        parser.add_argument(
+            '-w', '--window', type=int, required=True, help='Moving average window in days.')
+        parser.add_argument(
+            '-p', '--percentage', type=float, required=True,
+            help='Percentage of deviation from moving average. Example: 0.1 for 10%%.')
+
+        return parser.parse_args()
+
+    args = parse_args()
+
+    if args.output_type == 'csv' and args.full_details:
+        print_api("Full details output is not supported for csv files.", color='red')
+        return 1
+
+    if not os.path.isdir(args.directory):
+        print_api(f"Directory does not exist: {args.directory}", color='red')
+        return 1
+
+    if not filesystem.get_paths_from_directory(
+            directory_path=args.directory, get_file=True, simple_list=True, file_name_check_pattern='*statistics*.csv'):
+        print_api(f"No statistics files found in: {args.directory}", color='red')
+        return 1
+
+    if args.full_details:
+        summary = False
+    else:
+        summary = True
+
+    _ = deviation_calculator_by_moving_average(
+        statistics_file_directory=args.directory,
+        by_type=args.by_type,
+        moving_average_window_days=args.window,
+        top_bottom_deviation_percentage=args.percentage,
+        summary=summary,
+        output_file_path=args.output_file,
+        output_file_type=args.output_type,
+    )
+
+    return 0
