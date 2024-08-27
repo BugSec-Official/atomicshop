@@ -1,15 +1,26 @@
 import ssl
+import logging
+from pathlib import Path
 
 from ...print_api import print_api
 from ..loggingw import loggingw
 
 
 class Sender:
-    logger = loggingw.get_logger_with_level("network." + __name__.rpartition('.')[2])
-
-    def __init__(self, ssl_socket: ssl.SSLSocket, class_message: bytearray):
+    def __init__(
+            self,
+            ssl_socket: ssl.SSLSocket,
+            class_message: bytearray,
+            logger: logging.Logger = None
+    ):
         self.class_message: bytearray = class_message
         self.ssl_socket: ssl.SSLSocket = ssl_socket
+
+        if logger:
+            # Create child logger for the provided logger with the module's name.
+            self.logger: logging.Logger = loggingw.get_logger_with_level(f'{logger.name}.{Path(__file__).stem}')
+        else:
+            self.logger: logging.Logger = logger
 
     # Function to send a message to server
     def send(self):

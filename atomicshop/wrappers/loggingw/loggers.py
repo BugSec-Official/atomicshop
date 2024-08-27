@@ -25,6 +25,14 @@ def is_logger_exists(
     return logger_name in logging.Logger.manager.loggerDict
 
 
+def get_all_existing_loggers_names() -> list:
+    """
+    Function to get all existing loggers names.
+    :return: list, List of all existing loggers names.
+    """
+    return list(logging.Logger.manager.loggerDict.keys())
+
+
 def get_logger(logger_name: str) -> logging.Logger:
     """
     Function to get a logger.

@@ -7,6 +7,25 @@ from pathlib import Path
 from ..file_io.file_io import read_file
 
 
+"""
+class ParserParent:
+    # Initializing the logger in the "class variable" section will leave the instance of the logger initiated
+    # and the rest of the instances of the class will use the same logger.
+    # It is not in the "__init__" section, so it's not going to be initiated again.
+    # The name of the logger using "__name__" variable, which is the full name of the module package.
+    # Example: classes.parsers.parser_1_reference_general
+
+    # The code outside the functions will be executed during import of the module. When initializing a class
+    # in the script these lines will not be called again, only the "init" function.
+    logger = create_custom_logger()
+
+    def __init__(self, class_client_message: ClientMessage):
+        self.class_client_message: ClientMessage = class_client_message
+
+    # Usage: self.logger.info("Message")
+"""
+
+
 def create_empty_class():
     """
     Function creates empty class, you can add parameters to it dynamically.

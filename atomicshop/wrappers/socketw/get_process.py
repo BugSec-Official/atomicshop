@@ -1,6 +1,7 @@
 # Needed to redirect output from console to logger on LOCALHOST process command line harvesting.
 import io
 from contextlib import redirect_stdout
+import logging
 
 from . import base
 from ...ssh_remote import SSHRemote
@@ -15,12 +16,14 @@ class GetCommandLine:
             client_socket=None,
             ssh_script_processor=None,
             ssh_user: str = None,
-            ssh_pass: str = None
+            ssh_pass: str = None,
+            logger: logging.Logger = None
     ):
         self.client_socket = client_socket
         self.ssh_script_processor = ssh_script_processor
         self.ssh_user: str = ssh_user
         self.ssh_pass: str = ssh_pass
+        self.logger: logging.Logger = logger
 
     def get_process_name(self, print_kwargs: dict = None):
         # Get client ip and the source port.
@@ -53,7 +56,8 @@ class GetCommandLine:
 
             print_api(f"Initializing SSH connection to [{client_ip}]", **print_kwargs)
             # Initializing SSHRemote class.
-            current_ssh_client = SSHRemote(ip_address=client_ip, username=self.ssh_user, password=self.ssh_pass)
+            current_ssh_client = SSHRemote(
+                ip_address=client_ip, username=self.ssh_user, password=self.ssh_pass, logger=self.logger)
 
             execution_output, execution_error = current_ssh_client.connect_get_client_commandline(script_string)
         # Else, if we're on localhost, then execute the script directly without SSH.

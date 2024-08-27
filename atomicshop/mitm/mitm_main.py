@@ -242,7 +242,8 @@ def mitm_server_main(config_file_path: str):
                 resolve_to_tcp_server_all_domains=config_static.DNSServer.resolve_to_tcp_server_all_domains,
                 resolve_regular=config_static.DNSServer.resolve_regular,
                 cache_timeout_minutes=config_static.DNSServer.cache_timeout_minutes,
-                request_domain_queue=domain_queue
+                request_domain_queue=domain_queue,
+                logger=network_logger
             )
         except (dns_server.DnsPortInUseError, dns_server.DnsConfigurationValuesError) as e:
             print_api(e, error_type=True, color="red", logger=system_logger)
@@ -299,6 +300,11 @@ def mitm_server_main(config_file_path: str):
             )
         except socket_wrapper.SocketWrapperPortInUseError as e:
             print_api(e, error_type=True, color="red", logger=system_logger)
+            # Wait for the message to be printed and saved to file.
+            time.sleep(1)
+            return 1
+        except socket_wrapper.SocketWrapperConfigurationValuesError as e:
+            print_api(e, error_type=True, color="red", logger=system_logger, logger_method='critical')
             # Wait for the message to be printed and saved to file.
             time.sleep(1)
             return 1

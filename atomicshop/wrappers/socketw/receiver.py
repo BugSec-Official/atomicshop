@@ -1,5 +1,7 @@
+import logging
 import socket
 import ssl
+from pathlib import Path
 
 from ...print_api import print_api
 from ..loggingw import loggingw
@@ -20,9 +22,11 @@ def peek_first_bytes(client_socket, bytes_amount: int = 1) -> bytes:
 
 class Receiver:
     """ Receiver Class is responsible for receiving the message from socket and populate the message class """
-    logger = loggingw.get_logger_with_level("network." + __name__.rpartition('.')[2])
-
-    def __init__(self, ssl_socket: ssl.SSLSocket):
+    def __init__(
+            self,
+            ssl_socket: ssl.SSLSocket,
+            logger: logging.Logger = None
+    ):
         self.ssl_socket: ssl.SSLSocket = ssl_socket
         self.buffer_size_receive: int = 16384
         # Timeout of 2 is enough for regular HTTP sessions`.
@@ -38,6 +42,12 @@ class Receiver:
         self.class_client_address: str = str()
         # Will get client Local port from the socket
         self.class_client_local_port: int = int()
+
+        if logger:
+            # Create child logger for the provided logger with the module's name.
+            self.logger: logging.Logger = loggingw.get_logger_with_level(f'{logger.name}.{Path(__file__).stem}')
+        else:
+            self.logger: logging.Logger = logger
 
     # Function to receive only the buffer, with error handling
     def socket_receive_message_buffer(self):

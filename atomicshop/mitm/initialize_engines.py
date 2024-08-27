@@ -62,6 +62,17 @@ class ModuleCategory:
             engine_directory_path, get_file=True, file_name_check_pattern=configuration_data['recorder_file'])[0].path
 
     def initialize_engine(self, logs_path: str, logger=None, reference_general: bool = False, **kwargs):
+        # Initiating logger for each engine by its name
+        loggingw.create_logger(
+            logger_name=self.engine_name,
+            directory_path=logs_path,
+            add_stream=True,
+            add_timedfile=True,
+            formatter_streamhandler='DEFAULT',
+            formatter_filehandler='DEFAULT',
+            backupCount=config_static.LogRec.store_logs_for_x_days
+        )
+
         if not reference_general:
             self.parser_class_object = import_first_class_name_from_file_path(
                 self.script_directory, self.parser_file_path, logger=logger, stdout=False)
@@ -82,18 +93,6 @@ class ModuleCategory:
         except Exception as exception_object:
             logger.error_exception(f"Exception while initializing responder: {exception_object}")
             sys.exit()
-
-        # Initiating logger for each engine by its name
-        # initiate_logger(current_module.engine_name, log_file_extension)
-        loggingw.create_logger(
-            logger_name=self.engine_name,
-            directory_path=logs_path,
-            add_stream=True,
-            add_timedfile=True,
-            formatter_streamhandler='DEFAULT',
-            formatter_filehandler='DEFAULT',
-            backupCount=config_static.LogRec.store_logs_for_x_days
-        )
 
 
 # Assigning external class object by message domain received from client. If the domain is not in the list,

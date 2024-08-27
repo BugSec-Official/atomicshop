@@ -14,13 +14,13 @@ from google.protobuf import json_format
 """
 
 
-# The class that is responsible for generating response to client based on the received message.
 class ResponderGeneral(ResponderParent):
-    logger = create_custom_logger()
-
+    """The class that is responsible for generating response to client based on the received message."""
     # When initializing main classes through "super" you need to pass parameters to init
     def __init__(self):
         super().__init__()
+
+        self.logger = create_custom_logger()
 
     # ==================================================================================================================
     # Uncomment this section in order to begin building custom responder.

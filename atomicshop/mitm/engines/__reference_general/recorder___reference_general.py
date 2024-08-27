@@ -4,10 +4,10 @@ from atomicshop.mitm.shared_functions import create_custom_logger
 from atomicshop.mitm.message import ClientMessage
 
 
-# The class that is responsible for Recording Requests / Responses
 class RecorderGeneral(RecorderParent):
-    logger = create_custom_logger()
-
+    """The class that is responsible for Recording Requests / Responses"""
     # When initializing main classes through "super" you need to pass parameters to init
     def __init__(self, class_client_message: ClientMessage, record_path):
         super().__init__(class_client_message, record_path)
+
+        self.logger = create_custom_logger()

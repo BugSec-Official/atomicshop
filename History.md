@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.16.22 - 27.08.2024
+  * mitm, ssh_remote, wrappers/loggingw, wrappers/socketw - fixes and improvements.
 * 2.16.21 - 27.08.2024
   * mitm/statistic_analyzer - fixes and improvements.
 * 2.16.20 - 27.08.2024
