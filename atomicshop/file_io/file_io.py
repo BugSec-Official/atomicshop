@@ -21,7 +21,8 @@ def write_file_decorator(function_name):
 
         print_api(message=f"Writing file: {kwargs['file_path']}", **kwargs)
 
-        if kwargs['enable_long_file_path']:
+        enable_long_file_path = kwargs.get('enable_long_file_path', False)
+        if enable_long_file_path:
             # A simpler string method would be to add '\\?\' to the beginning of the file path.
             # kwargs['file_path'] = rf"\\?\{kwargs['file_path']}"
 
