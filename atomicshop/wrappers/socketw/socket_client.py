@@ -2,6 +2,8 @@ import socket
 import ssl
 import time
 from typing import Literal, Union
+import logging
+from pathlib import Path
 
 from cryptography import x509
 
@@ -18,11 +20,15 @@ import dns.resolver
 
 
 class SocketClient:
-    logger = loggingw.get_logger_with_level("network." + __name__.rpartition('.')[2])
-
     def __init__(
             self,
-            service_name: str, service_port: int, tls: bool = False, connection_ip=None, dns_servers_list=None):
+            service_name: str,
+            service_port: int,
+            tls: bool = False,
+            connection_ip=None,
+            dns_servers_list=None,
+            logger: logging.Logger = None
+    ):
         """
         If you have a certificate for domain, but not for the IPv4 address, the SSL Socket context can be created for
         domain and the connection itself (socket.connect()) made for the IP. This way YOU decide to which IPv4 your
@@ -38,6 +44,7 @@ class SocketClient:
             'service_name' by these DNS servers, with the first IPv4 result.
         :param dns_servers_list: (Optional) List object with dns IPv4 addresses that 'service_name' will be resolved
             with, using 'dnspython' module. 'connection_ip' will be populated with first resolved IP.
+        :param logger: (Optional) Logger object. If not provided, the default logger will be used.
 
         If both 'connection_ip' and 'dns_servers_list' specified, ValueException with raise.
         """
@@ -59,6 +66,12 @@ class SocketClient:
         # If both 'connection_ip' and 'dns_servers_list' specified, raise an exception.
         elif self.connection_ip and self.dns_servers_list:
             raise ValueError("Both 'connection_ip' and 'dns_servers_list' were specified.")
+
+        if logger:
+            # Create child logger for the provided logger with the module's name.
+            self.logger: logging.Logger = loggingw.get_logger_with_level(f'{logger.name}.{Path(__file__).stem}')
+        else:
+            self.logger: logging.Logger = logger
 
     # Function to create SSL socket to destination service
     def create_service_socket(self):
@@ -208,7 +221,8 @@ class SocketClient:
                 f"[{self.service_name}] resolves to ip: [{self.connection_ip}]. Pulled IP from the socket.")
 
             # Send the data received from the client to the service over socket
-            function_data_sent = Sender(self.socket_instance, request_bytes).send()
+            function_data_sent = Sender(
+                ssl_socket=self.socket_instance, class_message=request_bytes, logger=self.logger).send()
 
             # If the socket disconnected on data send
             if not function_data_sent:
@@ -218,7 +232,8 @@ class SocketClient:
                 self.close_socket()
             # Else if send was successful
             else:
-                function_service_data = Receiver(self.socket_instance).receive()
+                function_service_data = Receiver(
+                    ssl_socket=self.socket_instance, logger=self.logger).receive()
 
                 # If data received is empty meaning the socket was closed on the other side
                 if not function_service_data:

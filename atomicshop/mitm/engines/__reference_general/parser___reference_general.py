@@ -3,20 +3,23 @@ from atomicshop.mitm.engines.__parent.parser___parent import ParserParent
 from atomicshop.mitm.shared_functions import create_custom_logger
 from atomicshop.mitm.message import ClientMessage
 
-# # This is 'example' '.proto' file that contains message 'ExampleRequest'.
-# from .example_pb2 import ExampleRequest
-# # Import from 'protobuf' library of function 'MessageToDict' that
-# converts protobuf message object type to python dict.
-# from google.protobuf.json_format import MessageToDict
+
+"""
+# This is 'example' '.proto' file that contains message 'ExampleRequest'.
+from .example_pb2 import ExampleRequest
+# Import from 'protobuf' library of function 'MessageToDict' that
+converts protobuf message object type to python dict.
+from google.protobuf.json_format import MessageToDict
+"""
 
 
 # Class that parses the message received from client.
 class ParserGeneral(ParserParent):
-    logger = create_custom_logger()
-
     # When initializing main classes through "super" you need to pass parameters to init
     def __init__(self, class_client_message: ClientMessage):
         super().__init__(class_client_message)
+
+        self.logger = create_custom_logger()
 
     # ==================================================================================================================
     # Uncomment this section in order to begin building custom responder.

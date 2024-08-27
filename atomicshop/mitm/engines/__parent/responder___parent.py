@@ -7,20 +7,17 @@ from urllib.parse import unquote
 from urllib.parse import urlparse
 from urllib.parse import parse_qs
 
-from ...shared_functions import create_custom_logger
 from ...message import ClientMessage
 from ....http_parse import HTTPResponseParse
 from ....print_api import print_api
 
+from atomicshop.mitm.shared_functions import create_custom_logger
 
-# The class that is responsible for generating response to client based on the received message.
+
 class ResponderParent:
-    # The code outside the functions will be executed during import of the module. When initializing a class
-    # in the script these lines will not be called again, only the "init" function.
-    logger = create_custom_logger()
-
+    """The class that is responsible for generating response to client based on the received message."""
     def __init__(self):
-        return
+        self.logger = create_custom_logger()
 
     @staticmethod
     def get_path_parts(path: str):

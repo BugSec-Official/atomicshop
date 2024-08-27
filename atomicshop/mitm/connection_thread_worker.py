@@ -125,7 +125,8 @@ def thread_worker_main(
 
             network_logger.info("Initializing Receiver")
             # Getting message from the client over the socket using specific class.
-            client_received_raw_data = receiver.Receiver(function_client_socket_object).receive()
+            client_received_raw_data = receiver.Receiver(
+                ssl_socket=function_client_socket_object, logger=network_logger).receive()
 
             # If the message is empty, then the connection was closed already by the other side,
             # so we can close the socket as well.
@@ -239,13 +240,14 @@ def thread_worker_main(
                                 service_name=client_message.server_name, service_port=client_message.destination_port,
                                 tls=is_tls,
                                 dns_servers_list=(
-                                    config_static.TCPServer.forwarding_dns_service_ipv4_list___only_for_localhost)
+                                    config_static.TCPServer.forwarding_dns_service_ipv4_list___only_for_localhost),
+                                logger=network_logger
                             )
                         # If we're not on localhost, then connect to domain directly.
                         else:
                             service_client = socket_client.SocketClient(
                                 service_name=client_message.server_name, service_port=client_message.destination_port,
-                                tls=is_tls)
+                                tls=is_tls, logger=network_logger)
 
                     # Sending current client message and receiving a response.
                     # If there was an error it will be passed to "client_message" object class and if not, "None" will
@@ -301,7 +303,9 @@ def thread_worker_main(
 
                         # Iterate through the list of byte responses.
                         for response_raw_bytes in client_message.response_list_of_raw_bytes:
-                            function_data_sent = sender.Sender(function_client_socket_object, response_raw_bytes).send()
+                            function_data_sent = sender.Sender(
+                                ssl_socket=function_client_socket_object, class_message=response_raw_bytes,
+                                logger=network_logger).send()
 
                             # If there was problem with sending data, we'll break current loop.
                             if not function_data_sent:

@@ -432,7 +432,8 @@ class SocketWrapper:
                         client_socket=client_socket,
                         ssh_script_processor=self.ssh_script_processor,
                         ssh_user=self.ssh_user,
-                        ssh_pass=self.ssh_pass)
+                        ssh_pass=self.ssh_pass,
+                        logger=self.logger)
                     process_name = get_command_instance.get_process_name(print_kwargs={'logger': self.logger})
 
                 # If 'accept()' function worked well, SSL worked well, then 'client_socket' won't be empty.

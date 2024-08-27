@@ -3,6 +3,8 @@ import datetime
 import time
 import threading
 import socket
+import logging
+from pathlib import Path
 
 from ...print_api import print_api
 from ..loggingw import loggingw
@@ -28,8 +30,7 @@ class DnsServer:
     """
     DnsServer class is responsible to handle DNS Requests on port 53 based on configuration and send DNS Response back.
     """
-    logger = loggingw.get_logger_with_level("network." + __name__.rpartition('.')[2])
-
+    # noinspection PyPep8Naming
     def __init__(
             self,
             listening_interface: str,
@@ -49,6 +50,7 @@ class DnsServer:
             response_ttl: int = 60,
             dns_service_retries: int = 5,
             cache_timeout_minutes: int = 60,
+            logger: logging.Logger = None
     ):
         """
         Initialize the DNS Server object with all the necessary settings.
@@ -80,6 +82,7 @@ class DnsServer:
             (socket connect / request send / response receive).
         :param cache_timeout_minutes: int: Timeout in minutes to clear the DNS Cache.
             server. Each domain will be pass in the queue as a string.
+        :param logger: logging.Logger: Logger object to use for logging. If not provided, a new logger will be created.
         """
 
         self.listening_interface: str = listening_interface
@@ -127,12 +130,27 @@ class DnsServer:
         # Logger that logs all the DNS Requests and responses in DNS format. These entries will not present in
         # network log of TCP Server module.
         self.dns_full_logger = loggingw.create_logger(
-            logger_name="dns",
+            logger_name="dns_full",
             directory_path=self.log_directory_path,
             add_timedfile=True,
             formatter_filehandler='DEFAULT',
             backupCount=backupCount_log_files_x_days
         )
+
+        # Check if the logger was provided, if not, create a new logger.
+        if not logger:
+            self.logger = loggingw.create_logger(
+                logger_name=Path(__file__).stem,
+                directory_path=self.log_directory_path,
+                add_stream=True,
+                add_timedfile=True,
+                formatter_streamhandler='DEFAULT',
+                formatter_filehandler='DEFAULT',
+                backupCount=backupCount_log_files_x_days
+            )
+        else:
+            # Create child logger for the provided logger with the module's name.
+            self.logger: logging.Logger = loggingw.get_logger_with_level(f'{logger.name}.{Path(__file__).stem}')
 
         self.test_config()
 

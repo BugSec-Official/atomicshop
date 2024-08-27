@@ -9,9 +9,6 @@ from ....file_io import file_io
 
 # The class that is responsible for Recording Requests / Responses.
 class RecorderParent:
-    # The code outside the functions will be executed during import of the module. When initializing a class
-    # in the script these lines will not be called again, only the "init" function.
-    logger = create_custom_logger()
 
     def __init__(self, class_client_message: message.ClientMessage, record_path: str):
         self.class_client_message: message.ClientMessage = class_client_message
@@ -21,6 +18,8 @@ class RecorderParent:
         self.module_name = None
         self.engine_record_path: str = str()
         self.record_file_path: str = str()
+
+        self.logger = create_custom_logger()
 
         # Get engine name and module name
         self.get_engine_module()

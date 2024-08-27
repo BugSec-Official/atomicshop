@@ -1,18 +1,18 @@
 import sys
 import base64
 import socket
+import logging
+from pathlib import Path
 
-from .print_api import print_api
-from .wrappers.loggingw import loggingw
-from .wrappers.socketw import base
-
-
-# External Libraries
 try:
     import paramiko
 except ImportError as exception_object:
     print(f"Library missing: {exception_object.name}. Install by executing: pip install paramiko")
     sys.exit()
+
+from .print_api import print_api
+from .wrappers.loggingw import loggingw
+from .wrappers.socketw import base
 
 
 class SSHRemote:
@@ -87,15 +87,25 @@ class SSHRemote:
             sys.exit(main())
 
     """
-    logger = loggingw.get_logger_with_level("network." + __name__.rpartition('.')[2])
-
-    def __init__(self, ip_address: str, username: str, password: str):
+    def __init__(
+            self,
+            ip_address: str,
+            username: str,
+            password: str,
+            logger: logging.Logger = None
+    ):
         self.ip_address: str = ip_address
         self.username: str = username
         self.password: str = password
 
         # Initializing paramiko SSHClient class
         self.ssh_client = paramiko.SSHClient()
+
+        if logger:
+            # Create child logger for the provided logger with the module's name.
+            self.logger: logging.Logger = loggingw.get_logger_with_level(f'{logger.name}.{Path(__file__).stem}')
+        else:
+            self.logger: logging.Logger = logger
 
     def connect(self):
         error: str = str()
