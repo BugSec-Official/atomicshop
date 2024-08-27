@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.16.20 - 27.08.2024
+  * file_io/file_io - fixes and improvements.
 * 2.16.19 - 27.08.2024
   * filesystem, mitm/recs_files, wrappers/loggingw/reading - fixes and improvements.
 * 2.16.18 - 27.08.2024
