@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.16.18 - 27.08.2024
+  * wrappers/mongodbw - fixes and improvements.
 * 2.16.17 - 26.08.2024
   * mitm/statistic_analyzer_helper/moving_average_helper, wrappers/loggingw - fixes and improvements. 
 * 2.16.16 - 25.08.2024
