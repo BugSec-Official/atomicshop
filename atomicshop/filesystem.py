@@ -338,18 +338,20 @@ def create_directory(directory_fullpath: str):
     pathlib.Path(directory_fullpath).mkdir(parents=True, exist_ok=True)
 
 
-def rename_file(source_file_path: str, target_file_path: str) -> None:
+def rename_file(file_path: str, new_file_name: str) -> None:
     """
     The function renames file from source to target.
 
-    :param source_file_path: string, full path to source file.
-    :param target_file_path: string, full path to target file.
+    :param file_path: string, full path to file that will be renamed.
+    :param new_file_name: string, new name of the file. No path should be included.
 
     :return: None
     """
 
+    renamed_file_path = str(Path(file_path).parent) + os.sep + new_file_name
+
     # Rename file.
-    os.rename(source_file_path, target_file_path)
+    os.rename(file_path, renamed_file_path)
 
 
 @contextmanager
@@ -1569,7 +1571,7 @@ def backup_file(
         else:
             file_name: str = f"{file_name_no_extension}_{timestamp}{file_extension}"
         backup_file_path: str = str(Path(backup_directory) / file_name)
-        move_file(file_path, backup_directory)
+        rename_file(file_path, file_name)
 
         return backup_file_path
     else:
