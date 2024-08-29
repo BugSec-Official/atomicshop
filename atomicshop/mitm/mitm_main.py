@@ -1,4 +1,4 @@
-import os
+import logging
 import threading
 import time
 import datetime
@@ -6,6 +6,8 @@ import datetime
 import atomicshop   # Importing atomicshop package to get the version of the package.
 
 from .. import filesystem, queues, dns, on_exit
+from ..basics import tracebacks
+from ..file_io import csvs
 from ..permissions import permissions
 from ..python_functions import get_current_python_version_string, check_python_version_compliance
 from ..wrappers.socketw import socket_wrapper, dns_server, base
@@ -21,6 +23,12 @@ NETWORK_INTERFACE_IS_DYNAMIC: bool = bool()
 NETWORK_INTERFACE_IPV4_ADDRESS_LIST: list[str] = list()
 
 
+EXCEPTIONS_CSV_LOGGER_NAME: str = 'exceptions'
+EXCEPTIONS_CSV_LOGGER_HEADER: str = 'time,exception'
+# noinspection PyTypeChecker
+MITM_ERROR_LOGGER: logging.Logger = None
+
+
 def exit_cleanup():
     if permissions.is_admin():
         is_dns_dynamic, current_dns_gateway = dns.get_default_dns_gateway()
@@ -32,7 +40,7 @@ def exit_cleanup():
             print_api("Returned default DNS gateway...", color='blue')
 
 
-def mitm_server_main(config_file_path: str):
+def mitm_server(config_file_path: str):
     on_exit.register_exit_handler(exit_cleanup)
 
     # Main function should return integer with error code, 0 is successful.
@@ -44,6 +52,16 @@ def mitm_server_main(config_file_path: str):
     result = config_static.load_config(config_file_path)
     if result != 0:
         return result
+
+    global MITM_ERROR_LOGGER
+    MITM_ERROR_LOGGER = loggingw.create_logger(
+        logger_name=EXCEPTIONS_CSV_LOGGER_NAME,
+        directory_path=config_static.LogRec.logs_path,
+        file_type="csv",
+        add_timedfile=True,
+        formatter_filehandler='MESSAGE',
+        header=EXCEPTIONS_CSV_LOGGER_HEADER
+    )
 
     # Create folders.
     filesystem.create_directory(config_static.LogRec.logs_path)
@@ -57,17 +75,20 @@ def mitm_server_main(config_file_path: str):
         filesystem.create_directory(
             config_static.Certificates.sni_server_certificate_from_server_socket_download_directory)
 
-    # Create a logger that will log messages to file, Initiate System logger.
-    logger_name = "system"
-    system_logger = loggingw.create_logger(
-        logger_name=logger_name,
-        file_path=f"{config_static.LogRec.logs_path}{os.sep}{logger_name}.txt",
+    network_logger_name = config_static.MainConfig.LOGGER_NAME
+    network_logger = loggingw.create_logger(
+        logger_name=network_logger_name,
+        directory_path=config_static.LogRec.logs_path,
         add_stream=True,
         add_timedfile=True,
         formatter_streamhandler='DEFAULT',
         formatter_filehandler='DEFAULT',
         backupCount=config_static.LogRec.store_logs_for_x_days
     )
+
+    # Initiate Listener logger, which is a child of network logger, so he uses the same settings and handlers
+    listener_logger = loggingw.get_logger_with_level(f'{network_logger_name}.listener')
+    system_logger = loggingw.get_logger_with_level(f'{network_logger_name}.system')
 
     # Writing first log.
     system_logger.info("======================================")
@@ -202,22 +223,6 @@ def mitm_server_main(config_file_path: str):
     # Assigning all the engines domains to all time domains, that will be responsible for adding new domains.
     config_static.Certificates.domains_all_times = list(domains_engine_list_full)
 
-    network_logger_name = "network"
-    network_logger = loggingw.create_logger(
-        logger_name=network_logger_name,
-        directory_path=config_static.LogRec.logs_path,
-        add_stream=True,
-        add_timedfile=True,
-        formatter_streamhandler='DEFAULT',
-        formatter_filehandler='DEFAULT',
-        backupCount=config_static.LogRec.store_logs_for_x_days
-    )
-    system_logger.info(f"Loaded network logger: {network_logger}")
-
-    # Initiate Listener logger, which is a child of network logger, so he uses the same settings and handlers
-    listener_logger = loggingw.get_logger_with_level(f'{network_logger_name}.listener')
-    system_logger.info(f"Loaded listener logger: {listener_logger}")
-
     print_api("Press [Ctrl]+[C] to stop.", color='blue')
 
     # Create request domain queue.
@@ -339,22 +344,16 @@ def mitm_server_main(config_file_path: str):
                     use_default_connection=True
                 )
 
-        # General exception handler will catch all the exceptions that occurred in the threads and write it to the log.
-        # noinspection PyBroadException
-        try:
-            socket_thread = threading.Thread(
-                target=socket_wrapper_instance.loop_for_incoming_sockets,
-                kwargs={
-                    'reference_function_name': thread_worker_main,
-                    'reference_function_args': (network_logger, statistics_writer, engines_list, reference_module,)
-                }
-            )
+        socket_thread = threading.Thread(
+            target=socket_wrapper_instance.loop_for_incoming_sockets,
+            kwargs={
+                'reference_function_name': thread_worker_main,
+                'reference_function_args': (network_logger, statistics_writer, engines_list, reference_module,)
+            }
+        )
 
-            socket_thread.daemon = True
-            socket_thread.start()
-        except Exception:
-            message = f"Unhandled Exception occurred in 'loop_for_incoming_sockets' function"
-            print_api(message, error_type=True, color="red", logger=network_logger, traceback_string=True)
+        socket_thread.daemon = True
+        socket_thread.start()
 
         # Compress recordings each day in a separate process.
         recs_archiver_thread = threading.Thread(target=_loop_at_midnight_recs_archive)
@@ -380,3 +379,17 @@ def _loop_at_midnight_recs_archive():
             previous_date = current_date
         # Sleep for 1 minute.
         time.sleep(60)
+
+
+def mitm_server_main(config_file_path: str):
+    try:
+        # Main function should return integer with error code, 0 is successful.
+        return mitm_server(config_file_path)
+    except KeyboardInterrupt:
+        print_api("Server Stopped by [KeyboardInterrupt].", color='blue')
+        return 0
+    except Exception as e:
+        msg = tracebacks.get_as_string()
+        output_csv_line: str = csvs.escape_csv_line_to_string([datetime.datetime.now(), msg])
+        MITM_ERROR_LOGGER.info(output_csv_line)
+        print_api(str(e), error_type=True, color="red", traceback_string=True)

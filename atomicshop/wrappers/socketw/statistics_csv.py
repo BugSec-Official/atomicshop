@@ -5,9 +5,9 @@ from ..loggingw import loggingw
 
 
 LOGGER_NAME: str = 'statistics'
-STATISTICS_HEADER: str = \
-    ('request_time_sent,tls,protocol,host,path,command,status_code,request_size_bytes,response_size_bytes,file_path,'
-     'process_cmd,error')
+STATISTICS_HEADER: str = (
+    'request_time_sent,tls,protocol,host,path,command,status_code,request_size_bytes,response_size_bytes,file_path,'
+    'process_cmd,error')
 
 
 class StatisticsCSVWriter:
@@ -19,8 +19,6 @@ class StatisticsCSVWriter:
             self,
             statistics_directory_path: str
     ):
-        self.statistics_directory_path = statistics_directory_path
-
         self.csv_logger = loggingw.create_logger(
             logger_name=LOGGER_NAME,
             directory_path=statistics_directory_path,

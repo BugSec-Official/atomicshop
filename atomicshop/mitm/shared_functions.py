@@ -4,6 +4,8 @@ import inspect
 from ..wrappers.loggingw import loggingw
 from ..basics import dicts
 
+from . import config_static
+
 
 # If the string has several dot characters (".") - return the most right string after the last dot.
 # Meaning if the class name contains several child classes like: classes.parsers.parser_something,
@@ -32,7 +34,8 @@ def create_custom_logger():
     # 'f_globals' is a dictionary of all the global variables of the calling initiated class.
     class_name = calling_frame.f_globals['__name__']
     # Get the logger name only.
-    logger_name = build_module_names(class_name)[0]
+    engine_logger_part = build_module_names(class_name)[0]
+    logger_name = f'{config_static.MainConfig.LOGGER_NAME}.{engine_logger_part}'
 
     return loggingw.get_logger_with_level(logger_name)
 
