@@ -5,12 +5,14 @@ import threading
 import socket
 import logging
 from pathlib import Path
+from typing import Literal
 
 from ...print_api import print_api
 from ..loggingw import loggingw
 from ..psutilw import networks
 from ... import queues
-from ...basics import booleans
+from ...basics import booleans, tracebacks
+from ...file_io import csvs
 
 # noinspection PyPackageRequirements
 import dnslib
@@ -24,6 +26,115 @@ class DnsPortInUseError(Exception):
 
 class DnsConfigurationValuesError(Exception):
     pass
+
+
+LOGGER_NAME: str = 'dns_traffic'
+DNS_STATISTICS_HEADER: str = (
+    'timestamp,dns_type,client_ipv4,client_port,qname,qtype,qclass,header,error')
+
+
+class DnsStatisticsCSVWriter:
+    """
+    Class to write statistics to CSV file.
+    This can be initiated at the main, and then passed to the thread worker function.
+    """
+    def __init__(
+            self,
+            statistics_directory_path: str
+    ):
+        self.csv_logger = loggingw.create_logger(
+            logger_name=LOGGER_NAME,
+            directory_path=statistics_directory_path,
+            add_timedfile=True,
+            formatter_filehandler='MESSAGE',
+            file_type='csv',
+            header=DNS_STATISTICS_HEADER
+        )
+
+    def write_row(
+            self,
+            client_address: tuple,
+            timestamp=None,
+            dns_type: Literal['request', 'response'] = None,
+            dns_request = None,
+            dns_response = None,
+            error: str = None,
+    ):
+        if not timestamp:
+            timestamp = datetime.datetime.now()
+
+        if not dns_type:
+            if not dns_request and not dns_response:
+                raise ValueError("Either DNS Request or DNS Response must be provided.")
+            elif dns_request and dns_response:
+                raise ValueError("Either DNS Request or DNS Response must be provided. Not both.")
+
+        if dns_request:
+            dns_type = 'request'
+        elif dns_response:
+            dns_type = 'response'
+
+        if dns_type not in ['request', 'response']:
+            raise ValueError(f"DNS Type can be only 'request' or 'response'. Provided: {dns_type}")
+
+        client_ipv4, client_port = client_address
+        client_ipv4: str
+        client_port: str = str(client_port)
+
+        qname: str = str()
+        qtype: str = str()
+        qclass: str = str()
+        rr: str = str()
+        header: str = str()
+
+        if dns_request:
+            qname = str(dns_request.q.qname)[:-1]
+            qtype = dnslib.QTYPE[dns_request.q.qtype]
+            qclass = dnslib.CLASS[dns_request.q.qclass]
+
+        if dns_response:
+            qname = str(dns_response.q.qname)[:-1]
+            qtype = dnslib.QTYPE[dns_response.q.qtype]
+            qclass = dnslib.CLASS[dns_response.q.qclass]
+            rr: str = str(dns_response.rr)
+            header = str(dns_response.header)
+
+        escaped_line_string: str = csvs.escape_csv_line_to_string([
+            timestamp,
+            dns_type,
+            client_ipv4,
+            client_port,
+            qname,
+            qtype,
+            qclass,
+            rr,
+            header,
+            error
+        ])
+
+        self.csv_logger.info(escaped_line_string)
+
+    def write_error(
+            self,
+            dns_type: Literal['request', 'response'],
+            error_message: str,
+            client_address: tuple
+    ):
+        """
+        Write the error message to the statistics CSV file.
+        This is used for easier execution, since most of the parameters will be empty on accept.
+
+        :param dns_type: Literal['request', 'response'], DNS request or response.
+        :param error_message: string, error message.
+        :param client_address: tuple, client address (IPv4, Port).
+        :return:
+        """
+
+        self.write_row(
+            dns_type=dns_type,
+            client_address=client_address,
+            error=error_message
+        )
 
 
 class DnsServer:
@@ -129,13 +240,7 @@ class DnsServer:
 
         # Logger that logs all the DNS Requests and responses in DNS format. These entries will not present in
         # network log of TCP Server module.
-        self.dns_full_logger = loggingw.create_logger(
-            logger_name="dns_full",
-            directory_path=self.log_directory_path,
-            add_timedfile=True,
-            formatter_filehandler='DEFAULT',
-            backupCount=backupCount_log_files_x_days
-        )
+        self.dns_statistics_csv_writer = DnsStatisticsCSVWriter(statistics_directory_path=log_directory_path)
 
         # Check if the logger was provided, if not, create a new logger.
         if not logger:
@@ -250,20 +355,19 @@ class DnsServer:
                     client_data: bytes
                     client_address: tuple
                 except ConnectionResetError:
+                    traceback_string = tracebacks.get_as_string(one_line=True)
                     # This error happens when the client closes the connection before the server.
                     # This is not an error for a DNS Server, but we'll log it anyway only with the full DNS logger.
-                    message = "Error: to receive DNS request, An existing connection was forcibly closed"
-                    # print_api(message, logger=self.logger, logger_method='error', traceback_string=True)
-                    print_api(
-                        message, logger=self.dns_full_logger, logger_method='error', traceback_string=True)
-                    self.dns_full_logger.info("==========")
+                    message = (f"Error: to receive DNS request, An existing connection was forcibly closed | "
+                               f"{traceback_string}")
+                    self.dns_statistics_csv_writer.write_error(
+                        dns_type='request', client_address=client_address, error_message=message)
                     pass
                     continue
                 except Exception:
                     message = "Unknown Exception: to receive DNS request"
                     print_api(
                         message, logger=self.logger, logger_method='critical', traceback_string=True)
-                    self.logger.info("==========")
                     pass
                     continue
 
@@ -297,26 +401,18 @@ class DnsServer:
                     # "dns_object.q.qname" returns only the questioned domain with "." (dot) in the end,
                     # which needs to be removed.
                     question_domain: str = str(dns_object.q.qname)[:-1]
-                    self.dns_full_logger.info(f"QCLASS: {qclass_string}")
-                    self.dns_full_logger.info(f"QTYPE: {qtype_string}")
-                    self.dns_full_logger.info(f"Question Domain: {question_domain}")
+                    self.dns_statistics_csv_writer.write_row(client_address=client_address, dns_request=dns_object)
 
                     message = (f"Received DNS request: {question_domain} | {qclass_string} | {qtype_string} |   "
                                f"From: {client_address}.")
                     self.logger.info(message)
-                    self.dns_full_logger.info(message)
-
-                    self.dns_full_logger.info("--")
 
                     # Nullifying the DNS cache for current request before check.
                     dns_cached_request = False
                     # Check if the received data request from client is already in the cache
                     if client_data in self.dns_questions_to_answers_cache:
-                        message = "!!! Question / Answer is already in the dictionary..."
+                        # message = "!!! Question / Answer is already in the dictionary..."
                         # self.logger.info(message)
-                        self.dns_full_logger.info(message)
-
-                        self.dns_full_logger.info("--")
 
                         # Get the response from the cached answers list
                         dns_response = self.dns_questions_to_answers_cache[client_data]
@@ -395,7 +491,6 @@ class DnsServer:
                                         message = f"!!! Question / Answer is in offline mode returning " \
                                                   f"{self.offline_route_ipv6}."
                                         self.logger.info(message)
-                                        self.dns_full_logger.info(message)
 
                                     # SRV Record type explanation:
                                     # https://www.cloudflare.com/learning/dns/dns-records/dns-srv-record/
@@ -412,7 +507,6 @@ class DnsServer:
                                         message = f"!!! Question / Answer is in offline mode returning: " \
                                                   f"{self.offline_srv_answer}."
                                         self.logger.info(message)
-                                        self.dns_full_logger.info(message)
                                     elif qtype_string == "ANY":
                                         dns_built_response.add_answer(
                                             *RR.fromZone(question_domain + " " + str(self.response_ttl) + " CNAME " +
@@ -422,7 +516,6 @@ class DnsServer:
                                         message = f"!!! Question / Answer is in offline mode returning " \
                                                   f"{self.offline_route_domain}."
                                         self.logger.info(message)
-                                        self.dns_full_logger.info(message)
                                     else:
                                         dns_built_response.add_answer(
                                             *RR.fromZone(
@@ -433,7 +526,6 @@ class DnsServer:
                                         message = f"!!! Question / Answer is in offline mode returning " \
                                                   f"{self.offline_route_ipv4}."
                                         self.logger.info(message)
-                                        self.dns_full_logger.info(message)
                                 # Values error means in most cases that you create wrong response
                                 # for specific type of request.
                                 except ValueError:
@@ -450,17 +542,13 @@ class DnsServer:
                                 except Exception:
                                     message = \
                                         (f"Unknown exception while creating response for QTYPE: {qtype_string}. "
-                                         f"Response: ")
+                                         f"Response: \n{dns_built_response}")
                                     print_api(message, logger=self.logger, logger_method='critical',
-                                              traceback_string=True)
-                                    print_api(f"{dns_built_response}", logger=self.logger, logger_method='critical',
                                               traceback_string=True)
                                     # Pass the exception.
                                     pass
                                     # Continue to the next DNS request, since there's nothing to do here right now.
                                     continue
-
-                                self.dns_full_logger.info("--")
 
                                 # Encode the response that was built above to legit DNS Response
                                 dns_response = dns_built_response.pack()
@@ -476,7 +564,7 @@ class DnsServer:
                                     # Since, it's probably going to succeed.
                                     if counter > 0:
                                         self.logger.info(f"Retry #: {counter}/{self.dns_service_retries}")
-                                    self.dns_full_logger.info(
+                                    self.logger.info(
                                         f"Forwarding request. Creating UDP socket to: "
                                         f"{self.forwarding_dns_service_ipv4}:"
                                         f"{self.forwarding_dns_service_port}")
@@ -486,7 +574,7 @@ class DnsServer:
 
                                         message = "Socket created, Forwarding..."
                                         # self.logger.info(message)
-                                        self.dns_full_logger.info(message)
+                                        self.logger.info(message)
 
                                         google_dns_ipv4_socket.sendto(client_data, (
                                             self.forwarding_dns_service_ipv4,
@@ -495,7 +583,7 @@ class DnsServer:
                                         # The script needs to wait a second or receive can hang
                                         message = "Request sent to the forwarding DNS, Receiving the answer..."
                                         # self.logger.info(message)
-                                        self.dns_full_logger.info(message)
+                                        self.logger.info(message)
 
                                         dns_response, google_address = \
                                             google_dns_ipv4_socket.recvfrom(self.buffer_size_receive)
@@ -516,7 +604,6 @@ class DnsServer:
                                                 f"Couldn't forward DNS request to: "
                                                 f"[{self.forwarding_dns_service_ipv4}]. "
                                                 f"Continuing to next request.")
-                                            self.dns_full_logger.info("==========")
 
                                         # From here continue to the next iteration of While loop.
                                         continue
@@ -529,12 +616,12 @@ class DnsServer:
                                 if retried:
                                     continue
 
-                                self.dns_full_logger.info(
+                                self.logger.info(
                                     f"Answer received from: {self.forwarding_dns_service_ipv4}")
 
                                 # Closing the socket to forwarding service
                                 google_dns_ipv4_socket.close()
-                                self.dns_full_logger.info("Closed socket to forwarding service")
+                                self.logger.info("Closed socket to forwarding service")
 
                                 # Appending current DNS Request and DNS Answer to the Cache
                                 self.dns_questions_to_answers_cache.update({client_data: dns_response})
@@ -542,14 +629,15 @@ class DnsServer:
                     # If 'forward_to_tcp_server' it means that we built the response, and we don't need to reparse it,
                     # since we already have all the data.
                     if forward_to_tcp_server:
-                        self.dns_full_logger.info(f"Response IP: {dns_built_response.short()}")
-                        self.logger.info(f"Response {dns_built_response.short()}")
+                        # self.logger.info(f"Response {dns_built_response.short()}")
+                        self.dns_statistics_csv_writer.write_row(
+                            client_address=client_address, dns_response=dns_built_response)
 
                         message = f"Response Details: {dns_built_response.rr}"
-                        print_api(message, logger=self.dns_full_logger, logger_method='info', oneline=True)
+                        print_api(message, logger=self.logger, logger_method='info', oneline=True)
 
-                        message = f"Response Full Details: {dns_built_response.format(prefix='', sort=True)}"
-                        print_api(message, logger=self.dns_full_logger, logger_method='info', oneline=True)
+                        # message = f"Response Full Details: {dns_built_response.format(prefix='', sort=True)}"
+                        # print_api(message, logger=self.logger, logger_method='info', oneline=True)
 
                         # Now we can turn it to false, so it won't trigger this
                         # condition next time if the response was not built
@@ -569,20 +657,23 @@ class DnsServer:
                         if dns_response_parsed.rr:
                             for rr in dns_response_parsed.rr:
                                 if isinstance(rr.rdata, A):
-                                    self.dns_full_logger.info(f"Response IP: {rr.rdata}")
+                                    self.dns_statistics_csv_writer.write_row(
+                                        client_address=client_address, dns_response=dns_response_parsed)
+
+                                    self.logger.info(f"Response IP: {rr.rdata}")
 
                                     # Adding the address to the list as 'str' object and not 'dnslib.dns.A'.
                                     ipv4_addresses.append(str(rr.rdata))
 
-                        message = f"Response Details: {dns_response_parsed.rr}"
-                        print_api(message, logger=self.dns_full_logger, logger_method='info', oneline=True)
+                        # message = f"Response Details: {dns_response_parsed.rr}"
+                        # print_api(message, logger=self.dns_statistics_csv_writer, logger_method='info', oneline=True)
+                        #
+                        # message = f"Response Full Details: {dns_response_parsed}"
+                        # print_api(message, logger=self.dns_statistics_csv_writer, logger_method='info', oneline=True)
 
-                        message = f"Response Full Details: {dns_response_parsed}"
-                        print_api(message, logger=self.dns_full_logger, logger_method='info', oneline=True)
-
-                    self.dns_full_logger.info("Sending DNS response back to client...")
+                    self.logger.info("Sending DNS response back to client...")
                     main_socket_object.sendto(dns_response, client_address)
-                    self.dns_full_logger.info("DNS Response sent...")
+                    self.logger.info("DNS Response sent...")
 
                     # 'ipv4_addresses' list contains entries of type 'dnslib.dns.A' and not string.
                     # We'll convert each entry to string, so strings can be searched in this list.
@@ -661,9 +752,9 @@ class DnsServer:
                                 ) as output_file:
                                     output_file.write(record_string_line)
 
-                                self.dns_full_logger.info(
-                                    f"Saved new known domains file: "
-                                    f"{self.log_directory_path}{os.sep}{self.known_domains_filename}")
+                                # self.logger.info(
+                                #     f"Saved new known domains file: "
+                                #     f"{self.log_directory_path}{os.sep}{self.known_domains_filename}")
 
                     # Known domain list managements EOF
                     # ==================================================================================================
@@ -720,9 +811,9 @@ class DnsServer:
                                     ) as output_file:
                                         output_file.write(record_string_line)
 
-                                    self.dns_full_logger.info(
-                                        f"Saved new known IPv4 addresses file: "
-                                        f"{self.log_directory_path}{os.sep}{self.known_ipv4_filename}")
+                                    # self.logger.info(
+                                    #     f"Saved new known IPv4 addresses file: "
+                                    #     f"{self.log_directory_path}{os.sep}{self.known_ipv4_filename}")
 
                     # Known IPv4 address to domains list management EOF
                     # ==================================================================================================
@@ -743,7 +834,7 @@ class DnsServer:
                     # EOF Writing IPs by time.
                     # ==================================================================================================
 
-                    self.dns_full_logger.info("==========")
+                    # self.logger.info("==========")
                 except Exception:
                     message = "Unknown Exception: to parse DNS request"
                     print_api(

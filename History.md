@@ -1,11 +1,13 @@
 <!-- HISTORY -->
 ## History
 
-* 2.16.25 - 27.08.2024
+* 2.16.26 - 29.08.2024
+  * mitm, wrappers/socketw - fixes and improvements.
+* 2.16.25 - 29.08.2024
   * filesystem - fixes and improvements.
-* 2.16.24 - 27.08.2024
+* 2.16.24 - 29.08.2024
   * mitm/statistic_analyzer - fixes and improvements.
-* 2.16.23 - 27.08.2024
+* 2.16.23 - 29.08.2024
   * mitm/statistic_analyzer - fixes and improvements.
 * 2.16.22 - 27.08.2024
   * mitm, ssh_remote, wrappers/loggingw, wrappers/socketw - fixes and improvements.

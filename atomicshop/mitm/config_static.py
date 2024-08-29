@@ -48,6 +48,8 @@ TOML_TO_STATIC_CATEGORIES: dict = {
 
 
 class MainConfig:
+    LOGGER_NAME: str = 'network'
+
     SCRIPT_DIRECTORY: str = None
 
     ENGINES_DIRECTORY_PATH: str = None

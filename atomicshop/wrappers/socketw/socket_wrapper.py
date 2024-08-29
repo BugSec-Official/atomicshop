@@ -5,6 +5,7 @@ from pathlib import Path
 
 from ..psutilw import networks
 from ..certauthw import certauthw
+from ..loggingw import loggingw
 from ...script_as_string_processor import ScriptAsStringProcessor
 from ...permissions import permissions
 from ... import queues, filesystem, certificates
@@ -143,6 +144,7 @@ class SocketWrapper:
         :param ssh_pass: string, SSH password that will be used to connect to remote host.
         :param ssh_script_to_execute: string, script that will be executed to get the process name on ssh remote host.
         :param logger: logging.Logger object, logger object that will be used to log messages.
+            If not provided, logger will be created with default settings.
         :param statistics_logs_directory: string, path to directory where daily statistics.csv files will be stored.
             After you initialize the SocketWrapper object, you can get the statistics_writer object from it and use it
             to write statistics to the file in a worker thread.
@@ -218,6 +220,16 @@ class SocketWrapper:
 
         self.statistics_writer = statistics_csv.StatisticsCSVWriter(
             statistics_directory_path=self.statistics_logs_directory)
+
+        if not self.logger:
+            self.logger = loggingw.create_logger(
+                logger_name='SocketWrapper',
+                directory_path=self.statistics_logs_directory,
+                add_stream=True,
+                add_timedfile=True,
+                formatter_streamhandler='DEFAULT',
+                formatter_filehandler='DEFAULT'
+            )
 
         self.test_config()
 

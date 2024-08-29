@@ -63,15 +63,15 @@ class ModuleCategory:
 
     def initialize_engine(self, logs_path: str, logger=None, reference_general: bool = False, **kwargs):
         # Initiating logger for each engine by its name
-        loggingw.create_logger(
-            logger_name=self.engine_name,
-            directory_path=logs_path,
-            add_stream=True,
-            add_timedfile=True,
-            formatter_streamhandler='DEFAULT',
-            formatter_filehandler='DEFAULT',
-            backupCount=config_static.LogRec.store_logs_for_x_days
-        )
+        # loggingw.create_logger(
+        #     logger_name=self.engine_name,
+        #     directory_path=logs_path,
+        #     add_stream=True,
+        #     add_timedfile=True,
+        #     formatter_streamhandler='DEFAULT',
+        #     formatter_filehandler='DEFAULT',
+        #     backupCount=config_static.LogRec.store_logs_for_x_days
+        # )
 
         if not reference_general:
             self.parser_class_object = import_first_class_name_from_file_path(
