@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.16.24 - 27.08.2024
+  * mitm/statistic_analyzer - fixes and improvements.
 * 2.16.23 - 27.08.2024
   * mitm/statistic_analyzer - fixes and improvements.
 * 2.16.22 - 27.08.2024
