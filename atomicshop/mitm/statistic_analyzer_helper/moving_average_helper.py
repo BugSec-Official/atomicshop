@@ -270,6 +270,7 @@ def compute_average_for_current_day_from_past_x_days(
         ma_count = statistics.mean(host_dict['counts'])
         ma_request_size = statistics.mean(host_dict['avg_request_sizes'])
         ma_response_size = statistics.mean(host_dict['avg_response_sizes'])
+        mm_count = statistics.median(host_dict['counts'])
         mm_request_size = statistics.median(host_dict['median_request_sizes'])
         mm_response_size = statistics.median(host_dict['median_response_sizes'])
 
@@ -277,6 +278,7 @@ def compute_average_for_current_day_from_past_x_days(
             'ma_count': ma_count,
             'ma_request_size': ma_request_size,
             'ma_response_size': ma_response_size,
+            'mm_count': mm_count,
             'mm_request_size': mm_request_size,
             'mm_response_size': mm_response_size,
             'counts': host_dict['counts'],
@@ -332,8 +334,28 @@ def find_deviation_from_moving_average(
             deviation_percentage = (
                     (host_moving_average_by_type - day_statistics_content_dict[check_type]) /
                     host_moving_average_by_type)
+
         if deviation_type:
             message = f'[{check_type}] is [{deviation_type}] the moving average.'
+
+            # Get the right moving median.
+            if check_type == 'count':
+                median_type_string: str = 'count'
+                moving_median_type_string: str = 'mm_count'
+            else:
+                median_type_string: str = check_type.replace('avg', 'median')
+                moving_median_type_string: str = check_type.replace('avg', 'mm')
+
+            # The median and the total count are None for the count, Since they are the count.
+            if check_type == 'count':
+                total_entries_averaged = None
+                median_size = None
+            else:
+                total_entries_averaged = day_statistics_content_dict['count']
+                median_size = day_statistics_content_dict[median_type_string]
+
+            moving_median_size = moving_averages_dict[host][moving_median_type_string]
+
             deviation_list.append({
                 'day': day,
                 'host': host,
@@ -344,11 +366,10 @@ def find_deviation_from_moving_average(
                 'percentage': top_bottom_deviation_percentage,
                 'ma_value_checked': check_type_moving_above,
                 'deviation_percentage': deviation_percentage,
+                'total_entries_averaged': total_entries_averaged,
                 'deviation_type': deviation_type,
-                'median_request_size': day_statistics_content_dict['median_request_size'],
-                'median_response_size': day_statistics_content_dict['median_response_size'],
-                'mm_request_size': moving_averages_dict[host]['mm_request_size'],
-                'mm_response_size': moving_averages_dict[host]['mm_response_size'],
+                'median_size': median_size,
+                'mm_size': moving_median_size,
                 'data': day_statistics_content_dict,
                 'ma_data': moving_averages_dict[host]
             })
@@ -373,9 +394,19 @@ def find_deviation_from_moving_average(
                 deviation_list.append({
                     'day': day,
                     'host': host,
-                    'data': host_dict,
                     'message': message,
-                    'type': 'clear'
+                    'value': None,
+                    'ma_value': None,
+                    'check_type': None,
+                    'percentage': None,
+                    'ma_value_checked': None,
+                    'deviation_percentage': None,
+                    'total_entries_averaged': None,
+                    'deviation_type': 'clear',
+                    'median_size': None,
+                    'mm_size': None,
+                    'data': host_dict,
+                    'ma_data': previous_day_moving_average_dict
                 })
                 continue
 

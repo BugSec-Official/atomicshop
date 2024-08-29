@@ -429,30 +429,13 @@ def deviation_calculator_by_moving_average(
 
     if deviation_list:
         if summary:
-            summary_deviation_list: list = []
             for deviation in deviation_list:
-                value = deviation.get('value', None)
-                ma_value = deviation.get('ma_value', None)
-                if not value or not ma_value:
-                    total_entries_averaged = None
-                else:
-                    total_entries_averaged = deviation['data']['count']
-                    
-                summary_deviation_list.append({
-                    'day': deviation['day'],
-                    'host': deviation['host'],
-                    'message': deviation['message'],
-                    'value': deviation.get('value', None),
-                    'ma_value': deviation.get('ma_value', None),
-                    'deviation_percentage': deviation.get('deviation_percentage', None),
-                    'total_entries_averaged': total_entries_averaged,
-                    'median_request_size': deviation.get('median_request_size', None),
-                    'median_response_size': deviation.get('median_response_size', None),
-                    'mm_request_size': deviation.get('mm_request_size', None),
-                    'mm_response_size': deviation.get('mm_response_size', None),
-                })
-
-            deviation_list = summary_deviation_list
+                _ = deviation.pop('check_type')
+                _ = deviation.pop('percentage')
+                _ = deviation.pop('ma_value_checked')
+                _ = deviation.pop('deviation_type')
+                _ = deviation.pop('data')
+                _ = deviation.pop('ma_data')
 
         if output_file_path:
             if not summary:
