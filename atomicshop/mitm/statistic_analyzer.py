@@ -353,7 +353,8 @@ def deviation_calculator_by_moving_average(
         get_deviation_for_last_day_only: bool = False,
         summary: bool = False,
         output_file_path: str = None,
-        output_file_type: Literal['json', 'csv'] = 'json'
+        output_file_type: Literal['json', 'csv'] = 'json',
+        convert_sizes_lists_and_ma_data_to_string: bool = False
 ) -> Union[list, None]:
     """
     This function is the main function for the moving average calculator.
@@ -383,6 +384,8 @@ def deviation_calculator_by_moving_average(
         to calculate the averages and the moving average data.
     :param output_file_path: string, if None, no file will be written.
     :param output_file_type: string, the type of the output file. 'json' or 'csv'.
+    :param convert_sizes_lists_and_ma_data_to_string: bool, if True, the 'request_sizes', 'response_sizes' and 'ma_data'
+        will be converted to string. This is useful when writing to files, so the view will be more readable.
     -----------------------------
     :return: the deviation list of dicts.
 
@@ -428,6 +431,12 @@ def deviation_calculator_by_moving_average(
     )
 
     if deviation_list:
+        if convert_sizes_lists_and_ma_data_to_string:
+            for deviation_list_index, deviation in enumerate(deviation_list):
+                convert_data_value_to_string('request_sizes', deviation_list_index)
+                convert_data_value_to_string('response_sizes', deviation_list_index)
+                convert_value_to_string('ma_data', deviation_list_index)
+
         if summary:
             for deviation in deviation_list:
                 _ = deviation.pop('check_type')
@@ -438,12 +447,6 @@ def deviation_calculator_by_moving_average(
                 _ = deviation.pop('ma_data')
 
         if output_file_path:
-            if not summary:
-                for deviation_list_index, deviation in enumerate(deviation_list):
-                    convert_data_value_to_string('request_sizes', deviation_list_index)
-                    convert_data_value_to_string('response_sizes', deviation_list_index)
-                    convert_value_to_string('ma_data', deviation_list_index)
-
             print_api(f'Deviation Found, saving to file: {output_file_path}', color='blue')
 
             if output_file_type == 'csv':
@@ -501,8 +504,10 @@ def deviation_calculator_by_moving_average_main():
 
     if args.full_details:
         summary = False
+        convert_sizes_lists_and_ma_data_to_string = True
     else:
         summary = True
+        convert_sizes_lists_and_ma_data_to_string = False
 
     _ = deviation_calculator_by_moving_average(
         statistics_file_directory=args.directory,
@@ -512,6 +517,7 @@ def deviation_calculator_by_moving_average_main():
         summary=summary,
         output_file_path=args.output_file,
         output_file_type=args.output_type,
+        convert_sizes_lists_and_ma_data_to_string=convert_sizes_lists_and_ma_data_to_string
     )
 
     return 0
