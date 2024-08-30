@@ -2,6 +2,7 @@ import sys
 import logging
 
 from .basics.ansi_escape_codes import ColorsBasic, get_colors_basic_dict
+from .wrappers.loggingw import handlers
 from .basics import tracebacks
 
 
@@ -125,14 +126,16 @@ def print_api(
                 original_formatter = None
 
                 # Find the stream handler and change its formatter
+                # noinspection PyUnresolvedReferences
                 for handler in logger.handlers:
                     if isinstance(handler, logging.StreamHandler):
                         # Save the original formatter
                         original_formatter = handler.formatter
+                        original_formatter_string = handlers.get_formatter_string(handler)
 
                         # Create a colored formatter for errors
                         color_formatter = logging.Formatter(
-                            get_colors_basic_dict(color) + original_formatter + ColorsBasic.END)
+                            get_colors_basic_dict(color) + original_formatter_string + ColorsBasic.END)
                         handler.setFormatter(color_formatter)
 
         # If 'online' is set to 'True', we'll output message as oneline.
@@ -151,6 +154,7 @@ def print_api(
 
             if stdcolor:
                 # Restore the original formatter after logging
+                # noinspection PyUnresolvedReferences
                 for handler in logger.handlers:
                     if isinstance(handler, logging.StreamHandler):
                         handler.setFormatter(original_formatter)

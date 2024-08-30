@@ -472,3 +472,13 @@ def add_filter_to_handler(handler: logging.Handler, filter_object: logging.Filte
     """
 
     handler.addFilter(filter_object)
+
+
+def get_formatter_string(handler: logging.Handler) -> str:
+    """
+    Function to get the formatter string from the handler.
+    :param handler: Handler to get the formatter from.
+    :return: Formatter string.
+    """
+
+    return formatters.get_formatter_string(handler.formatter)

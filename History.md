@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.16.28 - 30.08.2024
+  * wrappers/loggingw - fixes and improvements.
 * 2.16.27 - 30.08.2024
   * file_io/csvs, mitm, on_exit, print_api, wrappers/loggingw/loggingw - fixes and improvements. 
 * 2.16.26 - 29.08.2024

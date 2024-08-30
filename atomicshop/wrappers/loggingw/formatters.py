@@ -155,3 +155,15 @@ def get_logging_formatter_from_string(
         return NanosecondsFormatter(formatter, style=style, datefmt=datefmt, use_nanoseconds=use_nanoseconds)
     else:
         return logging.Formatter(formatter, style=style, datefmt=datefmt)
+
+
+def get_formatter_string(formatter) -> str:
+    """
+    Function to get the formatter string from the 'logging.Formatter'.
+
+    :param formatter: logging.Formatter, formatter to convert to string.
+    :return: str, formatter string.
+    """
+
+    # noinspection PyProtectedMember
+    return formatter._fmt
