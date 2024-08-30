@@ -317,7 +317,8 @@ class ExceptionCsvLogger:
     def write(
             self,
             message: Union[str, Exception] = None,
-            custom_csv_string: str = None
+            custom_csv_string: str = None,
+            stdout: bool = True
     ):
         """
         Write the message to the log file.
@@ -330,6 +331,7 @@ class ExceptionCsvLogger:
             Meaning, that you need to provide the 'custom_header' during the initialization of the object.
             Off course, you can use as many commas as you need in the 'custom_csv_string': "custom1,custom2,custom3".
             This need to be mirrored in the 'custom_header' as well: "custom1,custom2,custom3".
+        :param stdout: If set to True, the exception will be printed to the console.
         """
 
         if message is None or isinstance(message, Exception):
@@ -348,7 +350,9 @@ class ExceptionCsvLogger:
                 "Number of cells in the 'output_csv_line' doesn't match the number of cells in the 'header'.")
 
         self.logger.info(output_csv_line)
-        print_api('', error_type=True, color="red", traceback_string=True)
+
+        if stdout:
+            print_api('', error_type=True, color="red", traceback_string=True)
 
     def get_logger(self):
         return self.logger
