@@ -1,4 +1,5 @@
 import sys
+import logging
 
 from .basics.ansi_escape_codes import ColorsBasic, get_colors_basic_dict
 from .basics import tracebacks
@@ -94,6 +95,20 @@ def print_api(
             from bidi.algorithm import get_display
             message = get_display(message)
 
+        if logger_method == 'error' or logger_method == 'critical':
+            error_type = True
+
+        # If exception was raised and 'stderr=True'.
+        if sys.exc_info()[0] is not None and stderr and traceback_string:
+            # If 'traceback' is set to 'True', we'll output traceback of exception.
+            if traceback_string:
+                if message:
+                    message = f'{message}\n{tracebacks.get_as_string()}{message}'
+                else:
+                    message = tracebacks.get_as_string()
+
+            color = 'red'
+
         # If 'stdcolor' is 'True', the console output will be colored.
         if stdcolor:
             # If 'logger.error' should be outputted to console, and 'color' wasn't selected, then set color to 'yellow'.
@@ -103,19 +118,22 @@ def print_api(
             elif logger_method == 'critical' and not color:
                 color = 'red'
 
-            if color:
+            if color and not logger:
                 message = get_colors_basic_dict(color) + message + ColorsBasic.END
+            elif color and logger:
+                # Save the original formatter
+                original_formatter = None
 
-        if logger_method == 'error' or logger_method == 'critical':
-            error_type = True
+                # Find the stream handler and change its formatter
+                for handler in logger.handlers:
+                    if isinstance(handler, logging.StreamHandler):
+                        # Save the original formatter
+                        original_formatter = handler.formatter
 
-        # If exception was raised and 'stderr=True'.
-        if sys.exc_info()[0] is not None and stderr:
-            # If 'traceback' is set to 'True', we'll output traceback of exception.
-            if traceback_string:
-                message = f'{message} | Exception: {tracebacks.get_as_string()}'
-
-            color = 'red'
+                        # Create a colored formatter for errors
+                        color_formatter = logging.Formatter(
+                            get_colors_basic_dict(color) + original_formatter + ColorsBasic.END)
+                        handler.setFormatter(color_formatter)
 
         # If 'online' is set to 'True', we'll output message as oneline.
         if oneline:
@@ -130,6 +148,12 @@ def print_api(
             if print_end == '\n':
                 # Use logger to output message.
                 getattr(logger, logger_method)(message)
+
+            if stdcolor:
+                # Restore the original formatter after logging
+                for handler in logger.handlers:
+                    if isinstance(handler, logging.StreamHandler):
+                        handler.setFormatter(original_formatter)
         # If logger wasn't passed.
         else:
             # Use print to output the message.
