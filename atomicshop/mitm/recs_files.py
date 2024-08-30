@@ -64,10 +64,11 @@ def recs_archiver(recs_directory: str) -> list:
     return archived_files
 
 
-def recs_archiver_in_process(recs_directory: str):
+def recs_archiver_in_process(recs_directory: str) -> multiprocessing.Process:
     """
     Archive recs files in a directory for each day in a separate process.
     """
 
     process = multiprocessing.Process(target=recs_archiver, args=(recs_directory,))
     process.start()
+    return process

@@ -1,8 +1,12 @@
 import logging
 import os
 from typing import Literal, Union
+import datetime
 
 from . import loggers, handlers
+from ...file_io import csvs
+from ...basics import tracebacks
+from ...print_api import print_api
 
 
 class LoggingwLoggerAlreadyExistsError(Exception):
@@ -258,3 +262,93 @@ def get_datetime_format_string_from_logger_file_handlers(logger: logging.Logger)
                 datetime_format_strings.append(date_time_format_string)
 
     return datetime_format_strings
+
+
+def is_logger_exists(logger_name: str) -> bool:
+    """
+    Function to check if the logger exists.
+    :param logger_name: Name of the logger.
+    :return: True if the logger exists, False if it doesn't.
+    """
+
+    return loggers.is_logger_exists(logger_name)
+
+
+class ExceptionCsvLogger:
+    def __init__(
+            self,
+            logger_name: str,
+            custom_header: str = None,
+            directory_path: str = None
+    ):
+        """
+        Initialize the ExceptionCsvLogger object.
+
+        :param logger_name: Name of the logger.
+        :param custom_header: Custom header to write to the log file.
+            If None, the default header will be used: "timestamp,exception", since that what is written to the log file.
+            If you want to add more columns to the csv file, you can provide a custom header:
+                "custom1,custom2,custom3".
+            These will be added to the default header as:
+                "timestamp,custom1,custom2,custom3,exception".
+        :param directory_path: Directory path where the log file will be saved.
+            You can leave it as None, but if the logger doesn't exist, you will get an exception.
+        """
+
+        if custom_header:
+            self.header = f"timestamp,{custom_header},exception"
+        else:
+            self.header = "timestamp,exception"
+
+        if is_logger_exists(logger_name):
+            self.logger = get_logger_with_level(logger_name)
+        else:
+            if directory_path is None:
+                raise ValueError("You need to provide 'directory_path' if the logger doesn't exist.")
+
+            self.logger = create_logger(
+                logger_name=logger_name,
+                directory_path=directory_path,
+                file_type="csv",
+                add_timedfile=True,
+                formatter_filehandler='MESSAGE',
+                header=self.header)
+
+    def write(
+            self,
+            message: Union[str, Exception] = None,
+            custom_csv_string: str = None
+    ):
+        """
+        Write the message to the log file.
+
+        :param message: The message to write to the log file.
+            If None, the message will be retrieved from current traceback frame.
+        :param custom_csv_string: Custom CSV string to add between the timestamp and the exception.
+            Currently, without the 'custom_csv_string', the csv line written as "timestamp,exception" as the header.
+            If you add a 'custom_csv_string', the csv line will be written as "timestamp,custom_csv_string,exception".
+            Meaning, that you need to provide the 'custom_header' during the initialization of the object.
+            Off course, you can use as many commas as you need in the 'custom_csv_string': "custom1,custom2,custom3".
+            This need to be mirrored in the 'custom_header' as well: "custom1,custom2,custom3".
+        """
+
+        if message is None or isinstance(message, Exception):
+            message = tracebacks.get_as_string()
+
+        if custom_csv_string:
+            output_csv_line: str = csvs.escape_csv_line_to_string([datetime.datetime.now(), custom_csv_string, message])
+        else:
+            output_csv_line: str = csvs.escape_csv_line_to_string([datetime.datetime.now(), message])
+
+        # If the number of cells in the 'output_csv_line' doesn't match the number of cells in the 'header',
+        # raise an exception.
+        if (csvs.get_number_of_cells_in_string_line(output_csv_line) !=
+                csvs.get_number_of_cells_in_string_line(self.header)):
+            raise ValueError(
+                "Number of cells in the 'output_csv_line' doesn't match the number of cells in the 'header'.")
+
+        self.logger.info(output_csv_line)
+        print_api('', error_type=True, color="red", traceback_string=True)
+
+    def get_logger(self):
+        return self.logger

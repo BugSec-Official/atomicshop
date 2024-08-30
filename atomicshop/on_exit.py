@@ -91,25 +91,54 @@ class ExitHandler:
             # Exit the process gracefully
             raise SystemExit(0)
 
-    def register_handlers(self):
-        win32api.SetConsoleCtrlHandler(self.console_handler, True)
-        atexit.register(self.atexit_handler)
-        signal.signal(signal.SIGINT, self.signal_handler)
-        signal.signal(signal.SIGTERM, self.signal_handler)
+    def register_handlers(
+            self,
+            at_exit: bool = True,
+            console_close: bool = True,
+            kill_signal: bool = True
+    ):
+        """
+        Register the exit handlers.
+
+        :param at_exit: Register the atexit handler.
+            Just remember that the atexit handler will be called right away on [Ctrl+C], meaning if you want to do
+            something specifically on KeyboardInterrupt, you should handle it separately and set this parameter to False.
+            Same goes for all the exceptions.
+        :param console_close: Register the console close handler.
+        :param kill_signal: Register the kill signal handler.
+        """
+        if at_exit:
+            atexit.register(self.atexit_handler)
+        if console_close:
+            win32api.SetConsoleCtrlHandler(self.console_handler, True)
+        if kill_signal:
+            signal.signal(signal.SIGINT, self.signal_handler)
+            signal.signal(signal.SIGTERM, self.signal_handler)
 
 
-def register_exit_handler(clean_up_function, *args, **kwargs):
+def register_exit_handler(
+        clean_up_function,
+        at_exit: bool = True,
+        console_close: bool = True,
+        kill_signal: bool = True,
+        *args, **kwargs):
     """
     This function will register the exit handler to handle exit events: Closing the console, pressing 'CTRL+C',
     Killing the process.
 
     :param clean_up_function: The action to run when one of exit types is triggered.
+    :param at_exit: Register the atexit handler.
+        Just remember that the atexit handler will be called right away on [Ctrl+C], meaning if you want to do something
+        specifically on KeyboardInterrupt, you should handle it separately and set this parameter to False.
+        Same goes for all the exceptions.
+    :param console_close: Register the console close handler.
+    :param kill_signal: Register the kill signal handler.
     :param args: The arguments to pass to the cleanup action.
     :param kwargs: The keyword arguments to pass to the cleanup action.
     """
     global EXIT_HANDLER_INSTANCE
     EXIT_HANDLER_INSTANCE = ExitHandler(clean_up_function, args, kwargs)
-    EXIT_HANDLER_INSTANCE.register_handlers()
+    EXIT_HANDLER_INSTANCE.register_handlers(at_exit=at_exit, console_close=console_close, kill_signal=kill_signal)
 
 
 def restart_function(callable_function, *args, **kwargs):

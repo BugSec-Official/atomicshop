@@ -254,3 +254,23 @@ def escape_csv_line_to_list(csv_line: list) -> list:
         result_csv_entries.append(escape_csv_value(entry))
 
     return result_csv_entries
+
+
+def get_number_of_cells_in_string_line(line: str) -> int:
+    """
+    Function to get number of cells in CSV line.
+
+    :param line: String, line of CSV file.
+    :return: int, number of cells in the line.
+    """
+
+    # Create CSV reader from 'input_file'. By default, the first row will be the header if 'fieldnames' is None.
+    csv_reader = csv.reader([line])
+
+    # Get the first row of the CSV file.
+    csv_list = list(csv_reader)
+
+    # Get the number of cells in the first row.
+    number_of_cells = len(csv_list[0])
+
+    return number_of_cells

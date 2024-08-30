@@ -1,13 +1,12 @@
 import logging
 import threading
+import multiprocessing
 import time
 import datetime
 
 import atomicshop   # Importing atomicshop package to get the version of the package.
 
 from .. import filesystem, queues, dns, on_exit
-from ..basics import tracebacks
-from ..file_io import csvs
 from ..permissions import permissions
 from ..python_functions import get_current_python_version_string, check_python_version_compliance
 from ..wrappers.socketw import socket_wrapper, dns_server, base
@@ -21,12 +20,14 @@ from . import config_static, recs_files
 
 NETWORK_INTERFACE_IS_DYNAMIC: bool = bool()
 NETWORK_INTERFACE_IPV4_ADDRESS_LIST: list[str] = list()
+# noinspection PyTypeChecker
+RECS_PROCESS_INSTANCE: multiprocessing.Process = None
 
 
 EXCEPTIONS_CSV_LOGGER_NAME: str = 'exceptions'
 EXCEPTIONS_CSV_LOGGER_HEADER: str = 'time,exception'
 # noinspection PyTypeChecker
-MITM_ERROR_LOGGER: logging.Logger = None
+MITM_ERROR_LOGGER: loggingw.ExceptionCsvLogger = None
 
 
 def exit_cleanup():
@@ -39,9 +40,13 @@ def exit_cleanup():
             dns.set_connection_dns_gateway_dynamic(use_default_connection=True)
             print_api("Returned default DNS gateway...", color='blue')
 
+    print_api(RECS_PROCESS_INSTANCE.is_alive())
+    RECS_PROCESS_INSTANCE.terminate()
+    RECS_PROCESS_INSTANCE.join()
+
 
 def mitm_server(config_file_path: str):
-    on_exit.register_exit_handler(exit_cleanup)
+    on_exit.register_exit_handler(exit_cleanup, at_exit=False)
 
     # Main function should return integer with error code, 0 is successful.
     # Since listening server is infinite, this will not be reached.
@@ -54,14 +59,7 @@ def mitm_server(config_file_path: str):
         return result
 
     global MITM_ERROR_LOGGER
-    MITM_ERROR_LOGGER = loggingw.create_logger(
-        logger_name=EXCEPTIONS_CSV_LOGGER_NAME,
-        directory_path=config_static.LogRec.logs_path,
-        file_type="csv",
-        add_timedfile=True,
-        formatter_filehandler='MESSAGE',
-        header=EXCEPTIONS_CSV_LOGGER_HEADER
-    )
+    MITM_ERROR_LOGGER = loggingw.ExceptionCsvLogger(EXCEPTIONS_CSV_LOGGER_NAME, config_static.LogRec.logs_path)
 
     # Create folders.
     filesystem.create_directory(config_static.LogRec.logs_path)
@@ -69,7 +67,8 @@ def mitm_server(config_file_path: str):
     if config_static.LogRec.enable_request_response_recordings_in_logs:
         filesystem.create_directory(config_static.LogRec.recordings_path)
         # Compress recordings of the previous days if there are any.
-        recs_files.recs_archiver_in_process(config_static.LogRec.recordings_path)
+        global RECS_PROCESS_INSTANCE
+        RECS_PROCESS_INSTANCE = recs_files.recs_archiver_in_process(config_static.LogRec.recordings_path)
 
     if config_static.Certificates.sni_get_server_certificate_from_server_socket:
         filesystem.create_directory(
@@ -335,7 +334,7 @@ def mitm_server(config_file_path: str):
         global NETWORK_INTERFACE_IS_DYNAMIC, NETWORK_INTERFACE_IPV4_ADDRESS_LIST
         NETWORK_INTERFACE_IS_DYNAMIC, NETWORK_INTERFACE_IPV4_ADDRESS_LIST = dns.get_default_dns_gateway()
         if set_dns_gateway:
-            # Set the DNS gateway to the specified one only if the DNS gateway is dynamic or it is static but different
+            # Set the DNS gateway to the specified one only if the DNS gateway is dynamic, or it is static but different
             # from the one specified in the configuration file.
             if (NETWORK_INTERFACE_IS_DYNAMIC or (not NETWORK_INTERFACE_IS_DYNAMIC and
                                                  NETWORK_INTERFACE_IPV4_ADDRESS_LIST != dns_gateway_server_list)):
@@ -374,7 +373,8 @@ def _loop_at_midnight_recs_archive():
         # If it's midnight, start the archiving process.
         if current_date != previous_date:
             if config_static.LogRec.enable_request_response_recordings_in_logs:
-                recs_files.recs_archiver_in_process(config_static.LogRec.recordings_path)
+                global RECS_PROCESS_INSTANCE
+                RECS_PROCESS_INSTANCE = recs_files.recs_archiver_in_process(config_static.LogRec.recordings_path)
             # Update the previous date.
             previous_date = current_date
         # Sleep for 1 minute.
@@ -387,9 +387,11 @@ def mitm_server_main(config_file_path: str):
         return mitm_server(config_file_path)
     except KeyboardInterrupt:
         print_api("Server Stopped by [KeyboardInterrupt].", color='blue')
+        exit_cleanup()
         return 0
     except Exception as e:
-        msg = tracebacks.get_as_string()
-        output_csv_line: str = csvs.escape_csv_line_to_string([datetime.datetime.now(), msg])
-        MITM_ERROR_LOGGER.info(output_csv_line)
-        print_api(str(e), error_type=True, color="red", traceback_string=True)
+        RECS_PROCESS_INSTANCE.terminate()
+
+        MITM_ERROR_LOGGER.write(e)
+        exit_cleanup()
+        return 1
