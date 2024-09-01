@@ -6,6 +6,8 @@ from ...print_api import print_api
 from ..loggingw import loggingw
 from ...basics import tracebacks
 
+from . import base, ssl_base
+
 
 class Sender:
     def __init__(
@@ -67,21 +69,38 @@ class Sender:
             # At this point the sending loop finished successfully
             self.logger.info(f"Sent the message to destination.")
         except ConnectionResetError as e:
+            destination_address, destination_port = base.get_destination_address_from_socket(self.ssl_socket)
+            if self.ssl_socket.server_hostname:
+                destination_address = self.ssl_socket.server_hostname
+            destination: str = f'{destination_address}:{destination_port}'
+
             error_class_type = str(type(e)).replace("<class '", '').replace("'>", '')
             exception_error = tracebacks.get_as_string(one_line=True)
-            error_message = (f"Socket Send: Error, Couldn't reach the server - Connection was reset | "
+            error_message = (f"Socket Send: {destination}: Error, Couldn't reach the server - Connection was reset | "
                              f"{error_class_type}: {exception_error}")
         except (ssl.SSLEOFError, ssl.SSLZeroReturnError, ssl.SSLWantWriteError, TimeoutError) as e:
+            destination_address, destination_port = base.get_destination_address_from_socket(self.ssl_socket)
+            if self.ssl_socket.server_hostname:
+                destination_address = self.ssl_socket.server_hostname
+            destination: str = f'{destination_address}:{destination_port}'
+
             error_class_type = str(type(e)).replace("<class '", '').replace("'>", '')
             exception_error = tracebacks.get_as_string(one_line=True)
-            error_message = f"Socket Send: {error_class_type}: {exception_error}"
+            error_message = f"Socket Send: {destination}: {error_class_type}: {exception_error}"
         except Exception as e:
+            destination_address, destination_port = base.get_destination_address_from_socket(self.ssl_socket)
+            if self.ssl_socket.server_hostname:
+                destination_address = self.ssl_socket.server_hostname
+            destination: str = f'{destination_address}:{destination_port}'
+
             error_class_type = str(type(e)).replace("<class '", '').replace("'>", '')
             exception_error = tracebacks.get_as_string(one_line=True)
             if 'ssl' in error_class_type.lower():
-                error_message = f"Socket Send: SSL UNDOCUMENTED Exception: {error_class_type}{exception_error}"
+                error_message = (f"Socket Send: {destination}: "
+                                 f"SSL UNDOCUMENTED Exception: {error_class_type}{exception_error}")
             else:
-                error_message = f"Socket Send: Error, UNDOCUMENTED Exception: {error_class_type}{exception_error}"
+                error_message = (f"Socket Send: {destination}: "
+                                 f"Error, UNDOCUMENTED Exception: {error_class_type}{exception_error}")
 
         if error_message:
             print_api(error_message, logger=self.logger, logger_method='error')

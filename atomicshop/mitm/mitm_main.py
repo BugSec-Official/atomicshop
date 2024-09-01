@@ -38,9 +38,11 @@ def exit_cleanup():
             dns.set_connection_dns_gateway_dynamic(use_default_connection=True)
             print_api.print_api("Returned default DNS gateway...", color='blue')
 
-    print_api.print_api(RECS_PROCESS_INSTANCE.is_alive())
-    RECS_PROCESS_INSTANCE.terminate()
-    RECS_PROCESS_INSTANCE.join()
+    # The process will not be executed if there was an exception in the beginning.
+    if RECS_PROCESS_INSTANCE is not None:
+        print_api.print_api(RECS_PROCESS_INSTANCE.is_alive())
+        RECS_PROCESS_INSTANCE.terminate()
+        RECS_PROCESS_INSTANCE.join()
 
 
 def mitm_server(config_file_path: str):
@@ -392,8 +394,8 @@ def mitm_server_main(config_file_path: str):
         exit_cleanup()
         return 0
     except Exception as e:
-        RECS_PROCESS_INSTANCE.terminate()
-
-        MITM_ERROR_LOGGER.write(e)
+        # The error logger will not be initiated if there will be a problem with configuration file or checks.
+        if MITM_ERROR_LOGGER is not None:
+            MITM_ERROR_LOGGER.write(e)
         exit_cleanup()
         return 1

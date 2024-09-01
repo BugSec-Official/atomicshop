@@ -1,9 +1,11 @@
 import ssl
 from dataclasses import dataclass
 
-from . import certificator, creator
+from ..loggingw import loggingw
 from ...domains import get_domain_without_first_subdomain_if_no_subdomain_return_as_is
 from ...print_api import print_api
+
+from . import certificator, creator
 
 
 @dataclass
@@ -43,7 +45,8 @@ class SNISetup:
             forwarding_dns_service_ipv4_list___only_for_localhost: list,
             tls: bool,
             domain_from_dns_server: str = None,
-            skip_extension_id_list: list = None
+            skip_extension_id_list: list = None,
+            exceptions_logger: loggingw.ExceptionCsvLogger = None
     ):
         self.ca_certificate_name = ca_certificate_name
         self.ca_certificate_filepath = ca_certificate_filepath
@@ -68,6 +71,7 @@ class SNISetup:
         self.domain_from_dns_server: str = domain_from_dns_server
         self.skip_extension_id_list = skip_extension_id_list
         self.tls = tls
+        self.exceptions_logger = exceptions_logger
 
         self.certificator_instance = None
 
@@ -154,7 +158,8 @@ class SNISetup:
                 sni_create_server_certificate_for_each_domain=self.sni_create_server_certificate_for_each_domain,
                 certificator_instance=self.certificator_instance,
                 domain_from_dns_server=self.domain_from_dns_server,
-                default_certificate_domain_list=self.default_certificate_domain_list
+                default_certificate_domain_list=self.default_certificate_domain_list,
+                exceptions_logger=self.exceptions_logger
             )
             ssl_context.set_servername_callback(
                 sni_handler_instance.setup_sni_callback(print_kwargs=print_kwargs))
@@ -172,7 +177,8 @@ class SNIHandler:
             sni_create_server_certificate_for_each_domain: bool,
             certificator_instance: certificator.Certificator,
             domain_from_dns_server: str,
-            default_certificate_domain_list: list
+            default_certificate_domain_list: list,
+            exceptions_logger: loggingw.ExceptionCsvLogger
     ):
         self.sni_use_default_callback_function_extended = sni_use_default_callback_function_extended
         self.sni_add_new_domains_to_default_server_certificate = sni_add_new_domains_to_default_server_certificate
@@ -180,6 +186,7 @@ class SNIHandler:
         self.certificator_instance = certificator_instance
         self.domain_from_dns_server: str = domain_from_dns_server
         self.default_certificate_domain_list = default_certificate_domain_list
+        self.exceptions_logger = exceptions_logger
 
         # noinspection PyTypeChecker
         self.sni_received_parameters: SNIReceivedParameters = None
@@ -202,18 +209,22 @@ class SNIHandler:
                 sni_ssl_socket: ssl.SSLSocket,
                 sni_destination_name: str,
                 sni_ssl_context: ssl.SSLContext):
-            # Set 'server_hostname' for the socket.
-            sni_ssl_socket.server_hostname = sni_destination_name
 
-            # If 'sni_execute_extended' was set to True.
-            if self.sni_use_default_callback_function_extended:
-                self.sni_received_parameters = SNIReceivedParameters(
-                    ssl_socket=sni_ssl_socket,
-                    destination_name=sni_destination_name,
-                    ssl_context=sni_ssl_context
-                )
+            try:
+                # Set 'server_hostname' for the socket.
+                sni_ssl_socket.server_hostname = sni_destination_name
 
-                self.sni_handle_extended(print_kwargs=print_kwargs)
+                # If 'sni_execute_extended' was set to True.
+                if self.sni_use_default_callback_function_extended:
+                    self.sni_received_parameters = SNIReceivedParameters(
+                        ssl_socket=sni_ssl_socket,
+                        destination_name=sni_destination_name,
+                        ssl_context=sni_ssl_context
+                    )
+
+                    self.sni_handle_extended(print_kwargs=print_kwargs)
+            except Exception as e:
+                self.exceptions_logger.write(e)
 
         return sni_handle
 

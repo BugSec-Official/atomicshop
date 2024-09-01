@@ -426,7 +426,6 @@ class SocketWrapper:
             listening_socket_list = self.listening_sockets
 
         while True:
-            # noinspection PyBroadException
             try:
                 # Using "select.select" which is currently the only API function that works on all
                 # operating system types: Windows / Linux / BSD.
@@ -503,7 +502,8 @@ class SocketWrapper:
                             domain_from_dns_server=domain_from_dns_server,
                             forwarding_dns_service_ipv4_list___only_for_localhost=(
                                 self.forwarding_dns_service_ipv4_list___only_for_localhost),
-                            tls=is_tls
+                            tls=is_tls,
+                            exceptions_logger=self.exceptions_logger
                         )
 
                         ssl_client_socket, accept_error_message = \
@@ -538,7 +538,7 @@ class SocketWrapper:
                     if not pass_function_reference_to_thread:
                         before_socket_thread_worker(
                             callable_function=reference_function_name, thread_args=thread_args,
-                            exception_logger=self.exceptions_logger)
+                            exceptions_logger=self.exceptions_logger)
                     # If 'pass_function_reference_to_thread' was set to 'True', execute the callable function reference
                     # in a new thread.
                     else:
@@ -552,11 +552,8 @@ class SocketWrapper:
                         error_message=accept_error_message,
                         host=domain_from_dns_server,
                         process_name=process_name)
-            except Exception:
-                print_api("Undocumented exception in while loop of listening sockets.", error_type=True,
-                          logger_method="error", traceback_string=True, logger=self.logger)
-                pass
-                continue
+            except Exception as e:
+                self.exceptions_logger.write(e)
 
     def _send_accepted_socket_to_thread(self, thread_function_name, reference_args=()):
         # Creating thread for each socket
@@ -575,17 +572,17 @@ class SocketWrapper:
 def before_socket_thread_worker(
         callable_function: callable,
         thread_args: tuple,
-        exception_logger: loggingw.ExceptionCsvLogger = None
+        exceptions_logger: loggingw.ExceptionCsvLogger = None
 ):
     """
     Function that will be executed before the thread is started.
     :param callable_function: callable, function that will be executed in the thread.
     :param thread_args: tuple, arguments that will be passed to the function.
-    :param exception_logger: loggingw.ExceptionCsvLogger, logger object that will be used to log exceptions.
+    :param exceptions_logger: loggingw.ExceptionCsvLogger, logger object that will be used to log exceptions.
     :return:
     """
 
     try:
         callable_function(*thread_args)
     except Exception as e:
-        exception_logger.write(e)
+        exceptions_logger.write(e)
