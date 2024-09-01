@@ -68,39 +68,32 @@ class Sender:
 
             # At this point the sending loop finished successfully
             self.logger.info(f"Sent the message to destination.")
-        except ConnectionResetError as e:
-            destination_address, destination_port = base.get_destination_address_from_socket(self.ssl_socket)
-            if self.ssl_socket.server_hostname:
-                destination_address = self.ssl_socket.server_hostname
-            destination: str = f'{destination_address}:{destination_port}'
-
-            error_class_type = str(type(e)).replace("<class '", '').replace("'>", '')
-            exception_error = tracebacks.get_as_string(one_line=True)
-            error_message = (f"Socket Send: {destination}: Error, Couldn't reach the server - Connection was reset | "
-                             f"{error_class_type}: {exception_error}")
-        except (ssl.SSLEOFError, ssl.SSLZeroReturnError, ssl.SSLWantWriteError, TimeoutError) as e:
-            destination_address, destination_port = base.get_destination_address_from_socket(self.ssl_socket)
-            if self.ssl_socket.server_hostname:
-                destination_address = self.ssl_socket.server_hostname
-            destination: str = f'{destination_address}:{destination_port}'
-
-            error_class_type = str(type(e)).replace("<class '", '').replace("'>", '')
-            exception_error = tracebacks.get_as_string(one_line=True)
-            error_message = f"Socket Send: {destination}: {error_class_type}: {exception_error}"
         except Exception as e:
-            destination_address, destination_port = base.get_destination_address_from_socket(self.ssl_socket)
+            source_tuple, destination_tuple = base.get_source_destination(self.ssl_socket)
+            source_address, source_port = source_tuple
+            destination_address, destination_port = destination_tuple
             if self.ssl_socket.server_hostname:
                 destination_address = self.ssl_socket.server_hostname
-            destination: str = f'{destination_address}:{destination_port}'
+            destination: str = f'[{source_address}:{source_port}<->{destination_address}:{destination_port}]'
 
             error_class_type = str(type(e)).replace("<class '", '').replace("'>", '')
             exception_error = tracebacks.get_as_string(one_line=True)
+
             if 'ssl' in error_class_type.lower():
-                error_message = (f"Socket Send: {destination}: "
-                                 f"SSL UNDOCUMENTED Exception: {error_class_type}{exception_error}")
+                if error_class_type in ['ssl.SSLEOFError', 'ssl.SSLZeroReturnError', 'ssl.SSLWantWriteError']:
+                    error_message = f"Socket Send: {destination}: {error_class_type}: {exception_error}"
+                else:
+                    error_message = (f"Socket Send: {destination}: "
+                                     f"SSL UNDOCUMENTED Exception: {error_class_type}{exception_error}")
             else:
-                error_message = (f"Socket Send: {destination}: "
-                                 f"Error, UNDOCUMENTED Exception: {error_class_type}{exception_error}")
+                if error_class_type == 'ConnectionResetError':
+                    error_message = (f"Socket Send: {destination}: "
+                                     f"Error, Couldn't reach the server - Connection was reset | "
+                                     f"{error_class_type}: {exception_error}")
+                elif error_class_type in ['TimeoutError']:
+                    error_message = f"Socket Send: {destination}: {error_class_type}: {exception_error}"
+                else:
+                    raise e
 
         if error_message:
             print_api(error_message, logger=self.logger, logger_method='error')
