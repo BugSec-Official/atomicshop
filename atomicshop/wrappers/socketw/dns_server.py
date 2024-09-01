@@ -589,7 +589,7 @@ class DnsServer:
                                             google_dns_ipv4_socket.recvfrom(self.buffer_size_receive)
                                     except TimeoutError as function_exception_object:
                                         print_api(function_exception_object, logger=self.logger, logger_method='error',
-                                                  traceback_string=True)
+                                                  traceback_string=True, oneline=True)
                                         google_dns_ipv4_socket.close()
                                         counter += 1
                                         # Pass the exception.

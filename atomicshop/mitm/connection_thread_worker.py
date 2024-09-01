@@ -82,29 +82,22 @@ def thread_worker_main(
     def parse_http():
         nonlocal error_message
         # Parsing the raw bytes as HTTP.
-        request_decoded = HTTPRequestParse(client_message.request_raw_bytes)
-        # Getting the status of http parsing
-        request_is_http, http_parsing_reason, http_parsing_error = request_decoded.check_if_http()
+        request_decoded, is_http_request, request_parsing_info, request_parsing_error = (
+            HTTPRequestParse(client_message.request_raw_bytes).parse())
 
-        # Currently, we don't care if it's HTTP. If there was no error we can continue. Just log the reason.
-        if not http_parsing_error:
-            print_api(http_parsing_reason, logger=network_logger, logger_method='info')
-        # If there was error - the request is really HTTP, but there's a problem with its structure.
-        else:
-            client_message.error = http_parsing_reason
-            error_message = (
-                f'HTTP Parse Request Error: '
-                f'The request is HTTP protocol, but there was a problem with its structure: '
-                f'{http_parsing_error}')
-            print_api(error_message, logger=network_logger, logger_method='error', color='yellow')
-            statistics_error_list.append(error_message)
-
-        # If the request is HTTP protocol.
-        if request_is_http:
+        if is_http_request:
             client_message.protocol = 'HTTP'
+            client_message.request_raw_decoded = request_decoded
+            print_api(request_parsing_info, logger=network_logger, logger_method='info')
             network_logger.info(f"Method: {request_decoded.command}")
             network_logger.info(f"Path: {request_decoded.path}")
-            client_message.request_raw_decoded = request_decoded
+        # If there was error - the request is really HTTP, but there's a problem with its structure.
+        else:
+            # client_message.error = request_parsing_error
+            print_api(request_parsing_error, logger=network_logger, logger_method='error', color='yellow')
+            # It doesn't matter if we have HTTP Parsing error, since the request may not be really HTTP, so it is OK
+            # not to log it into statistics.
+            # statistics_error_list.append(error_message)
 
     def finish_thread():
         # At this stage there could be several times that the same socket was used to the service server - we need to
@@ -184,6 +177,8 @@ def thread_worker_main(
             client_message.destination_port = destination_port
             client_message.process_name = process_commandline
             client_message.server_name = server_name
+            # Getting current time of message received from client.
+            client_message.request_time_received = datetime.now()
 
             network_logger.info(f"Initializing Receiver on cycle: {str(cycle_count+1)}")
             # Getting message from the client over the socket using specific class.
@@ -196,10 +191,10 @@ def thread_worker_main(
             if client_received_raw_data:
                 # Putting the received message to the aggregating message class.
                 client_message.request_raw_bytes = client_received_raw_data
-                # Getting current time of message received from client.
-                client_message.request_time_received = datetime.now()
 
                 parse_http()
+                if client_message.protocol != 'HTTP':
+                    pass
 
                 # Custom parser, should parse HTTP body or the whole message if not HTTP.
                 parser_instance = parser(client_message)
@@ -268,8 +263,13 @@ def thread_worker_main(
                     client_message.response_list_of_raw_decoded = list()
                     # Make HTTP Response parsing only if there was response at all.
                     if response_raw_bytes:
-                        response_raw_decoded = HTTPResponseParse(response_raw_bytes).response_raw_decoded
-                        client_message.response_list_of_raw_decoded.append(response_raw_decoded)
+                        response_raw_decoded, is_http_response, response_parsing_error = (
+                            HTTPResponseParse(response_raw_bytes).parse())
+
+                        if is_http_response:
+                            client_message.response_list_of_raw_decoded.append(response_raw_decoded)
+                        else:
+                            client_message.response_list_of_raw_decoded.append(None)
 
                     # So if the socket was closed and there was an error we can break the loop
                     if not service_ssl_socket:

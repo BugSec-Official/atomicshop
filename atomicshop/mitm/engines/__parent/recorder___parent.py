@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+import json
 
 from ...shared_functions import build_module_names, create_custom_logger, get_json
 from ... import message, recs_files
@@ -87,10 +88,13 @@ class RecorderParent:
         # Convert the requests and responses to hex.
         self.convert_messages()
         # Get the message in dict / JSON format
-        record_message = get_json(self.class_client_message)
+        # record_message = get_json(self.class_client_message)
+        record_message_dict: dict = dict(self.class_client_message)
+        recorded_message_json_string = json.dumps(record_message_dict)
 
         # Since we already dumped the object to dictionary string, we'll just save the object to regular file.
-        file_io.write_file(record_message, self.record_file_path, enable_long_file_path=True, **{'logger': self.logger})
+        file_io.write_file(
+            recorded_message_json_string, self.record_file_path, enable_long_file_path=True, **{'logger': self.logger})
 
         self.logger.info(f"Recorded to file: {self.record_file_path}")
 
