@@ -1,5 +1,9 @@
 import logging
+import threading
 import os
+
+
+from ...basics import ansi_escape_codes
 
 
 class HeaderFilter(logging.Filter):
@@ -7,6 +11,8 @@ class HeaderFilter(logging.Filter):
     A logging.Filter that writes a header to a log file if the file is empty (
     i.e., no log records have been written, i.e.2, on file rotation).
     """
+
+    # noinspection PyPep8Naming
     def __init__(self, header, baseFilename):
         super().__init__()
         self.header = header
@@ -24,6 +30,23 @@ class HeaderFilter(logging.Filter):
 
     def filter(self, record):
         self._write_header_if_needed()
+        return True
+
+
+class ThreadColorLogFilter(logging.Filter):
+    """
+    A logging.Filter that adds color to log records based on the thread that emitted the log record.
+    """
+    def __init__(self, color: str, thread_id):
+        super().__init__()
+        self.color = color
+        self.thread_id = thread_id
+
+    def filter(self, record):
+        if threading.get_ident() == self.thread_id:
+            record.msg = (
+                    ansi_escape_codes.get_colors_basic_dict(self.color) + record.msg +
+                    ansi_escape_codes.ColorsBasic.END)
         return True
 
 

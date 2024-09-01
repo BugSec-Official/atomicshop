@@ -8,6 +8,7 @@ import queue
 from typing import Literal, Union
 import threading
 from datetime import datetime
+import contextlib
 
 from . import loggers, formatters, filters, consts
 from ... import datetimes, filesystem
@@ -482,3 +483,22 @@ def get_formatter_string(handler: logging.Handler) -> str:
     """
 
     return formatters.get_formatter_string(handler.formatter)
+
+
+@contextlib.contextmanager
+def temporary_change_formatter(handler: logging.Handler, formatter_string: str):
+    """
+    Context manager to temporarily change the formatter of the handler.
+
+    Example:
+        with temporary_change_formatter(handler, formatter_string):
+            # Do something with the temporary formatter.
+            pass
+    """
+    original_formatter = handler.formatter
+
+    try:
+        handler.setFormatter(logging.Formatter(formatter_string))
+        yield
+    finally:
+        handler.setFormatter(original_formatter)

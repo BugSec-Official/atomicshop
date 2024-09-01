@@ -2,6 +2,7 @@ import threading
 import select
 from typing import Literal, Union
 from pathlib import Path
+import logging
 
 from ..psutilw import networks
 from ..certauthw import certauthw
@@ -63,7 +64,8 @@ class SocketWrapper:
                 ],
                 None
             ] = None,
-            logger=None,
+            logger: logging.Logger = None,
+            exceptions_logger: loggingw.ExceptionCsvLogger = None,
             statistics_logs_directory: str = None,
             request_domain_from_dns_server_queue: queues.NonBlockQueue = None
     ):
@@ -144,7 +146,11 @@ class SocketWrapper:
         :param ssh_pass: string, SSH password that will be used to connect to remote host.
         :param ssh_script_to_execute: string, script that will be executed to get the process name on ssh remote host.
         :param logger: logging.Logger object, logger object that will be used to log messages.
-            If not provided, logger will be created with default settings.
+            If not provided, logger will be created with default settings saving logs to the
+            'statistics_logs_directory'.
+        :param exceptions_logger: loggingw.ExceptionCsvLogger object, logger object that will be used to log exceptions.
+            If not provided, logger will be created with default settings and will save exceptions to the
+            'statistics_logs_directory'.
         :param statistics_logs_directory: string, path to directory where daily statistics.csv files will be stored.
             After you initialize the SocketWrapper object, you can get the statistics_writer object from it and use it
             to write statistics to the file in a worker thread.
@@ -230,6 +236,14 @@ class SocketWrapper:
                 formatter_streamhandler='DEFAULT',
                 formatter_filehandler='DEFAULT'
             )
+
+        if not exceptions_logger:
+            self.exceptions_logger = loggingw.ExceptionCsvLogger(
+                logger_name='SocketWrapperExceptions',
+                directory_path=self.statistics_logs_directory
+            )
+        else:
+            self.exceptions_logger = exceptions_logger
 
         self.test_config()
 
@@ -432,7 +446,8 @@ class SocketWrapper:
                 # Wait from any connection on "accept()".
                 # 'client_socket' is socket or ssl socket, 'client_address' is a tuple (ip_address, port).
                 client_socket, client_address, accept_error_message = accepter.accept_connection_with_error(
-                    listening_socket_object, domain_from_dns_server=domain_from_dns_server, print_kwargs={'logger': self.logger})
+                    listening_socket_object, domain_from_dns_server=domain_from_dns_server,
+                    print_kwargs={'logger': self.logger})
 
                 # This is the earliest stage to ask for process name.
                 # SSH Remote / LOCALHOST script execution to identify process section.
@@ -521,11 +536,15 @@ class SocketWrapper:
                     # If 'pass_function_reference_to_thread' was set to 'False', execute the callable passed function
                     # as is.
                     if not pass_function_reference_to_thread:
-                        reference_function_name(thread_args)
+                        before_socket_thread_worker(
+                            callable_function=reference_function_name, thread_args=thread_args,
+                            exception_logger=self.exceptions_logger)
                     # If 'pass_function_reference_to_thread' was set to 'True', execute the callable function reference
                     # in a new thread.
                     else:
-                        self._send_accepted_socket_to_thread(reference_function_name, thread_args)
+                        self._send_accepted_socket_to_thread(
+                            before_socket_thread_worker,
+                            reference_args=(reference_function_name, thread_args, self.exceptions_logger))
                 # Else, if no client_socket was opened during, accept, then print the error.
                 else:
                     # Write statistics after accept.
@@ -547,7 +566,26 @@ class SocketWrapper:
         # Append to list of threads, so they can be "joined" later
         self.threads_list.append(thread_current)
 
-        # 'reference_args[0]' is the client socket.
-        client_address = base.get_source_address_from_socket(reference_args[0])
+        # 'reference_args[1][0]' is the client socket.
+        client_address = base.get_source_address_from_socket(reference_args[1][0])
 
         self.logger.info(f"Accepted connection, thread created {client_address}. Continue listening...")
+
+
+def before_socket_thread_worker(
+        callable_function: callable,
+        thread_args: tuple,
+        exception_logger: loggingw.ExceptionCsvLogger = None
+):
+    """
+    Function that will be executed before the thread is started.
+    :param callable_function: callable, function that will be executed in the thread.
+    :param thread_args: tuple, arguments that will be passed to the function.
+    :param exception_logger: loggingw.ExceptionCsvLogger, logger object that will be used to log exceptions.
+    :return:
+    """
+
+    try:
+        callable_function(*thread_args)
+    except Exception as e:
+        exception_logger.write(e)

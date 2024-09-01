@@ -1,19 +1,18 @@
 import sys
 import logging
 
-from .basics.ansi_escape_codes import ColorsBasic, get_colors_basic_dict
-from .wrappers.loggingw import handlers
+from .basics import ansi_escape_codes
+from .wrappers.loggingw import loggingw
 from .basics import tracebacks
 
 
-# noinspection PyUnusedLocal,PyIncorrectDocstring
 def print_api(
         message: any,
         color: any = None,
         print_end: str = '\n',
         rtl: bool = False,
         error_type: bool = False,
-        logger: object = None,
+        logger: logging.Logger = None,
         logger_method: str = 'info',
         stdout: bool = True,
         stderr: bool = True,
@@ -21,8 +20,6 @@ def print_api(
         traceback_string: bool = False,
         oneline: bool = False,
         oneline_end: str = '',
-        # raise_exception: bool = True,
-        # exit_on_error: bool = False,
         **kwargs: object) -> None:
     """
     Function of custom api that is responsible for printing messages to console.
@@ -84,10 +81,6 @@ def print_api(
 
         # This section takes care of different types of string manipulations for message.
 
-        # If 'exit_on_error' is set to 'True', we'll add 'exit_message' on new line after 'message'.
-        # if error_type and exit_on_error and raise_exception:
-        #     message = message + '\n' + exit_message
-
         # If 'rtl' is set to 'True', we'll add Right-To-Left text conversion to 'message'.
         if rtl:
             # Lazy importing of 'bidi' library. It's not a problem since python caches the library after first import.
@@ -119,24 +112,8 @@ def print_api(
             elif logger_method == 'critical' and not color:
                 color = 'red'
 
-            if color and not logger:
-                message = get_colors_basic_dict(color) + message + ColorsBasic.END
-            elif color and logger:
-                # Save the original formatter
-                original_formatter = None
-
-                # Find the stream handler and change its formatter
-                # noinspection PyUnresolvedReferences
-                for handler in logger.handlers:
-                    if isinstance(handler, logging.StreamHandler):
-                        # Save the original formatter
-                        original_formatter = handler.formatter
-                        original_formatter_string = handlers.get_formatter_string(handler)
-
-                        # Create a colored formatter for errors
-                        color_formatter = logging.Formatter(
-                            get_colors_basic_dict(color) + original_formatter_string + ColorsBasic.END)
-                        handler.setFormatter(color_formatter)
+            if color is not None and logger is None:
+                message = ansi_escape_codes.get_colors_basic_dict(color) + message + ansi_escape_codes.ColorsBasic.END
 
         # If 'online' is set to 'True', we'll output message as oneline.
         if oneline:
@@ -149,23 +126,20 @@ def print_api(
         if logger:
             # Emit to logger only if 'print_end' is default, since we can't take responsibility for anything else.
             if print_end == '\n':
-                # Use logger to output message.
-                getattr(logger, logger_method)(message)
-
-            if stdcolor:
-                # Restore the original formatter after logging
-                # noinspection PyUnresolvedReferences
-                for handler in logger.handlers:
-                    if isinstance(handler, logging.StreamHandler):
-                        handler.setFormatter(original_formatter)
+                if stdcolor and color is not None:
+                    # Use logger to output message.
+                    # with loggingw.temporary_change_logger_stream_handler_color(logger, color=color):
+                    with loggingw.temporary_change_logger_stream_handler_emit_color(logger, color):
+                        getattr(logger, logger_method)(message)
+                else:
+                    # Use logger to output message.
+                    getattr(logger, logger_method)(message)
         # If logger wasn't passed.
         else:
             # Use print to output the message.
             print(message, end=print_end)
 
     # = Main Section with printing cases ===============================================================================
-    # exit_message: str = 'Exiting...'
-
     # Convert message to string.
     message = str(message)
 
@@ -178,20 +152,6 @@ def print_api(
     elif not stdout and stderr:
         if error_type:
             print_or_logger()
-
-    # ==================================
-    # This section is responsible for ending the script.
-
-    # Check if we're inside exception. In this case each of 3 entries in 'sys.exc_info()' tuple will not equal
-    # to 'None', so picked only the first one.
-    # if sys.exc_info()[0] and not exit_on_error:
-    #     # If 'raise_exception' is set to 'True', we'll end the script with exception.
-    #     if pass_exception:
-    #         pass
-
-    # If 'exit_on_error' is set to 'True', we'll end the script.
-    # if exit_on_error and error_type:
-    #     sys.exit()
 
 
 def print_status(

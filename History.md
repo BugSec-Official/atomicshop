@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.16.29 - 01.09.2024
+  * print_api was changed to print_api.print_api in several modules.
+  * http_parse, mitm, wrappers/loggingw, wrappers/socketw, print_api - fixes and improvements.
 * 2.16.28 - 30.08.2024
   * wrappers/loggingw - fixes and improvements.
 * 2.16.27 - 30.08.2024

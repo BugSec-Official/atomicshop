@@ -5,11 +5,10 @@ import random
 import getpass
 from tempfile import gettempdir
 
-from ...print_api import print_api
 from ...keyboard_press import send_alt_tab
-from ... import filesystem
+from ... import filesystem, print_api
 
-# Web automation library.
+# noinspection PyPackageRequirements
 from playwright.sync_api import sync_playwright
 # Stealth options for playwright. External.
 from playwright_stealth import stealth_sync
@@ -242,7 +241,7 @@ class PlaywrightEngine:
         for i in range(element_count):
             string_current = string_current + element.nth(i).text_content()
 
-        print_api(f'Current element text of [{locator_string}]: {string_current}', rtl=True)
+        print_api.print_api(f'Current element text of [{locator_string}]: {string_current}', rtl=True)
 
         # If text from previous cycle isn't the same as text from current cycle, then put the new value to the
         # previous one and return 'True' since the text really changed.
@@ -312,7 +311,7 @@ class PlaywrightEngine:
         # Nullifying 'string_previous', so new loop will not have the same one as previous loop in case of error.
         self.string_previous = str()
 
-        print_api('Finished execution Time: ' + str(datetime.datetime.now()), **kwargs)
-        print_api('Waiting minutes: ' + str(time_to_sleep_minutes), **kwargs)
+        print_api.print_api('Finished execution Time: ' + str(datetime.datetime.now()), **kwargs)
+        print_api.print_api('Waiting minutes: ' + str(time_to_sleep_minutes), **kwargs)
         time.sleep(time_to_sleep_minutes * 60)
-        print_api('-----------------------------------------', **kwargs)
+        print_api.print_api('-----------------------------------------', **kwargs)

@@ -1,7 +1,7 @@
 from typing import Union
 import functools
 
-from ..print_api import print_api
+from .. import print_api
 from ..inspect_wrapper import get_target_function_default_args_and_combine_with_current
 
 
@@ -19,7 +19,7 @@ def write_file_decorator(function_name):
         # args, kwargs = put_args_to_kwargs(function_name, *args, **kwargs)
         args, kwargs = get_target_function_default_args_and_combine_with_current(function_name, *args, **kwargs)
 
-        print_api(message=f"Writing file: {kwargs['file_path']}", **kwargs)
+        print_api.print_api(message=f"Writing file: {kwargs['file_path']}", **kwargs)
 
         enable_long_file_path = kwargs.get('enable_long_file_path', False)
         if enable_long_file_path:
@@ -41,7 +41,7 @@ def write_file_decorator(function_name):
         except FileExistsError:
             message = f"Can't write file: {kwargs['file_path']}\n" \
                       f"File exists, you should enable force/overwrite mode."
-            print_api(message, error_type=True, logger_method='critical', **kwargs)
+            print_api.print_api(message, error_type=True, logger_method='critical', **kwargs)
 
     return wrapper_write_file_decorator
 
@@ -56,7 +56,7 @@ def read_file_decorator(function_name):
         continue_loop: bool = True
         while continue_loop:
             try:
-                print_api(message=f"Reading file: {kwargs['file_path']}", **kwargs)
+                print_api.print_api(message=f"Reading file: {kwargs['file_path']}", **kwargs)
                 with open(kwargs['file_path'], kwargs['file_mode'], encoding=kwargs['encoding']) as input_file:
                     # Pass the 'output_file' object to kwargs that will pass the object to the executing function.
                     kwargs['file_object'] = input_file
@@ -64,19 +64,19 @@ def read_file_decorator(function_name):
                     return function_name(**kwargs)
             except FileNotFoundError:
                 message = f"File doesn't exist: {kwargs['file_path']}"
-                print_api(message, error_type=True, logger_method='critical', **kwargs)
+                print_api.print_api(message, error_type=True, logger_method='critical', **kwargs)
                 raise
             except UnicodeDecodeError as exception_object:
                 if kwargs["encoding"] != 'utf-8':
                     message = f'File decode error, current encoding: {kwargs["encoding"]}. Will try "utf-8".'
-                    print_api(message, logger_method='error', **kwargs)
+                    print_api.print_api(message, logger_method='error', **kwargs)
                     kwargs["encoding"] = 'utf-8'
                     pass
                     continue
                 else:
                     message = f'File decode error.\n' \
                               f'{exception_object}'
-                    print_api(message, merror_type=True, logger_method='critical', **kwargs)
+                    print_api.print_api(message, merror_type=True, logger_method='critical', **kwargs)
                     continue_loop = False
 
     return wrapper_read_file_decorator

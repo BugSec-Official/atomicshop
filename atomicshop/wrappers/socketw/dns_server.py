@@ -317,7 +317,7 @@ class DnsServer:
 
         if self.resolve_to_tcp_server_all_domains:
             message = "Routing all domains to Built-in TCP Server."
-            print_api(message, logger=self.logger, color='green')
+            print_api(message, logger=self.logger, color='blue')
 
         if self.resolve_regular:
             message = f"Routing all domains to Live DNS Service: {self.forwarding_dns_service_ipv4}"

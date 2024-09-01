@@ -2,8 +2,7 @@ from typing import Union
 import threading
 import multiprocessing.managers
 
-from .print_api import print_api
-from . import system_resources
+from . import system_resources, print_api
 
 
 class SystemResourceMonitor:
@@ -109,7 +108,7 @@ class SystemResourceMonitor:
         self.thread: Union[threading.Thread, None] = None
         # Sets the running state of the monitoring process. Needed to stop the monitoring and queue threads.
         self.running: bool = False
-        # The shared results dictionary.
+        # The shared results' dictionary.
         self.results: dict = {}
 
     def start(self, print_kwargs: dict = None):
@@ -128,7 +127,8 @@ class SystemResourceMonitor:
             """
 
             while self.running:
-                # Get the results of the system resources check function and store them in temporary results dictionary.
+                # Get the results of the system resources check function and store them in
+                # temporary results' dictionary.
                 results = system_resources.check_system_resources(
                     interval=interval, get_cpu=get_cpu, get_memory=get_memory,
                     get_disk_io_bytes=get_disk_io_bytes, get_disk_files_count=get_disk_files_count,
@@ -149,9 +149,9 @@ class SystemResourceMonitor:
                     for queue in queue_list:
                         queue.put(results)
 
-                # Update the shared results dictionary with the temporary results dictionary.
+                # Update the shared results dictionary with the temporary results' dictionary.
                 # This is done in separate steps to avoid overwriting the special 'multiprocessing.Manager.dict' object.
-                # So we update the shared results dictionary with the temporary results dictionary.
+                # So we update the shared results dictionary with the temporary results' dictionary.
                 if manager_dict is not None:
                     manager_dict.update(results)
 
@@ -169,7 +169,7 @@ class SystemResourceMonitor:
             self.thread.daemon = True
             self.thread.start()
         else:
-            print_api("Monitoring is already running.", color='yellow', **print_kwargs)
+            print_api.print_api("Monitoring is already running.", color='yellow', **print_kwargs)
 
     def get_results(self) -> dict:
         """
@@ -258,7 +258,7 @@ def start_monitoring(
         )
         SYSTEM_RESOURCES_MONITOR.start()
     else:
-        print_api("System resources monitoring is already running.", color='yellow', **(print_kwargs or {}))
+        print_api.print_api("System resources monitoring is already running.", color='yellow', **(print_kwargs or {}))
 
 
 def stop_monitoring():

@@ -1,14 +1,14 @@
 import os
 import urllib.request
 import ssl
+# noinspection PyPackageRequirements
 import certifi
 
-from .print_api import print_api
 from .archiver import zips
 from .urls import url_parser
 from .file_io import file_io
 from .wrappers.playwrightw import scenarios
-from . import filesystem
+from . import filesystem, print_api
 
 
 # https://www.useragents.me/
@@ -28,10 +28,10 @@ def is_status_ok(status_code: int, **kwargs) -> bool:
     """
 
     if status_code != 200:
-        print_api(f'URL Error, status code: {str(status_code)}', error_type=True, **kwargs)
+        print_api.print_api(f'URL Error, status code: {str(status_code)}', error_type=True, **kwargs)
         return False
     else:
-        print_api('URL Status: 200 OK', color="green", **kwargs)
+        print_api.print_api('URL Status: 200 OK', color="green", **kwargs)
         return True
 
 
@@ -165,10 +165,10 @@ def download(
 
     def print_to_console(print_end=None):
         if file_size_bytes_int:
-            print_api(
+            print_api.print_api(
                 f'Downloaded bytes: {aggregated_bytes_int} / {file_size_bytes_int}', print_end=print_end, **kwargs)
         else:
-            print_api(f'Downloaded bytes: {aggregated_bytes_int}', print_end=print_end, **kwargs)
+            print_api.print_api(f'Downloaded bytes: {aggregated_bytes_int}', print_end=print_end, **kwargs)
 
     # Size of the buffer to read each time from url.
     buffer_size: int = 4096
@@ -185,8 +185,8 @@ def download(
     # Build full path to file.
     file_path: str = f'{target_directory}{os.sep}{file_name}'
 
-    print_api(f'Downloading: {file_url}', **kwargs)
-    print_api(f'To: {file_path}', **kwargs)
+    print_api.print_api(f'Downloading: {file_url}', **kwargs)
+    print_api.print_api(f'To: {file_path}', **kwargs)
 
     # In order to use 'urllib.request', it is not enough to 'import urllib', you need to 'import urllib.request'.
     # Open the URL for data gathering with SSL context from certifi
@@ -223,10 +223,10 @@ def download(
                 print_to_console()
                 break
     if aggregated_bytes_int == file_size_bytes_int:
-        print_api(f'Successfully Downloaded to: {file_path}', color="green", **kwargs)
+        print_api.print_api(f'Successfully Downloaded to: {file_path}', color="green", **kwargs)
     else:
         message = f'Download failed: {aggregated_bytes_int} / {file_size_bytes_int}. File: {file_path}'
-        print_api(
+        print_api.print_api(
             message, error_type=True, color="red", **kwargs)
 
     return file_path

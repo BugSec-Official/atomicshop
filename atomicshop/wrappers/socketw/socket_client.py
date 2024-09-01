@@ -5,7 +5,10 @@ from typing import Literal, Union
 import logging
 from pathlib import Path
 
+# noinspection PyPackageRequirements
 from cryptography import x509
+# noinspection PyPackageRequirements
+import dns.resolver
 
 from . import creator
 from .receiver import Receiver
@@ -15,8 +18,6 @@ from .. import cryptographyw
 from ..loggingw import loggingw
 from ...print_api import print_api
 from ...file_io import file_io
-
-import dns.resolver
 
 
 class SocketClient:
@@ -221,12 +222,12 @@ class SocketClient:
                 f"[{self.service_name}] resolves to ip: [{self.connection_ip}]. Pulled IP from the socket.")
 
             # Send the data received from the client to the service over socket
-            function_data_sent = Sender(
+            error_on_send: str = Sender(
                 ssl_socket=self.socket_instance, class_message=request_bytes, logger=self.logger).send()
 
             # If the socket disconnected on data send
-            if not function_data_sent:
-                error_string = "Service socket closed on data send"
+            if error_on_send:
+                error_string = f"Service socket closed on data send: {error_on_send}"
 
                 # We'll close the socket and nullify the object
                 self.close_socket()

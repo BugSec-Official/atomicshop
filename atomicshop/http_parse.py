@@ -1,4 +1,3 @@
-# v1.0.1 - 26.03.2023 23:40
 from http.server import BaseHTTPRequestHandler
 from http.client import HTTPResponse
 import http
@@ -49,6 +48,7 @@ class HTTPRequestParse(BaseHTTPRequestHandler):
             client_message.request_raw_decoded = request_decoded
     """
 
+    # noinspection PyMissingConstructor
     def __init__(self, request_text):
         self.rfile = BytesIO(request_text)
         self.raw_requestline = self.rfile.readline()
@@ -57,28 +57,26 @@ class HTTPRequestParse(BaseHTTPRequestHandler):
 
         # Check if ".path" attribute exists after HTTP request parsing
         if not hasattr(self, 'path'):
+            # noinspection PyTypeChecker
             self.path = None
 
-        # Before checking for body, we need to make sure that ".headers" property exists, if not, return empty values
-        try:
+        self.content_length = None
+        self.body = None
+
+        # Before checking for body, we need to make sure that ".headers" property exists, if not, return empty values.
+        if hasattr(self, 'headers'):
             # The "body" of request is in the 'Content-Length' key. If it exists in "headers" - get the body
             if 'Content-Length' in self.headers.keys():
                 # "self.headers.get('Content-Length')" returns number in string format, "int" converts it to integer
                 self.content_length = int(self.headers.get('Content-Length'))
                 self.body = self.rfile.read(self.content_length)
-            else:
-                self.content_length = None
-                self.body = None
-        except Exception:
-            self.content_length = None
-            self.body = None
-            pass
 
         # Examples:
         # Getting path: self.path
         # Getting Request Version: self.request_version
         # Getting specific header: self.headers['host']
 
+    # noinspection PyMethodOverriding
     def send_error(self, code, message):
         self.error_code = code
         self.error_message = message
@@ -117,9 +115,7 @@ class HTTPRequestParse(BaseHTTPRequestHandler):
 
             client_message.request_raw_decoded = request_decoded
         """
-        # Defining variables
-        reason = None
-        function_result: bool = True
+
         error: bool = False
 
         # If there's any error in HTTP parsing
@@ -185,7 +181,9 @@ class HTTPResponseParse:
             pass
 
         # Before checking for body, we need to make sure that ".headers" property exists, if not, return empty values
-        try:
+        self.response_raw_decoded.content_length = None
+        self.response_raw_decoded.body = None
+        if hasattr(self.response_raw_decoded, 'headers') and self.response_raw_decoded is not None:
             # The "body" of response is in the 'Content-Length' key. If it exists in "headers" - get the body.
             if 'Content-Length' in self.response_raw_decoded.headers.keys():
                 # "self.response_raw_decoded.headers.get('Content-Length')" returns number in string format,
@@ -198,7 +196,3 @@ class HTTPResponseParse:
             else:
                 self.response_raw_decoded.content_length = None
                 self.response_raw_decoded.body = None
-        except Exception:
-            self.response_raw_decoded.content_length = None
-            self.response_raw_decoded.body = None
-            pass

@@ -5,9 +5,8 @@ import shutil
 import threading
 import multiprocessing.managers
 
-from .print_api import print_api
 from .wrappers.psutilw import cpus, memories, disks
-from . import system_resource_monitor
+from . import system_resource_monitor, print_api
 
 
 def check_system_resources(
@@ -129,13 +128,13 @@ def wait_for_resource_availability(
 
         if result['cpu_usage'] < cpu_percent_max and result['memory_usage'] < memory_percent_max:
             break
-        print_api(
+        print_api.print_api(
             f"Waiting for resources to be available... "
             f"CPU: {result['cpu_usage']}%, Memory: {result['memory_usage']}%", color='yellow')
         time.sleep(wait_time)  # Wait for 'wait_time' seconds before checking again
 
 
-def test_disk_speed_with_monitoring(
+def _test_disk_speed_with_monitoring(
         file_settings: list[dict],
         remove_file_after_each_copy: bool = False,
         target_directory=None,
@@ -144,6 +143,7 @@ def test_disk_speed_with_monitoring(
         print_kwargs: dict = None
 ):
     """
+    THIS IS NOT TESTED.
     Generates files and performs write and read operations in the specified target directory,
     while monitoring disk I/O speeds in a separate thread. Returns the maximum read and write rates,
     and the total operation time.
@@ -171,7 +171,7 @@ def test_disk_speed_with_monitoring(
     if monitoring:
         system_resource_monitor.start_monitoring(
             interval=1, get_cpu=False, get_memory=False, get_disk_io_bytes=True, get_disk_used_percent=False,
-            get_disk_files_count=True, calculate_maximum_changed_disk_io=True, use_queue=True)
+            get_disk_files_count=True, calculate_maximum_changed_disk_io=True)
 
     if target_directory is None:
         target_directory = tempfile.mkdtemp()
@@ -196,7 +196,7 @@ def test_disk_speed_with_monitoring(
             shutil.copy(src_file_path, dest_directory)
 
             target_file_path = os.path.join(dest_directory, os.path.basename(src_file_path))
-            print_api(f"Copied: {target_file_path}", **(print_kwargs or {}))
+            print_api.print_api(f"Copied: {target_file_path}", **(print_kwargs or {}))
 
             # Measure read speed.
             with open(target_file_path, "rb") as file:
@@ -212,7 +212,7 @@ def test_disk_speed_with_monitoring(
 
     overall_end_time = time.time()
     total_execution_time = overall_end_time - overall_start_time
-    print_api(f"Total execution time: {total_execution_time}", **(print_kwargs or {}))
+    print_api.print_api(f"Total execution time: {total_execution_time}", **(print_kwargs or {}))
 
     # Cleanup. Remove all created files and directories.
     shutil.rmtree(source_directory)
@@ -220,7 +220,7 @@ def test_disk_speed_with_monitoring(
 
     if monitoring:
         # Stop the I/O monitoring.
-        max_io_changes = system_resource_monitor.get_result()['maximum_disk_io']
+        max_io_changes = system_resource_monitor.get_results()['maximum_disk_io']
         system_resource_monitor.stop_monitoring()
 
     return total_execution_time, max_io_changes
