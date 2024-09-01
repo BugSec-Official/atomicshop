@@ -90,7 +90,7 @@ class RecorderParent:
         record_message = get_json(self.class_client_message)
 
         # Since we already dumped the object to dictionary string, we'll just save the object to regular file.
-        file_io.write_file(record_message, self.record_file_path, enable_long_file_path=True)
+        file_io.write_file(record_message, self.record_file_path, enable_long_file_path=True, **{'logger': self.logger})
 
         self.logger.info(f"Recorded to file: {self.record_file_path}")
 

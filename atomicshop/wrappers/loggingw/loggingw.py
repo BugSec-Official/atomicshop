@@ -2,11 +2,13 @@ import logging
 import os
 from typing import Literal, Union
 import datetime
+import contextlib
+import threading
 
 from . import loggers, handlers
 from ...file_io import csvs
-from ...basics import tracebacks
-from ...print_api import print_api
+from ...basics import tracebacks, ansi_escape_codes
+from ...import print_api
 
 
 class LoggingwLoggerAlreadyExistsError(Exception):
@@ -274,25 +276,146 @@ def is_logger_exists(logger_name: str) -> bool:
     return loggers.is_logger_exists(logger_name)
 
 
+def find_the_parent_logger_with_stream_handler(logger: logging.Logger) -> logging.Logger:
+    """
+    Function to find the parent logger with StreamHandler.
+    Example:
+        logger_name = "parent.child.grandchild"
+        'parent' logger has StreamHandler, but 'child' and 'grandchild' don't.
+        This function will return the 'parent' logger, since both 'child' and 'grandchild' will inherit the
+        StreamHandler from the 'parent' logger.
+
+    :param logger: Logger to find the parent logger with StreamHandler.
+    :return: Parent logger with StreamHandler.
+    """
+
+    # Start with current logger to see if it has a stream handler.
+    current_logger = logger
+    found: bool = False
+    while current_logger and not current_logger.handlers:
+        for handler in current_logger.handlers:
+            if isinstance(handler, logging.StreamHandler):
+                found = True
+                break
+
+        if not found:
+            # If the current logger doesn't have the stream handler, let's move to the parent.
+            current_logger = current_logger.parent
+
+    return current_logger
+
+
+@contextlib.contextmanager
+def _temporary_change_logger_stream_handler_color(logger: logging.Logger, color: str):
+    """
+    THIS IS ONLY FOR REFERENCE, for better result use the 'temporary_change_logger_stream_handler_emit_color' function.
+    If there are several threads that use this logger, there could be a problem, since unwanted messages
+    could be colored with the color of the other thread. 'temporary_change_logger_stream_handler_emit_color' is thread
+    safe and will color only the messages from the current thread.
+
+    Context manager to temporarily change the color of the logger's StreamHandler formatter.
+
+    Example:
+        with temporary_change_logger_stream_handler_color(logger, color):
+            # Do something with the temporary color.
+            pass
+    """
+
+    # Find the current or the topmost logger's StreamHandler.
+    # Could be that it is a child logger inherits its handlers from the parent.
+    logger_with_handlers = find_the_parent_logger_with_stream_handler(logger)
+
+    found_stream_handler = None
+    for handler in logger_with_handlers.handlers:
+        if isinstance(handler, logging.StreamHandler):
+            found_stream_handler = handler
+            break
+
+    # Save the original formatter
+    original_formatter = found_stream_handler.formatter
+    original_formatter_string = handlers.get_formatter_string(found_stream_handler)
+
+    # Create a colored formatter for errors
+    color_formatter = logging.Formatter(
+        ansi_escape_codes.get_colors_basic_dict(color) + original_formatter_string +
+        ansi_escape_codes.ColorsBasic.END)
+
+    # thread_id = threading.get_ident()
+    # color_filter = filters.ThreadColorLogFilter(color, thread_id)
+    # found_stream_handler.addFilter(color_filter)
+    try:
+        found_stream_handler.setFormatter(color_formatter)
+        yield
+    finally:
+        found_stream_handler.setFormatter(original_formatter)
+        # found_stream_handler.removeFilter(color_filter)
+
+
+# Thread-local storage to store color codes per thread
+thread_local = threading.local()
+
+
+@contextlib.contextmanager
+def temporary_change_logger_stream_handler_emit_color(logger: logging.Logger, color: str):
+    """Context manager to temporarily set the color code for log messages in the current thread."""
+
+    # Find the current or the topmost logger's StreamHandler.
+    # Could be that it is a child logger inherits its handlers from the parent.
+    logger_with_handlers = find_the_parent_logger_with_stream_handler(logger)
+
+    found_stream_handler = None
+    for handler in logger_with_handlers.handlers:
+        if isinstance(handler, logging.StreamHandler):
+            found_stream_handler = handler
+            break
+
+    # Save the original emit method of the stream handler
+    original_emit = found_stream_handler.emit
+
+    def emit_with_color(record):
+        original_msg = record.msg
+        # Check if the current thread has a color code
+        if getattr(thread_local, 'color', None):
+            record.msg = (
+                ansi_escape_codes.get_colors_basic_dict(color) + original_msg +
+                ansi_escape_codes.ColorsBasic.END)
+        original_emit(record)  # Call the original emit method
+        record.msg = original_msg  # Restore the original message for other handlers
+
+    # Replace the emit method with our custom method
+    found_stream_handler.emit = emit_with_color
+
+    # Set the color code in thread-local storage for this thread
+    thread_local.color = color
+
+    try:
+        yield
+    finally:
+        # Restore the original emit method after the context manager is exited
+        found_stream_handler.emit = original_emit
+        # Clear the color code from thread-local storage
+        thread_local.color = None
+
+
 class ExceptionCsvLogger:
     def __init__(
             self,
             logger_name: str,
-            custom_header: str = None,
-            directory_path: str = None
+            directory_path: str = None,
+            custom_header: str = None
     ):
         """
         Initialize the ExceptionCsvLogger object.
 
         :param logger_name: Name of the logger.
+        :param directory_path: Directory path where the log file will be saved.
+            You can leave it as None, but if the logger doesn't exist, you will get an exception.
         :param custom_header: Custom header to write to the log file.
             If None, the default header will be used: "timestamp,exception", since that what is written to the log file.
             If you want to add more columns to the csv file, you can provide a custom header:
                 "custom1,custom2,custom3".
             These will be added to the default header as:
                 "timestamp,custom1,custom2,custom3,exception".
-        :param directory_path: Directory path where the log file will be saved.
-            You can leave it as None, but if the logger doesn't exist, you will get an exception.
         """
 
         if custom_header:
@@ -352,7 +475,7 @@ class ExceptionCsvLogger:
         self.logger.info(output_csv_line)
 
         if stdout:
-            print_api('', error_type=True, color="red", traceback_string=True)
+            print_api.print_api('', error_type=True, color="red", traceback_string=True)
 
     def get_logger(self):
         return self.logger

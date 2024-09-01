@@ -1,4 +1,3 @@
-import logging
 import threading
 import multiprocessing
 import time
@@ -6,12 +5,11 @@ import datetime
 
 import atomicshop   # Importing atomicshop package to get the version of the package.
 
-from .. import filesystem, queues, dns, on_exit
+from .. import filesystem, queues, dns, on_exit, print_api
 from ..permissions import permissions
 from ..python_functions import get_current_python_version_string, check_python_version_compliance
 from ..wrappers.socketw import socket_wrapper, dns_server, base
 from ..wrappers.loggingw import loggingw
-from ..print_api import print_api
 
 from .initialize_engines import ModuleCategory
 from .connection_thread_worker import thread_worker_main
@@ -33,14 +31,14 @@ MITM_ERROR_LOGGER: loggingw.ExceptionCsvLogger = None
 def exit_cleanup():
     if permissions.is_admin():
         is_dns_dynamic, current_dns_gateway = dns.get_default_dns_gateway()
-        print_api(f'Current DNS Gateway: {current_dns_gateway}')
+        print_api.print_api(f'Current DNS Gateway: {current_dns_gateway}')
 
         if is_dns_dynamic != NETWORK_INTERFACE_IS_DYNAMIC or \
                 (not is_dns_dynamic and current_dns_gateway != NETWORK_INTERFACE_IPV4_ADDRESS_LIST):
             dns.set_connection_dns_gateway_dynamic(use_default_connection=True)
-            print_api("Returned default DNS gateway...", color='blue')
+            print_api.print_api("Returned default DNS gateway...", color='blue')
 
-    print_api(RECS_PROCESS_INSTANCE.is_alive())
+    print_api.print_api(RECS_PROCESS_INSTANCE.is_alive())
     RECS_PROCESS_INSTANCE.terminate()
     RECS_PROCESS_INSTANCE.join()
 
@@ -59,7 +57,8 @@ def mitm_server(config_file_path: str):
         return result
 
     global MITM_ERROR_LOGGER
-    MITM_ERROR_LOGGER = loggingw.ExceptionCsvLogger(EXCEPTIONS_CSV_LOGGER_NAME, config_static.LogRec.logs_path)
+    MITM_ERROR_LOGGER = loggingw.ExceptionCsvLogger(
+        logger_name=EXCEPTIONS_CSV_LOGGER_NAME, directory_path=config_static.LogRec.logs_path)
 
     # Create folders.
     filesystem.create_directory(config_static.LogRec.logs_path)
@@ -159,70 +158,72 @@ def mitm_server(config_file_path: str):
     # === EOF Initialize Reference Module ==========================================================================
     # === Engine logging ===========================================================================================
     # Printing the parsers using "start=1" for index to start counting from "1" and not "0"
-    print_api(f"[*] Found Engines:", logger=system_logger)
+    print_api.print_api(f"[*] Found Engines:", logger=system_logger)
     for index, engine in enumerate(engines_list, start=1):
         message = f"[*] {index}: {engine.engine_name} | {engine.domain_list}"
-        print_api(message, logger=system_logger)
+        print_api.print_api(message, logger=system_logger)
 
         message = (f"[*] Modules: {engine.parser_class_object.__name__}, "
                    f"{engine.responder_class_object.__name__}, "
                    f"{engine.recorder_class_object.__name__}")
-        print_api(message, logger=system_logger)
+        print_api.print_api(message, logger=system_logger)
 
     if config_static.DNSServer.enable:
-        print_api("DNS Server is enabled.", logger=system_logger)
+        print_api.print_api("DNS Server is enabled.", logger=system_logger)
 
         # If engines were found and dns is set to route by the engine domains.
         if engines_list and config_static.DNSServer.resolve_to_tcp_server_only_engine_domains:
-            print_api("Engine domains will be routed by the DNS server to Built-in TCP Server.", logger=system_logger)
+            print_api.print_api(
+                "Engine domains will be routed by the DNS server to Built-in TCP Server.", logger=system_logger)
         # If engines were found, but the dns isn't set to route to engines.
         elif engines_list and not config_static.DNSServer.resolve_to_tcp_server_only_engine_domains:
             message = f"[*] Engine domains found, but the DNS routing is set not to use them for routing."
-            print_api(message, color="yellow", logger=system_logger)
+            print_api.print_api(message, color="yellow", logger=system_logger)
         elif not engines_list and config_static.DNSServer.resolve_to_tcp_server_only_engine_domains:
             error_message = (
                 f"No engines were found in: [{config_static.MainConfig.ENGINES_DIRECTORY_PATH}]\n"
                 f"But the DNS routing is set to use them for routing.\n"
                 f"Please check your DNS configuration in the 'config.ini' file.")
-            print_api(error_message, color="red")
+            print_api.print_api(error_message, color="red")
             return 1
 
         if config_static.DNSServer.resolve_to_tcp_server_all_domains:
-            print_api("All domains will be routed by the DNS server to Built-in TCP Server.", logger=system_logger)
+            print_api.print_api(
+                "All domains will be routed by the DNS server to Built-in TCP Server.", logger=system_logger)
 
         if config_static.DNSServer.resolve_regular:
-            print_api(
+            print_api.print_api(
                 "Regular DNS resolving is enabled. Built-in TCP server will not be routed to",
                 logger=system_logger, color="yellow")
     else:
-        print_api("DNS Server is disabled.", logger=system_logger, color="yellow")
+        print_api.print_api("DNS Server is disabled.", logger=system_logger, color="yellow")
 
     if config_static.TCPServer.enable:
-        print_api("TCP Server is enabled.", logger=system_logger)
+        print_api.print_api("TCP Server is enabled.", logger=system_logger)
 
         if engines_list and not config_static.TCPServer.engines_usage:
             message = \
                 f"Engines found, but the TCP server is set not to use them for processing. General responses only."
-            print_api(message, color="yellow", logger=system_logger)
+            print_api.print_api(message, color="yellow", logger=system_logger)
         elif engines_list and config_static.TCPServer.engines_usage:
             message = f"Engines found, and the TCP server is set to use them for processing."
-            print_api(message, logger=system_logger)
+            print_api.print_api(message, logger=system_logger)
         elif not engines_list and config_static.TCPServer.engines_usage:
             error_message = (
                 f"No engines were found in: [{config_static.MainConfig.ENGINES_DIRECTORY_PATH}]\n"
                 f"But the TCP server is set to use them for processing.\n"
                 f"Please check your TCP configuration in the 'config.ini' file.")
-            print_api(error_message, color="red")
+            print_api.print_api(error_message, color="red")
             return 1
     else:
-        print_api("TCP Server is disabled.", logger=system_logger, color="yellow")
+        print_api.print_api("TCP Server is disabled.", logger=system_logger, color="yellow")
 
     # === EOF Engine Logging =======================================================================================
 
     # Assigning all the engines domains to all time domains, that will be responsible for adding new domains.
     config_static.Certificates.domains_all_times = list(domains_engine_list_full)
 
-    print_api("Press [Ctrl]+[C] to stop.", color='blue')
+    print_api.print_api("Press [Ctrl]+[C] to stop.", color='blue')
 
     # Create request domain queue.
     domain_queue = queues.NonBlockQueue()
@@ -250,7 +251,7 @@ def mitm_server(config_file_path: str):
                 logger=network_logger
             )
         except (dns_server.DnsPortInUseError, dns_server.DnsConfigurationValuesError) as e:
-            print_api(e, error_type=True, color="red", logger=system_logger)
+            print_api.print_api(e, error_type=True, color="red", logger=system_logger)
             # Wait for the message to be printed and saved to file.
             time.sleep(1)
             return 1
@@ -296,6 +297,7 @@ def mitm_server(config_file_path: str):
                 ssh_pass=config_static.ProcessName.ssh_pass,
                 ssh_script_to_execute=config_static.ProcessName.ssh_script_to_execute,
                 logger=listener_logger,
+                exceptions_logger=MITM_ERROR_LOGGER,
                 statistics_logs_directory=config_static.LogRec.logs_path,
                 forwarding_dns_service_ipv4_list___only_for_localhost=(
                     config_static.TCPServer.forwarding_dns_service_ipv4_list___only_for_localhost),
@@ -303,12 +305,12 @@ def mitm_server(config_file_path: str):
                 request_domain_from_dns_server_queue=domain_queue
             )
         except socket_wrapper.SocketWrapperPortInUseError as e:
-            print_api(e, error_type=True, color="red", logger=system_logger)
+            print_api.print_api(e, error_type=True, color="red", logger=system_logger)
             # Wait for the message to be printed and saved to file.
             time.sleep(1)
             return 1
         except socket_wrapper.SocketWrapperConfigurationValuesError as e:
-            print_api(e, error_type=True, color="red", logger=system_logger, logger_method='critical')
+            print_api.print_api(e, error_type=True, color="red", logger=system_logger, logger_method='critical')
             # Wait for the message to be printed and saved to file.
             time.sleep(1)
             return 1
@@ -386,7 +388,7 @@ def mitm_server_main(config_file_path: str):
         # Main function should return integer with error code, 0 is successful.
         return mitm_server(config_file_path)
     except KeyboardInterrupt:
-        print_api("Server Stopped by [KeyboardInterrupt].", color='blue')
+        print_api.print_api("Server Stopped by [KeyboardInterrupt].", color='blue')
         exit_cleanup()
         return 0
     except Exception as e:

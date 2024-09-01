@@ -1,7 +1,9 @@
-from atomicshop.print_api import print_api
+from ... import print_api
 
+# noinspection PyPackageRequirements
 from playwright.sync_api import expect
 # This is from official docs: https://playwright.dev/python/docs/api/class-timeouterror
+# noinspection PyPackageRequirements
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 
@@ -124,7 +126,7 @@ def network_fully_idle(page, timeout: int = 2000, print_kwargs: dict = None) -> 
             # 'page.expect_response' will wait for the response to be received, and then return the response object.
             # When timeout is reached, it will raise a TimeoutError, which will break the while loop.
             with page.expect_response("**/*", timeout=timeout) as response_info:
-                print_api(response_info.value, **print_kwargs)
+                print_api.print_api(response_info.value, **print_kwargs)
         except PlaywrightTimeoutError:
             break
 
@@ -151,13 +153,13 @@ def maximum_idle(page, print_kwargs: dict = None) -> None:
     :return: None
     """
 
-    print_api('Before wait_for_load', **print_kwargs)
+    print_api.print_api('Before wait_for_load', **print_kwargs)
     load(page)
-    print_api('After wait_for_load, Before wait_for_domcontentloaded', **print_kwargs)
+    print_api.print_api('After wait_for_load, Before wait_for_domcontentloaded', **print_kwargs)
     domcontentloaded(page)
-    print_api('After wait_for_domcontentloaded', **print_kwargs)
+    print_api.print_api('After wait_for_domcontentloaded', **print_kwargs)
     # For some reason 'networkidle' can result in timeout errors, so currently this is disabled.
     # networkidle(page)
-    print_api('Before wait_for_network_fully_idle', **print_kwargs)
+    print_api.print_api('Before wait_for_network_fully_idle', **print_kwargs)
     network_fully_idle(page, print_kwargs=print_kwargs)
-    print_api('After wait_for_network_fully_idle', **print_kwargs)
+    print_api.print_api('After wait_for_network_fully_idle', **print_kwargs)

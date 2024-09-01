@@ -4,8 +4,7 @@ import zipfile
 from io import BytesIO
 from typing import Union, Literal
 
-from .. import filesystem
-from ..print_api import print_api
+from .. import filesystem, print_api
 
 
 def is_zip_zipfile(file_object: Union[str, bytes]) -> bool:
@@ -42,7 +41,7 @@ def is_zip_magic_number(file_path: str) -> bool:
         Each file within the ZIP archive starts with this signature.
     50 4B 05 06: This is the end of central directory record signature.
         It's found at the end of a ZIP file and is essential for identifying the structure of the ZIP archive,
-        especially in cases where the file is split or is a multi-part archive.
+        especially in cases where the file is split or is a multipart archive.
     50 4B 07 08: This signature is used for spanned ZIP archives (also known as split or multi-volume ZIP archives).
         It's found in the end of central directory locator for ZIP files that are split across multiple volumes.
     """
@@ -93,7 +92,7 @@ def extract_archive_with_zipfile(
                 filesystem.get_file_directory(archive_path) + os.sep +
                 filesystem.get_file_name_without_extension(archive_path))
 
-    print_api(f'Extracting to directory: {extract_directory}', **print_kwargs)
+    print_api.print_api(f'Extracting to directory: {extract_directory}', **print_kwargs)
 
     # initiating the archived file path as 'zipfile.ZipFile' object.
     with zipfile.ZipFile(archive_path) as zip_object:
@@ -113,7 +112,7 @@ def extract_archive_with_zipfile(
                 # Cut the first directory from the filename.
                 zip_info.filename = zip_info.filename.split('/', maxsplit=1)[1]
 
-            print_api(f'Extracting: {zip_info.filename}', **print_kwargs)
+            print_api.print_api(f'Extracting: {zip_info.filename}', **print_kwargs)
 
             # Extract current file from the archive using 'zip_info' of the current file with 'filename' that we
             # updated under specified parameters to specified directory.
@@ -126,7 +125,7 @@ def extract_archive_with_zipfile(
             date_time = time.mktime(zip_info.date_time + (0, 0, -1))
             # Using 'os' library, changed the datetime of the file to the object created in previous step.
             os.utime(extracted_file_path, (date_time, date_time))
-    print_api('Extraction done.', color="green", **print_kwargs)
+    print_api.print_api('Extraction done.', color="green", **print_kwargs)
 
     return extract_directory
 

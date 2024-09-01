@@ -1,8 +1,9 @@
 import argparse
 
+# noinspection PyPackageRequirements
 import dns.resolver
 
-from .print_api import print_api
+from . import print_api
 from .permissions import permissions
 from .wrappers.pywin32w.wmis import win32networkadapter
 from .wrappers.winregw import winreg_network
@@ -57,10 +58,10 @@ def resolve_dns_localhost(domain_name: str, dns_servers_list: list = None, print
         # Get only the first entry of the list of IPs [0]
         connection_ip = function_server_address[0].to_text()
         message = f"Resolved to [{connection_ip}]"
-        print_api(message, **print_kwargs)
+        print_api.print_api(message, **print_kwargs)
     except dns.resolver.NXDOMAIN:
         message = f"Domain {domain_name} doesn't exist - Couldn't resolve with {dns_servers_list}."
-        print_api(message, **print_kwargs, error_type=True, logger_method='error')
+        print_api.print_api(message, **print_kwargs, error_type=True, logger_method='error')
         pass
 
     return connection_ip
@@ -137,12 +138,13 @@ def default_dns_gateway_main() -> int:
     args = argparse_obj.parse_args()
 
     if (args.set or args.dynamic) and not (args.connection_name or args.connection_default):
-        print_api("Please provide the connection name [-cn] or use the default connection [-cd].", color='red')
+        print_api.print_api(
+            "Please provide the connection name [-cn] or use the default connection [-cd].", color='red')
         return 1
 
     if args.set or args.dynamic:
         if not permissions.is_admin():
-            print_api("You need to run this script as an administrator", color='red')
+            print_api.print_api("You need to run this script as an administrator", color='red')
             return 1
 
     if args.get:
@@ -152,7 +154,7 @@ def default_dns_gateway_main() -> int:
             is_dynamic_string = 'Dynamic'
         else:
             is_dynamic_string = 'Static'
-        print_api(f'DNS Gateway: {is_dynamic_string} - {dns_servers}', color='blue')
+        print_api.print_api(f'DNS Gateway: {is_dynamic_string} - {dns_servers}', color='blue')
     elif args.set:
         # dns_servers_list: list = args.dns_servers.split(',')
         set_connection_dns_gateway_static(

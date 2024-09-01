@@ -4,6 +4,7 @@ from pathlib import Path
 
 from ...print_api import print_api
 from ..loggingw import loggingw
+from ...basics import tracebacks
 
 
 class Sender:
@@ -29,18 +30,22 @@ class Sender:
         # until other side receives all, so there's no way knowing how much data was sent. Returns "None" on
         # Success though.
 
-        # Defining function result variable which will mean if the socket was closed or not.
-        # True means everything is fine
-        function_result: bool = True
+        # The error string that will be returned by the function in case of error.
+        # If returned None then everything is fine.
+        # noinspection PyTypeChecker
+        function_result_error: str = None
         # Current amount of bytes sent is 0, since we didn't start yet
         total_sent_bytes = 0
 
+        # noinspection PyTypeChecker
+        error_message: str = None
         try:
             # Getting byte length of current message
             current_message_length = len(self.class_message)
 
-            self.logger.info(f"Sending message to "
-                             f"{self.ssl_socket.getpeername()[0]}:{self.ssl_socket.getpeername()[1]}")
+            self.logger.info(
+                f"Sending message to "
+                f"{self.ssl_socket.getpeername()[0]}:{self.ssl_socket.getpeername()[1]}")
 
             # Looping through "socket.send()" method while total sent bytes are less than message length
             while total_sent_bytes < current_message_length:
@@ -48,9 +53,11 @@ class Sender:
                 sent_bytes = self.ssl_socket.send(self.class_message[total_sent_bytes:])
                 # If there were only "0" bytes sent, then connection on the other side was terminated
                 if sent_bytes == 0:
-                    self.logger.info(f"Sent {sent_bytes} bytes - connection is down... Could send only "
-                                     f"{total_sent_bytes} bytes out of {current_message_length}. Closing socket...")
-                    function_result = False
+                    error_message = (
+                        f"Sent {sent_bytes} bytes - connection is down... Could send only "
+                        f"{total_sent_bytes} bytes out of {current_message_length}. Closing socket...")
+                    self.logger.info(error_message)
+                    function_result_error = error_message
                     break
 
                 # Adding amount of currently sent bytes to the total amount of bytes sent
@@ -59,23 +66,25 @@ class Sender:
 
             # At this point the sending loop finished successfully
             self.logger.info(f"Sent the message to destination.")
-        except ConnectionResetError:
-            message = "* Couldn't reach the server - Connection was reset. Exiting..."
-            print_api(message, logger=self.logger, logger_method='critical', traceback_string=True)
-            # Since the connection is down, it will be handled in thread_worker_main
-            function_result = False
-            pass
-        except ssl.SSLEOFError:
-            message = "SSLError on send, Exiting..."
-            print_api(message, logger=self.logger, logger_method='critical', traceback_string=True, oneline=True)
-            # Since the connection is down, it will be handled in thread_worker_main
-            function_result = False
-            pass
-        except ssl.SSLZeroReturnError:
-            message = "TLS/SSL connection has been closed (EOF), Exiting..."
-            print_api(message, logger=self.logger, logger_method='critical', traceback_string=True, oneline=True)
-            # Since the connection is down, it will be handled in thread_worker_main
-            function_result = False
-            pass
+        except ConnectionResetError as e:
+            error_class_type = str(type(e)).replace("<class '", '').replace("'>", '')
+            exception_error = tracebacks.get_as_string(one_line=True)
+            error_message = (f"Socket Send: Error, Couldn't reach the server - Connection was reset | "
+                             f"{error_class_type}: {exception_error}")
+        except (ssl.SSLEOFError, ssl.SSLZeroReturnError, ssl.SSLWantWriteError, TimeoutError) as e:
+            error_class_type = str(type(e)).replace("<class '", '').replace("'>", '')
+            exception_error = tracebacks.get_as_string(one_line=True)
+            error_message = f"Socket Send: {error_class_type}: {exception_error}"
+        except Exception as e:
+            error_class_type = str(type(e)).replace("<class '", '').replace("'>", '')
+            exception_error = tracebacks.get_as_string(one_line=True)
+            if 'ssl' in error_class_type.lower():
+                error_message = f"Socket Send: SSL UNDOCUMENTED Exception: {error_class_type}{exception_error}"
+            else:
+                error_message = f"Socket Send: Error, UNDOCUMENTED Exception: {error_class_type}{exception_error}"
 
-        return function_result
+        if error_message:
+            print_api(error_message, logger=self.logger, logger_method='error')
+            function_result_error = error_message
+
+        return function_result_error

@@ -12,10 +12,9 @@ import tempfile
 # noinspection PyPackageRequirements
 import psutil
 
-from .print_api import print_api, print_status_of_list
 from .basics import strings, list_of_dicts, list_of_classes
 from .file_io import file_io
-from . import hashing, datetimes
+from . import hashing, datetimes, print_api
 
 
 WINDOWS_DIRECTORY_SPECIAL_CHARACTERS = ['<', '>', ':', '"', '/', '\\', '|', '?', '*']
@@ -280,12 +279,12 @@ def remove_file(file_path: str, **kwargs) -> bool:
 
     try:
         os.remove(file_path)
-        print_api(f'File Removed: {file_path}')
+        print_api.print_api(f'File Removed: {file_path}')
         return True
     # Since the file doesn't exist, we actually don't care, since we want to remove it anyway.
     except FileNotFoundError:
         message = f'File Removal Failed, File non-existent: {file_path}'
-        print_api(message, error_type=True, logger_method='critical', **kwargs)
+        print_api.print_api(message, error_type=True, logger_method='critical', **kwargs)
         return False
 
 
@@ -321,12 +320,12 @@ def remove_directory(directory_path: str, force_readonly: bool = False, print_kw
             shutil.rmtree(directory_path, onerror=remove_readonly)
         else:
             shutil.rmtree(directory_path)
-        print_api(f'Directory Removed: {directory_path}', **print_kwargs)
+        print_api.print_api(f'Directory Removed: {directory_path}', **print_kwargs)
         return True
     # Since the directory doesn't exist, we actually don't care, since we want to remove it anyway.
     except FileNotFoundError:
         message = f'Directory Removal Failed, Directory non-existent: {directory_path}'
-        print_api(message, error_type=True, logger_method='critical', **print_kwargs)
+        print_api.print_api(message, error_type=True, logger_method='critical', **print_kwargs)
         return False
 
 
@@ -878,7 +877,7 @@ def get_paths_from_directory(
             prefix_string = 'Reading File: '
 
         for file_index, file_path in enumerate(object_list):
-            print_status_of_list(
+            print_api.print_status_of_list(
                 list_instance=object_list, prefix_string=prefix_string, current_state=(file_index + 1))
 
             # If 'add_binary' was passed.

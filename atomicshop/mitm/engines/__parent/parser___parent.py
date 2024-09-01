@@ -12,7 +12,4 @@ class ParserParent:
         # This is general parser, so we don't parse anything and 'request_body_parsed' gets empty byte string.
         self.class_client_message.request_body_parsed = b''
 
-        try:
-            self.logger.info(f"Parsed: {self.class_client_message.request_body_parsed[0: 100]}...")
-        except Exception:
-            pass
+        self.logger.info(f"Parsed: {self.class_client_message.request_body_parsed[0: 100]}...")

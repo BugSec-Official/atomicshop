@@ -4,7 +4,7 @@ from pathlib import Path
 import argparse
 
 from . import lists
-from ..print_api import print_api
+from .. import print_api
 
 
 def get_nth_character_from_start(input_string: str, nth: int):
@@ -537,7 +537,7 @@ def replace_string_in_file(
             file.writelines(lines)
 
     # Output the relevant line numbers
-    print_api(f"Target string found on the following lines: {changed_lines}", **(print_kwargs or {}))
+    print_api.print_api(f"Target string found on the following lines: {changed_lines}", **(print_kwargs or {}))
     return changed_lines
 
 

@@ -2,7 +2,7 @@ from datetime import datetime
 
 from ..wrappers.socketw import receiver, sender, socket_client, base
 from ..http_parse import HTTPRequestParse, HTTPResponseParse
-from ..basics.threads import current_thread_id
+from ..basics import threads, tracebacks
 from ..print_api import print_api
 
 from .message import ClientMessage
@@ -10,9 +10,8 @@ from .initialize_engines import assign_class_by_domain
 from . import config_static
 
 
-# Thread function on client connect.
 def thread_worker_main(
-        function_client_socket_object,
+        client_socket,
         process_commandline: str,
         is_tls: bool,
         tls_type: str,
@@ -24,7 +23,7 @@ def thread_worker_main(
         reference_module
 ):
     def output_statistics_csv_row():
-        # If there is no '.code' attribute in HTTPResponse, this means that this is not a HTTP message, so there is no
+        # If there is no '.code' attribute in HTTPResponse, this means that this is not an HTTP message, so there is no
         # status code.
         try:
             http_status_code: str = ','.join([str(x.code) for x in client_message.response_list_of_raw_decoded])
@@ -45,6 +44,15 @@ def thread_worker_main(
 
         response_size_bytes = ','.join([str(len(x)) for x in client_message.response_list_of_raw_bytes])
 
+        if statistics_error_list and len(statistics_error_list) > 1:
+            error_string = '||'.join(statistics_error_list)
+        elif statistics_error_list and len(statistics_error_list) == 1:
+            error_string = statistics_error_list[0]
+        elif not statistics_error_list:
+            error_string = str()
+        else:
+            raise ValueError(f"Error in statistics error list. Values: {statistics_error_list}")
+
         statistics_writer.write_row(
             host=client_message.server_name,
             tls_type=tls_type,
@@ -58,75 +66,129 @@ def thread_worker_main(
             response_size_bytes=response_size_bytes,
             recorded_file_path=client_message.recorded_file_path,
             process_cmd=process_commandline,
-            error=str())
-
-    try:
-        # Defining variables before assignment
-        function_recorded: bool = False
-        client_message: ClientMessage = ClientMessage()
-        request_decoded = None
-        service_client = None
-
-        # Getting thread ID of the current thread and putting to the client message class
-        client_message.thread_id = current_thread_id()
-        # Get client ip and port
-        client_message.client_ip, client_message.source_port = function_client_socket_object.getpeername()
-        # Get destination port
-        client_message.destination_port = function_client_socket_object.getsockname()[1]
-        # Putting the process command line.
-        client_message.process_name = process_commandline
-
-        # Only protocols that are encrypted with TLS have the server name attribute.
-        if is_tls:
-            # Get current destination domain
-            client_message.server_name = function_client_socket_object.server_hostname
-            # client_message.server_name = domain_from_dns
-        # If the protocol is not TLS, then we'll use the domain from the DNS.
-        else:
-            client_message.server_name = domain_from_dns
-
-        network_logger.info(f"Thread Created - Client [{client_message.client_ip}:{client_message.source_port}] | "
-                            f"Destination service: [{client_message.server_name}:{client_message.destination_port}]")
-
-        # Loading parser by domain, if there is no parser for current domain - general reference parser is loaded.
-        # These should be outside any loop and initialized only once entering the thread.
-        parser, responder, recorder = assign_class_by_domain(
-            engines_usage=config_static.TCPServer.engines_usage,
-            engines_list=engines_list,
-            message_domain_name=client_message.server_name,
-            reference_module=reference_module,
-            logger=network_logger
+            error=error_string
         )
 
-        # Defining client connection boolean variable to enter the loop
-        client_connection_boolean: bool = True
+    def record_and_statistics_write():
+        # If recorder wasn't executed before, then execute it now
+        if config_static.LogRec.enable_request_response_recordings_in_logs:
+            recorded_file = recorder(
+                class_client_message=client_message, record_path=config_static.LogRec.recordings_path).record()
+            client_message.recorded_file_path = recorded_file
 
+        # Save statistics file.
+        output_statistics_csv_row()
+
+    def parse_http():
+        nonlocal error_message
+        # Parsing the raw bytes as HTTP.
+        request_decoded = HTTPRequestParse(client_message.request_raw_bytes)
+        # Getting the status of http parsing
+        request_is_http, http_parsing_reason, http_parsing_error = request_decoded.check_if_http()
+
+        # Currently, we don't care if it's HTTP. If there was no error we can continue. Just log the reason.
+        if not http_parsing_error:
+            print_api(http_parsing_reason, logger=network_logger, logger_method='info')
+        # If there was error - the request is really HTTP, but there's a problem with its structure.
+        else:
+            client_message.error = http_parsing_reason
+            error_message = (
+                f'HTTP Parse Request Error: '
+                f'The request is HTTP protocol, but there was a problem with its structure: '
+                f'{http_parsing_error}')
+            print_api(error_message, logger=network_logger, logger_method='error', color='yellow')
+            statistics_error_list.append(error_message)
+
+        # If the request is HTTP protocol.
+        if request_is_http:
+            client_message.protocol = 'HTTP'
+            network_logger.info(f"Method: {request_decoded.command}")
+            network_logger.info(f"Path: {request_decoded.path}")
+            client_message.request_raw_decoded = request_decoded
+
+    def finish_thread():
+        # At this stage there could be several times that the same socket was used to the service server - we need to
+        # close this socket as well if it still opened.
+        if service_client:
+            if service_client.socket_instance:
+                service_client.close_socket()
+
+        # If client socket is still opened - close
+        if client_socket:
+            client_socket.close()
+            network_logger.info(f"Closed client socket [{client_message.client_ip}:{client_message.source_port}]...")
+
+        network_logger.info("Thread Finished. Will continue listening on the Main thread")
+
+    # Building client message object before the loop only for any exception to occurs, since we write it to
+    # recording file in its current state.
+    client_message: ClientMessage = ClientMessage()
+    # 'recorded' boolean is needed only to write the message in case of exception in the loop or before that.
+    recorded: bool = False
+    statistics_error_list: list[str] = list()
+
+    # Only protocols that are encrypted with TLS have the server name attribute.
+    if is_tls:
+        # Get current destination domain
+        server_name = client_socket.server_hostname
+        # client_message.server_name = domain_from_dns
+    # If the protocol is not TLS, then we'll use the domain from the DNS.
+    else:
+        server_name = domain_from_dns
+    client_message.server_name = server_name
+
+    thread_id = threads.current_thread_id()
+    client_message.thread_id = thread_id
+
+    # Loading parser by domain, if there is no parser for current domain - general reference parser is loaded.
+    # These should be outside any loop and initialized only once entering the thread.
+    parser, responder, recorder = assign_class_by_domain(
+        engines_usage=config_static.TCPServer.engines_usage,
+        engines_list=engines_list,
+        message_domain_name=server_name,
+        reference_module=reference_module,
+        logger=network_logger
+    )
+
+    try:
+        client_ip, source_port = client_socket.getpeername()
+        client_message.client_ip = client_ip
+        client_message.source_port = source_port
+
+        destination_port = client_socket.getsockname()[1]
+        client_message.destination_port = destination_port
+
+        network_logger.info(f"Thread Created - Client [{client_ip}:{source_port}] | "
+                            f"Destination service: [{server_name}:{destination_port}]")
+
+        service_client = None
         # Loop while received message is not empty, if so, close socket, since other side already closed.
-        while client_connection_boolean:
-            # Don't forget that 'ClientMessage' object is being reused at this step.
-            # Meaning, that each list / dictionary that is used to update at
-            # this loop section needs to be reinitialized.
-            # Add any variables that need reinitializing in the 'ClientMessage' class 'reinitialize' function.
-            client_message.reinitialize()
+        # noinspection PyTypeChecker
+        cycle_count: int = None
+        while True:
+            # If cycle count is None, then it's the first cycle, else it's not.
+            # The cycle_count should be added 1 in the beginning of each cycle, and not in the end, since not always
+            # the cycle will be executed till the end.
+            if cycle_count is None:
+                cycle_count = 0
+            else:
+                cycle_count += 1
 
-            # Initialize statistics_dict for the same reason as 'client_message.reinitialize()'.
-            # statistics_dict: dict = dict()
-            # statistics_dict['host'] = client_message.server_name
-            # statistics_dict['path'] = str()
-            # statistics_dict['status_code'] = str()
-            # statistics_dict['command'] = str()
-            # statistics_dict['request_time_sent'] = str()
-            # statistics_dict['request_size_bytes'] = str()
-            # # statistics_dict['response_time_sent'] = str()
-            # statistics_dict['response_size_bytes'] = str()
-            # statistics_dict['file_path'] = str()
-            # statistics_dict['process_cmd'] = str()
-            # statistics_dict['error'] = str()
+            recorded: bool = False
+            statistics_error_list: list[str] = list()
 
-            network_logger.info("Initializing Receiver")
+            client_message = ClientMessage()
+            client_message.thread_id = thread_id
+            client_message.client_ip = client_ip
+            client_message.source_port = source_port
+            client_message.destination_port = destination_port
+            client_message.process_name = process_commandline
+            client_message.server_name = server_name
+
+            network_logger.info(f"Initializing Receiver on cycle: {str(cycle_count+1)}")
             # Getting message from the client over the socket using specific class.
             client_received_raw_data = receiver.Receiver(
-                ssl_socket=function_client_socket_object, logger=network_logger).receive()
+                ssl_socket=client_socket, logger=network_logger).receive()
 
             # If the message is empty, then the connection was closed already by the other side,
             # so we can close the socket as well.
@@ -137,67 +199,18 @@ def thread_worker_main(
                 # Getting current time of message received from client.
                 client_message.request_time_received = datetime.now()
 
-                # HTTP Parsing section =================================================================================
-                # Parsing the raw bytes as HTTP.
-                try:
-                    request_decoded = HTTPRequestParse(client_message.request_raw_bytes)
-                except Exception:
-                    message = "There was an exception in HTTP Parsing module!"
-                    print_api(
-                        message, error_type=True, logger=network_logger, logger_method='critical',
-                        traceback_string=True)
-                    # Socket connection can be closed since we have a problem in current thread and break the loop
-                    client_connection_boolean = False
-                    break
+                parse_http()
 
-                # Getting the status of http parsing
-                request_is_http, http_parsing_reason, http_parsing_error = request_decoded.check_if_http()
+                # Custom parser, should parse HTTP body or the whole message if not HTTP.
+                parser_instance = parser(client_message)
+                parser_instance.parse()
 
-                # Currently, we don't care if it's HTTP. If there was no error we can continue. Just log the reason.
-                if not http_parsing_error:
-                    network_logger.info(http_parsing_reason)
-                # If there was error - the request is really HTTP, but there's a problem with its structure.
-                # So, we'll stop the loop.
-                else:
-                    client_message.error = http_parsing_reason
-                    network_logger.critical(client_message.error)
-                    break
-
-                # If the request is HTTP protocol.
-                if request_is_http:
-                    client_message.protocol = 'HTTP'
-                    network_logger.info(f"Method: {request_decoded.command}")
-                    network_logger.info(f"Path: {request_decoded.path}")
-                    # statistics.dict['path'] = request_decoded.path
-                    client_message.request_raw_decoded = request_decoded
-                # HTTP Parsing section EOF =============================================================================
-
-                # Catching exceptions in the parser
-                try:
-                    parser(client_message).parse()
-                except Exception:
-                    message = "Exception in Parser"
-                    print_api(
-                        message, error_type=True, logger=parser.logger, logger_method='critical',
-                        traceback_string=True)
-                    print_api(
-                        message, error_type=True, logger=network_logger, logger_method='critical',
-                        traceback_string=True)
-                    # At this point we can pass the exception and continue the script.
-                    pass
-                    # Socket connection can be closed since we have a problem in current thread and break the loop
-                    client_connection_boolean = False
-                    break
-
-                # Converting body parsed to string, since there is no strict rule for the parameter to be string.
-                # Still going to put exception on it, since it is not critical for the server.
-                # Won't even log the exception.
-                try:
-                    parser.logger.info(f"{str(client_message.request_body_parsed)[0: 100]}...")
-                except Exception:
-                    pass
+                # Converting body parsed to string on logging, since there is no strict rule for the parameter
+                # to be string.
+                parser_instance.logger.info(f"{str(client_message.request_body_parsed)[0: 100]}...")
 
                 # If we're in response mode, execute responder.
+                response_raw_bytes = None
                 if config_static.TCPServer.server_response_mode:
                     # Since we're in response mode, we'll record the request anyway, after the responder did its job.
                     client_message.info = "In Server Response Mode"
@@ -206,20 +219,7 @@ def thread_worker_main(
                     # new entries for empty list.
                     client_message.response_list_of_raw_bytes = list()
                     # Creating response for parsed message and printing
-                    try:
-                        responder.create_response(client_message)
-                    except Exception:
-                        message = "Exception in Responder"
-                        print_api(
-                            message, error_type=True, logger=responder.logger, logger_method='critical',
-                            traceback_string=True)
-                        print_api(
-                            message, error_type=True, logger=network_logger, logger_method='critical',
-                            traceback_string=True)
-                        pass
-                        # Socket connection can be closed since we have a problem in current thread and break the loop.
-                        client_connection_boolean = False
-                        break
+                    responder.create_response(client_message)
 
                     # Output first 100 characters of all the responses in the list.
                     for response_raw_bytes in client_message.response_list_of_raw_bytes:
@@ -254,8 +254,11 @@ def thread_worker_main(
                     # be passed.
                     # If there was connection error or socket close, then "ssl_socket" of the "service_client"
                     # will be empty.
-                    response_raw_bytes, client_message.error, client_message.server_ip, service_ssl_socket =\
-                        service_client.send_receive_to_service(client_message.request_raw_bytes)
+                    response_raw_bytes, client_message.error, client_message.server_ip, service_ssl_socket = (
+                        service_client.send_receive_to_service(client_message.request_raw_bytes))
+
+                    if client_message.error is not None:
+                        statistics_error_list.append(client_message.error)
 
                     # Since we need a list for raw bytes, we'll add the 'response_raw_bytes' to our list object.
                     # But we need to re-initiate it first.
@@ -272,100 +275,53 @@ def thread_worker_main(
                     if not service_ssl_socket:
                         break
 
-                # This is the point after the response mode check was finished.
-                # Recording the message, doesn't matter what type of mode this is.
-                if config_static.LogRec.enable_request_response_recordings_in_logs:
-                    try:
-                        recorded_file = recorder(class_client_message=client_message,
-                                                 record_path=config_static.LogRec.recordings_path).record()
-                        client_message.recorded_file_path = recorded_file
-                    except Exception:
-                        message = "Exception in Recorder"
-                        print_api(
-                            message, error_type=True, logger=recorder.logger, logger_method='critical',
-                            traceback_string=True)
-                        print_api(
-                            message, error_type=True, logger=network_logger, logger_method='critical',
-                            traceback_string=True)
+                # If there is a response, then send it.
+                if response_raw_bytes:
+                    # Sending response/s to client no matter if in record mode or not.
+                    network_logger.info(
+                        f"Sending messages to client: {len(client_message.response_list_of_raw_bytes)}")
 
-                function_recorded = True
+                    # Iterate through the list of byte responses.
+                    for response_raw_bytes in client_message.response_list_of_raw_bytes:
+                        error_on_send: str = sender.Sender(
+                            ssl_socket=client_socket, class_message=response_raw_bytes,
+                            logger=network_logger).send()
 
-                # Save statistics file.
-                output_statistics_csv_row()
-
-                try:
-                    # If there is a response, then send it.
-                    if response_raw_bytes:
-                        # Sending response/s to client no matter if in record mode or not.
-                        network_logger.info(
-                            f"Sending messages to client: {len(client_message.response_list_of_raw_bytes)}")
-                        function_data_sent = None
-
-                        # Iterate through the list of byte responses.
-                        for response_raw_bytes in client_message.response_list_of_raw_bytes:
-                            function_data_sent = sender.Sender(
-                                ssl_socket=function_client_socket_object, class_message=response_raw_bytes,
-                                logger=network_logger).send()
-
-                            # If there was problem with sending data, we'll break current loop.
-                            if not function_data_sent:
-                                break
-                    # If there is no response, close the socket.
-                    else:
-                        function_data_sent = None
-                        network_logger.info(f"Response empty, nothing to send to client.")
-                except Exception:
-                    message = "Not sending anything to the client, since there is no response available"
-                    print_api(
-                        message, error_type=True, logger=network_logger, logger_method='critical',
-                        traceback_string=True)
-                    # Pass the exception
-                    pass
-                    # Break the while loop
+                        # If there was problem with sending data, we'll break current loop.
+                        if error_on_send:
+                            statistics_error_list.append(error_on_send)
+                            break
+                # If response from server came back empty, then the server has closed the connection,
+                # we will do the same.
+                else:
+                    network_logger.info(f"Response empty, nothing to send to client.")
                     break
 
-                # If there was problem with sending data, we'll break the while loop
-                if not function_data_sent:
-                    break
+                record_and_statistics_write()
+                recorded = True
             else:
-                # Ending the while loop, basically we can use 'break'
-                client_connection_boolean = False
-                # We don't need to record empty message so setting the recorder state to recorded
-                function_recorded = True
+                # If it's the first cycle we will record the message from the client if it came empty.
+                if cycle_count == 0:
+                    record_and_statistics_write()
+
+                # In other cases, we'll just break the loop, since empty message means that the other side closed the
+                # connection.
+                recorded = True
+                break
+
+        finish_thread()
+    except Exception as e:
+        exception_message = tracebacks.get_as_string(one_line=True)
+        error_message = f'Socket Thread [{str(thread_id)}] Exception: {exception_message}'
+        print_api(error_message, logger_method='critical', logger=network_logger)
+        statistics_error_list.append(error_message)
 
         # === At this point while loop of 'client_connection_boolean' was broken =======================================
         # If recorder wasn't executed before, then execute it now
-        if not function_recorded:
-            if config_static.LogRec.enable_request_response_recordings_in_logs:
-                try:
-                    recorded_file = recorder(
-                        class_client_message=client_message, record_path=config_static.LogRec.recordings_path).record()
-                    client_message.recorded_file_path = recorded_file
-                except Exception:
-                    message = "Exception in Recorder"
-                    print_api(
-                        message, error_type=True, logger=recorder.logger, logger_method='critical',
-                        traceback_string=True)
-                    print_api(
-                        message, error_type=True, logger=network_logger, logger_method='critical',
-                        traceback_string=True)
+        if not recorded:
+            record_and_statistics_write()
 
-            # Save statistics file.
-            output_statistics_csv_row()
+        finish_thread()
 
-        # At this stage there could be several times that the same socket was used to the service server - we need to
-        # close this socket as well if it still opened.
-        if service_client:
-            if service_client.socket_instance:
-                service_client.close_socket()
-
-        # If client socket is still opened - close
-        if function_client_socket_object:
-            function_client_socket_object.close()
-            network_logger.info(f"Closed client socket [{client_message.client_ip}:{client_message.source_port}]...")
-
-        network_logger.info("Thread Finished. Will continue listening on the Main thread")
-    except Exception:
-        message = "Undocumented exception in thread worker"
-        print_api(
-            message, error_type=True, logger=network_logger, logger_method='critical', traceback_string=True)
+        # After the socket clean up, we will still raise the exception to the main thread.
+        raise e
