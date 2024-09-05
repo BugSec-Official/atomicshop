@@ -38,9 +38,3 @@ def create_custom_logger():
     logger_name = f'{config_static.MainConfig.LOGGER_NAME}.{engine_logger_part}'
 
     return loggingw.get_logger_with_level(logger_name)
-
-
-def get_json(obj):
-    """ Convert any nested object to json / dict and values to string as is """
-
-    return json.dumps(obj, default=dicts.convert_complex_object_to_dict)

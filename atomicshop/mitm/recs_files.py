@@ -1,13 +1,15 @@
 import datetime
 import os
 import multiprocessing
+from pathlib import Path
 
 from ..archiver import zips
 from .. import filesystem
+from .. wrappers.loggingw import consts
 
 
-REC_FILE_DATE_TIME_FORMAT: str = "%Y_%m_%d-%H_%M_%S_%f"
-REC_FILE_DATE_FORMAT: str = REC_FILE_DATE_TIME_FORMAT.split('-')[0]
+REC_FILE_DATE_TIME_FORMAT: str = f'{consts.DEFAULT_ROTATING_SUFFIXES_FROM_WHEN["S"]}_%f'
+REC_FILE_DATE_FORMAT: str = REC_FILE_DATE_TIME_FORMAT.split('_')[0]
 
 
 def recs_archiver(recs_directory: str) -> list:

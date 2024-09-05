@@ -261,11 +261,14 @@ class DnsServer:
 
     def test_config(self):
         try:
-            booleans.check_3_booleans_when_only_1_can_be_true(
-                (self.resolve_to_tcp_server_only_tcp_resolve_domains,
-                 'resolve_to_tcp_server_only_tcp_resolve_domains'),
-                (self.resolve_to_tcp_server_all_domains, 'resolve_to_tcp_server_all_domains'),
-                (self.resolve_regular, 'resolve_regular')
+            booleans.is_only_1_true_in_list(
+                booleans_list_of_tuples=[
+                    (self.resolve_to_tcp_server_only_tcp_resolve_domains,
+                     'resolve_to_tcp_server_only_tcp_resolve_domains'),
+                    (self.resolve_to_tcp_server_all_domains, 'resolve_to_tcp_server_all_domains'),
+                    (self.resolve_regular, 'resolve_regular')
+                ],
+                raise_if_all_false=True
             )
         except ValueError as e:
             raise DnsConfigurationValuesError(e)

@@ -2,9 +2,9 @@ import os
 from datetime import datetime
 import json
 
-from ...shared_functions import build_module_names, create_custom_logger, get_json
+from ...shared_functions import build_module_names, create_custom_logger
 from ... import message, recs_files
-from .... import filesystem, urls
+from .... import filesystem
 from ....file_io import file_io
 
 
@@ -46,21 +46,6 @@ class RecorderParent:
         # Build the record path with file name
         self.build_record_path_to_engine()
 
-        # Define empty 'http_path'.
-        http_path: str = str()
-        # If 'self.class_client_message.request_raw_decoded.path' will be undefined, exception will raise.
-        # This will happen if the message is not HTTP.
-        try:
-            # Parse the url to components.
-            http_path_parsed = urls.url_parser(self.class_client_message.request_raw_decoded.path)
-            # Get only directories.
-            http_path_directories_string = '-'.join(http_path_parsed['directories'])
-            # Add '_' character before 'http_path' to look better on the file name.
-            http_path = f'_{http_path_directories_string}'
-        # If 'self.class_client_message.request_raw_decoded.path' is not defined, we'll pass the exception.
-        except Exception:
-            pass
-
         # If HTTP Path is not defined, 'http_path' will be empty, and it will not interfere with file name.
         self.record_file_path: str = \
             self.engine_record_path + os.sep + \
@@ -88,7 +73,6 @@ class RecorderParent:
         # Convert the requests and responses to hex.
         self.convert_messages()
         # Get the message in dict / JSON format
-        # record_message = get_json(self.class_client_message)
         record_message_dict: dict = dict(self.class_client_message)
         recorded_message_json_string = json.dumps(record_message_dict)
 

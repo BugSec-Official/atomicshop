@@ -354,7 +354,8 @@ def deviation_calculator_by_moving_average(
         summary: bool = False,
         output_file_path: str = None,
         output_file_type: Literal['json', 'csv'] = 'json',
-        convert_sizes_lists_and_ma_data_to_string: bool = False
+        convert_sizes_lists_and_ma_data_to_string: bool = False,
+        skip_total_count_less_than: int = None
 ) -> Union[list, None]:
     """
     This function is the main function for the moving average calculator.
@@ -386,6 +387,12 @@ def deviation_calculator_by_moving_average(
     :param output_file_type: string, the type of the output file. 'json' or 'csv'.
     :param convert_sizes_lists_and_ma_data_to_string: bool, if True, the 'request_sizes', 'response_sizes' and 'ma_data'
         will be converted to string. This is useful when writing to files, so the view will be more readable.
+    :param skip_total_count_less_than: integer, if specified, the deviation calculation will be skipped
+        if the total count is less than this number.
+        This means that if we have moving average window of 7 days, on the 8th day, the deviation will be calculated
+        only if the total count of the checked type
+        (request average size, response average, request count, response count)
+        is greater or equal to this number.
     -----------------------------
     :return: the deviation list of dicts.
 
@@ -427,7 +434,8 @@ def deviation_calculator_by_moving_average(
         by_type,
         moving_average_window_days,
         top_bottom_deviation_percentage,
-        get_deviation_for_last_day_only
+        get_deviation_for_last_day_only,
+        skip_total_count_less_than
     )
 
     if deviation_list:
@@ -484,6 +492,9 @@ def deviation_calculator_by_moving_average_main():
         parser.add_argument(
             '-p', '--percentage', type=float, required=True,
             help='Percentage of deviation from moving average. Example: 0.1 for 10%%.')
+        parser.add_argument(
+            '-slt', '--skip_total_count_less_than', type=int, required=False,
+            help='An integer to skip the deviation calculation if the total count is less than this number.')
 
         return parser.parse_args()
 
@@ -517,7 +528,8 @@ def deviation_calculator_by_moving_average_main():
         summary=summary,
         output_file_path=args.output_file,
         output_file_type=args.output_type,
-        convert_sizes_lists_and_ma_data_to_string=convert_sizes_lists_and_ma_data_to_string
+        convert_sizes_lists_and_ma_data_to_string=convert_sizes_lists_and_ma_data_to_string,
+        skip_total_count_less_than=args.skip_total_count_less_than
     )
 
     return 0

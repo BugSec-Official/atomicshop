@@ -2,7 +2,7 @@ import os
 
 from .file_io import tomls
 from . import filesystem
-from .print_api import print_api
+from . import print_api
 
 CONFIG_FILE_NAME = 'config.toml'
 CONFIG: dict = dict()
@@ -45,7 +45,7 @@ def write_config(
         'CONFIG_FILE_NAME'.
     :param print_message: boolean, if True, the function will print the message about the created config file.
         Also, it will wait for the user to press Enter to exit the script.
-        If False, the function will not print anything and will not exit..
+        If False, the function will not print anything and will not exit.
     :return:
     """
 
@@ -62,7 +62,7 @@ def write_config(
         tomls.write_toml_file(config, f'{script_directory}{os.sep}{config_file_name}')
 
         if print_message:
-            print_api(f"Created config file: {config_file_path}", color="yellow")
-            print_api(f"You need to fill it with details.", color="yellow")
+            print_api.print_api(f"Created config file: {config_file_path}", color="yellow")
+            print_api.print_api(f"You need to fill it with details.", color="yellow")
             input("Press Enter to exit.")
             exit()

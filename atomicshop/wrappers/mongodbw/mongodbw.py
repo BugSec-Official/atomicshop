@@ -394,9 +394,14 @@ def find(
         query: dict = None,
         page: int = None,
         items: int = None,
-        sorting: dict[str, Literal[
-            'asc', 'desc',
-            1, -1]] = None,
+        sorting: Union[
+            dict[str, Literal[
+                'asc', 'desc',
+                'ASC', 'DESC',
+                1, -1]],
+            list[tuple[
+                str, Literal[1, -1]]],
+            None] = None,
         convert_object_id_to_str: bool = False,
         key_convert_to_dict: list[str] = None,
         mongo_client: pymongo.MongoClient = None,
@@ -445,29 +450,40 @@ def find(
         $nin: Will search for a value not in a list of values.
             Example for searching for a value that is not in a list of values:
             query = {'field_name': {'$nin': ['value1', 'value2', 'value3']}}
-
+        $exists: Will search for entries where the field exists or not.
+            Example for searching for entries where the field exists:
+            query = {'field_name': {'$exists': True}}
+            Example for searching for entries where the field does not exist:
+            query = {'field_name': {'$exists': False}}
+        $ne: Will search for entries where the field is not equal to the value.
+            Example for searching for entries where the field is not equal to the value:
+            query = {'field_name': {'$ne': 'value'}}
 
     :param page: int, the page number (Optional).
     :param items: int, the number of results per page (Optional).
-    :param sorting: dict, the name of the field and the order to sort the containers by.
-        You can use several fields to sort the containers by several fields.
-        In this case the containers will be sorted by the first field, then by the second field, etc.
-        You can also use only singular field to sort the containers by only one field.
-        Usage:
-            {
-                field_name: order
-            }
-        Example:
-            {
-                'vendor': 'asc',
-                'model': 'desc'
-            }
+    :param sorting: dict or list of tuples:
+        dict, the name of the field and the order to sort the containers by.
+            You can use several fields to sort the containers by several fields.
+            In this case the containers will be sorted by the first field, then by the second field, etc.
+            You can also use only singular field to sort the containers by only one field.
+            Usage:
+                {
+                    field_name: order
+                }
+            Example:
+                {
+                    'vendor': 'asc',
+                    'model': 'desc'
+                }
 
-        Or example using integers:
-            {
-                'vendor': 1,
-                'model': -1
-            }
+            Or example using integers:
+                {
+                    'vendor': 1,
+                    'model': -1
+                }
+
+        list of tuples, each tuple will contain [0] string of the field name and [1] the integer value of the order
+            to sort by, this is pymongo default, 1 for ascending and -1 for descending.
     :param convert_object_id_to_str: bool, if True, the '_id' field will be converted to a string.
         The '_id' field is an ObjectId type, which is a complex object, it can be converted to a string for simpler
         processing.
@@ -486,9 +502,9 @@ def find(
     elif items and not page:
         page = 1
 
-    if sorting:
+    if sorting and isinstance(sorting, dict):
         for key_to_sort_by, order in sorting.items():
-            if order not in ['asc', 'desc', 1, -1]:
+            if order.lower() not in ['asc', 'desc', 1, -1]:
                 raise ValueError("The order must be 'asc', 'desc', 1 or -1.")
 
     if not mongo_client:
@@ -510,13 +526,16 @@ def find(
 
     if sorting:
         sorting_list_of_tuples: list[tuple[str, int]] = []
-        for key_to_sort_by, order in sorting.items():
-            if order == 'asc':
-                order = pymongo.ASCENDING
-            elif order == 'desc':
-                order = pymongo.DESCENDING
+        if isinstance(sorting, dict):
+            for key_to_sort_by, order in sorting.items():
+                if order.lower() == 'asc':
+                    order = pymongo.ASCENDING
+                elif order.lower() == 'desc':
+                    order = pymongo.DESCENDING
 
-            sorting_list_of_tuples.append((key_to_sort_by, order))
+                sorting_list_of_tuples.append((key_to_sort_by, order))
+        elif sorting and isinstance(sorting, list):
+            sorting_list_of_tuples = sorting
 
         collection_items = collection_items.sort(sorting_list_of_tuples)
 
