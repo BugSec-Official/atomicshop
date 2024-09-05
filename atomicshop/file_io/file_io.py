@@ -2,7 +2,7 @@ from typing import Union
 import functools
 
 from .. import print_api
-from ..inspect_wrapper import get_target_function_default_args_and_combine_with_current
+from .. import inspect_wrapper
 
 
 def get_write_file_mode_string_from_overwrite_bool(overwrite: bool) -> str:
@@ -17,7 +17,8 @@ def write_file_decorator(function_name):
     def wrapper_write_file_decorator(*args, **kwargs):
         # Put 'args' into 'kwargs' with appropriate key.
         # args, kwargs = put_args_to_kwargs(function_name, *args, **kwargs)
-        args, kwargs = get_target_function_default_args_and_combine_with_current(function_name, *args, **kwargs)
+        args, kwargs = inspect_wrapper.get_target_function_default_args_and_combine_with_current(
+            function_name, *args, **kwargs)
 
         print_api.print_api(message=f"Writing file: {kwargs['file_path']}", **kwargs)
 
@@ -51,7 +52,8 @@ def read_file_decorator(function_name):
     def wrapper_read_file_decorator(*args, **kwargs):
         # Put 'args' into 'kwargs' with appropriate key.
         # args, kwargs = put_args_to_kwargs(function_name, *args, **kwargs)
-        args, kwargs = get_target_function_default_args_and_combine_with_current(function_name, *args, **kwargs)
+        args, kwargs = inspect_wrapper.get_target_function_default_args_and_combine_with_current(
+            function_name, *args, **kwargs)
 
         continue_loop: bool = True
         while continue_loop:

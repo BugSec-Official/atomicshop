@@ -263,11 +263,15 @@ class SocketWrapper:
             raise SocketWrapperConfigurationValuesError(message)
 
         try:
-            booleans.check_3_booleans_when_only_1_can_be_true(
-                (self.default_server_certificate_usage, 'default_server_certificate_usage'),
-                (self.sni_create_server_certificate_for_each_domain,
-                 'sni_create_server_certificate_for_each_domain'),
-                (self.custom_server_certificate_usage, 'custom_server_certificate_usage'))
+            booleans.is_only_1_true_in_list(
+                booleans_list_of_tuples=[
+                    (self.default_server_certificate_usage, 'default_server_certificate_usage'),
+                    (self.sni_create_server_certificate_for_each_domain,
+                     'sni_create_server_certificate_for_each_domain'),
+                    (self.custom_server_certificate_usage, 'custom_server_certificate_usage')
+                ],
+                raise_if_all_false=True
+            )
         except ValueError as e:
             raise SocketWrapperConfigurationValuesError(str(e))
 

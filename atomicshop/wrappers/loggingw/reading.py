@@ -13,6 +13,7 @@ def get_logs_paths(
         date_format: str = None,
         latest_only: bool = False,
         previous_day_only: bool = False,
+        yesterday_only: bool = False,
         specific_date: str = None
 ) -> list[filesystem.AtomicPath]:
     """
@@ -37,24 +38,37 @@ def get_logs_paths(
         date_format = '%Y-%m-%d'
     :param latest_only: Boolean, if True, only the latest log file path will be returned.
     :param previous_day_only: Boolean, if True, only the log file path from the previous day will be returned.
+    :param yesterday_only: Boolean, if True, only the log file path from yesterday will be returned.
+        There's a difference between 'previous_day_only' and 'yesterday_only'.
+        'previous_day_only' will get the log file from the previous day in the list of files that were found.
+        Since that doesn't guarantee that the log file from the previous day is yesterday, we have 'yesterday_only'.
     :param specific_date: Specific date to get the log file path.
         If specified, the function will get the log file by the specific date.
         Meaning that 'date_format' must be specified.
-
     """
 
-    if latest_only or previous_day_only or specific_date:
-        booleans.check_3_booleans_when_only_1_can_be_true(
-                (latest_only, 'latest_only'),
-                (previous_day_only, 'previous_day_only'),
-                (specific_date, 'specific_date'))
+    booleans.is_only_1_true_in_list(
+        booleans_list_of_tuples=[
+            (latest_only, 'latest_only'),
+            (previous_day_only, 'previous_day_only'),
+            (yesterday_only, 'yesterday_only'),
+            (specific_date, 'specific_date'),
+        ],
+        raise_if_all_false=False
+    )
 
     if not date_format and specific_date:
         raise ValueError('If "specific_date" is specified, "date_format" must be specified.')
 
     # Get the file_name_pattern from the file name. Build the file_name_pattern.
+    # For some reason if the file name will be '.zip', then the file stem will be '.zip' and the extension will be ''.
     log_file_name: str = Path(log_file_path).stem
     log_file_extension: str = Path(log_file_path).suffix
+
+    if not log_file_extension and '.' in log_file_name:
+        log_file_name, log_file_extension = log_file_name.rsplit('.')
+        log_file_extension = f'.{log_file_extension}'
+
     file_name_pattern: str = f'{log_file_name}*{log_file_extension}'
 
     # Get the directory path from the file path.
@@ -111,15 +125,18 @@ def get_logs_paths(
     if logs_files:
         if latest_only:
             logs_files = [logs_files[-1]]
-
-        if previous_day_only:
-            # Check if there is a previous day log file.
+        elif previous_day_only:
             if len(logs_files) == 1:
                 logs_files = []
             else:
                 logs_files = [logs_files[-2]]
-
-        if specific_date:
+        elif yesterday_only:
+            # Get yesterday's date.
+            yesterday_date_string = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime(date_format)
+            # Check if there is a yesterday log file.
+            logs_files = [single_file
+                          for single_file in logs_files if single_file.datetime_string == yesterday_date_string]
+        elif specific_date:
             # Check if there is a specific date log file.
             logs_files = [single_file for single_file in logs_files if single_file.datetime_string == specific_date]
 

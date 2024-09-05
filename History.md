@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.16.32 - 05.09.2024
+  * basics/booleans, config_init, file_io, mitm, print_api, system_resource_monitor, wrappers/loggingw, wrappers/mongodbw, wrappers/nodejsw/install_nodejs, wrappers/socketw, wrappers/ctyping/win_console - fixes and improvements. 
 * 2.16.31 - 01.09.2024
   * wrappers/socketw/sender - fixes and improvements.
 * 2.16.30 - 01.09.2024

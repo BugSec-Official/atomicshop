@@ -10,6 +10,7 @@ from ..permissions import permissions
 from ..python_functions import get_current_python_version_string, check_python_version_compliance
 from ..wrappers.socketw import socket_wrapper, dns_server, base
 from ..wrappers.loggingw import loggingw
+from ..wrappers.ctyping import win_console
 
 from .initialize_engines import ModuleCategory
 from .connection_thread_worker import thread_worker_main
@@ -26,6 +27,12 @@ EXCEPTIONS_CSV_LOGGER_NAME: str = 'exceptions'
 EXCEPTIONS_CSV_LOGGER_HEADER: str = 'time,exception'
 # noinspection PyTypeChecker
 MITM_ERROR_LOGGER: loggingw.ExceptionCsvLogger = None
+
+
+try:
+    win_console.disable_quick_edit()
+except win_console.NotWindowsConsoleError:
+    pass
 
 
 def exit_cleanup():

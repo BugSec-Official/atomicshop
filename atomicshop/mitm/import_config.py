@@ -93,19 +93,20 @@ def check_configurations() -> int:
             print_api(message, color='red')
             return 1
 
-    if config_static.DNSServer.set_default_dns_gateway or \
-            config_static.DNSServer.set_default_dns_gateway_to_localhost or \
-            config_static.DNSServer.set_default_dns_gateway_to_default_interface_ipv4:
-        try:
-            booleans.check_3_booleans_when_only_1_can_be_true(
+    try:
+        booleans.is_only_1_true_in_list(
+            booleans_list_of_tuples=[
                 (config_static.DNSServer.set_default_dns_gateway, '[dns][set_default_dns_gateway]'),
                 (config_static.DNSServer.set_default_dns_gateway_to_localhost,
                  '[dns][set_default_dns_gateway_to_localhost]'),
                 (config_static.DNSServer.set_default_dns_gateway_to_default_interface_ipv4,
-                 '[dns][set_default_dns_gateway_to_default_interface_ipv4]'))
-        except ValueError as e:
-            print_api(str(e), color='red')
-            return 1
+                 '[dns][set_default_dns_gateway_to_default_interface_ipv4]')
+            ],
+            raise_if_all_false=False
+        )
+    except ValueError as e:
+        print_api(str(e), color='red')
+        return 1
 
     if (config_static.DNSServer.set_default_dns_gateway or
             config_static.DNSServer.set_default_dns_gateway_to_localhost or

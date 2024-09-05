@@ -2,7 +2,6 @@ import sys
 import logging
 
 from .basics import ansi_escape_codes
-from .wrappers.loggingw import loggingw
 from .basics import tracebacks
 
 
@@ -74,6 +73,7 @@ def print_api(
 
     # Inner functions already get all the local variables of the main function.
     def print_or_logger():
+        from .wrappers.loggingw import loggingw
         nonlocal message
         nonlocal color
         nonlocal traceback_string
@@ -128,7 +128,6 @@ def print_api(
             if print_end == '\n':
                 if stdcolor and color is not None:
                     # Use logger to output message.
-                    # with loggingw.temporary_change_logger_stream_handler_color(logger, color=color):
                     with loggingw.temporary_change_logger_stream_handler_emit_color(logger, color):
                         getattr(logger, logger_method)(message)
                 else:

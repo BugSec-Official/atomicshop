@@ -84,10 +84,13 @@ def install_nodejs_ubuntu(
     :return:
     """
 
-    booleans.check_3_booleans_when_only_1_can_be_true(
-        (install_latest_version, 'install_latest_version'),
-        (install_lts, 'install_lts'),
-        (install_by_version_number, 'install_by_version_number')
+    booleans.is_only_1_true_in_list(
+        booleans_list_of_tuples=[
+            (install_latest_version, 'install_latest_version'),
+            (install_lts, 'install_lts'),
+            (install_by_version_number, 'install_by_version_number')
+        ],
+        raise_if_all_false=True
     )
 
     # Check if Node.js is already installed.

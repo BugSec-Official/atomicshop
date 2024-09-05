@@ -2,11 +2,10 @@ import csv
 import io
 from typing import Tuple, List
 
-from .file_io import read_file_decorator
 from . import file_io
 
 
-@read_file_decorator
+@file_io.read_file_decorator
 def read_csv_to_list_of_dicts_by_header(
         file_path: str,
         file_mode: str = 'r',
@@ -53,7 +52,7 @@ def read_csv_to_list_of_dicts_by_header(
     return csv_list, header
 
 
-@read_file_decorator
+@file_io.read_file_decorator
 def read_csv_to_list_of_lists(
         file_path: str,
         file_mode: str = 'r',

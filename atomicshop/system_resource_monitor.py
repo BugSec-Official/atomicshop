@@ -118,51 +118,12 @@ class SystemResourceMonitor:
         :return:
         """
 
-        def run_check_system_resources(
-                interval, get_cpu, get_memory, get_disk_io_bytes, get_disk_files_count, get_disk_busy_time,
-                get_disk_used_percent, calculate_maximum_changed_disk_io, maximum_disk_io, queue_list, manager_dict):
-            """
-            Continuously update the system resources in the shared results dictionary.
-            This function runs in a separate process.
-            """
-
-            while self.running:
-                # Get the results of the system resources check function and store them in
-                # temporary results' dictionary.
-                results = system_resources.check_system_resources(
-                    interval=interval, get_cpu=get_cpu, get_memory=get_memory,
-                    get_disk_io_bytes=get_disk_io_bytes, get_disk_files_count=get_disk_files_count,
-                    get_disk_busy_time=get_disk_busy_time, get_disk_used_percent=get_disk_used_percent)
-
-                if calculate_maximum_changed_disk_io:
-                    if results['disk_io_read'] > maximum_disk_io['read_bytes_per_sec']:
-                        maximum_disk_io['read_bytes_per_sec'] = results['disk_io_read']
-                    if results['disk_io_write'] > maximum_disk_io['write_bytes_per_sec']:
-                        maximum_disk_io['write_bytes_per_sec'] = results['disk_io_write']
-                    if results['disk_files_count_read'] > maximum_disk_io['read_files_count_per_sec']:
-                        maximum_disk_io['read_files_count_per_sec'] = results['disk_files_count_read']
-                    if results['disk_files_count_write'] > maximum_disk_io['write_files_count_per_sec']:
-                        maximum_disk_io['write_files_count_per_sec'] = results['disk_files_count_write']
-                    results['maximum_disk_io'] = maximum_disk_io
-
-                if queue_list is not None:
-                    for queue in queue_list:
-                        queue.put(results)
-
-                # Update the shared results dictionary with the temporary results' dictionary.
-                # This is done in separate steps to avoid overwriting the special 'multiprocessing.Manager.dict' object.
-                # So we update the shared results dictionary with the temporary results' dictionary.
-                if manager_dict is not None:
-                    manager_dict.update(results)
-
-                self.results = results
-
         if print_kwargs is None:
             print_kwargs = {}
 
         if self.thread is None:
             self.running = True
-            self.thread = threading.Thread(target=run_check_system_resources, args=(
+            self.thread = threading.Thread(target=self.run_check_system_resources, args=(
                 self.interval, self.get_cpu, self.get_memory, self.get_disk_io_bytes, self.get_disk_files_count,
                 self.get_disk_busy_time, self.get_disk_used_percent, self.calculate_maximum_changed_disk_io,
                 self.maximum_disk_io, self.queue_list, self.manager_dict))
@@ -170,6 +131,46 @@ class SystemResourceMonitor:
             self.thread.start()
         else:
             print_api.print_api("Monitoring is already running.", color='yellow', **print_kwargs)
+
+    def run_check_system_resources(
+            self,
+            interval, get_cpu, get_memory, get_disk_io_bytes, get_disk_files_count, get_disk_busy_time,
+            get_disk_used_percent, calculate_maximum_changed_disk_io, maximum_disk_io, queue_list, manager_dict):
+        """
+        Continuously update the system resources in the shared results dictionary.
+        This function runs in a separate process.
+        """
+
+        while self.running:
+            # Get the results of the system resources check function and store them in
+            # temporary results' dictionary.
+            results = system_resources.check_system_resources(
+                interval=interval, get_cpu=get_cpu, get_memory=get_memory,
+                get_disk_io_bytes=get_disk_io_bytes, get_disk_files_count=get_disk_files_count,
+                get_disk_busy_time=get_disk_busy_time, get_disk_used_percent=get_disk_used_percent)
+
+            if calculate_maximum_changed_disk_io:
+                if results['disk_io_read'] > maximum_disk_io['read_bytes_per_sec']:
+                    maximum_disk_io['read_bytes_per_sec'] = results['disk_io_read']
+                if results['disk_io_write'] > maximum_disk_io['write_bytes_per_sec']:
+                    maximum_disk_io['write_bytes_per_sec'] = results['disk_io_write']
+                if results['disk_files_count_read'] > maximum_disk_io['read_files_count_per_sec']:
+                    maximum_disk_io['read_files_count_per_sec'] = results['disk_files_count_read']
+                if results['disk_files_count_write'] > maximum_disk_io['write_files_count_per_sec']:
+                    maximum_disk_io['write_files_count_per_sec'] = results['disk_files_count_write']
+                results['maximum_disk_io'] = maximum_disk_io
+
+            if queue_list is not None:
+                for queue in queue_list:
+                    queue.put(results)
+
+            # Update the shared results dictionary with the temporary results' dictionary.
+            # This is done in separate steps to avoid overwriting the special 'multiprocessing.Manager.dict' object.
+            # So we update the shared results dictionary with the temporary results' dictionary.
+            if manager_dict is not None:
+                manager_dict.update(results)
+
+            self.results = results
 
     def get_results(self) -> dict:
         """
