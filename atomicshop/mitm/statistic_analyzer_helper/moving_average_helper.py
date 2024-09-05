@@ -347,11 +347,15 @@ def find_deviation_from_moving_average(
 
         deviation_type = None
         deviation_percentage = None
+        error_message: str = str()
         if day_statistics_content_dict[check_type] > check_type_moving_above:
             deviation_type = 'above'
-            deviation_percentage = (
-                    (day_statistics_content_dict[check_type] - host_moving_average_by_type) /
-                    host_moving_average_by_type)
+            try:
+                deviation_percentage = (
+                        (day_statistics_content_dict[check_type] - host_moving_average_by_type) /
+                        host_moving_average_by_type)
+            except ZeroDivisionError as e:
+                error_message = f' | Error: Division by 0, host_moving_average_by_type: {host_moving_average_by_type}'
         elif day_statistics_content_dict[check_type] < check_type_moving_below:
             deviation_type = 'below'
             deviation_percentage = (
@@ -359,7 +363,7 @@ def find_deviation_from_moving_average(
                     host_moving_average_by_type)
 
         if deviation_type:
-            message = f'[{check_type}] is [{deviation_type}] the moving average.'
+            message = f'[{check_type}] is [{deviation_type}] the moving average.' + error_message
 
             # The median and the total count are None for the count, Since they are the count.
             if 'count' in check_type:
