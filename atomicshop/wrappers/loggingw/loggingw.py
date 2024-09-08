@@ -5,7 +5,7 @@ import datetime
 import contextlib
 import threading
 
-from . import loggers, handlers
+from . import loggers, handlers, filters
 from ...file_io import csvs
 from ...basics import tracebacks, ansi_escape_codes
 from ... import print_api
@@ -308,10 +308,10 @@ def find_the_parent_logger_with_stream_handler(logger: logging.Logger) -> loggin
 @contextlib.contextmanager
 def _temporary_change_logger_stream_handler_color(logger: logging.Logger, color: str):
     """
-    THIS IS ONLY FOR REFERENCE, for better result use the 'temporary_change_logger_stream_handler_emit_color' function.
+    THIS IS ONLY FOR REFERENCE.
+    Better use 'temporary_change_logger_stream_record_color', since it is thread safe.
     If there are several threads that use this logger, there could be a problem, since unwanted messages
-    could be colored with the color of the other thread. 'temporary_change_logger_stream_handler_emit_color' is thread
-    safe and will color only the messages from the current thread.
+    could be colored with the color of the other thread.
 
     Context manager to temporarily change the color of the logger's StreamHandler formatter.
 
@@ -351,13 +351,16 @@ def _temporary_change_logger_stream_handler_color(logger: logging.Logger, color:
         # found_stream_handler.removeFilter(color_filter)
 
 
-# Thread-local storage to store color codes per thread
-thread_local = threading.local()
-
-
 @contextlib.contextmanager
-def temporary_change_logger_stream_handler_emit_color(logger: logging.Logger, color: str):
-    """Context manager to temporarily set the color code for log messages in the current thread."""
+def temporary_change_logger_stream_record_color(logger: logging.Logger, color: str):
+    """
+    This function will temporarily change the color of the logger's StreamHandler record message.
+
+    Example:
+        with temporary_change_logger_stream_record_color(logger, "red"):
+            # Do something with the temporary color.
+            logger.error("This message will be colored with the 'red'.")
+    """
 
     # Find the current or the topmost logger's StreamHandler.
     # Could be that it is a child logger inherits its handlers from the parent.
@@ -369,32 +372,21 @@ def temporary_change_logger_stream_handler_emit_color(logger: logging.Logger, co
             found_stream_handler = handler
             break
 
-    # Save the original emit method of the stream handler
-    original_emit = found_stream_handler.emit
+    # Save the original state of the handler
+    # original_filters = found_stream_handler.filters.copy()  # To restore the original filters
 
-    def emit_with_color(record):
-        original_msg = record.msg
-        # Check if the current thread has a color code
-        if getattr(thread_local, 'color', None):
-            record.msg = (
-                ansi_escape_codes.get_colors_basic_dict(color) + original_msg +
-                ansi_escape_codes.ColorsBasic.END)
-        original_emit(record)  # Call the original emit method
-        record.msg = original_msg  # Restore the original message for other handlers
+    # Create a thread-specific color filter
+    thread_id = threading.get_ident()
+    color_filter = filters.ThreadColorLogFilter(color, thread_id)
 
-    # Replace the emit method with our custom method
-    found_stream_handler.emit = emit_with_color
-
-    # Set the color code in thread-local storage for this thread
-    thread_local.color = color
+    # Add the filter to the handler
+    found_stream_handler.addFilter(color_filter)
 
     try:
-        yield
+        yield  # Do the logging within the context
     finally:
-        # Restore the original emit method after the context manager is exited
-        found_stream_handler.emit = original_emit
-        # Clear the color code from thread-local storage
-        thread_local.color = None
+        # Restore the original filters, ensuring thread safety
+        found_stream_handler.removeFilter(color_filter)
 
 
 class ExceptionCsvLogger:

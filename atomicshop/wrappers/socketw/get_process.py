@@ -73,20 +73,12 @@ class GetCommandLine:
                     print_api(
                         execution_error, error_type=True, logger_method="error", traceback_string=True,
                         **print_kwargs)
-                    pass
                 except psutil.AccessDenied:
                     execution_error = f"Access Denied for 'psutil' to read system process command line. " \
                                       f"Run script with Admin Rights."
                     print_api(
                         execution_error, error_type=True, logger_method="error", traceback_string=True,
                         **print_kwargs)
-                    pass
-                except Exception:
-                    execution_error = "There was undocumented exception in localhost script execution."
-                    print_api(
-                        execution_error, error_type=True, logger_method="error", traceback_string=True,
-                        **print_kwargs)
-                    pass
 
                 if not execution_error:
                     # Reading the buffer.
@@ -97,8 +89,8 @@ class GetCommandLine:
 
         return process_name
 
+    @staticmethod
     def get_commandline_and_error(
-            self,
             execution_output,
             execution_error,
             print_kwargs: dict = None

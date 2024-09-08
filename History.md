@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.16.34 - 05.09.2024
+  * print_api, wrappers/loggingw/loggingw - fixes and improvements.
 * 2.16.33 - 05.09.2024
   * mitm/statistic_analyzer_helper/moving_average_helper - fixes and improvements.
 * 2.16.32 - 05.09.2024
