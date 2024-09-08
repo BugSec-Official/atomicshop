@@ -128,7 +128,7 @@ def print_api(
             if print_end == '\n':
                 if stdcolor and color is not None:
                     # Use logger to output message.
-                    with loggingw.temporary_change_logger_stream_handler_emit_color(logger, color):
+                    with loggingw.temporary_change_logger_stream_record_color(logger, color):
                         getattr(logger, logger_method)(message)
                 else:
                     # Use logger to output message.
