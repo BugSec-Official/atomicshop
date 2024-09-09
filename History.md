@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.16.35 - 09.09.2024
+  * wrappers/mongodbw/mongodbw, a_installs/ubuntu/mongodb - fixes and improvements.
 * 2.16.34 - 05.09.2024
   * print_api, wrappers/loggingw/loggingw - fixes and improvements.
 * 2.16.33 - 05.09.2024

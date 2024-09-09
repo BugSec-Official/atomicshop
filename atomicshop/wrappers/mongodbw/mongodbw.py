@@ -18,6 +18,18 @@ These are good examples to get you started, but can't really cover all the use c
 """
 
 
+class MongoDBReplaceOneError(Exception):
+    pass
+
+
+class MongoDBUpdateOneError(Exception):
+    pass
+
+
+class MongoDBUpdateManyError(Exception):
+    pass
+
+
 class MongoDBWrapper:
     def __init__(
             self,
@@ -80,13 +92,15 @@ class MongoDBWrapper:
 
     def delete(
             self,
-            object_instance: Union[list[dict], dict],
+            query_instance: Union[list[dict], dict],
             collection_name: str
     ):
         """
-        Remove a list of dictionaries or a dictionary from a MongoDB collection.
+        Remove a dict or list of dictionaries or a dictionary from a MongoDB collection.
+        For pure mongo, this is the list of queries to remove.
+        Each query for a single item.
 
-        :param object_instance: list of dictionaries, the list of dictionaries to remove from the collection.
+        :param query_instance: dict or list of dictionaries, the list of queries to remove from the collection.
         :param collection_name: str, the name of the collection.
 
         :return: None
@@ -95,7 +109,30 @@ class MongoDBWrapper:
         self.connect()
 
         delete(
-            object_instance=object_instance,
+            query_instance=query_instance,
+            database=self.db, collection_name=collection_name,
+            mongo_client=self.client, close_client=False)
+
+    def delete_many(
+            self,
+            query: dict,
+            collection_name: str
+    ):
+        """
+        Remove all entries that match the query from a MongoDB collection.
+
+        :param query: dict, the query to search for.
+            Example, search for all entries with column name 'name' equal to 'John':
+                query = {'name': 'John'}
+        :param collection_name: str, the name of the collection.
+
+        :return: result of the operation.
+        """
+
+        self.connect()
+
+        return delete_many(
+            query=query,
             database=self.db, collection_name=collection_name,
             mongo_client=self.client, close_client=False)
 
@@ -202,6 +239,69 @@ class MongoDBWrapper:
             field_name=field_name, query=query, mongo_client=self.client, close_client=False)
 
         return distinct_values
+
+    def update(
+            self,
+            collection_name: str,
+            query: dict,
+            update_instance: Union[dict, list[dict]],
+            add_timestamp: bool = False,
+            convert_mixed_lists_to_strings: bool = False
+    ):
+        """
+        Update one entry in a MongoDB collection by query.
+        :param collection_name: str, the name of the collection.
+        :param query: dict, the query to search for.
+            Example, search for all entries with column name 'name' equal to 'John':
+                query = {'name': 'John'}
+            Find by Object id:
+                query = {'_id': ObjectId('5f3e3b3b4b9f3b3b4b9f3b3b')}
+        :param update_instance: dict or list of dicts, the update to apply.
+            Get examples for operators for each dict in the docstring of the function 'update' below.
+        :param add_timestamp: bool, if True, a current time timestamp will be added to the object.
+        :param convert_mixed_lists_to_strings: bool, if True, mixed lists or tuples when entries are
+            strings and integers, the integers will be converted to strings.
+        :return: result of the operation.
+        """
+
+        self.connect()
+
+        return update(
+            database=self.db, collection_name=collection_name,
+            query=query, update_instance=update_instance, add_timestamp=add_timestamp,
+            convert_mixed_lists_to_strings=convert_mixed_lists_to_strings,
+            mongo_client=self.client, close_client=False)
+
+    def replace(
+            self,
+            collection_name: str,
+            query: dict,
+            replacement: dict,
+            add_timestamp: bool = False,
+            convert_mixed_lists_to_strings: bool = False
+    ):
+        """
+        Replace one entry in a MongoDB collection by query.
+        :param collection_name: str, the name of the collection.
+        :param query: dict, the query to search for.
+            Example, search for all entries with column name 'name' equal to 'John':
+                query = {'name': 'John'}
+            Find by Object id:
+                query = {'_id': ObjectId('5f3e3b3b4b9f3b3b4b9f3b3b')}
+        :param replacement: dict, the replacement to apply.
+        :param add_timestamp: bool, if True, a current time timestamp will be added to the object.
+        :param convert_mixed_lists_to_strings: bool, if True, mixed lists or tuples when entries are
+
+        :return: result of the operation.
+        """
+
+        self.connect()
+
+        return replace(
+            database=self.db, collection_name=collection_name,
+            query=query, replacement=replacement,
+            add_timestamp=add_timestamp, convert_mixed_lists_to_strings=convert_mixed_lists_to_strings,
+            mongo_client=self.client, close_client=False)
 
     def count_entries_in_collection(
             self,
@@ -328,7 +428,11 @@ def index(
     collection = db[collection_name]
 
     if convert_mixed_lists_to_strings:
-        object_instance = dicts.convert_int_to_str_in_mixed_lists(object_instance)
+        if isinstance(object_instance, dict):
+            object_instance = dicts.convert_int_to_str_in_mixed_lists(object_instance)
+        elif isinstance(object_instance, list):
+            for doc_index, doc in enumerate(object_instance):
+                object_instance[doc_index] = dicts.convert_int_to_str_in_mixed_lists(doc)
 
     if add_timestamp:
         timestamp = datetime.datetime.now()
@@ -348,16 +452,18 @@ def index(
 
 
 def delete(
-        object_instance: Union[list[dict], dict],
+        query_instance: Union[list[dict], dict],
         database: Union[str, pymongo.database.Database],
         collection_name: str,
         mongo_client: pymongo.MongoClient = None,
         close_client: bool = False
 ):
     """
-    Remove a list of dictionaries or a dictionary from a MongoDB collection.
+    Remove a dict or list of dictionaries or a dictionary from a MongoDB collection.
 
-    :param object_instance: list of dictionaries, the list of dictionaries to remove from the collection.
+    :param query_instance: list of dictionaries, the list of dictionaries to remove from the collection.
+        For pure mongo, this is the list of queries to remove.
+        Each query for a single item.
     :param database: String or the database object.
         str - the name of the database. In this case the database object will be created.
         pymongo.database.Database - the database object that will be used instead of creating a new one.
@@ -369,7 +475,7 @@ def delete(
     :return: None
     """
 
-    _is_object_list_of_dicts_or_dict(object_instance)
+    _is_object_list_of_dicts_or_dict(query_instance)
 
     if not mongo_client:
         mongo_client = connect()
@@ -378,14 +484,53 @@ def delete(
     db = _get_pymongo_db_from_string_or_pymongo_db(database, mongo_client)
     collection = db[collection_name]
 
-    if isinstance(object_instance, dict):
-        collection.delete_one(object_instance)
-    elif isinstance(object_instance, list):
-        for doc in object_instance:
+    if isinstance(query_instance, dict):
+        collection.delete_one(query_instance)
+    elif isinstance(query_instance, list):
+        for doc in query_instance:
             collection.delete_one(doc)
 
     if close_client:
         mongo_client.close()
+
+
+def delete_many(
+        query: dict,
+        database: Union[str, pymongo.database.Database],
+        collection_name: str,
+        mongo_client: pymongo.MongoClient = None,
+        close_client: bool = False
+):
+    """
+    Remove all entries that match the query from a MongoDB collection.
+
+    :param query: dict, the query to search for.
+        Example, search for all entries with column name 'name' equal to 'John':
+            query = {'name': 'John'}
+    :param database: String or the database object.
+        str - the name of the database. In this case the database object will be created.
+        pymongo.database.Database - the database object that will be used instead of creating a new one.
+    :param collection_name: str, the name of the collection.
+    :param mongo_client: pymongo.MongoClient, the connection object.
+        If None, a new connection will be created to default URI.
+    :param close_client: bool, if True, the connection will be closed after the operation.
+
+    :return: result of the operation.
+    """
+
+    if not mongo_client:
+        mongo_client = connect()
+        close_client = True
+
+    db = _get_pymongo_db_from_string_or_pymongo_db(database, mongo_client)
+    collection = db[collection_name]
+
+    result = collection.delete_many(query)
+
+    if close_client:
+        mongo_client.close()
+
+    return result
 
 
 def find(
@@ -612,6 +757,145 @@ def distinct(
         mongo_client.close()
 
     return distinct_values
+
+
+def update(
+        database: Union[str, pymongo.database.Database],
+        collection_name: str,
+        query: dict,
+        update_instance: Union[dict, list[dict]],
+        add_timestamp: bool = False,
+        convert_mixed_lists_to_strings: bool = False,
+        mongo_client: pymongo.MongoClient = None,
+        close_client: bool = False
+):
+    """
+    Update one entry in a MongoDB collection by query.
+    :param database: String or the database object.
+        str - the name of the database. In this case the database object will be created.
+        pymongo.database.Database - the database object that will be used instead of creating a new one.
+    :param collection_name: str, the name of the collection.
+    :param query: dict, the query to search for.
+        Example, search for all entries with column name 'name' equal to 'John':
+            query = {'name': 'John'}
+        Find by Object id:
+            query = {'_id': ObjectId('5f3e3b3b4b9f3b3b4b9f3b3b')}
+    :param update_instance: dict or list of dicts, the update to apply.
+        If dict, the update will be applied to one entry using 'update_one'.
+        If list of dicts, the update will be applied to multiple entries using 'update_many'.
+
+        Examples for operators for each dict:
+        $set: update the column 'name' to 'Alice':
+            update_instance = {'$set': {'name': 'Alice'}}
+        $inc: increment the column 'age' by 1:
+            update_instance = {'$inc': {'age': 1}}
+        $unset: remove the column 'name':
+            update_instance = {'$unset': {'name': ''}}
+        $push: add a value to the list 'hobbies':
+            update_instance = {'$push': {'hobbies': 'swimming'}}
+        $pull: remove a value from the list 'hobbies':
+            update_instance = {'$pull': {'hobbies': 'swimming'}}
+    :param add_timestamp: bool, if True, a current time timestamp will be added to the object.
+    :param convert_mixed_lists_to_strings: bool, if True, mixed lists or tuples when entries are
+        strings and integers, the integers will be converted to strings.
+    :param mongo_client: pymongo.MongoClient, the connection object.
+        If None, a new connection will be created to default URI.
+    :param close_client: bool, if True, the connection will be closed after the operation.
+
+    :return: None
+    """
+
+    if not mongo_client:
+        mongo_client = connect()
+        close_client = True
+
+    db = _get_pymongo_db_from_string_or_pymongo_db(database, mongo_client)
+    collection = db[collection_name]
+
+    if convert_mixed_lists_to_strings:
+        if isinstance(update_instance, dict):
+            object_instance = dicts.convert_int_to_str_in_mixed_lists(update_instance)
+        elif isinstance(update_instance, list):
+            for doc_index, doc in enumerate(update_instance):
+                update_instance[doc_index] = dicts.convert_int_to_str_in_mixed_lists(doc)
+
+    if add_timestamp:
+        timestamp = datetime.datetime.now()
+        if isinstance(update_instance, dict):
+            update_instance['timestamp'] = timestamp
+        elif isinstance(update_instance, list):
+            for doc in update_instance:
+                doc['timestamp'] = timestamp
+
+    result = None
+    if isinstance(update_instance, dict):
+        result = collection.update_one(query, update_instance)
+    elif isinstance(update_instance, list):
+        result = collection.update_many(query, update_instance)
+
+    if result.matched_count == 0:
+        raise MongoDBUpdateOneError("No document found to update.")
+
+    if close_client:
+        mongo_client.close()
+
+    return result
+
+
+def replace(
+        database: Union[str, pymongo.database.Database],
+        collection_name: str,
+        query: dict,
+        replacement: dict,
+        add_timestamp: bool = False,
+        convert_mixed_lists_to_strings: bool = False,
+        mongo_client: pymongo.MongoClient = None,
+        close_client: bool = False
+):
+    """
+    Replace one entry in a MongoDB collection by query.
+    :param database: String or the database object.
+        str - the name of the database. In this case the database object will be created.
+        pymongo.database.Database - the database object that will be used instead of creating a new one.
+    :param collection_name: str, the name of the collection.
+    :param query: dict, the query to search for.
+        Example, search for all entries with column name 'name' equal to 'John':
+            query = {'name': 'John'}
+        Find by Object id:
+            query = {'_id': ObjectId('5f3e3b3b4b9f3b3b4b9f3b3b')}
+    :param replacement: dict, the replacement to apply.
+    :param add_timestamp: bool, if True, a current time timestamp will be added to the object.
+    :param convert_mixed_lists_to_strings: bool, if True, mixed lists or tuples when entries are strings and integers,
+        the integers will be converted to strings.
+    :param mongo_client: pymongo.MongoClient, the connection object.
+        If None, a new connection will be created to default URI.
+    :param close_client: bool, if True, the connection will be closed after the operation.
+
+    :return: None
+    """
+
+    if not mongo_client:
+        mongo_client = connect()
+        close_client = True
+
+    db = _get_pymongo_db_from_string_or_pymongo_db(database, mongo_client)
+    collection = db[collection_name]
+
+    if convert_mixed_lists_to_strings:
+        replacement = dicts.convert_int_to_str_in_mixed_lists(replacement)
+
+    if add_timestamp:
+        timestamp = datetime.datetime.now()
+        replacement['timestamp'] = timestamp
+
+    result = collection.replace_one(query, replacement)
+    if result.matched_count == 0:
+        raise MongoDBReplaceOneError("No document found to replace.")
+
+    if close_client:
+        mongo_client.close()
+
+    return result
 
 
 def count_entries_in_collection(
