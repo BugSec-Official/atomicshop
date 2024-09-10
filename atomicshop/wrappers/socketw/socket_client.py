@@ -181,7 +181,7 @@ class SocketClient:
         self.logger.info("Connected...")
 
         # Return the connected socket.
-        return self.socket_instance
+        return self.socket_instance, None
 
     def get_socket(self):
         return self.socket_instance
