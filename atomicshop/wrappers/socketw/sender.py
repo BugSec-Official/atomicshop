@@ -76,7 +76,7 @@ class Sender:
                 destination_address = self.ssl_socket.server_hostname
             destination: str = f'[{source_address}:{source_port}<->{destination_address}:{destination_port}]'
 
-            error_class_type = str(type(e)).replace("<class '", '').replace("'>", '')
+            error_class_type = type(e).__name__
             exception_error = tracebacks.get_as_string(one_line=True)
 
             if 'ssl' in error_class_type.lower():

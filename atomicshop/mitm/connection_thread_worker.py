@@ -273,6 +273,8 @@ def thread_worker_main(
 
                     # So if the socket was closed and there was an error we can break the loop
                     if not service_ssl_socket:
+                        record_and_statistics_write()
+                        recorded = True
                         break
 
                 # If there is a response, then send it.
