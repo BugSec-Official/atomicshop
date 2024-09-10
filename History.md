@@ -1,7 +1,7 @@
 <!-- HISTORY -->
 ## History
 
-* 2.16.37 - 10.09.2024
+* 2.16.37-38 - 10.09.2024
   * wrappers/socketw - fixes and improvements.
 * 2.16.36 - 10.09.2024
   * basics/exceptions, mitm/connection_thread_worker, wrappers/socketw - fixes and improvements.

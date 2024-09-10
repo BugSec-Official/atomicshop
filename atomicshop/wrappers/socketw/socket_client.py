@@ -118,7 +118,7 @@ class SocketClient:
                 f"Should be connected - Reusing.")
             # Since, restart the function each send_receive iteration, and there's still a connection we need to
             # return the socket, or the socket object will be nullified in the next step.
-            return self.socket_instance
+            return self.socket_instance, None
 
         # If 'dns_servers_list' was provided, we will resolve the domain to ip through these servers.
         if self.dns_servers_list:
