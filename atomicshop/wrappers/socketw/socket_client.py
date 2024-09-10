@@ -18,6 +18,7 @@ from .. import cryptographyw
 from ..loggingw import loggingw
 from ...print_api import print_api
 from ...file_io import file_io
+from ...basics import tracebacks
 
 
 class SocketClient:
@@ -55,6 +56,12 @@ class SocketClient:
         self.connection_ip = connection_ip
         self.dns_servers_list = dns_servers_list
 
+        if logger:
+            # Create child logger for the provided logger with the module's name.
+            self.logger: logging.Logger = loggingw.get_logger_with_level(f'{logger.name}.{Path(__file__).stem}')
+        else:
+            self.logger: logging.Logger = logger
+
         self.socket_instance = None
 
         # If 'connection_ip' was specified, but no 'dns_servers_list', then this IP will be used for 'socket.connect()'.
@@ -68,12 +75,6 @@ class SocketClient:
         elif self.connection_ip and self.dns_servers_list:
             raise ValueError("Both 'connection_ip' and 'dns_servers_list' were specified.")
 
-        if logger:
-            # Create child logger for the provided logger with the module's name.
-            self.logger: logging.Logger = loggingw.get_logger_with_level(f'{logger.name}.{Path(__file__).stem}')
-        else:
-            self.logger: logging.Logger = logger
-
     # Function to create SSL socket to destination service
     def create_service_socket(self):
         # If TLS is enabled.
@@ -86,8 +87,18 @@ class SocketClient:
             return creator.wrap_socket_with_ssl_context_client___default_certs___ignore_verification(
                 socket_object, self.service_name)
 
-    def service_connection(self):
-        """ Function to establish connection to server """
+    def service_connection(
+            self
+    ) -> tuple[
+            Union[socket.socket, ssl.SSLSocket, None],
+            Union[str, None]]:
+        """
+        Function to establish connection to server
+
+        :return: Tuple with socket object and error string.
+        If connection was successful, the error string will be None.
+        If connection wasn't successful, the socket object will be None.
+        """
         # Check if socket to service domain exists.
         # If not
         if not self.socket_instance:
@@ -106,8 +117,8 @@ class SocketClient:
                 f"Socket already defined to [{self.service_name}:{self.service_port}]. "
                 f"Should be connected - Reusing.")
             # Since, restart the function each send_receive iteration, and there's still a connection we need to
-            # set it True, or the socket object will be nullified in the next step.
-            return True
+            # return the socket, or the socket object will be nullified in the next step.
+            return self.socket_instance
 
         # If 'dns_servers_list' was provided, we will resolve the domain to ip through these servers.
         if self.dns_servers_list:
@@ -125,11 +136,13 @@ class SocketClient:
                 # Get only the first entry of the list of IPs [0]
                 self.connection_ip = function_server_address[0].to_text()
                 self.logger.info(f"Resolved to [{self.connection_ip}]")
-            except dns.resolver.NXDOMAIN:
-                self.logger.error(f"Domain {self.service_name} doesn't exist - Couldn't resolve with "
-                                  f"{self.dns_servers_list}.")
-                pass
-                return None
+            except dns.resolver.NXDOMAIN as e:
+                exception_type: str = type(e).__name__
+                error_string = (
+                    f"Socket Client Connect: {exception_type}: "
+                    f"Domain {self.service_name} doesn't exist - Couldn't resolve with {self.dns_servers_list}.")
+                print_api(error_string, logger=self.logger, logger_method='error')
+                return None, error_string
 
         # If DNS was resolved correctly or DNS servers weren't specified - we can try connecting.
         # If 'connection_ip' was manually specified or resolved with 'dnspython' - the connection
@@ -144,43 +157,25 @@ class SocketClient:
         try:
             # "connect()" to the server using address and port
             self.socket_instance.connect((destination, self.service_port))
-        except ConnectionRefusedError:
-            message = f"Couldn't connect to: {self.service_name}. The server is unreachable - Connection refused."
-            print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
-            # Socket close will be handled in the thread_worker_main
-            pass
-            return None
-        except ConnectionAbortedError:
-            message = f"Connection was aborted (by the software on host) to {self.service_name}."
-            print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
-            # Socket close will be handled in the thread_worker_main
-            pass
-            return None
-        except socket.gaierror:
-            message = f"Couldn't resolve [{self.service_name}] to IP using default methods. " \
-                      f"Domain doesn't exist or there's no IP assigned to it."
-            print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
-            # Socket close will be handled in the thread_worker_main
-            pass
-            return None
-        except ssl.SSLError:
-            message = f"SSLError raised on connection to {self.service_name}."
-            print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
-            # Socket close will be handled in the thread_worker_main
-            pass
-            return None
-        except TimeoutError:
-            message = f"TimeoutError raised on connection to {self.service_name}."
-            print_api(message, logger=self.logger, logger_method='error', traceback_string=True, oneline=True)
-            # Socket close will be handled in the thread_worker_main
-            pass
-            return None
-        except ValueError as e:
-            message = f'{str(e)} | on connect to [{self.service_name}].'
-            print_api(message, logger=self.logger, logger_method='error')
-            # Socket close will be handled in the thread_worker_main
-            pass
-            return None
+        except Exception as e:
+            exception_type: str = type(e).__name__
+            exception_error: str = tracebacks.get_as_string(one_line=True)
+            error_string: str = f"Socket Client Connect: {destination}: {exception_type}"
+
+            if exception_type in ['ConnectionRefusedError', 'ConnectionAbortedError', 'ConnectionResetError',
+                                  'ssl.SSLError', 'TimeoutError']:
+                error_message: str = f"{error_string}: {exception_error}"
+                print_api(error_message, logger=self.logger, logger_method='error')
+                return None, error_message
+            elif exception_type == 'socket.gaierror':
+                custom_error_message: str = (
+                    f"Couldn't resolve [{self.service_name}] to IP using default methods. "
+                    f"Domain doesn't exist or there's no IP assigned to it.")
+                error_message: str = f"{error_string}: {custom_error_message}"
+                print_api(error_message, logger=self.logger, logger_method='error')
+                return None, error_message
+            else:
+                raise e
 
         # If everything was fine, we'll log the connection.
         self.logger.info("Connected...")
@@ -200,14 +195,12 @@ class SocketClient:
     def send_receive_to_service(self, request_bytes: bytearray):
         # Define variables
         function_service_data = None
-        error_string = None
+        error_message = None
 
+        service_socket, error_message = self.service_connection()
         # If connection to service server wasn't successful
-        if not self.service_connection():
-            error_string = "Wasn't able to connect to service, closing the destination service socket"
-            print_api(error_string, logger=self.logger, logger_method='error')
-
-            # We'll close the socket and nullify the object
+        if error_message:
+            # Wasn't able to connect to service, closing the destination service socket and nullify the object.
             self.close_socket()
         # If the connection to the service was successful
         else:
@@ -227,7 +220,7 @@ class SocketClient:
 
             # If the socket disconnected on data send
             if error_on_send:
-                error_string = f"Service socket closed on data send: {error_on_send}"
+                error_message = f"Service socket closed on data send: {error_on_send}"
 
                 # We'll close the socket and nullify the object
                 self.close_socket()
@@ -238,12 +231,12 @@ class SocketClient:
 
                 # If data received is empty meaning the socket was closed on the other side
                 if not function_service_data:
-                    error_string = "Service server closed the connection on receive"
+                    error_message = "Service server closed the connection on receive"
 
                     # We'll close the socket and nullify the object
                     self.close_socket()
 
-        return function_service_data, error_string, self.connection_ip, self.socket_instance
+        return function_service_data, error_message, self.connection_ip, self.socket_instance
 
     def send_receive_message_list_with_interval(
             self, requests_bytes_list: list, intervals_list: list, intervals_defaults: int, cycles: int = 1):
@@ -316,15 +309,15 @@ class SocketClient:
                 # be passed.
                 # If there was connection error or socket close, then "ssl_socket" of the "service_client"
                 # will be empty.
-                response_raw_bytes, error_string, self.connection_ip, service_ssl_socket = \
+                response_raw_bytes, error_message, self.connection_ip, service_ssl_socket = \
                     self.send_receive_to_service(request_raw_bytes)
 
                 # Adding the response to responses list. Same for error.
                 responses_list.append(response_raw_bytes)
-                errors_list.append(error_string)
+                errors_list.append(error_message)
 
                 self.logger.info(f"Response: {response_raw_bytes}")
-                self.logger.info(f"Error: {error_string}")
+                self.logger.info(f"Error: {error_message}")
 
                 # So if the socket was closed and there was an error we can break the loop.
                 # This is needed for more complex operations
@@ -359,7 +352,7 @@ class SocketClient:
             raise ValueError("If 'save_as_file' is True, then 'cert_file_path' must be provided.")
 
         # Connect and get the connected socket.
-        server_socket_for_certificate = self.service_connection()
+        server_socket_for_certificate, error_message = self.service_connection()
         # Get the DER byte certificate from the socket.
         certificate_from_socket_der_bytes = ssl_base.get_certificate_from_socket(server_socket_for_certificate)
         print_api('Fetched certificate from socket.', logger=self.logger, **kwargs)
