@@ -164,9 +164,9 @@ def get_default_dns_gateway() -> tuple[bool, list[str]]:
                 current_interface_dynamic_ipv4_address == default_ipv4_address)
         if static_and_ip_match or dynamic_and_ip_match:
             if interface_settings['NameServer']:
-                function_result = (False, interface_settings['NameServer'].split(' '))
+                function_result = (False, interface_settings['NameServer'].split(','))
             else:
-                function_result = (True, interface_settings['DhcpNameServer'].split(' '))
+                function_result = (True, interface_settings['DhcpNameServer'].split(','))
 
             break
 

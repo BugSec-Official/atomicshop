@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import socket
 
 from ..print_api import print_api
 from .. import config_init, filesystem, dns
@@ -111,12 +112,29 @@ def check_configurations() -> int:
     if (config_static.DNSServer.set_default_dns_gateway or
             config_static.DNSServer.set_default_dns_gateway_to_localhost or
             config_static.DNSServer.set_default_dns_gateway_to_default_interface_ipv4):
+        # Get current settings of the DNS gateway.
         is_dns_dynamic, current_dns_gateway = dns.get_default_dns_gateway()
-        if is_dns_dynamic and not is_admin:
-            message: str = \
-                "Need to run the script with administrative rights to set the default DNS gateway.\nExiting..."
-            print_api(message, color='red')
-            return 1
+
+        if not is_admin:
+            if config_static.DNSServer.set_default_dns_gateway:
+                ipv4_address_list = config_static.DNSServer.set_default_dns_gateway
+            elif config_static.DNSServer.set_default_dns_gateway_to_localhost:
+                ipv4_address_list = ['127.0.0.1']
+            elif config_static.DNSServer.set_default_dns_gateway_to_default_interface_ipv4:
+                ipv4_address_list = [socket.gethostbyname(socket.gethostname())]
+            else:
+                raise ValueError("Error: DNS gateway configuration is not set.")
+
+            # If the setting is dynamic or static, but the needed target address is not in the current DNS gateway.
+            if (is_dns_dynamic or
+                    (not is_dns_dynamic and current_dns_gateway != ipv4_address_list)):
+                status_string = 'Dynamic' if is_dns_dynamic else 'Static'
+                message: str = (
+                    "Need to run the script with administrative rights to set the default DNS gateway.\n"
+                    f"Current DNS gateway: {status_string}, {current_dns_gateway}\n"
+                    f"Target DNS gateway: Static, {ipv4_address_list}")
+                print_api(message, color='red')
+                return 1
 
     # This is checked directly in the SocketWrapper.
     # if (config_static.Certificates.install_ca_certificate_to_root_store and not is_admin) or \

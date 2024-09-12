@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.16.39 - 12.09.2024
+  * mitm, wrappers/playwrightw, wrappers/socketw/base, wrappers/ubuntu_terminal, wrappers/winregw/winreg_network - fixes and improvements.
 * 2.16.37-38 - 10.09.2024
   * wrappers/socketw - fixes and improvements.
 * 2.16.36 - 10.09.2024

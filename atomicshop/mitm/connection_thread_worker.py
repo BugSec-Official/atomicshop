@@ -42,7 +42,18 @@ def thread_worker_main(
         except AttributeError:
             http_command: str = str()
 
-        response_size_bytes = ','.join([str(len(x)) for x in client_message.response_list_of_raw_bytes])
+        response_size_bytes: str = str()
+        for response_index, response in enumerate(client_message.response_list_of_raw_bytes):
+            if response is None:
+                response_size_bytes += ''
+            else:
+                response_size_bytes += str(len(response))
+
+            # If it is not the last entry, add the comma.
+            if response_index + 1 != len(client_message.response_list_of_raw_bytes):
+                response_size_bytes += ','
+
+        # response_size_bytes = ','.join([str(len(x)) for x in client_message.response_list_of_raw_bytes])
 
         if statistics_error_list and len(statistics_error_list) > 1:
             error_string = '||'.join(statistics_error_list)
@@ -258,7 +269,16 @@ def thread_worker_main(
                     # Since we need a list for raw bytes, we'll add the 'response_raw_bytes' to our list object.
                     # But we need to re-initiate it first.
                     client_message.response_list_of_raw_bytes = list()
-                    client_message.response_list_of_raw_bytes.append(response_raw_bytes)
+                    # If there was error during send or receive from the service and response was None,
+                    # It means that there was no response at all because of the error.
+                    if client_message.error and response_raw_bytes is None:
+                        client_message.response_list_of_raw_bytes.append(None)
+                    # If there was no error, but response came empty, it means that the service has closed the
+                    # socket after it received the request, without sending any data.
+                    elif client_message.error is None and response_raw_bytes is None:
+                        client_message.response_list_of_raw_bytes.append("")
+                    else:
+                        client_message.response_list_of_raw_bytes.append(response_raw_bytes)
 
                     client_message.response_list_of_raw_decoded = list()
                     # Make HTTP Response parsing only if there was response at all.

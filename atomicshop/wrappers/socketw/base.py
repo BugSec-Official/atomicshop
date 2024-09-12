@@ -66,7 +66,7 @@ def set_socket_timeout(socket_object, seconds: int = 1):
 
 def get_default_ip_address() -> str:
     """
-    Get the default IP address of the system.
+    Get the default IP address of the system (in other words the interface IPv4 that is used for internet connection).
     :return: string.
     """
     return socket.gethostbyname(socket.gethostname())

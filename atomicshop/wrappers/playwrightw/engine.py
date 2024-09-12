@@ -5,13 +5,15 @@ import random
 import getpass
 from tempfile import gettempdir
 
+# noinspection PyPackageRequirements
+from playwright.sync_api import sync_playwright, Error
+# Stealth options for playwright. External.
+from playwright_stealth import stealth_sync
+
 from ...keyboard_press import send_alt_tab
 from ... import filesystem, print_api
 
-# noinspection PyPackageRequirements
-from playwright.sync_api import sync_playwright
-# Stealth options for playwright. External.
-from playwright_stealth import stealth_sync
+from . import infra
 
 
 class PlaywrightEngine:
@@ -21,8 +23,11 @@ class PlaywrightEngine:
 
     def __init__(
             self,
-            browser: str = 'chromium', headless: bool = False, incognito_mode: bool = True,
-            browser_content_working_directory: str = None):
+            browser: str = 'chromium',
+            headless: bool = False,
+            incognito_mode: bool = True,
+            browser_content_working_directory: str = None
+    ):
         """
         :param browser: string, specifies which browser will be executed. Playwright default is 'chromium'.
         :param headless: boolean, specifies if browser will be executed in headless mode. Default is 'False'.
@@ -69,7 +74,15 @@ class PlaywrightEngine:
         # Also, 'sync_playwright()' has 'start()' function that executes the '__enter__()' function.
         # So, we can execute only that.
         self.playwright = sync_playwright().start()
-        self.execute_browser()
+
+        try:
+            self.execute_browser()
+        except Error as e:
+            if "BrowserType.launch: Executable doesn't exist" in e.message:
+                infra.install_playwright()
+                self.execute_browser()
+            else:
+                raise e
 
     def stop(self):
         # Close browser objects. You can only close browser without stopping playwright.
@@ -79,8 +92,7 @@ class PlaywrightEngine:
         # creates '.stop' attribute for 'playwright' object, which gets the '__exit__' function reference name.
         # playwright.stop = self.__exit__
         # So, we can call 'playwright.stop()' in order to close the object without 'with' statement.
-        # noinspection PyStatementEffect,PyUnresolvedReferences
-        self.playwright.stop
+        self.playwright.stop()
 
     def execute_browser(self) -> None:
         """ Execute browser based on mode """
@@ -169,9 +181,13 @@ class PlaywrightEngine:
         self.page.wait_for_selector(f'{element}[{attribute}="{value}"]')
 
     def login(
-            self, url_login: str,
-            user_box_text: str = str(), pass_box_text: str = str(), submit_button_text: str = str(),
-            username: str = str(), password: str = str(),
+            self,
+            url_login: str,
+            user_box_text: str = str(),
+            pass_box_text: str = str(),
+            submit_button_text: str = str(),
+            username: str = str(),
+            password: str = str(),
             credential_single_usage: bool = False
               ) -> None:
         """
