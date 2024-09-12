@@ -21,6 +21,33 @@ def install_packages(package_list: list[str]):
     subprocess.check_call(command)
 
 
+def remove_packages(
+        package_list: list[str],
+        remove_config_files: bool = False,
+        remove_dependencies: bool = False,
+):
+    """
+    Function removes a list of packages.
+    :param package_list: list of strings, package names to remove. Regular removal is through 'apt remove'.
+    :param remove_config_files: bool, if True, the config files will be removed also through 'apt purge'.
+    :param remove_dependencies: bool, if True, the dependencies will be removed also through 'apt autoremove'.
+    :return:
+    """
+
+    # Construct the command with the package list
+    command = ["sudo", "apt", "remove", "-y"] + package_list
+
+    # If remove_config_files is True, add 'purge' to the command
+    if remove_config_files:
+        command.insert(2, "purge")
+
+    subprocess.check_call(command)
+
+    # If remove_dependencies is True, remove the dependencies
+    if remove_dependencies:
+        subprocess.check_call(["sudo", "apt", "autoremove", "-y"])
+
+
 def is_package_installed(package: str) -> bool:
     """
     Function checks if a package is installed.

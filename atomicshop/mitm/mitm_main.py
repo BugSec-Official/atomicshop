@@ -38,11 +38,17 @@ except win_console.NotWindowsConsoleError:
 def exit_cleanup():
     if permissions.is_admin():
         is_dns_dynamic, current_dns_gateway = dns.get_default_dns_gateway()
-        print_api.print_api(f'Current DNS Gateway: {current_dns_gateway}')
+        status_string = 'Dynamic' if is_dns_dynamic else 'Static'
+        print_api.print_api(f'Current DNS Gateway: {status_string}, {current_dns_gateway}')
 
         if is_dns_dynamic != NETWORK_INTERFACE_IS_DYNAMIC or \
                 (not is_dns_dynamic and current_dns_gateway != NETWORK_INTERFACE_IPV4_ADDRESS_LIST):
-            dns.set_connection_dns_gateway_dynamic(use_default_connection=True)
+            if NETWORK_INTERFACE_IS_DYNAMIC:
+                dns.set_connection_dns_gateway_dynamic(use_default_connection=True)
+            else:
+                dns.set_connection_dns_gateway_static(
+                    dns_servers=NETWORK_INTERFACE_IPV4_ADDRESS_LIST, use_default_connection=True)
+
             print_api.print_api("Returned default DNS gateway...", color='blue')
 
     # The process will not be executed if there was an exception in the beginning.
@@ -349,10 +355,16 @@ def mitm_server(config_file_path: str):
             # from the one specified in the configuration file.
             if (NETWORK_INTERFACE_IS_DYNAMIC or (not NETWORK_INTERFACE_IS_DYNAMIC and
                                                  NETWORK_INTERFACE_IPV4_ADDRESS_LIST != dns_gateway_server_list)):
-                dns.set_connection_dns_gateway_static(
-                    dns_servers=dns_gateway_server_list,
-                    use_default_connection=True
-                )
+                try:
+                    dns.set_connection_dns_gateway_static(
+                        dns_servers=dns_gateway_server_list,
+                        use_default_connection=True
+                    )
+                except PermissionError as e:
+                    print_api.print_api(e, error_type=True, color="red", logger=system_logger)
+                    # Wait for the message to be printed and saved to file.
+                    time.sleep(1)
+                    return 1
 
         socket_thread = threading.Thread(
             target=socket_wrapper_instance.loop_for_incoming_sockets,
