@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.16.42 - 12.09.2024
+  * wrappers/mongodbw, wrappers/pycharmw/ubuntu - fixes and improvements.
 * 2.16.41 - 12.09.2024
   * wrappers/mongodbw/mongodbw - fixes and improvements.
 * 2.16.39-40 - 12.09.2024

@@ -11,7 +11,8 @@ def parse_args():
     :return: Parsed arguments.
     """
     parser = argparse.ArgumentParser(description='Install PyCharm Community Edition.')
-    parser.add_argument('--install', action='store_true', help='Install PyCharm Community Edition with snapd.')
+    parser.add_argument('-ic', '--install_community', action='store_true', required=True,
+                        help='Install PyCharm Community Edition with snapd.')
     parser.add_argument('--enable_sudo_execution', action='store_true',
                         help='There is a problem when trying to run snapd installed Pycharm as sudo, need to enable '
                              'this.')
@@ -29,7 +30,7 @@ def install_main():
 
     args = parse_args()
 
-    if args.install:
+    if args.install_community:
         process.execute_script('sudo snap install pycharm-community --classic', shell=True)
 
     if args.enable_sudo_execution:

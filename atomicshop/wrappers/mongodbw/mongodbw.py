@@ -92,7 +92,7 @@ class MongoDBWrapper:
 
     def delete(
             self,
-            query_instance: Union[list[dict], dict],
+            filter_instance: Union[list[dict], dict],
             collection_name: str
     ):
         """
@@ -100,7 +100,7 @@ class MongoDBWrapper:
         For pure mongo, this is the list of queries to remove.
         Each query for a single item.
 
-        :param query_instance: dict or list of dictionaries, the list of queries to remove from the collection.
+        :param filter_instance: dict or list of dictionaries (the list of filters to remove from the collection).
         :param collection_name: str, the name of the collection.
 
         :return: None
@@ -109,21 +109,21 @@ class MongoDBWrapper:
         self.connect()
 
         delete(
-            query_instance=query_instance,
+            filter_instance=filter_instance,
             database=self.db, collection_name=collection_name,
             mongo_client=self.client, close_client=False)
 
     def delete_many(
             self,
-            query: dict,
+            filter_query: dict,
             collection_name: str
     ):
         """
-        Remove all entries that match the query from a MongoDB collection.
+        Remove all entries that match the filter query from a MongoDB collection.
 
-        :param query: dict, the query to search for.
+        :param filter_query: dict, the filter query to search for.
             Example, search for all entries with column name 'name' equal to 'John':
-                query = {'name': 'John'}
+                filter query = {'name': 'John'}
         :param collection_name: str, the name of the collection.
 
         :return: result of the operation.
@@ -132,17 +132,51 @@ class MongoDBWrapper:
         self.connect()
 
         return delete_many(
-            query=query,
+            filter_query=filter_query,
             database=self.db, collection_name=collection_name,
+            mongo_client=self.client, close_client=False)
+
+    def create_index(
+            self,
+            collection_name: str,
+            fields_list: list[tuple[str, int]],
+            name: str = None
+    ):
+        """
+        Create an index in a MongoDB collection.
+        :param collection_name: str, the name of the collection.
+        :param fields_list: list of tuples, each tuple will contain
+            [0] string of the field name and
+            [1] the integer value of the order
+                to sort by, this is pymongo default, 1 for ascending and -1 for descending.
+            Example:
+                [
+                    ('vendor', 1),
+                    ('model', -1)
+                ]
+
+            Explanation:
+                This will create a compound index that will sort the collection by the field 'vendor'
+                in ascending order, and then by the field 'model' in descending order.
+        :param name: str, the name of the index.
+
+        :return: None
+        """
+
+        self.connect()
+
+        create_index(
+            database=self.db, collection_name=collection_name,
+            fields_list=fields_list, name=name,
             mongo_client=self.client, close_client=False)
 
     def find(
             self,
             collection_name: str,
-            query: dict = None,
+            filter_query: dict = None,
             page: int = None,
             items: int = None,
-            sorting: dict[str, Literal[
+            sort: dict[str, Literal[
                 'asc', 'desc',
                 1, -1]] = None,
             convert_object_id_to_str: bool = False,
@@ -151,18 +185,18 @@ class MongoDBWrapper:
         """
         Find entries in a MongoDB collection by query.
         :param collection_name: str, the name of the collection.
-        :param query: dict, the query to search for.
+        :param filter_query: dict, the query to search for.
             Example, search for all entries with column name 'name' equal to 'John':
-                query = {'name': 'John'}
+                filter_query = {'name': 'John'}
             Example, return all entries from collection:
-                query = None
+                filter_query = None
 
             CHECK MORE EXAMPLES IN THE DOCSTRING OF THE FUNCTION 'find' BELOW which is not in this class.
         :param page: int, the page number (Optional).
             The results are filtered after results are fetched from db.
         :param items: int, the number of results per page (Optional).
             The results are filtered after results are fetched from db.
-        :param sorting: dict, the name of the field and the order to sort the containers by.
+        :param sort: dict, the name of the field and the order to sort the containers by.
             You can use several fields to sort the containers by several fields.
             In this case the containers will be sorted by the first field, then by the second field, etc.
             You can also use only singular field to sort the containers by only one field.
@@ -195,7 +229,7 @@ class MongoDBWrapper:
 
         entries: list[dict] = find(
             database=self.db, collection_name=collection_name,
-            query=query, page=page, items=items, sorting=sorting,
+            filter_query=filter_query, page=page, items=items, sort=sort,
             convert_object_id_to_str=convert_object_id_to_str, key_convert_to_dict=keys_convert_to_dict,
             mongo_client=self.client, close_client=False)
 
@@ -205,7 +239,7 @@ class MongoDBWrapper:
             self,
             collection_name: str,
             field_name: str,
-            query: dict = None
+            filter_query: dict = None
     ) -> list:
         """
         Get distinct values of a field from a MongoDB collection.
@@ -227,7 +261,7 @@ class MongoDBWrapper:
 
         :param collection_name: str, the name of the collection.
         :param field_name: str, the name of the field.
-        :param query: dict, the query to search for. If None, the query will not be executed.
+        :param filter_query: dict, the filter query to search for. If None, the filter query will not be executed.
 
         :return: list, the list of distinct values.
         """
@@ -236,26 +270,26 @@ class MongoDBWrapper:
 
         distinct_values = distinct(
             database=self.db, collection_name=collection_name,
-            field_name=field_name, query=query, mongo_client=self.client, close_client=False)
+            field_name=field_name, filter_query=filter_query, mongo_client=self.client, close_client=False)
 
         return distinct_values
 
     def update(
             self,
             collection_name: str,
-            query: dict,
+            filter_query: dict,
             update_instance: Union[dict, list[dict]],
             add_timestamp: bool = False,
             convert_mixed_lists_to_strings: bool = False
     ):
         """
-        Update one entry in a MongoDB collection by query.
+        Update one entry in a MongoDB collection by filter query.
         :param collection_name: str, the name of the collection.
-        :param query: dict, the query to search for.
+        :param filter_query: dict, the filter query to search for.
             Example, search for all entries with column name 'name' equal to 'John':
-                query = {'name': 'John'}
+                filter_query = {'name': 'John'}
             Find by Object id:
-                query = {'_id': ObjectId('5f3e3b3b4b9f3b3b4b9f3b3b')}
+                filter_query = {'_id': ObjectId('5f3e3b3b4b9f3b3b4b9f3b3b')}
         :param update_instance: dict or list of dicts, the update to apply.
             Get examples for operators for each dict in the docstring of the function 'update' below.
         :param add_timestamp: bool, if True, a current time timestamp will be added to the object.
@@ -268,26 +302,26 @@ class MongoDBWrapper:
 
         return update(
             database=self.db, collection_name=collection_name,
-            query=query, update_instance=update_instance, add_timestamp=add_timestamp,
+            filter_query=filter_query, update_instance=update_instance, add_timestamp=add_timestamp,
             convert_mixed_lists_to_strings=convert_mixed_lists_to_strings,
             mongo_client=self.client, close_client=False)
 
     def replace(
             self,
             collection_name: str,
-            query: dict,
+            filter_query: dict,
             replacement: dict,
             add_timestamp: bool = False,
             convert_mixed_lists_to_strings: bool = False
     ):
         """
-        Replace one entry in a MongoDB collection by query.
+        Replace one entry in a MongoDB collection by filter query.
         :param collection_name: str, the name of the collection.
-        :param query: dict, the query to search for.
+        :param filter_query: dict, the filter query to search for.
             Example, search for all entries with column name 'name' equal to 'John':
-                query = {'name': 'John'}
+                filter_query = {'name': 'John'}
             Find by Object id:
-                query = {'_id': ObjectId('5f3e3b3b4b9f3b3b4b9f3b3b')}
+                filter_query = {'_id': ObjectId('5f3e3b3b4b9f3b3b4b9f3b3b')}
         :param replacement: dict, the replacement to apply.
         :param add_timestamp: bool, if True, a current time timestamp will be added to the object.
         :param convert_mixed_lists_to_strings: bool, if True, mixed lists or tuples when entries are
@@ -299,24 +333,62 @@ class MongoDBWrapper:
 
         return replace(
             database=self.db, collection_name=collection_name,
-            query=query, replacement=replacement,
+            filter_query=filter_query, replacement=replacement,
             add_timestamp=add_timestamp, convert_mixed_lists_to_strings=convert_mixed_lists_to_strings,
             mongo_client=self.client, close_client=False)
+
+    def get_all_indexes_in_collection(
+            self,
+            collection_name: str
+    ) -> dict:
+        """
+        Get all indexes in a MongoDB collection.
+        :param collection_name: str, the name of the collection.
+        :return: list of dictionaries, the list of indexes.
+        """
+
+        self.connect()
+
+        indexes: dict = get_all_indexes_in_collection(
+            database=self.db, collection_name=collection_name,
+            mongo_client=self.client, close_client=False)
+
+        return indexes
+
+    def is_index_name_in_collection(
+            self,
+            collection_name: str,
+            index_name: str
+    ) -> bool:
+        """
+        Check if an index name exists in a MongoDB collection.
+        :param collection_name: str, the name of the collection.
+        :param index_name: str, the name of the index.
+        :return: bool, if the index name exists in the collection.
+        """
+
+        self.connect()
+
+        exists: bool = is_index_name_in_collection(
+            database=self.db, collection_name=collection_name,
+            index_name=index_name, mongo_client=self.client, close_client=False)
+
+        return exists
 
     def count_entries_in_collection(
             self,
             collection_name: str,
-            query: dict = None
+            filter_query: dict = None
     ) -> int:
         """
         Count entries in a MongoDB collection by query.
 
         :param collection_name: str, the name of the collection.
-        :param query: dict, the query to search for.
+        :param filter_query: dict, the query to search for.
             Example, search for all entries with column name 'name' equal to 'John':
-                query = {'name': 'John'}
+                filter_query = {'name': 'John'}
             Example, return all entries from collection:
-                query = None
+                filter_query = None
 
         :return: int, the number of entries that match the query.
         """
@@ -325,7 +397,7 @@ class MongoDBWrapper:
 
         count = count_entries_in_collection(
             database=self.db, collection_name=collection_name,
-            query=query, mongo_client=self.client, close_client=False)
+            filter_query=filter_query, mongo_client=self.client, close_client=False)
 
         return count
 
@@ -452,7 +524,7 @@ def insert(
 
 
 def delete(
-        query_instance: Union[list[dict], dict],
+        filter_instance: Union[list[dict], dict],
         database: Union[str, pymongo.database.Database],
         collection_name: str,
         mongo_client: pymongo.MongoClient = None,
@@ -461,9 +533,10 @@ def delete(
     """
     Remove a dict or list of dictionaries or a dictionary from a MongoDB collection.
 
-    :param query_instance: list of dictionaries, the list of dictionaries to remove from the collection.
-        For pure mongo, this is the list of queries to remove.
-        Each query for a single item.
+    :param filter_instance: dict or list of dictionaries,
+        dict, the regular filter for pymongo.
+        list of dictionaries to remove from the collection, for pure mongo, this is the list of filtered to remove.
+            Each filter for a single item.
     :param database: String or the database object.
         str - the name of the database. In this case the database object will be created.
         pymongo.database.Database - the database object that will be used instead of creating a new one.
@@ -475,7 +548,7 @@ def delete(
     :return: None
     """
 
-    _is_object_list_of_dicts_or_dict(query_instance)
+    _is_object_list_of_dicts_or_dict(filter_instance)
 
     if not mongo_client:
         mongo_client = connect()
@@ -484,10 +557,10 @@ def delete(
     db = _get_pymongo_db_from_string_or_pymongo_db(database, mongo_client)
     collection = db[collection_name]
 
-    if isinstance(query_instance, dict):
-        collection.delete_one(query_instance)
-    elif isinstance(query_instance, list):
-        for doc in query_instance:
+    if isinstance(filter_instance, dict):
+        collection.delete_one(filter_instance)
+    elif isinstance(filter_instance, list):
+        for doc in filter_instance:
             collection.delete_one(doc)
 
     if close_client:
@@ -495,18 +568,18 @@ def delete(
 
 
 def delete_many(
-        query: dict,
+        filter_query: dict,
         database: Union[str, pymongo.database.Database],
         collection_name: str,
         mongo_client: pymongo.MongoClient = None,
         close_client: bool = False
 ):
     """
-    Remove all entries that match the query from a MongoDB collection.
+    Remove all entries that match the filter query from a MongoDB collection.
 
-    :param query: dict, the query to search for.
+    :param filter_query: dict, the filter query to search for.
         Example, search for all entries with column name 'name' equal to 'John':
-            query = {'name': 'John'}
+            filter_query = {'name': 'John'}
     :param database: String or the database object.
         str - the name of the database. In this case the database object will be created.
         pymongo.database.Database - the database object that will be used instead of creating a new one.
@@ -525,7 +598,7 @@ def delete_many(
     db = _get_pymongo_db_from_string_or_pymongo_db(database, mongo_client)
     collection = db[collection_name]
 
-    result = collection.delete_many(query)
+    result = collection.delete_many(filter_query)
 
     if close_client:
         mongo_client.close()
@@ -533,13 +606,62 @@ def delete_many(
     return result
 
 
+def create_index(
+        database: Union[str, pymongo.database.Database],
+        collection_name: str,
+        fields_list: list[tuple[str, int]],
+        name: str = None,
+        mongo_client: pymongo.MongoClient = None,
+        close_client: bool = False
+):
+    """
+    Create an index in a MongoDB collection.
+    :param database: String or the database object.
+        str - the name of the database. In this case the database object will be created.
+        pymongo.database.Database - the database object that will be used instead of creating a new one.
+    :param collection_name: str, the name of the collection.
+    :param fields_list: list of tuples, each tuple will contain
+        [0] string of the field name and
+        [1] the integer value of the order
+            to sort by, this is pymongo default, 1 for ascending and -1 for descending.
+        Example:
+            [
+                ('vendor', 1),
+                ('model', -1)
+            ]
+
+        Explanation:
+            This will create a compound index that will sort the collection by the field 'vendor' in ascending order,
+            and then by the field 'model' in descending order.
+    :param name: str, the name of the index.
+    :param mongo_client: pymongo.MongoClient, the connection object.
+        If None, a new connection will be created to default URI.
+    :param close_client: bool, if True, the connection will be closed after the operation.
+
+    :return: None
+    """
+
+    if not mongo_client:
+        mongo_client = connect()
+        close_client = True
+
+    db = _get_pymongo_db_from_string_or_pymongo_db(database, mongo_client)
+    collection = db[collection_name]
+
+    collection.create_index(fields_list, name=name)
+
+    if close_client:
+        mongo_client.close()
+
+
 def find(
         database: Union[str, pymongo.database.Database],
         collection_name: str,
-        query: dict = None,
+        filter_query: dict = None,
+        projection: dict = None,
         page: int = None,
         items: int = None,
-        sorting: Union[
+        sort: Union[
             dict[str, Literal[
                 'asc', 'desc',
                 'ASC', 'DESC',
@@ -558,55 +680,62 @@ def find(
         str - the name of the database. In this case the database object will be created.
         pymongo.database.Database - the database object that will be used instead of creating a new one.
     :param collection_name: str, the name of the collection.
-    :param query: dict, the query to search for.
+    :param filter_query: dict, the query to search for.
         Example, return all entries from collection:
-            query = None
+            filter_query = None
         Example, search for all entries with column name 'name' equal to 'John':
-            query = {'name': 'John'}
+            filter_query = {'name': 'John'}
 
         Additional parameters to use in the value of the query:
         $regex: Will search for a regex pattern in the field.
             Example for searching for a value that contains 'test':
-            query = {'field_name': {'$regex': 'test'}}
+            filter_query = {'field_name': {'$regex': 'test'}}
             This will return all entries where the field 'field_name' contains the word 'test':
             'test', 'test1', '2test', etc.
 
             Example for searching for a value that starts with 'test':
-            query = {'field_name': {'$regex': '^test'}}
+            filter_query = {'field_name': {'$regex': '^test'}}
         $options: The options for the regex search.
             'i': case-insensitive search.
                 Example for case-insensitive search:
-                query = {'field_name': {'$regex': 'test', '$options': 'i'}}
+                filter_query = {'field_name': {'$regex': 'test', '$options': 'i'}}
         $and: Will search for entries that match all the conditions.
             Example for searching for entries that match all the conditions:
-            query = {'$and': [
+            filter_query = {'$and': [
                 {'field_name1': 'value1'},
                 {'field_name2': 'value2'}
             ]}
         $or: Will search for entries that match at least one of the conditions.
             Example for searching for entries that match at least one of the conditions:
-            query = {'$or': [
+            filter_query = {'$or': [
                 {'field_name1': 'value1'},
                 {'field_name2': 'value2'}
             ]}
         $in: Will search for a value in a list of values.
             Example for searching for a value that is in a list of values:
-            query = {'field_name': {'$in': ['value1', 'value2', 'value3']}}
+            filter_query = {'field_name': {'$in': ['value1', 'value2', 'value3']}}
         $nin: Will search for a value not in a list of values.
             Example for searching for a value that is not in a list of values:
-            query = {'field_name': {'$nin': ['value1', 'value2', 'value3']}}
+            filter_query = {'field_name': {'$nin': ['value1', 'value2', 'value3']}}
         $exists: Will search for entries where the field exists or not.
             Example for searching for entries where the field exists:
-            query = {'field_name': {'$exists': True}}
+            filter_query = {'field_name': {'$exists': True}}
             Example for searching for entries where the field does not exist:
-            query = {'field_name': {'$exists': False}}
+            filter_query = {'field_name': {'$exists': False}}
         $ne: Will search for entries where the field is not equal to the value.
             Example for searching for entries where the field is not equal to the value:
-            query = {'field_name': {'$ne': 'value'}}
+            filter_query = {'field_name': {'$ne': 'value'}}
 
+    :param projection: dict, the only fields to return or exclude.
+        Example, return only the field 'name' and 'age':
+            projection = {'name': 1, 'age': 1}
+        Example, return all fields except the field 'age':
+            projection = {'age': 0}
+        Example, return all fields except the field 'age' and 'name':
+            projection = {'age': 0, 'name': 0}
     :param page: int, the page number (Optional).
     :param items: int, the number of results per page (Optional).
-    :param sorting: dict or list of tuples:
+    :param sort: dict or list of tuples:
         dict, the name of the field and the order to sort the containers by.
             You can use several fields to sort the containers by several fields.
             In this case the containers will be sorted by the first field, then by the second field, etc.
@@ -647,8 +776,8 @@ def find(
     elif items and not page:
         page = 1
 
-    if sorting and isinstance(sorting, dict):
-        for key_to_sort_by, order in sorting.items():
+    if sort and isinstance(sort, dict):
+        for key_to_sort_by, order in sort.items():
             if order.lower() not in ['asc', 'desc', 1, -1]:
                 raise ValueError("The order must be 'asc', 'desc', 1 or -1.")
 
@@ -659,35 +788,42 @@ def find(
     db = _get_pymongo_db_from_string_or_pymongo_db(database, mongo_client)
     collection = db[collection_name]
 
-    if query is None:
-        query = {}
+    if filter_query is None:
+        filter_query = {}
+
+    # 'skip_items' can be 0, if we ask for the first page, so we still need to cut the number of items.
+    # In this case checking if 'items' is not None is enough.
+    if items is None:
+        items = 0
 
     # Calculate the number of documents to skip
     skip_items = 0
     if page and items:
         skip_items = (page - 1) * items
 
-    collection_items = collection.find(query)
-
-    if sorting:
-        sorting_list_of_tuples: list[tuple[str, int]] = []
-        if isinstance(sorting, dict):
-            for key_to_sort_by, order in sorting.items():
+    # noinspection PyTypeChecker
+    sorting_list_of_tuples: list[tuple[str, int]] = None
+    if sort:
+        sorting_list_of_tuples = []
+        if isinstance(sort, dict):
+            for key_to_sort_by, order in sort.items():
                 if order.lower() == 'asc':
                     order = pymongo.ASCENDING
                 elif order.lower() == 'desc':
                     order = pymongo.DESCENDING
 
                 sorting_list_of_tuples.append((key_to_sort_by, order))
-        elif sorting and isinstance(sorting, list):
-            sorting_list_of_tuples = sorting
+        elif sort and isinstance(sort, list):
+            sorting_list_of_tuples = sort
 
-        collection_items = collection_items.sort(sorting_list_of_tuples)
+        # collection_items = collection_items.sort(sorting_list_of_tuples)
+    collection_items = collection.find(
+        filter_query, projection=projection, sort=sorting_list_of_tuples, skip=skip_items, limit=items)
 
-    # 'skip_items' can be 0, if we ask for the first page, so we still need to cut the number of items.
-    # In this case checking if 'items' is not None is enough.
-    if items:
-        collection_items = collection_items.skip(skip_items).limit(items)
+    # # 'skip_items' can be 0, if we ask for the first page, so we still need to cut the number of items.
+    # # In this case checking if 'items' is not None is enough.
+    # if items:
+    #     collection_items = collection_items.skip(skip_items).limit(items)
 
     entries: list[dict] = list(collection_items)
 
@@ -708,7 +844,7 @@ def distinct(
         database: Union[str, pymongo.database.Database],
         collection_name: str,
         field_name: str,
-        query: dict = None,
+        filter_query: dict = None,
         mongo_client: pymongo.MongoClient = None,
         close_client: bool = False
 ) -> list:
@@ -735,8 +871,8 @@ def distinct(
         pymongo.database.Database - the database object that will be used instead of creating a new one.
     :param collection_name: str, the name of the collection.
     :param field_name: str, the name of the field.
-    :param query: dict, the query to search for.
-        If None, the query will not be executed.
+    :param filter_query: dict, the filter query to search for.
+        If None, the filter query will not be executed.
     :param mongo_client: pymongo.MongoClient, the connection object.
         If None, a new connection will be created to default URI.
     :param close_client: bool, if True, the connection will be closed after the operation.
@@ -751,7 +887,7 @@ def distinct(
     db = _get_pymongo_db_from_string_or_pymongo_db(database, mongo_client)
     collection = db[collection_name]
 
-    distinct_values = collection.distinct(field_name, query)
+    distinct_values = collection.distinct(field_name, filter_query)
 
     if close_client:
         mongo_client.close()
@@ -762,7 +898,7 @@ def distinct(
 def update(
         database: Union[str, pymongo.database.Database],
         collection_name: str,
-        query: dict,
+        filter_query: dict,
         update_instance: Union[dict, list[dict]],
         add_timestamp: bool = False,
         convert_mixed_lists_to_strings: bool = False,
@@ -770,16 +906,16 @@ def update(
         close_client: bool = False
 ):
     """
-    Update one entry in a MongoDB collection by query.
+    Update one entry in a MongoDB collection by filter query.
     :param database: String or the database object.
         str - the name of the database. In this case the database object will be created.
         pymongo.database.Database - the database object that will be used instead of creating a new one.
     :param collection_name: str, the name of the collection.
-    :param query: dict, the query to search for.
+    :param filter_query: dict, the filter query to search for.
         Example, search for all entries with column name 'name' equal to 'John':
-            query = {'name': 'John'}
+            filter_query = {'name': 'John'}
         Find by Object id:
-            query = {'_id': ObjectId('5f3e3b3b4b9f3b3b4b9f3b3b')}
+            filter_query = {'_id': ObjectId('5f3e3b3b4b9f3b3b4b9f3b3b')}
     :param update_instance: dict or list of dicts, the update to apply.
         If dict, the update will be applied to one entry using 'update_one'.
         If list of dicts, the update will be applied to multiple entries using 'update_many'.
@@ -814,7 +950,7 @@ def update(
 
     if convert_mixed_lists_to_strings:
         if isinstance(update_instance, dict):
-            object_instance = dicts.convert_int_to_str_in_mixed_lists(update_instance)
+            update_instance = dicts.convert_int_to_str_in_mixed_lists(update_instance)
         elif isinstance(update_instance, list):
             for doc_index, doc in enumerate(update_instance):
                 update_instance[doc_index] = dicts.convert_int_to_str_in_mixed_lists(doc)
@@ -829,9 +965,9 @@ def update(
 
     result = None
     if isinstance(update_instance, dict):
-        result = collection.update_one(query, update_instance)
+        result = collection.update_one(filter_query, update_instance)
     elif isinstance(update_instance, list):
-        result = collection.update_many(query, update_instance)
+        result = collection.update_many(filter_query, update_instance)
 
     if result.matched_count == 0:
         raise MongoDBUpdateOneError("No document found to update.")
@@ -845,7 +981,7 @@ def update(
 def replace(
         database: Union[str, pymongo.database.Database],
         collection_name: str,
-        query: dict,
+        filter_query: dict,
         replacement: dict,
         add_timestamp: bool = False,
         convert_mixed_lists_to_strings: bool = False,
@@ -853,16 +989,16 @@ def replace(
         close_client: bool = False
 ):
     """
-    Replace one entry in a MongoDB collection by query.
+    Replace one entry in a MongoDB collection by filter query.
     :param database: String or the database object.
         str - the name of the database. In this case the database object will be created.
         pymongo.database.Database - the database object that will be used instead of creating a new one.
     :param collection_name: str, the name of the collection.
-    :param query: dict, the query to search for.
+    :param filter_query: dict, the filter query to search for.
         Example, search for all entries with column name 'name' equal to 'John':
-            query = {'name': 'John'}
+            filter_query = {'name': 'John'}
         Find by Object id:
-            query = {'_id': ObjectId('5f3e3b3b4b9f3b3b4b9f3b3b')}
+            filter_query = {'_id': ObjectId('5f3e3b3b4b9f3b3b4b9f3b3b')}
     :param replacement: dict, the replacement to apply.
     :param add_timestamp: bool, if True, a current time timestamp will be added to the object.
     :param convert_mixed_lists_to_strings: bool, if True, mixed lists or tuples when entries are strings and integers,
@@ -888,7 +1024,7 @@ def replace(
         timestamp = datetime.datetime.now()
         replacement['timestamp'] = timestamp
 
-    result = collection.replace_one(query, replacement)
+    result = collection.replace_one(filter_query, replacement)
     if result.matched_count == 0:
         raise MongoDBReplaceOneError("No document found to replace.")
 
@@ -898,10 +1034,73 @@ def replace(
     return result
 
 
+def get_all_indexes_in_collection(
+        database: Union[str, pymongo.database.Database],
+        collection_name: str,
+        mongo_client: pymongo.MongoClient = None,
+        close_client: bool = False
+) -> dict:
+    """
+    Get all indexes in a MongoDB collection.
+    :param database: String or the database object.
+        str - the name of the database. In this case the database object will be created.
+        pymongo.database.Database - the database object that will be used instead of creating a new one.
+    :param collection_name: str, the name of the collection.
+    :param mongo_client: pymongo.MongoClient, the connection object.
+        If None, a new connection will be created to default URI.
+    :param close_client: bool, if True, the connection will be closed after the operation.
+
+    :return: list, the list of indexes.
+    """
+
+    if not mongo_client:
+        mongo_client = connect()
+        close_client = True
+
+    db = _get_pymongo_db_from_string_or_pymongo_db(database, mongo_client)
+    collection = db[collection_name]
+
+    # noinspection PyTypeChecker
+    indexes: dict = collection.index_information()
+
+    if close_client:
+        mongo_client.close()
+
+    return indexes
+
+
+def is_index_name_in_collection(
+        database: Union[str, pymongo.database.Database],
+        collection_name: str,
+        index_name: str,
+        mongo_client: pymongo.MongoClient = None,
+        close_client: bool = False
+) -> bool:
+    """
+    Check if an index name is in a MongoDB collection.
+    :param database: String or the database object.
+        str - the name of the database. In this case the database object will be created.
+        pymongo.database.Database - the database object that will be used instead of creating a new one.
+    :param collection_name: str, the name of the collection.
+    :param index_name: str, the name of the index.
+    :param mongo_client: pymongo.MongoClient, the connection object.
+        If None, a new connection will be created to default URI.
+    :param close_client: bool, if True, the connection will be closed after the operation.
+
+    :return: bool, if the index name is in the collection.
+    """
+
+    indexes = get_all_indexes_in_collection(
+        database=database, collection_name=collection_name,
+        mongo_client=mongo_client, close_client=close_client)
+
+    return index_name in indexes
+
+
 def count_entries_in_collection(
         database: Union[str, pymongo.database.Database],
         collection_name: str,
-        query: dict = None,
+        filter_query: dict = None,
         mongo_client: pymongo.MongoClient = None,
         close_client: bool = False
 ) -> int:
@@ -912,11 +1111,11 @@ def count_entries_in_collection(
         str - the name of the database. In this case the database object will be created.
         pymongo.database.Database - the database object that will be used instead of creating a new one.
     :param collection_name: str, the name of the collection.
-    :param query: dict, the query to search for.
+    :param filter_query: dict, the query to search for.
         Example, search for all entries with column name 'name' equal to 'John':
-            query = {'name': 'John'}
+            filter_query = {'name': 'John'}
         Example, return all entries from collection:
-            query = None
+            filter_query = None
     :param mongo_client: pymongo.MongoClient, the connection object.
         If None, a new connection will be created to default URI.
     :param close_client: bool, if True, the connection will be closed after the operation.
@@ -931,10 +1130,10 @@ def count_entries_in_collection(
     db = _get_pymongo_db_from_string_or_pymongo_db(database, mongo_client)
     collection = db[collection_name]
 
-    if query is None:
-        query = {}
+    if filter_query is None:
+        filter_query = {}
 
-    count = collection.count_documents(query)
+    count = collection.count_documents(filter_query)
 
     if close_client:
         mongo_client.close()
@@ -1011,7 +1210,7 @@ def overwrite_collection(
         mongo_client=mongo_client
     )
 
-    index(
+    insert(
         object_instance=object_instance,
         database=database, collection_name=collection_name,
         add_timestamp=add_timestamp, convert_mixed_lists_to_strings=convert_mixed_lists_to_strings,
