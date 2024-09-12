@@ -64,7 +64,7 @@ class MongoDBWrapper:
             self.client.close()
             self.client = None
 
-    def index(
+    def insert(
             self,
             object_instance: Union[list[dict], dict],
             collection_name: str,
@@ -84,7 +84,7 @@ class MongoDBWrapper:
 
         self.connect()
 
-        index(
+        insert(
             object_instance=object_instance,
             database=self.db, collection_name=collection_name,
             add_timestamp=add_timestamp, convert_mixed_lists_to_strings=convert_mixed_lists_to_strings,
@@ -392,7 +392,7 @@ def get_db(
     return mongo_client[database]
 
 
-def index(
+def insert(
         object_instance: Union[list[dict], dict],
         database: Union[str, pymongo.database.Database],
         collection_name: str,
