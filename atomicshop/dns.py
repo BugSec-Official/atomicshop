@@ -77,6 +77,17 @@ def get_default_dns_gateway() -> tuple[bool, list[str]]:
     return is_dynamic, dns_servers
 
 
+def get_default_dns_gateway_with_dns_resolver() -> list[str]:
+    """
+    Get the default DNS gateway from the system using dns.resolver.
+    :return: tuple(is dynamic boolean, list of DNS server IPv4s).
+    """
+
+    resolver = dns.resolver.Resolver()
+    dns_servers = list(resolver.nameservers)
+    return dns_servers
+
+
 def set_connection_dns_gateway_static(
         dns_servers: list[str],
         connection_name: str = None,

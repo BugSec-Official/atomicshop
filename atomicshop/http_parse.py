@@ -2,7 +2,6 @@ from http.server import BaseHTTPRequestHandler
 from http.client import HTTPResponse
 import http
 from io import BytesIO
-import socket
 
 
 class HTTPRequestParse(BaseHTTPRequestHandler):
@@ -50,8 +49,8 @@ class HTTPRequestParse(BaseHTTPRequestHandler):
     """
 
     # noinspection PyMissingConstructor
-    def __init__(self, request_text):
-        self.request_text = request_text
+    def __init__(self, request_bytes: bytes):
+        self.request_bytes: bytes = request_bytes
 
         # noinspection PyTypeChecker
         self.rfile = None
@@ -107,7 +106,7 @@ class HTTPRequestParse(BaseHTTPRequestHandler):
         error: str = str()
         info: str = str()
 
-        self.rfile = BytesIO(self.request_text)
+        self.rfile = BytesIO(self.request_bytes)
         self.raw_requestline = self.rfile.readline()
         self.error_code = self.error_message = None
         self.parse_request()
@@ -152,6 +151,7 @@ class FakeSocket:
     def __init__(self, response_bytes):
         self._file = BytesIO(response_bytes)
 
+    # noinspection PyUnusedLocal
     def makefile(self, mode='rb', buffering=-1) -> BytesIO:
         """
         Mimics the socket's makefile method, returning the BytesIO object.

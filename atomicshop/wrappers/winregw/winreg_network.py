@@ -144,8 +144,23 @@ def get_default_dns_gateway() -> tuple[bool, list[str]]:
     :return: tuple(is dynamic boolean, list of DNS server IPv4s).
     """
 
+    def get_current_interface_status(current_interface_settings: dict) -> tuple[bool, list[str]]:
+        if current_interface_settings['NameServer']:
+            result = (False, current_interface_settings['NameServer'].split(','))
+        else:
+            result = (True, current_interface_settings['DhcpNameServer'].split(','))
+
+        return result
+
+
     # Get current default IPv4 address of the interface that is being used for internet.
     default_ipv4_address: str = socket.gethostbyname(socket.gethostname())
+    # If the default IPv4 address is localhost, then it could mean that the system is not connected to the internet.
+    # Or there is no network adapter at all.
+    default_dns_gateway_list: list[str] = []
+    if default_ipv4_address == '127.0.0.1':
+        from ... import dns
+        default_dns_gateway_list = dns.get_default_dns_gateway_with_dns_resolver()
 
     # Get all network interface settings from the registry.
     all_interfaces_configurations = get_network_interfaces_settings()
@@ -153,22 +168,36 @@ def get_default_dns_gateway() -> tuple[bool, list[str]]:
     # Find the interface that has this IPv4 assigned.
     function_result: tuple = tuple()
     for interface_guid, interface_settings in all_interfaces_configurations.items():
-        current_interface_static_ipv4_address: list = interface_settings.get('IPAddress', None)
-        current_interface_dynamic_ipv4_address: str = interface_settings.get('DhcpIPAddress', None)
+        if not interface_settings:
+            continue
 
-        static_and_ip_match: bool = (
-                current_interface_static_ipv4_address and
-                current_interface_static_ipv4_address[0] == default_ipv4_address)
-        dynamic_and_ip_match: bool = (
-                current_interface_dynamic_ipv4_address and
-                current_interface_dynamic_ipv4_address == default_ipv4_address)
-        if static_and_ip_match or dynamic_and_ip_match:
-            if interface_settings['NameServer']:
-                function_result = (False, interface_settings['NameServer'].split(','))
-            else:
-                function_result = (True, interface_settings['DhcpNameServer'].split(','))
+        if ' ' in interface_settings['NameServer']:
+            interface_settings['NameServer'] = interface_settings['NameServer'].replace(' ', ',')
+        if ' ' in interface_settings['DhcpNameServer']:
+            interface_settings['DhcpNameServer'] = interface_settings['DhcpNameServer'].replace(' ', ',')
 
-            break
+        if not default_dns_gateway_list:
+            current_interface_static_ipv4_address: list = interface_settings.get('IPAddress', None)
+            current_interface_dynamic_ipv4_address: str = interface_settings.get('DhcpIPAddress', None)
+
+            static_and_ip_match: bool = (
+                    current_interface_static_ipv4_address and
+                    current_interface_static_ipv4_address[0] == default_ipv4_address)
+            dynamic_and_ip_match: bool = (
+                    current_interface_dynamic_ipv4_address and
+                    current_interface_dynamic_ipv4_address == default_ipv4_address)
+            if static_and_ip_match or dynamic_and_ip_match:
+                function_result = get_current_interface_status(interface_settings)
+
+                break
+        else:
+            current_interface_name_server_list: list[str] = interface_settings['NameServer'].split(',')
+            current_interface_dhcp_name_server_list: list[str] = interface_settings['DhcpNameServer'].split(',')
+            if (current_interface_name_server_list == default_dns_gateway_list or
+                    current_interface_dhcp_name_server_list == default_dns_gateway_list):
+                function_result = get_current_interface_status(interface_settings)
+
+                break
 
     # noinspection PyTypeChecker
     return function_result

@@ -44,8 +44,12 @@ def get_page_text_content(page) -> str:
     :return: string, text content of the page.
     """
 
-    text_content: str = page.evaluate('''() => {
-        return document.body.innerText;
-    }''')
+    # Full javascript.
+    # text_content: str = page.evaluate('''() => {
+    #     return document.body.innerText;
+    # }''')
+
+    # Short javascript.
+    text_content: str = page.evaluate("document.body.innerText")
 
     return text_content

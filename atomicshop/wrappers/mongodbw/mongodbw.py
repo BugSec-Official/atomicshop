@@ -174,6 +174,7 @@ class MongoDBWrapper:
             self,
             collection_name: str,
             filter_query: dict = None,
+            projection: dict = None,
             page: int = None,
             items: int = None,
             sort: dict[str, Literal[
@@ -192,6 +193,7 @@ class MongoDBWrapper:
                 filter_query = None
 
             CHECK MORE EXAMPLES IN THE DOCSTRING OF THE FUNCTION 'find' BELOW which is not in this class.
+        :param projection: dict, the only fields to return or exclude.
         :param page: int, the page number (Optional).
             The results are filtered after results are fetched from db.
         :param items: int, the number of results per page (Optional).
@@ -229,7 +231,8 @@ class MongoDBWrapper:
 
         entries: list[dict] = find(
             database=self.db, collection_name=collection_name,
-            filter_query=filter_query, page=page, items=items, sort=sort,
+            filter_query=filter_query, projection=projection,
+            page=page, items=items, sort=sort,
             convert_object_id_to_str=convert_object_id_to_str, key_convert_to_dict=keys_convert_to_dict,
             mongo_client=self.client, close_client=False)
 
@@ -827,7 +830,7 @@ def find(
 
     entries: list[dict] = list(collection_items)
 
-    if convert_object_id_to_str:
+    if entries and convert_object_id_to_str and '_id' in entries[0]:
         for entry_index, entry in enumerate(entries):
             entries[entry_index]['_id'] = str(entry['_id'])
 

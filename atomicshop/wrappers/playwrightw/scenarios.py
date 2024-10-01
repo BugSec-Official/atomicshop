@@ -43,8 +43,12 @@ def get_text_from_html_tag(url: str, tag_name: str, attribute: str, value: str) 
 
 
 def get_page_content(
-        url: str, page_format: str = 'html', path: str = None, print_kwargs: dict = None, pdf_format: str = 'A4',
-        html_txt_convert_to_bytes: bool = True
+        url: str,
+        page_format: str = 'html',
+        path: str = None,
+        pdf_format: str = 'A4',
+        html_txt_convert_to_bytes: bool = True,
+        print_kwargs: dict = None
 ) -> any:
     """
     The function receives playwright engine and page object, navigates to URL, gets page content in specified format,
@@ -57,10 +61,10 @@ def get_page_content(
         'png' - returns png binary.
         'jpeg' - returns jpeg binary.
     :param path: string of path to save the file to. Default is None.
-    :param print_kwargs: dict, that contains all the arguments for 'print_api' function.
     :param pdf_format: string of pdf format, applicable only if 'page_format=pdf'. Default is 'A4'.
     :param html_txt_convert_to_bytes: boolean, applicable only if 'page_format=html' or 'page_format=txt'.
         Default is True.
+    :param print_kwargs: dict, that contains all the arguments for 'print_api' function.
 
     :return: any page content in specified format.
     """
@@ -95,8 +99,13 @@ def get_page_content(
 
 
 def get_page_content_in_thread(
-        url: str, page_format: str = 'html', path: str = None, print_kwargs: dict = None, pdf_format: str = 'A4',
-        html_txt_convert_to_bytes: bool = True):
+        url: str,
+        page_format: str = 'html',
+        path: str = None,
+        pdf_format: str = 'A4',
+        html_txt_convert_to_bytes: bool = True,
+        print_kwargs: dict = None
+):
     """
     The function uses 'threads.thread_wrap_var' function in order to wrap the function 'get_page_content' and
     execute it in a thread with arguments and return the result.

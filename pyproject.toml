@@ -76,7 +76,8 @@ dependencies = [
     "SoundCard",
     "soundfile",
     "SpeechRecognition",
-    "tldextract"
+    "tldextract",
+    "websockets"
 ]
 classifiers = [
     "Intended Audience :: Developers",

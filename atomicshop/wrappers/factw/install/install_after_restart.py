@@ -7,7 +7,12 @@ from .. import config_install
 
 def install_after_restart(
         installation_directory: str,
-        install_type: Union[None, Literal['backend', 'frontend', 'db']] = None
+        install_type: Union[
+            None,
+            Literal['backend', 'frontend', 'db']] = None,
+        log_level: Union[
+            None,
+            Literal['DEBUG', 'INFO', 'WARNING', 'ERROR']] = None
 ):
     """
     This function will continue the installation the FACT_core after the restart of the computer.
@@ -20,6 +25,9 @@ def install_after_restart(
         --backend: Distributed setup, Install the FACT_core backend.
         --frontend: Distributed setup, Install the FACT_core frontend.
         --db: Distributed setup, Install the FACT_core database.
+    :param log_level: string, the log level to use for the installation.
+        The same as using the '--log-level' parameter in the 'install.py' script.
+        The default is 'INFO' in the 'install.py' script.
     :return:
     """
 
@@ -28,8 +36,11 @@ def install_after_restart(
     if install_type:
         install_command = install_command + ' --' + install_type
 
+    if log_level:
+        install_command = install_command + ' --log-level ' + log_level
+
     # Install the FACT_core repo.
     process.execute_with_live_output(cmd=install_command, verbose=True)
     # Remove the FACT_core installation log.
-    working_directory_path: str = filesystem.get_working_directory()
+    # working_directory_path: str = filesystem.get_working_directory()
     # filesystem.remove_file(str(Path(working_directory_path, config_install.INSTALL_LOG_FILE_NAME)))
