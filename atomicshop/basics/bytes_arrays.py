@@ -53,6 +53,30 @@ def convert_sequence_of_bytes_to_sequence_of_strings(byte_sequence: bytes) -> li
     return result
 
 
+def convert_sequence_of_bytes_to_exact_string(
+        byte_sequence: bytes,
+        add_space_between_bytes: bool = False,
+) -> str:
+    """
+    Convert sequence of bytes to exact string.
+    Example: b'\xc0\x00' -> 'c000'
+
+    :param byte_sequence: bytes, sequence of bytes.
+    :param add_space_between_bytes: bool, add space between bytes.
+        Example: b'\xc0\x00' -> 'c0 00'
+    :return: string.
+    """
+
+    # Convert to hex string and format
+    byte_list: list = []
+    for byte in byte_sequence:
+        byte_list.append(f'{byte:02x}')
+
+    result = ''.join(byte_list)
+
+    return result
+
+
 def find_position(target: bytes, file_path: str = None, file_bytes: bytes = None, chunk_size: int = None, starting_position: int = 0) -> int:
     """
     Find position of the target bytes string in the file.

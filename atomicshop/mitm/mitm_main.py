@@ -19,6 +19,7 @@ from . import config_static, recs_files
 
 NETWORK_INTERFACE_IS_DYNAMIC: bool = bool()
 NETWORK_INTERFACE_IPV4_ADDRESS_LIST: list[str] = list()
+IS_SET_DNS_GATEWAY: bool = False
 # noinspection PyTypeChecker
 RECS_PROCESS_INSTANCE: multiprocessing.Process = None
 
@@ -36,7 +37,7 @@ except win_console.NotWindowsConsoleError:
 
 
 def exit_cleanup():
-    if permissions.is_admin():
+    if permissions.is_admin() and IS_SET_DNS_GATEWAY:
         is_dns_dynamic, current_dns_gateway = dns.get_default_dns_gateway()
         status_string = 'Dynamic' if is_dns_dynamic else 'Static'
         print_api.print_api(f'Current DNS Gateway: {status_string}, {current_dns_gateway}')
@@ -347,10 +348,14 @@ def mitm_server(config_file_path: str):
             dns_gateway_server_list = [base.DEFAULT_IPV4]
             set_dns_gateway = True
 
-        # Get current network interface state.
-        global NETWORK_INTERFACE_IS_DYNAMIC, NETWORK_INTERFACE_IPV4_ADDRESS_LIST
-        NETWORK_INTERFACE_IS_DYNAMIC, NETWORK_INTERFACE_IPV4_ADDRESS_LIST = dns.get_default_dns_gateway()
         if set_dns_gateway:
+            global IS_SET_DNS_GATEWAY
+            IS_SET_DNS_GATEWAY = True
+
+            # Get current network interface state.
+            global NETWORK_INTERFACE_IS_DYNAMIC, NETWORK_INTERFACE_IPV4_ADDRESS_LIST
+            NETWORK_INTERFACE_IS_DYNAMIC, NETWORK_INTERFACE_IPV4_ADDRESS_LIST = dns.get_default_dns_gateway()
+
             # Set the DNS gateway to the specified one only if the DNS gateway is dynamic, or it is static but different
             # from the one specified in the configuration file.
             if (NETWORK_INTERFACE_IS_DYNAMIC or (not NETWORK_INTERFACE_IS_DYNAMIC and

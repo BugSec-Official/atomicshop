@@ -100,15 +100,12 @@ def thread_worker_main(
             client_message.protocol = 'HTTP'
             client_message.request_raw_decoded = request_decoded
             print_api(request_parsing_info, logger=network_logger, logger_method='info')
-            network_logger.info(f"Method: {request_decoded.command}")
-            network_logger.info(f"Path: {request_decoded.path}")
-        # If there was error - the request is really HTTP, but there's a problem with its structure.
+            network_logger.info(f"Method: {request_decoded.command} | Path: {request_decoded.path}")
         else:
-            # client_message.error = request_parsing_error
-            print_api(request_parsing_error, logger=network_logger, logger_method='error', color='yellow')
             # It doesn't matter if we have HTTP Parsing error, since the request may not be really HTTP, so it is OK
             # not to log it into statistics.
             # statistics_error_list.append(error_message)
+            print_api(request_parsing_error, logger=network_logger, logger_method='error', color='yellow')
 
     def finish_thread():
         # At this stage there could be several times that the same socket was used to the service server - we need to
@@ -204,8 +201,6 @@ def thread_worker_main(
                 client_message.request_raw_bytes = client_received_raw_data
 
                 parse_http()
-                if client_message.protocol != 'HTTP':
-                    pass
 
                 # Custom parser, should parse HTTP body or the whole message if not HTTP.
                 parser_instance = parser(client_message)

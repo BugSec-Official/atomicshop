@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.16.43 - 12.09.2024
+  * dns, basics/bytes_arrays, http_parse, mitm, web, wrappers/factw/install/install_after_restart, wrappers/mongodbw, wrappers/playwrightw, wrappers/winregw/winreg_network - fixes and improvements.
 * 2.16.42 - 12.09.2024
   * wrappers/mongodbw, wrappers/pycharmw/ubuntu - fixes and improvements.
 * 2.16.41 - 12.09.2024

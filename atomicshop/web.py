@@ -90,10 +90,13 @@ def get_page_bytes(
 
 
 def get_page_content(
-        url: str, get_method: str = 'urllib', path: str = None,
+        url: str,
+        get_method: str = 'urllib',
+        path: str = None,
         playwright_pdf_format: str = 'A4',
         playwright_html_txt_convert_to_bytes: bool = True,
-        print_kwargs: dict = None) -> any:
+        print_kwargs: dict = None
+) -> any:
     """
     Function returns the page content from the given URL.
 
