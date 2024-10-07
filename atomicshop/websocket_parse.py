@@ -1,18 +1,256 @@
-from typing import Union
+from typing import Union, Generator
 import logging
 
 from websockets.server import ServerProtocol
 from websockets.client import ClientProtocol
-from websockets.extensions.permessage_deflate import ServerPerMessageDeflateFactory, ClientPerMessageDeflateFactory
+from websockets.extensions.permessage_deflate import PerMessageDeflate, ServerPerMessageDeflateFactory, ClientPerMessageDeflateFactory
 from websockets.http11 import Request, Response
-from websockets.frames import Frame, Opcode, Close
+from websockets.frames import Frame, Opcode
 from websockets.uri import parse_uri
 from websockets.exceptions import InvalidHeaderValue
 from websockets.protocol import OPEN
+from websockets.streams import StreamReader
+from websockets.exceptions import ProtocolError, PayloadTooBig
 
 
-class WebsocketRequestParse:
+class WebsocketParseWrongOpcode(Exception):
+    pass
+
+
+def create_byte_http_response(
+        byte_http_request: Union[bytes, bytearray],
+        enable_logging: bool = False
+) -> bytes:
     """
+    Create a byte HTTP response from a byte HTTP request.
+
+    Parameters:
+    - byte_http_request (bytes, bytearray): The byte HTTP request.
+    - enable_logging (bool): Whether to enable logging.
+
+    Returns:
+    - bytes: The byte HTTP response.
+    """
+
+    # Set up extensions
+    permessage_deflate_factory = ServerPerMessageDeflateFactory()
+
+    # Create the protocol instance
+    protocol = ServerProtocol(
+        extensions=[permessage_deflate_factory],
+    )
+    # At this state the protocol.state is State.CONNECTING
+
+    if enable_logging:
+        logging.basicConfig(level=logging.DEBUG)
+        protocol.logger.setLevel(logging.DEBUG)
+
+
+    protocol.receive_data(byte_http_request)
+    events = protocol.events_received()
+    event = events[0]
+    if isinstance(event, Request):
+        # Accept the handshake.
+        # After the response is sent, it means the handshake was successful, the protocol.state is State.OPEN
+        # Only after this state we can parse frames.
+        response = protocol.accept(event)
+        return response.serialize()
+    else:
+        raise ValueError("The event is not a Request object.")
+
+
+def parse_frame_bytes(data_bytes: bytes):
+    # Define the read_exact function
+    def read_exact(n: int) -> Generator[None, None, bytes]:
+        return reader.read_exact(n)
+
+    # Helper function to run generator-based coroutines
+    def run_coroutine(coroutine):
+        try:
+            while True:
+                next(coroutine)
+        except StopIteration as e:
+            return e.value
+        except Exception as e:
+            raise e  # Re-raise exceptions to be handled by the caller
+
+    # Function to parse frames
+    def parse_frame(mask: bool):
+        try:
+            # Use Frame.parse to parse the frame
+            frame_parser = Frame.parse(
+                read_exact,
+                mask=mask,  # Client frames are masked
+                max_size=None,
+                extensions=[permessage_deflate],  # Include the extension unconditionally
+            )
+            current_frame = run_coroutine(frame_parser)
+        except EOFError as e:
+            # Not enough data to parse a complete frame
+            raise e
+        except (ProtocolError, PayloadTooBig) as e:
+            print("Error parsing frame:", e)
+            raise e
+        except Exception as e:
+            print("Error parsing frame:", e)
+            raise e
+        return current_frame
+
+    def process_frame(current_frame):
+        if current_frame.opcode == Opcode.TEXT:
+            message = current_frame.data.decode('utf-8', errors='replace')
+            return message
+        elif current_frame.opcode == Opcode.BINARY:
+            return current_frame.data
+        elif current_frame.opcode == Opcode.CLOSE:
+            print("Received close frame")
+        elif current_frame.opcode == Opcode.PING:
+            print("Received ping")
+        elif current_frame.opcode == Opcode.PONG:
+            print("Received pong")
+        else:
+            raise WebsocketParseWrongOpcode("Received unknown frame with opcode:", current_frame.opcode)
+
+    # Create the StreamReader instance
+    reader = StreamReader()
+
+    # Instantiate the permessage-deflate extension
+    permessage_deflate = PerMessageDeflate(
+        remote_no_context_takeover=False,
+        local_no_context_takeover=False,
+        remote_max_window_bits=15,
+        local_max_window_bits=15,
+    )
+
+    masked = is_frame_masked(data_bytes)
+
+    # Feed the data into the reader
+    reader.feed_data(data_bytes)
+
+    # Parse and process frames
+    frame = parse_frame(masked)
+    result = process_frame(frame)
+    return result
+
+
+def create_websocket_frame(
+            data: Union[str, bytes, bytearray],
+            deflate: bool = False,
+            mask: bool = False,
+            opcode: int = None
+    ) -> bytes:
+    """
+    Create a WebSocket frame with the given data, optionally applying
+    permessage-deflate compression and masking.
+
+    Parameters:
+    - data (str, bytes, bytearray): The payload data.
+        If str, it will be encoded to bytes using UTF-8.
+    - deflate (bool): Whether to apply permessage-deflate compression.
+    - mask (bool): Whether to apply masking to the frame.
+    - opcode (int): The opcode of the frame. If not provided, it will be
+        determined based on the type of data.
+        Example:
+            from websockets.frames import Opcode
+            Opcode.TEXT, Opcode.BINARY, Opcode.CLOSE, Opcode.PING, Opcode.PONG.
+
+    Returns:
+    - bytes: The serialized WebSocket frame ready to be sent.
+    """
+
+    # Determine the opcode if not provided
+    if opcode is None:
+        if isinstance(data, str):
+            opcode = Opcode.TEXT
+        elif isinstance(data, (bytes, bytearray)):
+            opcode = Opcode.BINARY
+        else:
+            raise TypeError("Data must be of type str, bytes, or bytearray.")
+    else:
+        if not isinstance(opcode, int):
+            raise TypeError("Opcode must be an integer.")
+        if not isinstance(data, (str, bytes, bytearray)):
+            raise TypeError("Data must be of type str, bytes, or bytearray.")
+
+    # Encode string data if necessary
+    if isinstance(data, str):
+        payload = data.encode('utf-8')
+    else:
+        payload = bytes(data)
+
+    # Create the Frame instance
+    frame = Frame(opcode=opcode, data=payload)
+
+    # Set up extensions if deflate is True
+    extensions = []
+    if deflate:
+        permessage_deflate = PerMessageDeflate(
+            remote_no_context_takeover=False,
+            local_no_context_takeover=False,
+            remote_max_window_bits=15,
+            local_max_window_bits=15,
+        )
+        extensions.append(permessage_deflate)
+
+    # Serialize the frame with the specified options
+    try:
+        frame_bytes = frame.serialize(
+            mask=mask,
+            extensions=extensions,
+        )
+    except Exception as e:
+        raise RuntimeError(f"Error serializing frame: {e}")
+
+    return frame_bytes
+
+
+def is_frame_masked(frame_bytes):
+    """
+    Determine whether a WebSocket frame is masked.
+
+    Parameters:
+    - frame_bytes (bytes): The raw bytes of the WebSocket frame.
+
+    Returns:
+    - bool: True if the frame is masked, False otherwise.
+    """
+    if len(frame_bytes) < 2:
+        raise ValueError("Frame is too short to determine masking.")
+
+    # The second byte of the frame header contains the MASK bit
+    second_byte = frame_bytes[1]
+
+    # The MASK bit is the most significant bit (MSB) of the second byte
+    mask_bit = (second_byte & 0x80) != 0  # 0x80 is 1000 0000 in binary
+
+    return mask_bit
+
+
+def is_frame_deflated(frame_bytes):
+    """
+    Determine whether a WebSocket frame is deflated (compressed).
+
+    Parameters:
+    - frame_bytes (bytes): The raw bytes of the WebSocket frame.
+
+    Returns:
+    - bool: True if the frame is deflated (compressed), False otherwise.
+    """
+    if len(frame_bytes) < 1:
+        raise ValueError("Frame is too short to determine deflation status.")
+
+    # The first byte of the frame header contains the RSV1 bit
+    first_byte = frame_bytes[0]
+
+    # The RSV1 bit is the second most significant bit (bit 6)
+    rsv1 = (first_byte & 0x40) != 0  # 0x40 is 0100 0000 in binary
+
+    return rsv1
+
+
+class _WebsocketRequestParse:
+    """
+    THIS IS ONLY FOR THE REFERENCE IT IS NOT CURRENTLY USED OR SHOULD BE USED.
     Parse the websocket request and return the data
     """
     def __init__(
@@ -85,8 +323,9 @@ class WebsocketRequestParse:
                 """
 
 
-class WebsocketResponseParse:
+class _WebsocketResponseParse:
     """
+    THIS IS ONLY FOR THE REFERENCE IT IS NOT CURRENTLY USED OR SHOULD BE USED.
     Parse the websocket response and return the data
     """
     def __init__(

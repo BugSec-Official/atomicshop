@@ -75,7 +75,7 @@ def search_for_hyperlink_in_files(directory_path: str, hyperlink: str, relative_
 
     # Get all the docx files in the specified directory.
     files = filesystem.get_paths_from_directory(
-        directory_path, get_file=True, file_name_check_pattern="*\.docx",
+        directory_path, get_file=True, file_name_check_pattern="*.docx",
         add_relative_directory=True, relative_file_name_as_directory=True)
 
     found_in_files: list = list()
