@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.16.46 - 09.10.2024
+  * mitm/connection_thread_worker, websocket_parse - fixes and improvements.
 * 2.16.45 - 09.10.2024
   * archiver/search_in_archive, basics/classes, mitm, websocket_parse, wrappers/socketw/statistics_csv, wrappers/winregw/winreg_network - fixes and improvements. 
 * 2.16.44 - 07.10.2024

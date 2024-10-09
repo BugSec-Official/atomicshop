@@ -129,15 +129,15 @@ class WebsocketFrameParser:
         def process_frame(current_frame):
             if current_frame.opcode == Opcode.TEXT:
                 message = current_frame.data.decode('utf-8', errors='replace')
-                return message
+                return message, 'TEXT'
             elif current_frame.opcode == Opcode.BINARY:
-                return current_frame.data
+                return current_frame.data, 'BINARY'
             elif current_frame.opcode == Opcode.CLOSE:
-                print("Received close frame")
+                return None, 'CLOSE'
             elif current_frame.opcode == Opcode.PING:
-                print("Received ping")
+                return None, 'PING'
             elif current_frame.opcode == Opcode.PONG:
-                print("Received pong")
+                return None, 'PONG'
             else:
                 raise WebsocketParseWrongOpcode("Received unknown frame with opcode:", current_frame.opcode)
 
@@ -152,11 +152,18 @@ class WebsocketFrameParser:
 
         # Parse and process frames
         frame = parse_frame(masked, deflated)
-        result = process_frame(frame)
+        parsed_frame, frame_opcode = process_frame(frame)
 
         # This is basically not needed since we restart the 'reader = StreamReader()' each function execution.
         # # After processing, reset the reader's buffer
         # reader.buffer = b''
+
+        result: dict = {
+            'is_deflated': deflated,
+            'is_masked': masked,
+            'frame': parsed_frame,
+            'opcode': frame_opcode
+        }
 
         return result
 
