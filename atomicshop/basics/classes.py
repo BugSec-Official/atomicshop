@@ -1,8 +1,10 @@
 import os
 import sys
 import ast
-import importlib
 from pathlib import Path
+import pkgutil
+import importlib
+import inspect
 
 from ..file_io.file_io import read_file
 
@@ -24,6 +26,63 @@ class ParserParent:
 
     # Usage: self.logger.info("Message")
 """
+
+
+def get_list_of_classes_in_module(
+        imported_package,
+        imported_base_class
+) -> list:
+    """
+    Function that returns a list of classes that are subclasses of the imported_base_class from the imported_package.
+
+    Example:
+        # Package structure:
+        # unpackers
+        # ├── __init__.py
+        # ├── unpacker_base.py
+        # ├── unpacker_1.py
+        # ├── unpacker_2.py
+        # ├── unpacker_3.py
+        # └── ... (other unpacker modules)
+
+        # unpacker_base.py:
+        from abc import abstractmethod
+        class Unpacker:
+            @abstractmethod
+            def unpack(self, file_path):
+                pass
+
+        # unpacker_1.py:
+        from unpackers.unpacker_base import Unpacker
+        class Unpacker1(Unpacker):
+            def unpack(self, file_path):
+                print(f"Unpacking file with Unpacker1: {file_path}")
+
+        # main_script.py:
+        # Import the base class
+        from unpackers.unpacker_base import Unpacker
+        # Import the package
+        import unpackers
+        # Get the list of classes
+        unpacker_classes = get_list_of_classes_in_module(imported_package=unpackers, imported_base_class=Unpacker)
+
+    :param imported_package:
+    :param imported_base_class:
+    :return:
+    """
+    unpacker_classes = []
+
+    # Iterate over all modules in the 'imported_package' package
+    for loader, module_name, is_pkg in pkgutil.iter_modules(imported_package.__path__):
+        # Import the module
+        module = importlib.import_module(f"{imported_package.__name__}.{module_name}")
+
+        # Inspect module members to find Unpacker subclasses
+        for name, obj in inspect.getmembers(module, inspect.isclass):
+            if issubclass(obj, imported_base_class) and obj is not imported_base_class:
+                unpacker_classes.append(obj)
+
+    return unpacker_classes
 
 
 def create_empty_class():

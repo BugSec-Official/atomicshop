@@ -6,7 +6,7 @@ from ..loggingw import loggingw
 
 LOGGER_NAME: str = 'statistics'
 STATISTICS_HEADER: str = (
-    'request_time_sent,tls,protocol,host,path,command,status_code,request_size_bytes,response_size_bytes,file_path,'
+    'request_time_sent,thread_id,tls,protocol,host,path,command,status_code,request_size_bytes,response_size_bytes,file_path,'
     'process_cmd,error')
 
 
@@ -30,6 +30,7 @@ class StatisticsCSVWriter:
 
     def write_row(
             self,
+            thread_id: str,
             host: str,
             tls_type: str,
             tls_version: str,
@@ -54,6 +55,7 @@ class StatisticsCSVWriter:
 
         escaped_line_string: str = csvs.escape_csv_line_to_string([
             request_time_sent,
+            thread_id,
             tls_info,
             protocol,
             host,
@@ -73,7 +75,8 @@ class StatisticsCSVWriter:
             self,
             error_message: str,
             host: str,
-            process_name: str
+            process_name: str,
+            thread_id: str = str()
     ):
         """
         Write the error message to the statistics CSV file.
@@ -82,10 +85,12 @@ class StatisticsCSVWriter:
         :param error_message: string, error message.
         :param host: string, host, the domain or IP address.
         :param process_name: process name, the command line of the process.
+        :param thread_id: integer, the id of the thread.
         :return:
         """
 
         self.write_row(
+            thread_id=thread_id,
             host=host,
             tls_type='',
             tls_version='',

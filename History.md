@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.16.45 - 09.10.2024
+  * archiver/search_in_archive, basics/classes, mitm, websocket_parse, wrappers/socketw/statistics_csv, wrappers/winregw/winreg_network - fixes and improvements. 
 * 2.16.44 - 07.10.2024
   * file_io/docxs, wrappers/factw/install/install_after_restart - fixes and improvements.
   * websocket_parse - initial release.

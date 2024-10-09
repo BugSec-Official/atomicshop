@@ -47,9 +47,9 @@ class RecorderParent:
         self.build_record_path_to_engine()
 
         # If HTTP Path is not defined, 'http_path' will be empty, and it will not interfere with file name.
-        self.record_file_path: str = \
-            self.engine_record_path + os.sep + \
-            day_time_format + "_" + self.class_client_message.server_name + self.file_extension
+        self.record_file_path: str = (
+            f"{self.engine_record_path}{os.sep}{day_time_format}_"
+            f"{self.class_client_message.server_name}{self.file_extension}")
 
     def convert_messages(self):
         """
