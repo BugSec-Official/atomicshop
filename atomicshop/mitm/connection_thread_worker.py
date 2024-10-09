@@ -127,13 +127,7 @@ def thread_worker_main(
                     network_logger.info(f'Protocol upgraded to Websocket')
 
     def parse_websocket(raw_bytes):
-        is_deflated = websocket_parse.is_frame_deflated(raw_bytes)
-        request_decoded = websocket_frame_parser.parse_frame_bytes(raw_bytes)
-
-        return {
-            'is_deflated': is_deflated,
-            'frame': request_decoded
-        }
+        return websocket_frame_parser.parse_frame_bytes(raw_bytes)
 
     def finish_thread():
         # At this stage there could be several times that the same socket was used to the service server - we need to
