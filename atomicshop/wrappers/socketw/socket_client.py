@@ -163,7 +163,7 @@ class SocketClient:
             error_string: str = f"Socket Client Connect: {destination}: {exception_type}"
 
             if exception_type in ['ConnectionRefusedError', 'ConnectionAbortedError', 'ConnectionResetError',
-                                  'ssl.SSLError', 'TimeoutError']:
+                                  'TimeoutError'] or 'ssl' in exception_type.lower():
                 error_message: str = f"{error_string}: {exception_error}"
                 print_api(error_message, logger=self.logger, logger_method='error')
                 return None, error_message

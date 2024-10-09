@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.16.47 - 09.10.2024
+  * wrappers/socketw/socket_client - fixes and improvements.
 * 2.16.46 - 09.10.2024
   * mitm/connection_thread_worker, websocket_parse - fixes and improvements.
 * 2.16.45 - 09.10.2024
