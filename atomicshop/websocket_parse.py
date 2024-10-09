@@ -59,78 +59,106 @@ def create_byte_http_response(
         raise ValueError("The event is not a Request object.")
 
 
-def parse_frame_bytes(data_bytes: bytes):
-    # Define the read_exact function
-    def read_exact(n: int) -> Generator[None, None, bytes]:
-        return reader.read_exact(n)
+class WebsocketFrameParser:
+    def __init__(self):
+        # Instantiate the permessage-deflate extension.
+        # If a frame uses 'deflate', then the 'permessage_deflate' should be the same object during parsing of
+        # several message on the same socket. Each time 'PerMessageDeflate' is initiated, the context changes
+        # and more than one message can't be parsed.
+        self.permessage_deflate_masked = PerMessageDeflate(
+            remote_no_context_takeover=False,
+            local_no_context_takeover=False,
+            remote_max_window_bits=15,
+            local_max_window_bits=15,
+        )
 
-    # Helper function to run generator-based coroutines
-    def run_coroutine(coroutine):
-        try:
-            while True:
-                next(coroutine)
-        except StopIteration as e:
-            return e.value
-        except Exception as e:
-            raise e  # Re-raise exceptions to be handled by the caller
+        # We need separate instances for masked (frames from client) and unmasked (frames from server).
+        self.permessage_deflate_unmasked = PerMessageDeflate(
+            remote_no_context_takeover=False,
+            local_no_context_takeover=False,
+            remote_max_window_bits=15,
+            local_max_window_bits=15,
+        )
 
-    # Function to parse frames
-    def parse_frame(mask: bool):
-        try:
-            # Use Frame.parse to parse the frame
-            frame_parser = Frame.parse(
-                read_exact,
-                mask=mask,  # Client frames are masked
-                max_size=None,
-                extensions=[permessage_deflate],  # Include the extension unconditionally
-            )
-            current_frame = run_coroutine(frame_parser)
-        except EOFError as e:
-            # Not enough data to parse a complete frame
-            raise e
-        except (ProtocolError, PayloadTooBig) as e:
-            print("Error parsing frame:", e)
-            raise e
-        except Exception as e:
-            print("Error parsing frame:", e)
-            raise e
-        return current_frame
+    def parse_frame_bytes(
+            self,
+            data_bytes: bytes
+    ):
+        # Define the read_exact function
+        def read_exact(n: int) -> Generator[None, None, bytes]:
+            return reader.read_exact(n)
 
-    def process_frame(current_frame):
-        if current_frame.opcode == Opcode.TEXT:
-            message = current_frame.data.decode('utf-8', errors='replace')
-            return message
-        elif current_frame.opcode == Opcode.BINARY:
-            return current_frame.data
-        elif current_frame.opcode == Opcode.CLOSE:
-            print("Received close frame")
-        elif current_frame.opcode == Opcode.PING:
-            print("Received ping")
-        elif current_frame.opcode == Opcode.PONG:
-            print("Received pong")
-        else:
-            raise WebsocketParseWrongOpcode("Received unknown frame with opcode:", current_frame.opcode)
+        # Helper function to run generator-based coroutines
+        def run_coroutine(coroutine):
+            try:
+                while True:
+                    next(coroutine)
+            except StopIteration as e:
+                return e.value
+            except Exception as e:
+                raise e  # Re-raise exceptions to be handled by the caller
 
-    # Create the StreamReader instance
-    reader = StreamReader()
+        # Function to parse frames
+        def parse_frame(mask: bool, deflate: bool):
+            try:
+                if mask:
+                    # Decide whether to include permessage-deflate extension
+                    extensions = [self.permessage_deflate_masked] if deflate else []
+                else:
+                    extensions = [self.permessage_deflate_unmasked] if deflate else []
 
-    # Instantiate the permessage-deflate extension
-    permessage_deflate = PerMessageDeflate(
-        remote_no_context_takeover=False,
-        local_no_context_takeover=False,
-        remote_max_window_bits=15,
-        local_max_window_bits=15,
-    )
+                # Use Frame.parse to parse the frame
+                frame_parser = Frame.parse(
+                    read_exact,
+                    mask=mask,  # Client frames are masked
+                    max_size=None,
+                    extensions=extensions
+                )
+                current_frame = run_coroutine(frame_parser)
+            except EOFError as e:
+                # Not enough data to parse a complete frame
+                raise e
+            except (ProtocolError, PayloadTooBig) as e:
+                print("Error parsing frame:", e)
+                raise e
+            except Exception as e:
+                print("Error parsing frame:", e)
+                raise e
+            return current_frame
 
-    masked = is_frame_masked(data_bytes)
+        def process_frame(current_frame):
+            if current_frame.opcode == Opcode.TEXT:
+                message = current_frame.data.decode('utf-8', errors='replace')
+                return message
+            elif current_frame.opcode == Opcode.BINARY:
+                return current_frame.data
+            elif current_frame.opcode == Opcode.CLOSE:
+                print("Received close frame")
+            elif current_frame.opcode == Opcode.PING:
+                print("Received ping")
+            elif current_frame.opcode == Opcode.PONG:
+                print("Received pong")
+            else:
+                raise WebsocketParseWrongOpcode("Received unknown frame with opcode:", current_frame.opcode)
 
-    # Feed the data into the reader
-    reader.feed_data(data_bytes)
+        # Create the StreamReader instance
+        reader = StreamReader()
 
-    # Parse and process frames
-    frame = parse_frame(masked)
-    result = process_frame(frame)
-    return result
+        masked = is_frame_masked(data_bytes)
+        deflated = is_frame_deflated(data_bytes)
+
+        # Feed the data into the reader
+        reader.feed_data(data_bytes)
+
+        # Parse and process frames
+        frame = parse_frame(masked, deflated)
+        result = process_frame(frame)
+
+        # This is basically not needed since we restart the 'reader = StreamReader()' each function execution.
+        # # After processing, reset the reader's buffer
+        # reader.buffer = b''
+
+        return result
 
 
 def create_websocket_frame(

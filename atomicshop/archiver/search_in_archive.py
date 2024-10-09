@@ -65,8 +65,9 @@ def _handle_callback_matching(
         callback_result = callback(archived_file_bytes)
         if callback_result:
             # Initialize key for callback function name if not present
-            if callback.__name__ not in results:
-                results[callback.__name__] = []
+            if _get_callback_name(callback) not in results:
+                results[_get_callback_name(callback)]: dict = {}
+                results[_get_callback_name(callback)]['files']: list = []
 
             if archive_type == 'zip':
                 file_info = {
@@ -82,7 +83,8 @@ def _handle_callback_matching(
                     'size': item.uncompressed,
                     'modified_time': item.creationtime
                 }
-            results[callback.__name__].append(file_info)
+            results[_get_callback_name(callback)]['files'].append(file_info)
+            results[_get_callback_name(callback)]['callable_result'] = callback_result
             if return_first_only:
                 found_set.add(item.filename)
             return True
@@ -149,11 +151,42 @@ def _search_in_archive(
             break  # All files found, stop searching
 
 
-def _initialize_results(callback_functions):
-    if callback_functions:
-        return {callback.__name__: [] for callback in callback_functions}
+def _get_callback_name(callback: callable) -> str:
+    """
+    Get the name of the callback function.
+    :param callback: callable.
+    :return: string, the name of the callback function. If the function is part of the class, the name will be
+        'class_name.function_name', if not the only the function name will be returned.
+    """
+    try:
+        class_name = callback.__self__.__class__.__name__
+    except AttributeError:
+        class_name = None
+
+    function_name = callback.__name__
+
+    if class_name:
+        return f"{class_name}.{function_name}"
     else:
-        return {}
+        return function_name
+
+
+# def _initialize_results(callback_functions: list[callable]) -> dict:
+#     """
+#     Initialize the results dictionary.
+#     :param callback_functions:
+#     :return:
+#     """
+#     if callback_functions:
+#         result_dict: dict = {}
+#         for callback in callback_functions:
+#             result_dict[_get_callback_name(callback)]: dict = {}
+#             result_dict[_get_callback_name(callback)]['files']: list = []
+#             result_dict[_get_callback_name(callback)]['callable_result']: any = None
+#
+#         return result_dict
+#     else:
+#         return {}
 
 
 def _get_archive_type(file_object) -> Union[str, None]:
@@ -212,7 +245,7 @@ def search_file_in_archive(
         recursive: bool = False,
         callback_functions: list = None,
         extract_file_to_path: str = None
-) -> dict[str, list[bytes]]:
+) -> dict[list[bytes], str]:
     """
     Function searches for the file names inside the zip file and returns a dictionary where the keys are the
     names of the callback functions and the values are lists of found file bytes.
@@ -236,7 +269,8 @@ def search_file_in_archive(
         raise ValueError("Either file_names_to_search or callback_functions must be provided.")
 
     # Initialize results dictionary.
-    results = _initialize_results(callback_functions)
+    # results = _initialize_results(callback_functions)
+    results: dict[list[bytes], str] = {}
     found_set = set()
 
     _search_archive_content(

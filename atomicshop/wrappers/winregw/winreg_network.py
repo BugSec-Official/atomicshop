@@ -173,7 +173,7 @@ def get_default_dns_gateway() -> tuple[bool, list[str]]:
 
         if ' ' in interface_settings['NameServer']:
             interface_settings['NameServer'] = interface_settings['NameServer'].replace(' ', ',')
-        if ' ' in interface_settings['DhcpNameServer']:
+        if 'DhcpNameServer' in interface_settings and ' ' in interface_settings['DhcpNameServer']:
             interface_settings['DhcpNameServer'] = interface_settings['DhcpNameServer'].replace(' ', ',')
 
         if not default_dns_gateway_list:

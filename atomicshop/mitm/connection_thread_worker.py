@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from ..wrappers.socketw import receiver, sender, socket_client, base
+from .. import websocket_parse
 from ..http_parse import HTTPRequestParse, HTTPResponseParse
 from ..basics import threads, tracebacks
 from ..print_api import print_api
@@ -65,6 +66,7 @@ def thread_worker_main(
             raise ValueError(f"Error in statistics error list. Values: {statistics_error_list}")
 
         statistics_writer.write_row(
+            thread_id=str(thread_id),
             host=client_message.server_name,
             tls_type=tls_type,
             tls_version=tls_version,
@@ -92,12 +94,15 @@ def thread_worker_main(
 
     def parse_http():
         nonlocal error_message
+        nonlocal protocol
         # Parsing the raw bytes as HTTP.
         request_decoded, is_http_request, request_parsing_info, request_parsing_error = (
             HTTPRequestParse(client_message.request_raw_bytes).parse())
 
         if is_http_request:
-            client_message.protocol = 'HTTP'
+            if protocol == '':
+                protocol = 'HTTP'
+
             client_message.request_raw_decoded = request_decoded
             print_api(request_parsing_info, logger=network_logger, logger_method='info')
             network_logger.info(f"Method: {request_decoded.command} | Path: {request_decoded.path}")
@@ -106,6 +111,29 @@ def thread_worker_main(
             # not to log it into statistics.
             # statistics_error_list.append(error_message)
             print_api(request_parsing_error, logger=network_logger, logger_method='error', color='yellow')
+
+        is_http_request_a_websocket()
+
+    def is_http_request_a_websocket():
+        nonlocal protocol
+
+        if protocol == 'HTTP':
+            if (client_message.request_raw_decoded and
+                    hasattr(client_message.request_raw_decoded, 'headers') and
+                    'Upgrade' in client_message.request_raw_decoded.headers):
+                if client_message.request_raw_decoded.headers['Upgrade'] == 'websocket':
+                    protocol = 'Websocket'
+
+                    network_logger.info(f'Protocol upgraded to Websocket')
+
+    def parse_websocket(raw_bytes):
+        is_deflated = websocket_parse.is_frame_deflated(raw_bytes)
+        request_decoded = websocket_frame_parser.parse_frame_bytes(raw_bytes)
+
+        return {
+            'is_deflated': is_deflated,
+            'frame': request_decoded
+        }
 
     def finish_thread():
         # At this stage there could be several times that the same socket was used to the service server - we need to
@@ -140,6 +168,13 @@ def thread_worker_main(
 
     thread_id = threads.current_thread_id()
     client_message.thread_id = thread_id
+
+    protocol: str = str()
+    # # This is Client Masked Frame Parser.
+    # websocket_masked_frame_parser = websocket_parse.WebsocketFrameParser()
+    # # This is Server UnMasked Frame Parser.
+    # websocket_unmasked_frame_parser = websocket_parse.WebsocketFrameParser()
+    websocket_frame_parser = websocket_parse.WebsocketFrameParser()
 
     # Loading parser by domain, if there is no parser for current domain - general reference parser is loaded.
     # These should be outside any loop and initialized only once entering the thread.
@@ -201,6 +236,12 @@ def thread_worker_main(
                 client_message.request_raw_bytes = client_received_raw_data
 
                 parse_http()
+                if protocol != '':
+                    client_message.protocol = protocol
+
+                # Parse websocket frames only if it is not the first protocol upgrade request.
+                if protocol == 'Websocket' and cycle_count != 0:
+                    client_message.request_raw_decoded = parse_websocket(client_message.request_raw_bytes)
 
                 # Custom parser, should parse HTTP body or the whole message if not HTTP.
                 parser_instance = parser(client_message)
@@ -219,6 +260,12 @@ def thread_worker_main(
                     # Re-initiate the 'client_message.response_list_of_raw_bytes' list, since we'll be appending
                     # new entries for empty list.
                     client_message.response_list_of_raw_bytes = list()
+
+                    # If it's the first cycle and the protocol is Websocket, then we'll create the HTTP Handshake
+                    # response automatically.
+                    if protocol == 'Websocket' and cycle_count == 0:
+                        client_message.response_list_of_raw_bytes.append(
+                            websocket_parse.create_byte_http_response(client_message.request_raw_bytes))
                     # Creating response for parsed message and printing
                     responder.create_response(client_message)
 
@@ -283,8 +330,13 @@ def thread_worker_main(
 
                         if is_http_response:
                             client_message.response_list_of_raw_decoded.append(response_raw_decoded)
+                        elif protocol == 'Websocket' and cycle_count != 0:
+                            response_decoded = parse_websocket(response_raw_bytes)
+                            client_message.response_list_of_raw_decoded.append(response_decoded)
                         else:
                             client_message.response_list_of_raw_decoded.append(None)
+
+
 
                     # So if the socket was closed and there was an error we can break the loop
                     if not service_ssl_socket:
