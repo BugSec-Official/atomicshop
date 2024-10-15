@@ -1,6 +1,7 @@
 import logging
 import socket
 import ssl
+import select
 from pathlib import Path
 
 from ...print_api import print_api
@@ -18,6 +19,24 @@ def peek_first_bytes(client_socket, bytes_amount: int = 1) -> bytes:
     """
 
     return client_socket.recv(bytes_amount, socket.MSG_PEEK)
+
+
+def is_socket_ready_for_read(client_socket, timeout: int = 0) -> bool:
+    """
+    Check if socket is ready for read.
+
+    :param client_socket: Socket object.
+    :param timeout: Timeout in seconds. The default is no timeout.
+
+    :return: True if socket is ready for read, False otherwise.
+    """
+
+    # Use select to check if the socket is ready for reading.
+    # 'readable' returns a list of sockets that are ready for reading.
+    # Since we use only one socket, it will return a list with one element if the socket is ready for reading,
+    # or an empty list if the socket is not ready for reading.
+    readable, _, _ = select.select([client_socket], [], [], timeout)
+    return bool(readable)
 
 
 class Receiver:

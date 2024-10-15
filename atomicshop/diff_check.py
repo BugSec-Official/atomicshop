@@ -54,9 +54,9 @@ class DiffChecker:
             function input for that object. So, not always you know what your object type during class initialization.
         :param check_object_display_name: string, name of the object to display in the message.
             If not specified, the provided 'check_object' will be displayed.
-        :param aggregation: boolean, if True, the object will be aggregated with other objects in the list of objects.
-            Meaning, that the object will be checked against the existing objects in the list, and if it is not
-            in the list, it will be added to the list. If it is in the list, it will be ignored.
+        #:param aggregation: boolean, if True, the object will be aggregated with other objects in the list of objects.
+        #    Meaning, that the object will be checked against the existing objects in the list, and if it is not
+        #    in the list, it will be added to the list. If it is in the list, it will be ignored.
         :param input_file_path: string, full file path for storing input file for current state of objects,
             to check later if this state isn't updated. If this variable is left empty, all the content will be saved
             in memory and input file will not be used.

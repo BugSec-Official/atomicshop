@@ -1,7 +1,6 @@
 import datetime
 import os
 import multiprocessing
-from pathlib import Path
 
 from ..archiver import zips
 from .. import filesystem

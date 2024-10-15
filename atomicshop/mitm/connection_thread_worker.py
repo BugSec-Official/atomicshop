@@ -143,6 +143,111 @@ def thread_worker_main(
 
         network_logger.info("Thread Finished. Will continue listening on the Main thread")
 
+    def process_client_raw_data_request() -> bool:
+        """
+        Process the client raw data request.
+
+        :return: True if the socket should be closed, False if not.
+        """
+
+        # If the message is empty, then the connection was closed already by the other side,
+        # so we can close the socket as well.
+        # If the received message from the client is not empty, then continue.
+        if not client_received_raw_data:
+            return True
+
+        # Putting the received message to the aggregating message class.
+        client_message.request_raw_bytes = client_received_raw_data
+
+        parse_http()
+        if protocol != '':
+            client_message.protocol = protocol
+
+        # Parse websocket frames only if it is not the first protocol upgrade request.
+        if protocol == 'Websocket' and cycle_count != 0:
+            client_message.request_raw_decoded = parse_websocket(client_message.request_raw_bytes)
+
+        # Custom parser, should parse HTTP body or the whole message if not HTTP.
+        parser_instance = parser(client_message)
+        parser_instance.parse()
+
+        # Converting body parsed to string on logging, since there is no strict rule for the parameter
+        # to be string.
+        parser_instance.logger.info(f"{str(client_message.request_body_parsed)[0: 100]}...")
+
+        return False
+
+    def create_responder_response():
+        # Since we're in response mode, we'll record the request anyway, after the responder did its job.
+        client_message.info = "In Server Response Mode"
+
+        # Re-initiate the 'client_message.response_list_of_raw_bytes' list, since we'll be appending
+        # new entries for empty list.
+        client_message.response_list_of_raw_bytes = list()
+
+        # If it's the first cycle and the protocol is Websocket, then we'll create the HTTP Handshake
+        # response automatically.
+        if protocol == 'Websocket' and cycle_count == 0:
+            client_message.response_list_of_raw_bytes.append(
+                websocket_parse.create_byte_http_response(client_message.request_raw_bytes))
+        # Creating response for parsed message and printing
+        responder.create_response(client_message)
+
+        # Output first 100 characters of all the responses in the list.
+        for response_raw_bytes_single in client_message.response_list_of_raw_bytes:
+            responder.logger.info(f"{response_raw_bytes_single[0: 100]}...")
+
+    def create_client_socket():
+        # If we're on localhost, then use external services list in order to resolve the domain:
+        # config['tcp']['forwarding_dns_service_ipv4_list___only_for_localhost']
+        if client_message.client_ip in base.THIS_DEVICE_IP_LIST:
+            service_client_instance = socket_client.SocketClient(
+                service_name=client_message.server_name, service_port=client_message.destination_port,
+                tls=is_tls,
+                dns_servers_list=(
+                    config_static.TCPServer.forwarding_dns_service_ipv4_list___only_for_localhost),
+                logger=network_logger
+            )
+        # If we're not on localhost, then connect to domain directly.
+        else:
+            service_client_instance = socket_client.SocketClient(
+                service_name=client_message.server_name, service_port=client_message.destination_port,
+                tls=is_tls, logger=network_logger)
+
+        return service_client_instance
+
+    def process_received_response_from_service_client():
+        if client_message.error is not None:
+            statistics_error_list.append(client_message.error)
+
+        # Since we need a list for raw bytes, we'll add the 'response_raw_bytes' to our list object.
+        # But we need to re-initiate it first.
+        client_message.response_list_of_raw_bytes = list()
+        # If there was error during send or receive from the service and response was None,
+        # It means that there was no response at all because of the error.
+        if client_message.error and response_raw_bytes is None:
+            client_message.response_list_of_raw_bytes.append(None)
+        # If there was no error, but response came empty, it means that the service has closed the
+        # socket after it received the request, without sending any data.
+        elif client_message.error is None and response_raw_bytes is None:
+            client_message.response_list_of_raw_bytes.append("")
+        else:
+            client_message.response_list_of_raw_bytes.append(response_raw_bytes)
+
+        client_message.response_list_of_raw_decoded = list()
+        # Make HTTP Response parsing only if there was response at all.
+        if response_raw_bytes:
+            response_raw_decoded, is_http_response, response_parsing_error = (
+                HTTPResponseParse(response_raw_bytes).parse())
+
+            if is_http_response:
+                client_message.response_list_of_raw_decoded.append(response_raw_decoded)
+            elif protocol == 'Websocket' and cycle_count != 0:
+                response_decoded = parse_websocket(response_raw_bytes)
+                client_message.response_list_of_raw_decoded.append(response_decoded)
+            else:
+                client_message.response_list_of_raw_decoded.append(None)
+
     # Building client message object before the loop only for any exception to occurs, since we write it to
     # recording file in its current state.
     client_message: ClientMessage = ClientMessage()
@@ -191,6 +296,7 @@ def thread_worker_main(
         network_logger.info(f"Thread Created - Client [{client_ip}:{source_port}] | "
                             f"Destination service: [{server_name}:{destination_port}]")
 
+        end_socket: bool = False
         service_client = None
         # Loop while received message is not empty, if so, close socket, since other side already closed.
         # noinspection PyTypeChecker
@@ -217,79 +323,34 @@ def thread_worker_main(
             # Getting current time of message received from client.
             client_message.request_time_received = datetime.now()
 
-            network_logger.info(f"Initializing Receiver on cycle: {str(cycle_count+1)}")
-            # Getting message from the client over the socket using specific class.
-            client_received_raw_data = receiver.Receiver(
-                ssl_socket=client_socket, logger=network_logger).receive()
+            # Peek if there is some data in the socket.
+            # This is needed to check if the client just connects without sending data, if so we need to try and
+            # receive data from the server and send it to the client.
+            # We will do it only on the first cycle, after that the connection should work as usual.
+            # Sometimes the client will execute connection without sending data, just for the server to send response.
+            is_socket_ready: bool = True
+            if cycle_count == 0:
+                is_socket_ready = receiver.is_socket_ready_for_read(client_socket)
 
-            # If the message is empty, then the connection was closed already by the other side,
-            # so we can close the socket as well.
-            # If the received message from the client is not empty, then continue.
-            if client_received_raw_data:
-                # Putting the received message to the aggregating message class.
-                client_message.request_raw_bytes = client_received_raw_data
+            if is_socket_ready:
+                network_logger.info(f"Initializing Receiver on cycle: {str(cycle_count+1)}")
+                # Getting message from the client over the socket using specific class.
+                client_received_raw_data = receiver.Receiver(
+                    ssl_socket=client_socket, logger=network_logger).receive()
 
-                parse_http()
-                if protocol != '':
-                    client_message.protocol = protocol
+                end_socket = process_client_raw_data_request()
 
-                # Parse websocket frames only if it is not the first protocol upgrade request.
-                if protocol == 'Websocket' and cycle_count != 0:
-                    client_message.request_raw_decoded = parse_websocket(client_message.request_raw_bytes)
-
-                # Custom parser, should parse HTTP body or the whole message if not HTTP.
-                parser_instance = parser(client_message)
-                parser_instance.parse()
-
-                # Converting body parsed to string on logging, since there is no strict rule for the parameter
-                # to be string.
-                parser_instance.logger.info(f"{str(client_message.request_body_parsed)[0: 100]}...")
-
+            if not end_socket:
                 # If we're in response mode, execute responder.
                 response_raw_bytes = None
                 if config_static.TCPServer.server_response_mode:
-                    # Since we're in response mode, we'll record the request anyway, after the responder did its job.
-                    client_message.info = "In Server Response Mode"
-
-                    # Re-initiate the 'client_message.response_list_of_raw_bytes' list, since we'll be appending
-                    # new entries for empty list.
-                    client_message.response_list_of_raw_bytes = list()
-
-                    # If it's the first cycle and the protocol is Websocket, then we'll create the HTTP Handshake
-                    # response automatically.
-                    if protocol == 'Websocket' and cycle_count == 0:
-                        client_message.response_list_of_raw_bytes.append(
-                            websocket_parse.create_byte_http_response(client_message.request_raw_bytes))
-                    # Creating response for parsed message and printing
-                    responder.create_response(client_message)
-
-                    # Output first 100 characters of all the responses in the list.
-                    for response_raw_bytes in client_message.response_list_of_raw_bytes:
-                        if response_raw_bytes:
-                            responder.logger.info(f"{response_raw_bytes[0: 100]}...")
-                        else:
-                            responder.logger.info(f"Response empty...")
+                    create_responder_response()
                 # Else, we're not in response mode, then execute client connect and record section.
                 else:
                     # If "service_client" object is not defined, we'll define it.
-                    # If it's defined, then it means there's still active "ssl_socket" with connection to the service
-                    # domain.
+                    # If it's defined, then there's still active "ssl_socket" with connection to the service domain.
                     if not service_client:
-                        # If we're on localhost, then use external services list in order to resolve the domain:
-                        # config['tcp']['forwarding_dns_service_ipv4_list___only_for_localhost']
-                        if client_message.client_ip in base.THIS_DEVICE_IP_LIST:
-                            service_client = socket_client.SocketClient(
-                                service_name=client_message.server_name, service_port=client_message.destination_port,
-                                tls=is_tls,
-                                dns_servers_list=(
-                                    config_static.TCPServer.forwarding_dns_service_ipv4_list___only_for_localhost),
-                                logger=network_logger
-                            )
-                        # If we're not on localhost, then connect to domain directly.
-                        else:
-                            service_client = socket_client.SocketClient(
-                                service_name=client_message.server_name, service_port=client_message.destination_port,
-                                tls=is_tls, logger=network_logger)
+                        service_client = create_client_socket()
 
                     # Sending current client message and receiving a response.
                     # If there was an error it will be passed to "client_message" object class and if not, "None" will
@@ -297,40 +358,9 @@ def thread_worker_main(
                     # If there was connection error or socket close, then "ssl_socket" of the "service_client"
                     # will be empty.
                     response_raw_bytes, client_message.error, client_message.server_ip, service_ssl_socket = (
-                        service_client.send_receive_to_service(client_message.request_raw_bytes))
+                        service_client.send_receive_to_service(client_message.request_raw_bytes, (not is_socket_ready)))
 
-                    if client_message.error is not None:
-                        statistics_error_list.append(client_message.error)
-
-                    # Since we need a list for raw bytes, we'll add the 'response_raw_bytes' to our list object.
-                    # But we need to re-initiate it first.
-                    client_message.response_list_of_raw_bytes = list()
-                    # If there was error during send or receive from the service and response was None,
-                    # It means that there was no response at all because of the error.
-                    if client_message.error and response_raw_bytes is None:
-                        client_message.response_list_of_raw_bytes.append(None)
-                    # If there was no error, but response came empty, it means that the service has closed the
-                    # socket after it received the request, without sending any data.
-                    elif client_message.error is None and response_raw_bytes is None:
-                        client_message.response_list_of_raw_bytes.append("")
-                    else:
-                        client_message.response_list_of_raw_bytes.append(response_raw_bytes)
-
-                    client_message.response_list_of_raw_decoded = list()
-                    # Make HTTP Response parsing only if there was response at all.
-                    if response_raw_bytes:
-                        response_raw_decoded, is_http_response, response_parsing_error = (
-                            HTTPResponseParse(response_raw_bytes).parse())
-
-                        if is_http_response:
-                            client_message.response_list_of_raw_decoded.append(response_raw_decoded)
-                        elif protocol == 'Websocket' and cycle_count != 0:
-                            response_decoded = parse_websocket(response_raw_bytes)
-                            client_message.response_list_of_raw_decoded.append(response_decoded)
-                        else:
-                            client_message.response_list_of_raw_decoded.append(None)
-
-
+                    process_received_response_from_service_client()
 
                     # So if the socket was closed and there was an error we can break the loop
                     if not service_ssl_socket:
@@ -338,8 +368,8 @@ def thread_worker_main(
                         recorded = True
                         break
 
-                # If there is a response, then send it.
-                if response_raw_bytes:
+                # If there is a response(s), then send it.
+                if client_message.response_list_of_raw_bytes:
                     # Sending response/s to client no matter if in record mode or not.
                     network_logger.info(
                         f"Sending messages to client: {len(client_message.response_list_of_raw_bytes)}")
@@ -362,7 +392,10 @@ def thread_worker_main(
 
                 record_and_statistics_write()
                 recorded = True
-            else:
+
+            # If the message is empty, then the connection was closed already by the other side, also if there will
+            # be empty response from the server, so we can close the socket as well and exceptions will be raised.
+            if end_socket:
                 # If it's the first cycle we will record the message from the client if it came empty.
                 if cycle_count == 0:
                     record_and_statistics_write()
@@ -370,6 +403,7 @@ def thread_worker_main(
                 # In other cases, we'll just break the loop, since empty message means that the other side closed the
                 # connection.
                 recorded = True
+
                 break
 
         finish_thread()

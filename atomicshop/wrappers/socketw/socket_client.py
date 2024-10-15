@@ -192,7 +192,18 @@ class SocketClient:
         self.logger.info(f"Closed socket to service server [{self.service_name}:{self.service_port}]")
 
     # noinspection PyUnusedLocal
-    def send_receive_to_service(self, request_bytes: bytearray):
+    def send_receive_to_service(
+            self,
+            request_bytes: Union[bytearray, bytes],
+            skip_send: bool = False
+    ):
+        """
+        Function to send data to service server and receive response.
+
+        :param request_bytes: The data that will be sent to the service server.
+        :param skip_send: If True, the data will not be sent to the service server. After the connection is established,
+            the function will wait for the response only.
+        """
         # Define variables
         function_service_data = None
         error_message = None
@@ -214,18 +225,22 @@ class SocketClient:
             self.logger.info(
                 f"[{self.service_name}] resolves to ip: [{self.connection_ip}]. Pulled IP from the socket.")
 
-            # Send the data received from the client to the service over socket
-            error_on_send: str = Sender(
-                ssl_socket=self.socket_instance, class_message=request_bytes, logger=self.logger).send()
+            # noinspection PyTypeChecker
+            error_on_send: str = None
+            if not skip_send:
+                # Send the data received from the client to the service over socket
+                error_on_send = Sender(
+                    ssl_socket=self.socket_instance, class_message=request_bytes, logger=self.logger).send()
 
-            # If the socket disconnected on data send
-            if error_on_send:
-                error_message = f"Service socket closed on data send: {error_on_send}"
+                # If the socket disconnected on data send
+                if error_on_send:
+                    error_message = f"Service socket closed on data send: {error_on_send}"
 
-                # We'll close the socket and nullify the object
-                self.close_socket()
+                    # We'll close the socket and nullify the object
+                    self.close_socket()
+
             # Else if send was successful
-            else:
+            if not error_on_send:
                 function_service_data = Receiver(
                     ssl_socket=self.socket_instance, logger=self.logger).receive()
 

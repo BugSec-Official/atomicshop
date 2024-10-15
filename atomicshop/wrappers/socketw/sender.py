@@ -6,7 +6,7 @@ from ...print_api import print_api
 from ..loggingw import loggingw
 from ...basics import tracebacks
 
-from . import base, ssl_base
+from . import base
 
 
 class Sender:
