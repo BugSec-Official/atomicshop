@@ -49,7 +49,7 @@ def is_sysmon_running():
     """
 
     process_list: list = process.get_running_processes_by_cmdline_pattern(
-        pattern=SYSMON_FILE_NAME, first=True, process_name_case_insensitive=True)
+        pattern=SYSMON_FILE_NAME, first=True, cmdline_case_insensitive=True)
 
     if process_list:
         return True

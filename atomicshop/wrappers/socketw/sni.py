@@ -254,15 +254,13 @@ class SNIHandler:
 
         # Try on general settings in the SNI function.
         try:
-            # Check if SNI was passed.
-            if self.sni_received_parameters.destination_name:
-                service_name_from_sni = self.sni_received_parameters.destination_name
-            # If no SNI was passed.
-            else:
+            # Check if SNI was passed. If no SNI was passed.
+            if not self.sni_received_parameters.destination_name:
                 # If DNS server is enabled we'll get the domain from dns server.
                 if self.domain_from_dns_server:
-                    service_name_from_sni = self.domain_from_dns_server
-                    message = f"SNI Handler: No SNI was passed, using domain from DNS Server: {service_name_from_sni}"
+                    self.sni_received_parameters.destination_name = self.domain_from_dns_server
+                    message = \
+                        f"SNI Handler: No SNI was passed, using domain from DNS Server: {self.domain_from_dns_server}"
                     print_api(message, **(print_kwargs or {}))
                 # If DNS server is disabled, the domain from dns server will be empty.
                 else:
@@ -271,7 +269,7 @@ class SNIHandler:
                     print_api(message, **(print_kwargs or {}))
 
             # Setting "server_hostname" as a domain.
-            self.sni_received_parameters.ssl_socket.server_hostname = service_name_from_sni
+            self.sni_received_parameters.ssl_socket.server_hostname = self.sni_received_parameters.destination_name
             message = \
                 f"SNI Handler: port {self.sni_received_parameters.ssl_socket.getsockname()[1]}: " \
                 f"Incoming connection for [{self.sni_received_parameters.ssl_socket.server_hostname}]"
