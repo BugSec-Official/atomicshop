@@ -198,6 +198,14 @@ def thread_worker_main(
             responder.logger.info(f"{response_raw_bytes_single[0: 100]}...")
 
     def create_client_socket():
+        # If there is a custom certificate for the client for this domain, then we'll use it.
+        # noinspection PyTypeChecker
+        custom_client_pem_certificate_path: str = None
+        for subdomain, pem_file_path in mtls_dict.items():
+            if subdomain == client_message.server_name:
+                custom_client_pem_certificate_path = pem_file_path
+                break
+
         # If we're on localhost, then use external services list in order to resolve the domain:
         # config['tcp']['forwarding_dns_service_ipv4_list___only_for_localhost']
         if client_message.client_ip in base.THIS_DEVICE_IP_LIST:
@@ -206,13 +214,18 @@ def thread_worker_main(
                 tls=is_tls,
                 dns_servers_list=(
                     config_static.TCPServer.forwarding_dns_service_ipv4_list___only_for_localhost),
-                logger=network_logger
+                logger=network_logger,
+                custom_pem_client_certificate_file_path=custom_client_pem_certificate_path
             )
         # If we're not on localhost, then connect to domain directly.
         else:
             service_client_instance = socket_client.SocketClient(
-                service_name=client_message.server_name, service_port=client_message.destination_port,
-                tls=is_tls, logger=network_logger)
+                service_name=client_message.server_name,
+                service_port=client_message.destination_port,
+                tls=is_tls,
+                logger=network_logger,
+                custom_pem_client_certificate_file_path=custom_client_pem_certificate_path
+            )
 
         return service_client_instance
 
@@ -277,7 +290,7 @@ def thread_worker_main(
 
     # Loading parser by domain, if there is no parser for current domain - general reference parser is loaded.
     # These should be outside any loop and initialized only once entering the thread.
-    parser, responder, recorder = assign_class_by_domain(
+    parser, responder, recorder, mtls_dict = assign_class_by_domain(
         engines_usage=config_static.TCPServer.engines_usage,
         engines_list=engines_list,
         message_domain_name=server_name,

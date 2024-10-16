@@ -16,7 +16,7 @@ from .sender import Sender
 from . import ssl_base
 from .. import cryptographyw
 from ..loggingw import loggingw
-from ...print_api import print_api
+from ... import print_api
 from ...file_io import file_io
 from ...basics import tracebacks
 
@@ -29,7 +29,8 @@ class SocketClient:
             tls: bool = False,
             connection_ip=None,
             dns_servers_list=None,
-            logger: logging.Logger = None
+            logger: logging.Logger = None,
+            custom_pem_client_certificate_file_path: str = None
     ):
         """
         If you have a certificate for domain, but not for the IPv4 address, the SSL Socket context can be created for
@@ -47,6 +48,8 @@ class SocketClient:
         :param dns_servers_list: (Optional) List object with dns IPv4 addresses that 'service_name' will be resolved
             with, using 'dnspython' module. 'connection_ip' will be populated with first resolved IP.
         :param logger: (Optional) Logger object. If not provided, the default logger will be used.
+        :param custom_pem_client_certificate_file_path: (Optional) If specified, the SSL Socket will be created with
+            custom client certificate. The path to the file with the certificate should be provided.
 
         If both 'connection_ip' and 'dns_servers_list' specified, ValueException with raise.
         """
@@ -55,6 +58,7 @@ class SocketClient:
         self.tls: bool = tls
         self.connection_ip = connection_ip
         self.dns_servers_list = dns_servers_list
+        self.custom_pem_client_certificate_file_path: str = custom_pem_client_certificate_file_path
 
         if logger:
             # Create child logger for the provided logger with the module's name.
@@ -79,13 +83,15 @@ class SocketClient:
     def create_service_socket(self):
         # If TLS is enabled.
         if not self.tls:
-            self.logger.info(f"Creating non-SSL socket to [{self.service_name}:{self.service_port}]")
+            log_message: str = f"Creating non-SSL socket to [{self.service_name}:{self.service_port}]"
+            print_api.print_api(log_message, logger=self.logger, logger_method='info')
             return creator.create_socket_ipv4_tcp()
         else:
-            self.logger.info(f"Creating SSL socket to [{self.service_name}:{self.service_port}]")
+            log_message: str = f"Creating SSL socket to [{self.service_name}:{self.service_port}]"
+            print_api.print_api(log_message, logger=self.logger, logger_method='info')
             socket_object = creator.create_socket_ipv4_tcp()
             return creator.wrap_socket_with_ssl_context_client___default_certs___ignore_verification(
-                socket_object, self.service_name)
+                socket_object, self.service_name, self.custom_pem_client_certificate_file_path)
 
     def service_connection(
             self
@@ -141,7 +147,7 @@ class SocketClient:
                 error_string = (
                     f"Socket Client Connect: {exception_type}: "
                     f"Domain {self.service_name} doesn't exist - Couldn't resolve with {self.dns_servers_list}.")
-                print_api(error_string, logger=self.logger, logger_method='error')
+                print_api.print_api(error_string, logger=self.logger, logger_method='error')
                 return None, error_string
 
         # If DNS was resolved correctly or DNS servers weren't specified - we can try connecting.
@@ -165,14 +171,14 @@ class SocketClient:
             if exception_type in ['ConnectionRefusedError', 'ConnectionAbortedError', 'ConnectionResetError',
                                   'TimeoutError'] or 'ssl' in exception_type.lower():
                 error_message: str = f"{error_string}: {exception_error}"
-                print_api(error_message, logger=self.logger, logger_method='error')
+                print_api.print_api(error_message, logger=self.logger, logger_method='error')
                 return None, error_message
             elif exception_type == 'socket.gaierror':
                 custom_error_message: str = (
                     f"Couldn't resolve [{self.service_name}] to IP using default methods. "
                     f"Domain doesn't exist or there's no IP assigned to it.")
                 error_message: str = f"{error_string}: {custom_error_message}"
-                print_api(error_message, logger=self.logger, logger_method='error')
+                print_api.print_api(error_message, logger=self.logger, logger_method='error')
                 return None, error_message
             else:
                 raise e
@@ -370,7 +376,7 @@ class SocketClient:
         server_socket_for_certificate, error_message = self.service_connection()
         # Get the DER byte certificate from the socket.
         certificate_from_socket_der_bytes = ssl_base.get_certificate_from_socket(server_socket_for_certificate)
-        print_api('Fetched certificate from socket.', logger=self.logger, **kwargs)
+        print_api.print_api('Fetched certificate from socket.', logger=self.logger, **kwargs)
         # Close the socket.
         self.close_socket()
 

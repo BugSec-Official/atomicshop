@@ -37,11 +37,26 @@ def create_ssl_context_for_client():
     return ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
 
 
-def set_client_ssl_context_default_certs(ssl_context):
-    # "load_default_certs" method is telling the client to check the local certificate storage on the system for the
-    # needed certificate of the server. Without this line you will get an error from the server that the client
-    # is using self-signed certificate. Which is partly true, since you used the SLL wrapper,
-    # but didn't specify the certificate at all.
+def set_client_ssl_context_ca_default_certs(ssl_context):
+    """
+    "load_default_certs" method is telling the client to check the local certificate storage on the system for the
+    needed certificate of the server. Without this line you will get an error from the server that the client
+    is using self-signed certificate. Which is partly true, since you used the SLL wrapper,
+    but didn't specify the certificate at all.
+    -----------------------------------------
+    https://docs.python.org/3/library/ssl.html#ssl.SSLContext.load_default_certs
+    Load a set of default “certification authority” (CA) certificates from default locations.
+    On Windows it loads CA certs from the CA and ROOT system stores.
+    On all systems it calls SSLContext.set_default_verify_paths().
+    In the future the method may load CA certificates from other locations, too.
+
+    The purpose flag specifies what kind of CA certificates are loaded.
+    The default settings Purpose.SERVER_AUTH loads certificates, that are flagged and trusted for
+    TLS web server authentication (client side sockets). Purpose.CLIENT_AUTH loads CA certificates for
+    client certificate verification on the server side.
+    -----------------------------------------
+    """
+
     # The purpose of the certificate is to authenticate on the server
     # context.load_default_certs(Purpose.SERVER_AUTH)
     # You don't have to specify the purpose to connect, but if you get a purpose error, you know where to find it
@@ -187,10 +202,26 @@ def set_listen_on_socket(socket_object, **kwargs):
 # Socket Creator Presets
 
 def wrap_socket_with_ssl_context_client___default_certs___ignore_verification(
-        socket_object, server_hostname: str = None):
+        socket_object,
+        server_hostname: str = None,
+        custom_pem_client_certificate_file_path: str = None
+):
+    """
+    This function is a preset for wrapping the socket with SSL context for the client.
+    It sets the CA default certificates, and ignores the server's certificate verification.
+
+    :param socket_object: socket.socket object
+    :param server_hostname: string, hostname of the server. Default is None.
+    :param custom_pem_client_certificate_file_path: string, full file path for the client certificate PWM file.
+        Default is None.
+    """
     ssl_context: ssl.SSLContext = create_ssl_context_for_client()
-    set_client_ssl_context_default_certs(ssl_context)
+    set_client_ssl_context_ca_default_certs(ssl_context)
     set_client_ssl_context_certificate_verification_ignore(ssl_context)
+
+    if custom_pem_client_certificate_file_path:
+        ssl_context.load_cert_chain(certfile=custom_pem_client_certificate_file_path, keyfile=None)
+
     ssl_socket: ssl.SSLSocket = wrap_socket_with_ssl_context_client(
         socket_object, ssl_context, server_hostname=server_hostname)
 
