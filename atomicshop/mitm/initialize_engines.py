@@ -2,7 +2,6 @@ import os
 import sys
 from pathlib import Path
 
-from .. import filesystem
 from ..file_io import tomls
 from ..basics.classes import import_first_class_name_from_file_path
 from .engines.__reference_general import parser___reference_general, responder___reference_general, \
@@ -26,6 +25,8 @@ class ModuleCategory:
         # The instance of the recorder class that will be initiated once in the script start
         self.responder_instance = None
 
+        self.mtls: dict = dict()
+
     def fill_engine_fields_from_general_reference(self, engines_fullpath: str):
         # Reference module variables.
         self.engine_name = '__reference_general'
@@ -44,6 +45,7 @@ class ModuleCategory:
 
         # Getting the parameters from engine config file
         self.domain_list = configuration_data['domains']
+        self.mtls = configuration_data['mtls']
 
         # If there's module configuration file, but no domains in it, there's no point to continue.
         # Since, each engine is based on domains.
@@ -51,12 +53,12 @@ class ModuleCategory:
             raise ValueError(f"Engine Configuration file doesn't contain any domains: {engine_config_file_path}")
 
         # Full path to file
-        self.parser_file_path = filesystem.get_paths_from_directory(
-            engine_directory_path, get_file=True, file_name_check_pattern=configuration_data['parser_file'])[0].path
-        self.responder_file_path = filesystem.get_paths_from_directory(
-            engine_directory_path, get_file=True, file_name_check_pattern=configuration_data['responder_file'])[0].path
-        self.recorder_file_path = filesystem.get_paths_from_directory(
-            engine_directory_path, get_file=True, file_name_check_pattern=configuration_data['recorder_file'])[0].path
+        self.parser_file_path = f'{engine_directory_path}{os.sep}{configuration_data['parser_file']}'
+        self.responder_file_path = f'{engine_directory_path}{os.sep}{configuration_data['responder_file']}'
+        self.recorder_file_path = f'{engine_directory_path}{os.sep}{configuration_data['recorder_file']}'
+
+        for subdomain, file_name in self.mtls.items():
+            self.mtls[subdomain] = f'{engine_directory_path}{os.sep}{file_name}'
 
     def initialize_engine(self, logs_path: str, logger=None, reference_general: bool = False, **kwargs):
         # Initiating logger for each engine by its name
@@ -105,6 +107,7 @@ def assign_class_by_domain(
     function_parser = None
     function_responder = None
     function_recorder = None
+    mtls_data: dict = dict()
 
     # In case SNI came empty in the request from client, then there's no point in iterating through engine domains.
     if message_domain_name:
@@ -127,6 +130,8 @@ def assign_class_by_domain(
                     function_recorder = function_module.recorder_class_object
                     # Since the responder is being initiated only once, we're assigning only the instance
                     function_responder = function_module.responder_instance
+                    mtls_data = function_module.mtls
+
 
                     logger.info(f"Assigned Modules for [{message_domain_name}]: "
                                 f"{function_module.parser_class_object.__name__}, "
@@ -148,4 +153,4 @@ def assign_class_by_domain(
         function_responder = reference_module.responder_instance
 
     # Return all the initiated modules
-    return function_parser, function_responder, function_recorder
+    return function_parser, function_responder, function_recorder, mtls_data

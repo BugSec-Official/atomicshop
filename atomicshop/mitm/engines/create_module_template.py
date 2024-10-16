@@ -1,4 +1,5 @@
 import os
+import argparse
 from typing import Literal
 
 from ... import filesystem
@@ -19,11 +20,17 @@ SCRIPT_DIRECTORY: str = filesystem.get_file_directory(__file__)
 ENGINES_DIRECTORY_PATH: str = filesystem.get_working_directory() + os.sep + ENGINES_DIRECTORY_NAME
 
 
+def parse_arguments():
+    parser = argparse.ArgumentParser(description='Create a new engine module template.')
+    parser.add_argument('engine_name', type=str, help='The name of the new engine.')
+    return parser.parse_args()
+
+
 class CreateModuleTemplate:
-    def __init__(self, engine_name: str, domains: list):
+    def __init__(self):
         # === Get input variables. ===
-        self.engine_name: str = engine_name
-        self.domains: list = domains
+        self.engine_name: str = parse_arguments().engine_name
+        self.domains: list = ['example.com']
 
         # New engine's directory.
         self.new_engine_directory: str = ENGINES_DIRECTORY_PATH + os.sep + self.engine_name
@@ -66,10 +73,14 @@ class CreateModuleTemplate:
 
         # Add "" to each domain.
         domains_with_quotes: list = [f'"{domain}"' for domain in self.domains]
-        config_lines_list.append(f'domains = [{", ".join(domains_with_quotes)}]\n')
-        config_lines_list.append(f'parser_file = "{self.parser_file_name}"')
-        config_lines_list.append(f'responder_file = "{self.responder_file_name}"')
-        config_lines_list.append(f'recorder_file = "{self.recorder_file_name}"')
+        config_lines_list.append(f'"domains" = [{", ".join(domains_with_quotes)}]\n')
+        # config_lines_list.append(f'\n')
+        config_lines_list.append(f'"parser_file" = "{self.parser_file_name}"')
+        config_lines_list.append(f'"responder_file" = "{self.responder_file_name}"')
+        config_lines_list.append(f'"recorder_file" = "{self.recorder_file_name}"\n')
+        # config_lines_list.append(f'\n')
+        config_lines_list.append(f'[mtls]')
+        config_lines_list.append(f'# "subdomain.domain.com" = "file_name_in_current_dir.pem"')
 
         config_file_path = self.new_engine_directory + os.sep + CONFIG_FILE_NAME
 

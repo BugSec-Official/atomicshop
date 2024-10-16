@@ -154,13 +154,16 @@ class Certificator:
                     service_name=sni_received_parameters.destination_name,
                     service_port=base.get_destination_address_from_socket(sni_received_parameters.ssl_socket)[1],
                     tls=self.tls,
-                    dns_servers_list=self.forwarding_dns_service_ipv4_list___only_for_localhost)
+                    dns_servers_list=self.forwarding_dns_service_ipv4_list___only_for_localhost,
+                    logger=print_kwargs.get('logger') if print_kwargs else None
+                )
             # If we're not on localhost, then connect to domain directly.
             else:
                 service_client = socket_client.SocketClient(
                     service_name=sni_received_parameters.destination_name,
                     service_port=base.get_destination_address_from_socket(sni_received_parameters.ssl_socket)[1],
-                    tls=self.tls
+                    tls=self.tls,
+                    logger=print_kwargs.get('logger') if print_kwargs else None
                 )
 
             # If certificate from socket exists, then we don't need to get it from the socket and write to file.

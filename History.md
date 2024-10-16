@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.17.0 - 16.10.2024
+  * mitm, wrappers/socketw - new functionality.
 * 2.16.48 - 15.10.2024
   * mitm, wrappers/socketw - fixes and improvements.
 * 2.16.47 - 09.10.2024
