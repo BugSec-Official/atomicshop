@@ -35,16 +35,6 @@ def _get_unique_filename(directory, filename):
     return unique_filename
 
 
-def _is_zip_file(file, zip_obj):
-    with zip_obj.open(file) as file_data:
-        return zips.is_zip_zipfile(file_data.read())
-
-
-def _is_7z_file(file, sevenz_obj):
-    with sevenz_obj.open(file) as file_data:
-        return sevenzs.is_7z(file_data.read())
-
-
 def _match_file_name(target, current, case_sensitive):
     if case_sensitive:
         return current.endswith(target)
@@ -139,7 +129,7 @@ def _search_in_archive(
         if callback_matched:
             _handle_file_extraction(item, extract_file_to_path, archived_file_bytes)
         else:
-            if recursive and (_is_zip_file(item.filename, arch_obj) or _is_7z_file(item.filename, arch_obj)):
+            if recursive and (zips.is_zip_zipfile(archived_file_bytes) or sevenzs.is_7z(archived_file_bytes)):
                 _search_archive_content(
                     archived_file_bytes, file_names, results, found_set, case_sensitive, return_first_only,
                     recursive, callback_functions, extract_file_to_path)

@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.17.2 - 21.10.2024
+  * archiver/search_in_archive - fixes and improvements.
 * 2.17.1 - 20.10.2024
   * venvs - new release.
 * 2.17.0 - 16.10.2024
