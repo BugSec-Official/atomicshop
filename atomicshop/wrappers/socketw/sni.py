@@ -54,6 +54,7 @@ class SNISetup:
         self.default_server_certificate_name = default_server_certificate_name
         self.default_server_certificate_directory = default_server_certificate_directory
         self.default_certificate_domain_list = default_certificate_domain_list
+        self.enable_sslkeylogfile_to_ssl_context: bool = enable_sslkeylogfile_to_ssl_context
         self.sni_custom_callback_function: callable = sni_custom_callback_function
         self.sni_use_default_callback_function: bool = sni_use_default_callback_function
         self.sni_use_default_callback_function_extended: bool = sni_use_default_callback_function_extended

@@ -210,12 +210,15 @@ def thread_worker_main(
         # config['tcp']['forwarding_dns_service_ipv4_list___only_for_localhost']
         if client_message.client_ip in base.THIS_DEVICE_IP_LIST:
             service_client_instance = socket_client.SocketClient(
-                service_name=client_message.server_name, service_port=client_message.destination_port,
+                service_name=client_message.server_name,
+                service_port=client_message.destination_port,
                 tls=is_tls,
                 dns_servers_list=(
                     config_static.TCPServer.forwarding_dns_service_ipv4_list___only_for_localhost),
                 logger=network_logger,
-                custom_pem_client_certificate_file_path=custom_client_pem_certificate_path
+                custom_pem_client_certificate_file_path=custom_client_pem_certificate_path,
+                enable_sslkeylogfile_env_to_client_ssl_context=(
+                    config_static.Certificates.enable_sslkeylogfile_env_to_client_ssl_context)
             )
         # If we're not on localhost, then connect to domain directly.
         else:
@@ -224,7 +227,9 @@ def thread_worker_main(
                 service_port=client_message.destination_port,
                 tls=is_tls,
                 logger=network_logger,
-                custom_pem_client_certificate_file_path=custom_client_pem_certificate_path
+                custom_pem_client_certificate_file_path=custom_client_pem_certificate_path,
+                enable_sslkeylogfile_env_to_client_ssl_context=(
+                    config_static.Certificates.enable_sslkeylogfile_env_to_client_ssl_context)
             )
 
         return service_client_instance
