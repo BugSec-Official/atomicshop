@@ -1,3 +1,4 @@
+import os
 import socket
 import ssl
 
@@ -33,8 +34,31 @@ def create_ssl_context_for_server():
     # return ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
 
 
-def create_ssl_context_for_client():
-    return ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+def create_ssl_context_for_client(
+        enable_sslkeylogfile_env_to_client_ssl_context: bool = False
+) -> ssl.SSLContext:
+    """
+    This function creates the SSL context for the client.
+    The SSL context is created with the "PROTOCOL_TLS_CLIENT" protocol.
+
+    :param enable_sslkeylogfile_env_to_client_ssl_context: boolean, enables the SSLKEYLOGFILE environment variable
+        to the SSL context. Default is False.
+        if True, SSLKEYLOGFILE will be added to SSL context with:
+        ssl_context.keylog_filename = os.environ.get('SSLKEYLOGFILE')
+        This is useful for debugging SSL/TLS connections with WireShark.
+        Since WireShark also uses this environment variable to read the key log file and apply to the SSL/TLS
+        connections, so you can see the decrypted traffic.
+
+    :return: ssl.SSLContext
+    """
+    ssl_context: ssl.SSLContext = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+
+    if enable_sslkeylogfile_env_to_client_ssl_context:
+        ssl_key_logfile = os.environ.get('SSLKEYLOGFILE')
+        if ssl_key_logfile:
+            ssl_context.keylog_filename = ssl_key_logfile
+
+    return ssl_context
 
 
 def set_client_ssl_context_ca_default_certs(ssl_context):
@@ -204,7 +228,8 @@ def set_listen_on_socket(socket_object, **kwargs):
 def wrap_socket_with_ssl_context_client___default_certs___ignore_verification(
         socket_object,
         server_hostname: str = None,
-        custom_pem_client_certificate_file_path: str = None
+        custom_pem_client_certificate_file_path: str = None,
+        enable_sslkeylogfile_env_to_client_ssl_context: bool = False
 ):
     """
     This function is a preset for wrapping the socket with SSL context for the client.
@@ -214,8 +239,11 @@ def wrap_socket_with_ssl_context_client___default_certs___ignore_verification(
     :param server_hostname: string, hostname of the server. Default is None.
     :param custom_pem_client_certificate_file_path: string, full file path for the client certificate PWM file.
         Default is None.
+    :param enable_sslkeylogfile_env_to_client_ssl_context: boolean, enables the SSLKEYLOGFILE environment variable
+        to the SSL context. Default is False.
     """
-    ssl_context: ssl.SSLContext = create_ssl_context_for_client()
+    ssl_context: ssl.SSLContext = create_ssl_context_for_client(
+        enable_sslkeylogfile_env_to_client_ssl_context=enable_sslkeylogfile_env_to_client_ssl_context)
     set_client_ssl_context_ca_default_certs(ssl_context)
     set_client_ssl_context_certificate_verification_ignore(ssl_context)
 

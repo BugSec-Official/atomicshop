@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.17.3 - 22.10.2024
+  * mitm, wrappers/socketw - fixes and improvements.
 * 2.17.2 - 21.10.2024
   * archiver/search_in_archive - fixes and improvements.
 * 2.17.1 - 20.10.2024

@@ -123,6 +123,7 @@ class LogRec:
 
 @dataclass
 class Certificates:
+    enable_sslkeylogfile_env_to_client_ssl_context: bool
     install_ca_certificate_to_root_store: bool
     uninstall_unused_ca_certificates_with_mitm_ca_name: bool
 
