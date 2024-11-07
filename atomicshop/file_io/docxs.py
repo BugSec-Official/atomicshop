@@ -12,7 +12,7 @@ def get_hyperlinks(docx_path):
     :return: list of strings, hyperlinks.
     """
 
-    hyperlinks: list = list()
+    hyperlinks: list[dict] = list()
 
     try:
         doc = Document(docx_path)
@@ -32,9 +32,13 @@ def get_hyperlinks(docx_path):
             # And the fragment is stored in the hyperlink.fragment as 'anchor'.
             # For the full hyperlink, we need to concatenate the address and the fragment.
             # If there is no anchor in the link the fragment will be empty string ('').
-            if hyperlink.fragment:
-                hyperlinks.append(hyperlink.address + "#" + hyperlink.fragment)
-            hyperlinks.append(hyperlink.address)
+            # Basically, we don't need to add the fragment to the hyperlink if it's empty, we can just use the url.
+            # if hyperlink.fragment:
+            #     hyperlinks.append(hyperlink.address + "#" + hyperlink.fragment)
+            hyperlinks.append({
+                'url': hyperlink.url,
+                'text': hyperlink.text
+            })
 
     return hyperlinks
 
@@ -78,20 +82,23 @@ def search_for_hyperlink_in_files(directory_path: str, hyperlink: str, relative_
         directory_path, get_file=True, file_name_check_pattern="*.docx",
         add_relative_directory=True, relative_file_name_as_directory=True)
 
-    found_in_files: list = list()
+    found_in_files: list[dict] = list()
     for file_path in files:
-        hyperlinks = get_hyperlinks(file_path.path)
-        if hyperlink in hyperlinks:
-            found_in_files.append(file_path)
+        doc_hyperlinks = get_hyperlinks(file_path.path)
+        for doc_link in doc_hyperlinks:
+            if hyperlink in doc_link['url']:
+                if relative_paths:
+                    path: str = file_path.relative_dir
+                else:
+                    path: str = file_path.path
 
-    if relative_paths:
-        result_list = list()
-        for found_file in found_in_files:
-            result_list.append(found_file.relative_dir)
-    else:
-        result_list = found_in_files
+                found_in_files.append({
+                    'path':path,
+                    'link':doc_link['url'],
+                    'text':doc_link['text']
+                })
 
-    return result_list
+    return found_in_files
 
 
 def search_for_hyperlink_in_files_interface_main(script_directory: str = None):
@@ -134,10 +141,12 @@ def search_for_hyperlink_in_files_interface_main(script_directory: str = None):
     found_in_files = search_for_hyperlink_in_files(
         config['directory_path'], config['hyperlink'], relative_paths=config['relative_paths'])
 
-    print_api(f"Found in [{len(found_in_files)}] files:", color="blue")
+    print_api(f"Found [{len(found_in_files)}] links:", color="blue")
 
     for index, found_file in enumerate(found_in_files):
         print_api(f"[{index+1}]", print_end="", color="green")
-        print_api(f" {found_file}")
+        print_api(f" {found_file['path']}")
+        print_api(f" {found_file['link']}", color="cyan")
+        print_api(f" {found_file['text']}", color="orange")
 
     input('[*] Press [Enter] to exit...')

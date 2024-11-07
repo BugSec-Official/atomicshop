@@ -8,15 +8,18 @@ from ..basics import dicts
 class ClientMessage:
     """ A class that will store all the message details from the client """
     def __init__(self):
-        self.request_raw_bytes: bytearray = bytearray()
         # noinspection PyTypeChecker
-        self.request_time_received: datetime = None
-        self.request_raw_decoded: Union[http_parse.HTTPRequestParse, any] = None
-        self.request_body_parsed = None
+        self.timestamp: datetime = None
+        # noinspection PyTypeChecker
+        self.request_raw_bytes: bytes = None
+        self.request_auto_parsed: Union[http_parse.HTTPRequestParse, any] = None
+        self.request_custom_parsed: any = None
         self.request_raw_hex: hex = None
-        self.response_list_of_raw_bytes: list = list()
-        self.response_list_of_raw_decoded: list = list()
-        self.response_list_of_raw_hex: list = list()
+        # noinspection PyTypeChecker
+        self.response_raw_bytes: bytes = None
+        self.response_auto_parsed: any = None
+        self.response_custom_parsed: any = None
+        self.response_raw_hex: hex = None
         self.server_name: str = str()
         self.server_ip: str = str()
         self.client_ip: str = str()
@@ -25,26 +28,48 @@ class ClientMessage:
         self.process_name: str = str()
         self.thread_id = None
         self.info: str = str()
-        self.error: str = str()
+        self.errors: list = list()
         self.protocol: str = str()
+        self.protocol2: str = str()
         self.recorded_file_path: str = str()
+        self.action: str = str()
+
+    def reinitialize_dynamic_vars(self):
+        """
+        Reinitialize the dynamic variables of the class for the new cycle.
+        """
+        self.request_raw_bytes = None
+        self.timestamp = None
+        self.request_auto_parsed = None
+        self.request_custom_parsed = None
+        self.request_raw_hex = None
+        self.response_raw_bytes = None
+        self.response_auto_parsed = None
+        self.response_custom_parsed = None
+        self.response_raw_hex = None
+        self.action = None
+        self.info = str()
+        self.errors = list()
+        self.protocol = str()
+        self.protocol2 = str()
+        self.recorded_file_path = str()
 
     def __iter__(self):
         # __dict__ returns a dictionary containing the instance's attributes
         for key, value in self.__dict__.items():
             if key == 'request_raw_bytes':
                 value = str(value)
-            elif key == 'request_time_received':
+            elif key == 'timestamp':
                 value = value.strftime('%Y-%m-%d-%H:%M:%S.%f')
-            elif key == 'request_raw_decoded':
+            elif key == 'request_auto_parsed':
                 if isinstance(value, http_parse.HTTPRequestParse):
                     value = dicts.convert_complex_object_to_dict(value)
                 else:
                     value = str(value)
-            elif key == 'request_body_parsed':
+            elif key == 'request_custom_parsed':
                 value = dicts.convert_complex_object_to_dict(value)
-            elif key == 'response_list_of_raw_bytes':
-                value = [str(bytes_response) for bytes_response in value]
-            elif key == 'response_list_of_raw_decoded':
-                value = [dicts.convert_complex_object_to_dict(complex_response) for complex_response in value]
+            elif key == 'response_raw_bytes':
+                value = str(value)
+            elif key == 'response_auto_parsed':
+                value = dicts.convert_complex_object_to_dict(value)
             yield key, value

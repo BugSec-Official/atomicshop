@@ -111,10 +111,18 @@ class SystemResourceMonitor:
         # The shared results' dictionary.
         self.results: dict = {}
 
-    def start(self, print_kwargs: dict = None):
+    def start(
+            self,
+            print_kwargs: dict = None,
+            thread_as_daemon: bool = True
+    ):
         """
         Start the monitoring process.
         :param print_kwargs:
+        :param thread_as_daemon: bool, set the thread as daemon. If you're running the monitoring process in the main
+            process, set it to True. If you're running the monitoring process in a separate process, set it to False.
+            In child processes created by multiprocessing.Process, the thread works differently. You might not
+            get the desired result.
         :return:
         """
 
@@ -127,7 +135,7 @@ class SystemResourceMonitor:
                 self.interval, self.get_cpu, self.get_memory, self.get_disk_io_bytes, self.get_disk_files_count,
                 self.get_disk_busy_time, self.get_disk_used_percent, self.calculate_maximum_changed_disk_io,
                 self.maximum_disk_io, self.queue_list, self.manager_dict))
-            self.thread.daemon = True
+            self.thread.daemon = thread_as_daemon
             self.thread.start()
         else:
             print_api.print_api("Monitoring is already running.", color='yellow', **print_kwargs)
@@ -205,6 +213,7 @@ def start_monitoring(
         calculate_maximum_changed_disk_io: bool = False,
         queue_list: list = None,
         manager_dict: multiprocessing.managers.DictProxy = None,      # multiprocessing.Manager().dict()
+        get_results_thread_as_daemon: bool = True,
         print_kwargs: dict = None
 ):
     """
@@ -235,6 +244,10 @@ def start_monitoring(
             multiprocessing.Process(
                 target=system_resource_monitor.start_monitoring, kwargs={'manager_dict': shared_dict}).start()
 
+    :param get_results_thread_as_daemon: bool, set the thread as daemon. If you're running the monitoring process in the
+        main process, set it to True. If you're running the monitoring process in a separate process, set it to False.
+        In child processes created by multiprocessing.Process, the thread works differently.
+        You might not get the desired result.
     :param print_kwargs: dict, print kwargs.
     :return:
     """
@@ -257,7 +270,7 @@ def start_monitoring(
             queue_list=queue_list,
             manager_dict=manager_dict
         )
-        SYSTEM_RESOURCES_MONITOR.start()
+        SYSTEM_RESOURCES_MONITOR.start(thread_as_daemon=get_results_thread_as_daemon)
     else:
         print_api.print_api("System resources monitoring is already running.", color='yellow', **(print_kwargs or {}))
 

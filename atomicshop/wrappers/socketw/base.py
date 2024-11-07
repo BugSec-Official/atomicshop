@@ -70,3 +70,20 @@ def get_default_ip_address() -> str:
     :return: string.
     """
     return socket.gethostbyname(socket.gethostname())
+
+
+def is_socket_closed(socket_object) -> bool:
+    """
+    Check if the socket is closed.
+    :param socket_object: socket object or ssl socket object.
+    :return: bool.
+    """
+    try:
+        # If the socket is closed, the fileno() method will raise an exception or return -1.
+
+        if socket_object.fileno() == -1:
+            return True
+        else:
+            return False
+    except socket.error:
+        return False

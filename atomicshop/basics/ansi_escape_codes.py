@@ -23,7 +23,8 @@ def get_colors_basic_dict(color):
         'yellow': ColorsBasic.YELLOW,
         'blue': ColorsBasic.BLUE,
         'header': ColorsBasic.HEADER,
-        'cyan': ColorsBasic.CYAN
+        'cyan': ColorsBasic.CYAN,
+        'orange': ColorsBasic.ORANGE
     }
 
     return colors_basic_dict[color]
@@ -48,6 +49,7 @@ class ColorsBasic:
     BLUE = '\033[94m'
     HEADER = '\033[95m'
     CYAN = '\033[96m'
+    ORANGE = '\033[38;2;255;165;0m'
     END = ANSI_END
 
 

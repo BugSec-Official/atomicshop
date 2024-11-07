@@ -272,7 +272,7 @@ def mitm_server(config_file_path: str):
             time.sleep(1)
             return 1
 
-        dns_thread = threading.Thread(target=dns_server_instance.start)
+        dns_thread = threading.Thread(target=dns_server_instance.start, name="dns_server")
         dns_thread.daemon = True
         dns_thread.start()
 
@@ -376,7 +376,8 @@ def mitm_server(config_file_path: str):
             kwargs={
                 'reference_function_name': thread_worker_main,
                 'reference_function_args': (network_logger, statistics_writer, engines_list, reference_module,)
-            }
+            },
+            name="accepting_loop"
         )
 
         socket_thread.daemon = True
