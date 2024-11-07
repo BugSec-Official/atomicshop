@@ -4,6 +4,40 @@ import http
 from io import BytesIO
 
 
+def get_request_methods() -> list[str]:
+    """
+    Function to return all available HTTP request methods.
+    """
+    # noinspection PyUnresolvedReferences
+    return [method.value for method in http.HTTPMethod]
+
+
+def is_first_bytes_http_request(request_bytes: bytes) -> bool:
+    """
+    Function to check if the first bytes are HTTP request or not.
+    """
+    http_request_methods_list: list = get_request_methods()
+    http_request_methods_list = [method.encode() for method in http_request_methods_list]
+
+    # If the first bytes are HTTP request, then the first word should be one of the HTTP request methods.
+    for method in http_request_methods_list:
+        if request_bytes.startswith(method):
+            return True
+    return False
+
+
+def is_first_bytes_http_response(response_bytes: bytes) -> bool:
+    """
+    Function to check if the first bytes are HTTP response or not.
+    """
+    http_response_beginning: bytes = b'HTTP/'
+
+    # If the first bytes are HTTP response, then the first word should be 'HTTP/'.
+    if response_bytes.startswith(http_response_beginning):
+        return True
+    return False
+
+
 class HTTPRequestParse(BaseHTTPRequestHandler):
     """
     The class will parse HTTP requests.
@@ -103,45 +137,47 @@ class HTTPRequestParse(BaseHTTPRequestHandler):
             client_message.request_raw_decoded = request_decoded
         """
 
-        error: str = str()
-        info: str = str()
-
-        self.rfile = BytesIO(self.request_bytes)
-        self.raw_requestline = self.rfile.readline()
-        self.error_code = self.error_message = None
-        self.parse_request()
-
-        # Before checking for body, we need to make sure that ".headers" property exists, if not, return empty values.
-        if hasattr(self, 'headers'):
-            # The "body" of request is in the 'Content-Length' key. If it exists in "headers" - get the body
-            if 'Content-Length' in self.headers.keys():
-                # "self.headers.get('Content-Length')" returns number in string format, "int" converts it to integer
-                self.content_length = int(self.headers.get('Content-Length'))
-                self.body = self.rfile.read(self.content_length)
-
-        # Examples:
-        # Getting path: self.path
-        # Getting Request Version: self.request_version
-        # Getting specific header: self.headers['host']
-
-        # If there's any error in HTTP parsing
-        if self.error_message:
-            # If error status is "BAD_REQUEST"
-            if self.error_message.startswith("Bad request"):
-                # If it's 'Bad request' this is not HTTP request, so we can
-                # continue the execution and parse the code as NON-HTTP Request.
-                # Currently, seen 'Bad request syntax' and 'Bad request version'.
-                error = f"HTTP Request Parsing: Not HTTP request: {self.error_message}"
-                is_http = False
-            else:
-                error = f"HTTP Request Parsing: HTTP Request with Script Undocumented ERROR: {self.error_message}"
-                is_http = False
-        # If there's no error at all in HTTP Parsing, then it's fine HTTP Request
+        if self.request_bytes is None or not is_first_bytes_http_request(self.request_bytes):
+            error = "HTTP Request Parsing: Not HTTP request by first bytes."
+            is_http = False
         else:
-            is_http = True
-            info = "HTTP Request Parsing: Valid HTTP request"
+            error: str = str()
 
-        return self, is_http, info, error
+            self.rfile = BytesIO(self.request_bytes)
+            self.raw_requestline = self.rfile.readline()
+            self.error_code = self.error_message = None
+            self.parse_request()
+
+            # Before checking for body, we need to make sure that ".headers" property exists, if not, return empty values.
+            if hasattr(self, 'headers'):
+                # The "body" of request is in the 'Content-Length' key. If it exists in "headers" - get the body
+                if 'Content-Length' in self.headers.keys():
+                    # "self.headers.get('Content-Length')" returns number in string format, "int" converts it to integer
+                    self.content_length = int(self.headers.get('Content-Length'))
+                    self.body = self.rfile.read(self.content_length)
+
+            # Examples:
+            # Getting path: self.path
+            # Getting Request Version: self.request_version
+            # Getting specific header: self.headers['host']
+
+            # If there's any error in HTTP parsing
+            if self.error_message:
+                # If error status is "BAD_REQUEST"
+                if self.error_message.startswith("Bad request"):
+                    # If it's 'Bad request' this is not HTTP request, so we can
+                    # continue the execution and parse the code as NON-HTTP Request.
+                    # Currently, seen 'Bad request syntax' and 'Bad request version'.
+                    error = f"HTTP Request Parsing: Not HTTP request: {self.error_message}"
+                    is_http = False
+                else:
+                    error = f"HTTP Request Parsing: HTTP Request with Script Undocumented ERROR: {self.error_message}"
+                    is_http = False
+            # If there's no error at all in HTTP Parsing, then it's fine HTTP Request
+            else:
+                is_http = True
+
+        return self, is_http, error
 
 
 class FakeSocket:
@@ -171,49 +207,54 @@ class HTTPResponseParse:
 
         self.error = None
         self.source = None
-        self.response_raw_decoded = None
+        self.response_raw_parsed = None
         self.is_http: bool = False
 
     def parse(self):
-        # Assigning FakeSocket with response_raw_bytes.
-        self.source = FakeSocket(self.response_raw_bytes)
-
-        # Initializing HTTPResponse class with the FakeSocket with response_raw_bytes as input.
-        # noinspection PyTypeChecker
-        self.response_raw_decoded = HTTPResponse(self.source)
-
-        # Try to parse HTTP Response.
-        try:
-            self.response_raw_decoded.begin()
-            self.is_http = True
-        # If there were problems with the status line.
-        except http.client.BadStatusLine:
-            self.error = "HTTP Response Parsing: Not a valid HTTP Response: Bad Status Line."
+        if self.response_raw_bytes is None or not is_first_bytes_http_response(self.response_raw_bytes):
+            self.error = "HTTP Response Parsing: Not a valid HTTP Response by first bytes."
             self.is_http = False
+            self.response_raw_parsed = None
+        else:
+            # Assigning FakeSocket with response_raw_bytes.
+            self.source = FakeSocket(self.response_raw_bytes)
 
-        header_exists: bool = False
-        if (self.response_raw_decoded is not None and hasattr(self.response_raw_decoded, 'headers') and
-                self.response_raw_decoded.headers is not None):
-            header_exists = True
+            # Initializing HTTPResponse class with the FakeSocket with response_raw_bytes as input.
+            # noinspection PyTypeChecker
+            self.response_raw_parsed = HTTPResponse(self.source)
 
-        if header_exists and self.response_raw_decoded.headers.defects:
-            self.error = f"HTTP Response Parsing: Not a valid HTTP Response: Some defects in headers: " \
-                         f"{self.response_raw_decoded.headers.defects}"
-            self.is_http = False
+            # Try to parse HTTP Response.
+            try:
+                self.response_raw_parsed.begin()
+                self.is_http = True
+            # If there were problems with the status line.
+            except http.client.BadStatusLine:
+                self.error = "HTTP Response Parsing: Not a valid HTTP Response: Bad Status Line."
+                self.is_http = False
 
-        if self.is_http:
-            # Before checking for body, we need to make sure that ".headers" property exists,
-            # if not, return empty values.
-            self.response_raw_decoded.content_length = None
-            self.response_raw_decoded.body = None
-            if header_exists and 'Content-Length' in self.response_raw_decoded.headers.keys():
-                # The "body" of response is in the 'Content-Length' key. If it exists in "headers" - get the body.
-                # "self.response_raw_decoded.headers.get('Content-Length')" returns number in string format,
-                # "int" converts it to integer.
-                self.response_raw_decoded.content_length = int(self.response_raw_decoded.headers.get('Content-Length'))
-                # Basically we need to extract only the number of bytes specified in 'Content-Length' from the end
-                # of the response that we received.
-                # self.response_raw_bytes[-23:]
-                self.response_raw_decoded.body = self.response_raw_bytes[-self.response_raw_decoded.content_length:]
+            header_exists: bool = False
+            if (self.response_raw_parsed is not None and hasattr(self.response_raw_parsed, 'headers') and
+                    self.response_raw_parsed.headers is not None):
+                header_exists = True
 
-        return self.response_raw_decoded, self.is_http, self.error
+            if header_exists and self.response_raw_parsed.headers.defects:
+                self.error = f"HTTP Response Parsing: Not a valid HTTP Response: Some defects in headers: " \
+                             f"{self.response_raw_parsed.headers.defects}"
+                self.is_http = False
+
+            if self.is_http:
+                # Before checking for body, we need to make sure that ".headers" property exists,
+                # if not, return empty values.
+                self.response_raw_parsed.content_length = None
+                self.response_raw_parsed.body = None
+                if header_exists and 'Content-Length' in self.response_raw_parsed.headers.keys():
+                    # The "body" of response is in the 'Content-Length' key. If it exists in "headers" - get the body.
+                    # "self.response_raw_decoded.headers.get('Content-Length')" returns number in string format,
+                    # "int" converts it to integer.
+                    self.response_raw_parsed.content_length = int(self.response_raw_parsed.headers.get('Content-Length'))
+                    # Basically we need to extract only the number of bytes specified in 'Content-Length' from the end
+                    # of the response that we received.
+                    # self.response_raw_bytes[-23:]
+                    self.response_raw_parsed.body = self.response_raw_bytes[-self.response_raw_parsed.content_length:]
+
+        return self.response_raw_parsed, self.is_http, self.error

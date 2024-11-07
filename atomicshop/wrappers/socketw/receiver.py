@@ -21,21 +21,25 @@ def peek_first_bytes(client_socket, bytes_amount: int = 1) -> bytes:
     return client_socket.recv(bytes_amount, socket.MSG_PEEK)
 
 
-def is_socket_ready_for_read(client_socket, timeout: int = 0) -> bool:
+def is_socket_ready_for_read(socket_instance, timeout: int = 0) -> bool:
     """
     Check if socket is ready for read.
 
-    :param client_socket: Socket object.
+    :param socket_instance: Socket object.
     :param timeout: Timeout in seconds. The default is no timeout.
 
     :return: True if socket is ready for read, False otherwise.
     """
 
+    # Check if the socket is closed.
+    if socket_instance.fileno() == -1:
+        return False
+
     # Use select to check if the socket is ready for reading.
     # 'readable' returns a list of sockets that are ready for reading.
     # Since we use only one socket, it will return a list with one element if the socket is ready for reading,
     # or an empty list if the socket is not ready for reading.
-    readable, _, _ = select.select([client_socket], [], [], timeout)
+    readable, _, _ = select.select([socket_instance], [], [], timeout)
     return bool(readable)
 
 
@@ -69,129 +73,115 @@ class Receiver:
             self.logger: logging.Logger = logger
 
     # Function to receive only the buffer, with error handling
-    def socket_receive_message_buffer(self):
-        # Defining the data variable
-        class_data: bytes = bytes()
+    def chunk_from_buffer(self) -> tuple[bytes, str]:
+        """
+        Receive a chunk from the socket buffer.
 
+        :return: Tuple(received chunk binary bytes data, error message string).
+        """
+        # Defining the data variable
+        # noinspection PyTypeChecker
+        received_data: bytes = None
+        # noinspection PyTypeChecker
+        error_message: str = None
+
+        # All excepts will be treated as empty message, indicate that socket was closed and will be handled properly.
         try:
             # "recv(byte buffer size)" to read the server's response.
-            class_data = self.ssl_socket.recv(self.buffer_size_receive)
+            # A signal to close connection will be empty bytes string: b''.
+            received_data = self.ssl_socket.recv(self.buffer_size_receive)
         except ConnectionAbortedError:
-            message = "* Connection was aborted by the client. Exiting..."
-            print_api(message, logger=self.logger, logger_method='critical', traceback_string=True)
-            # This will be treated as empty message - indicate that socket was closed and will be handled properly.
-            pass
+            error_message = "* Connection was aborted by the client. Exiting..."
+            print_api(error_message, logger=self.logger, logger_method='critical', traceback_string=True)
         except ConnectionResetError:
-            message = "* Connection was forcibly closed by the client. Exiting..."
-            print_api(message, logger=self.logger, logger_method='critical', traceback_string=True)
-            # This will be treated as empty message - indicate that socket was closed and will be handled properly.
-            pass
+            error_message = "* Connection was forcibly closed by the client. Exiting..."
+            print_api(error_message, logger=self.logger, logger_method='critical', traceback_string=True)
         except ssl.SSLError:
-            message = "* Encountered SSL error on packet receive. Exiting..."
-            print_api(message, logger=self.logger, logger_method='critical', traceback_string=True)
-            # This will be treated as empty message - indicate that socket was closed and will be handled properly.
-            pass
+            error_message = "* Encountered SSL error on packet receive. Exiting..."
+            print_api(error_message, logger=self.logger, logger_method='critical', traceback_string=True)
 
-        if not class_data:
+        if received_data == b'':
             self.logger.info("Empty message received, socket closed on the other side.")
 
-        return class_data
+        return received_data, error_message
 
-    # Function to receive message
-    def socket_receive_message_full(self):
-        # Setting timeout for the client to receive connections, since there is no way to know when the message has
-        # ended and the message is longer than the receiving buffer.
-        # So we need to set the timeout for the client socket.
-        # If you set "timeout" on the listening main socket, it is not inherited to the child socket when client
-        # connected, so you need to set it for the new socket as well.
-        # Each function need to set the timeout independently
-        self.ssl_socket.settimeout(self.socket_timeout)
-        # variable that is responsible to retry over the same receive session if packet is less than buffer
-        partial_data_received: bool = False
+    def socket_receive_message_full(self) -> tuple[bytes, bool, str]:
+        """
+        Receive the full message from the socket.
 
+        :return: Tuple(full data binary bytes, is socket closed boolean, error message string).
+        """
         # Define the variable that is going to aggregate the whole data received
-        class_data: bytearray = bytearray()
-        # Define the variable that will be responsible for receive buffer
-        class_data_received: bytes = bytes()
+        full_data: bytes = bytes()
+        # noinspection PyTypeChecker
+        error_message: str = None
 
         # Infinite loop to accept data from the client
+        # We'll skip the 'is_socket_ready_for_read' check on the first run, since we want to read the data anyway,
+        # to leave the socket in the blocking mode.
+        first_run: bool = True
         while True:
-            # SocketTimeout creates an exception that we need to handle with try and except.
-            try:
-                # The variable needs to be defined before receiving the socket data or else you will get an error
-                # - variable not defined.
-                # function_data_received: bytearray = bytearray()
-                # Receiving data from the socket with "recv" method, while 1024 byte is a buffer size for the data.
-                # "decode()" method converts byte message to string.
-                class_data_received: bytes = self.socket_receive_message_buffer()
-            # If there is no byte data received from the client and also the full message is not empty, then the loop
-            # needs to break, since it is the last message that was received from the client
-            except TimeoutError:
-                if partial_data_received:
-                    self.logger.info(f"Timed out after {self.socket_timeout} seconds - no more packets. "
-                                     f"Passing current request of total {len(class_data)} bytes down the network chain")
-                    # Pass the exception
-                    pass
-                    # Break the while loop, since we already have the request
+            # Check if there is data to be read from the socket.
+            is_there_data: bool = is_socket_ready_for_read(self.ssl_socket, timeout=0)
+            # noinspection PyTypeChecker
+            if is_there_data or first_run:
+                first_run = False
+                # Receive the data from the socket.
+                received_chunk, error_message = self.chunk_from_buffer()
+                received_chunk: bytes
+                error_message: str
+
+                # And if the message received is not empty then aggregate it to the main "data received" variable
+                if received_chunk != b'' and received_chunk is not None:
+                    full_data += received_chunk
+
+                    self.logger.info(f"Received packet bytes: [{len(received_chunk)}] | "
+                                     f"Total aggregated bytes: [{len(full_data)}]")
+
+                elif received_chunk == b'' or received_chunk is None:
+                    # If there received_chunk is None, this means that the socket was closed,
+                    # since it is a connection error.
+                    # Same goes for the empty message.
+                    is_socket_closed = True
                     break
-                else:
-                    self.logger.info(
-                        # Dividing number of seconds by 60 to get minutes
-                        f"{self.socket_timeout/60} minutes timeout reached on 'socket.recv()' - no data received from "
-                        f"{self.class_client_address}:{self.class_client_local_port}. Still waiting...")
-                    # Pass the exception
-                    pass
-                    # Changing the socket timeout back to none since receiving operation has been finished.
-                    self.ssl_socket.settimeout(None)
-                    # Continue to the next iteration inside while
-                    continue
-
-            # And if the message received is not empty then aggregate it to the main "data received" variable
-            if class_data_received:
-                class_data.extend(class_data_received)
-
-                self.logger.info(f"Received packet with {len(class_data_received)} bytes. "
-                                 f"Current aggregated request of total: {len(class_data)} bytes")
-
-                # If the first received session is less than the buffer size, then the full message was received
-                if len(class_data_received) < self.buffer_size_receive:
-                    # Since we already received some data from the other side, the retried variable will be true
-                    partial_data_received = True
-                    self.logger.info(f"Receiving the buffer again...")
-
-                    # In this case the socket timeout will be 2 seconds to wait for more packets.
-                    # If there are no more packets, receiver will end its activity and pass the message to
-                    # the rest of the components in the network chain
-                    if self.socket_timeout != 0.5:
-                        self.socket_timeout = 0.5
-                        self.ssl_socket.settimeout(self.socket_timeout)
-                        self.logger.info(f"Timeout changed to {self.socket_timeout} seconds")
-
-                    # Continue to the next receive on the socket
-                    continue
             else:
-                if class_data:
-                    self.logger.info(f"Since there's request received from the client of total {len(class_data)} "
-                                     f"bytes, we'll first process it, and when the receiver will ask for data from "
-                                     f"client in the next cycle - empty message will be received again, and current "
-                                     f"socket will be finally closed.")
+                # If there is no data to be read from the socket, it doesn't mean that the socket is closed.
+                is_socket_closed = False
+                received_chunk = None
                 break
 
-        return class_data
+        if full_data:
+            self.logger.info(f"Received total: [{len(full_data)}] bytes")
 
-    # noinspection PyBroadException
-    def receive(self):
-        # Getting client address from the socket
+        # In case the full data is empty, and the received chunk is None, it doesn't mean that the socket is closed.
+        # But it means that there was no data to be read from the socket, because of error or timeout.
+        if full_data == b'' and received_chunk is None:
+            full_data = None
+
+        return full_data, is_socket_closed, error_message
+
+    def receive(self) -> tuple[bytes, bool, str]:
+        """
+        Receive the message from the socket.
+
+        :return: Tuple(
+            data binary bytes,
+            is socket closed boolean,
+            error message string if there was a connection exception).
+        """
+        # Getting client address and Local port from the socket
         self.class_client_address = self.ssl_socket.getpeername()[0]
-        # Getting client Local port from the socket
         self.class_client_local_port = self.ssl_socket.getpeername()[1]
 
         # Receiving data from the socket and closing the socket if send is finished.
         self.logger.info(f"Waiting for data from {self.class_client_address}:{self.class_client_local_port}")
-        function_client_data: bytearray = self.socket_receive_message_full()
+        socket_data_bytes, is_socket_closed, error_message = self.socket_receive_message_full()
+        socket_data_bytes: bytes
+        is_socket_closed: bool
+        error_message: str
 
-        if function_client_data:
+        if socket_data_bytes:
             # Put only 100 characters to the log, since we record the message any way in full - later.
-            self.logger.info(f"Received: {function_client_data[0: 100]}...")
+            self.logger.info(f"Received: {socket_data_bytes[0: 100]}...")
 
-        return function_client_data
+        return socket_data_bytes, is_socket_closed, error_message

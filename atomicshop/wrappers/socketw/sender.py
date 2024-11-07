@@ -13,10 +13,10 @@ class Sender:
     def __init__(
             self,
             ssl_socket: ssl.SSLSocket,
-            class_message: bytearray,
+            class_message: bytes,
             logger: logging.Logger = None
     ):
-        self.class_message: bytearray = class_message
+        self.class_message: bytes = class_message
         self.ssl_socket: ssl.SSLSocket = ssl_socket
 
         if logger:
@@ -35,12 +35,11 @@ class Sender:
         # The error string that will be returned by the function in case of error.
         # If returned None then everything is fine.
         # noinspection PyTypeChecker
-        function_result_error: str = None
+        error_message: str = None
+
         # Current amount of bytes sent is 0, since we didn't start yet
         total_sent_bytes = 0
 
-        # noinspection PyTypeChecker
-        error_message: str = None
         try:
             # Getting byte length of current message
             current_message_length = len(self.class_message)
@@ -59,7 +58,6 @@ class Sender:
                         f"Sent {sent_bytes} bytes - connection is down... Could send only "
                         f"{total_sent_bytes} bytes out of {current_message_length}. Closing socket...")
                     self.logger.info(error_message)
-                    function_result_error = error_message
                     break
 
                 # Adding amount of currently sent bytes to the total amount of bytes sent
@@ -97,6 +95,5 @@ class Sender:
 
         if error_message:
             print_api(error_message, logger=self.logger, logger_method='error')
-            function_result_error = error_message
 
-        return function_result_error
+        return error_message

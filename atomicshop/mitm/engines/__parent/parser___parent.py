@@ -10,6 +10,6 @@ class ParserParent:
 
     def parse(self):
         # This is general parser, so we don't parse anything and 'request_body_parsed' gets empty byte string.
-        self.class_client_message.request_body_parsed = b''
+        self.class_client_message.request_custom_parsed = b''
 
-        self.logger.info(f"Parsed: {self.class_client_message.request_body_parsed[0: 100]}...")
+        self.logger.info(f"Parsed: {self.class_client_message.request_custom_parsed[0: 100]}...")

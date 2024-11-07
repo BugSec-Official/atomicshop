@@ -113,8 +113,8 @@ class SocketClient:
         Function to establish connection to server
 
         :return: Tuple with socket object and error string.
-        If connection was successful, the error string will be None.
-        If connection wasn't successful, the socket object will be None.
+            If connection was successful, the error string will be None.
+            If connection wasn't successful, the socket object will be None.
         """
         # Check if socket to service domain exists.
         # If not

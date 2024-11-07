@@ -6,8 +6,8 @@ from ..loggingw import loggingw
 
 LOGGER_NAME: str = 'statistics'
 STATISTICS_HEADER: str = (
-    'request_time_sent,thread_id,tls,protocol,host,path,command,status_code,request_size_bytes,response_size_bytes,file_path,'
-    'process_cmd,error')
+    'request_time_sent,thread_id,tls,protocol,protocol2,host,path,command,status_code,request_size_bytes,response_size_bytes,file_path,'
+    'process_cmd,action,error')
 
 
 class StatisticsCSVWriter:
@@ -35,6 +35,7 @@ class StatisticsCSVWriter:
             tls_type: str,
             tls_version: str,
             protocol: str,
+            protocol2: str,
             path: str,
             status_code: str,
             command: str,
@@ -43,10 +44,11 @@ class StatisticsCSVWriter:
             recorded_file_path: str = None,
             process_cmd: str = None,
             error: str = None,
-            request_time_sent=None,
+            action: str = None,
+            timestamp=None,
     ):
-        if not request_time_sent:
-            request_time_sent = datetime.datetime.now()
+        if not timestamp:
+            timestamp = datetime.datetime.now()
 
         if not tls_type and not tls_version:
             tls_info = ''
@@ -54,10 +56,11 @@ class StatisticsCSVWriter:
             tls_info = f'{tls_type}|{tls_version}'
 
         escaped_line_string: str = csvs.escape_csv_line_to_string([
-            request_time_sent,
+            timestamp,
             thread_id,
             tls_info,
             protocol,
+            protocol2,
             host,
             path,
             command,
@@ -66,6 +69,7 @@ class StatisticsCSVWriter:
             response_size_bytes,
             recorded_file_path,
             process_cmd,
+            action,
             error
         ])
 
@@ -95,6 +99,7 @@ class StatisticsCSVWriter:
             tls_type='',
             tls_version='',
             protocol='',
+            protocol2='',
             path='',
             status_code='',
             command='',
@@ -102,5 +107,6 @@ class StatisticsCSVWriter:
             response_size_bytes='',
             recorded_file_path='',
             process_cmd=process_name,
+            action='client_accept',
             error=error_message
         )
