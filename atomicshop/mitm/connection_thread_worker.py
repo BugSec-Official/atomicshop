@@ -291,6 +291,11 @@ def thread_worker_main(
         try:
             while True:
                 client_message = responder_queue.get()
+
+                # If the message is not a ClientMessage object, then we'll break the loop, since it is the exit signal.
+                if not isinstance(client_message, ClientMessage):
+                    return
+
                 raw_responses: list[bytes] = create_responder_response(client_message)
 
                 is_socket_closed: bool = False
@@ -377,10 +382,10 @@ def thread_worker_main(
                 # the close on the opposite socket.
                 record_and_statistics_write(client_message)
 
-                if is_socket_closed:
-                    exception_or_close_in_receiving_thread = True
-                    finish_thread()
-                    return
+                # if is_socket_closed:
+                #     exception_or_close_in_receiving_thread = True
+                #     finish_thread()
+                #     return
 
                 # If we're in response mode, execute responder.
                 if config_static.TCPServer.server_response_mode:
@@ -404,9 +409,10 @@ def thread_worker_main(
 
                         record_and_statistics_write(client_message)
 
-                    # If the socket was closed, then we'll break the loop.
+                    # If the socket was closed on message receive, then we'll break the loop only after send.
                     if is_socket_closed or error_on_send:
                         exception_or_close_in_receiving_thread = True
+                        responder_queue.put('exit')
                         finish_thread()
                         return
         except Exception as exc:
@@ -437,6 +443,7 @@ def thread_worker_main(
         #     record_and_statistics_write(client_message)
 
         finish_thread()
+        responder_queue.put('exit')
         exception_queue.put(exc)
 
     def handle_exceptions_on_main_connection_thread(
@@ -512,6 +519,9 @@ def thread_worker_main(
             responder_thread: threading.Thread = threading.Thread(
                 target=responder_thread_worker, name=f"Thread-{thread_id}-Responder", daemon=True)
             responder_thread.start()
+        else:
+            # noinspection PyTypeChecker
+            responder_thread = None
 
         service_client = None
         client_receive_count: int = 0
@@ -557,6 +567,8 @@ def thread_worker_main(
 
             client_thread.join()
             service_thread.join()
+            if config_static.TCPServer.server_response_mode:
+                responder_thread.join()
 
             # If there was an exception in any of the threads, then we'll raise it here.
             if not client_exception_queue.empty():

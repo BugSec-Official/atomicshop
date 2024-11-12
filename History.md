@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.18.2 - 12.11.2024
+  * mitm/connection_thread_worker - fixes and improvements.
 * 2.18.1 - 12.11.2024
   * mitm, wrappers/socketw - fixes and improvements.
 * 2.18.0 - 07.11.2024
