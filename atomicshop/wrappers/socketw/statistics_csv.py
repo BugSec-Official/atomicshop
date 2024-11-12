@@ -6,8 +6,8 @@ from ..loggingw import loggingw
 
 LOGGER_NAME: str = 'statistics'
 STATISTICS_HEADER: str = (
-    'request_time_sent,thread_id,tls,protocol,protocol2,host,path,command,status_code,request_size_bytes,response_size_bytes,file_path,'
-    'process_cmd,action,error')
+    'request_time_sent,thread_id,tls,protocol,protocol2,protocol3,host,path,command,status_code,request_size_bytes,'
+    'response_size_bytes,file_path,process_cmd,action,error')
 
 
 class StatisticsCSVWriter:
@@ -36,6 +36,7 @@ class StatisticsCSVWriter:
             tls_version: str,
             protocol: str,
             protocol2: str,
+            protocol3: str,
             path: str,
             status_code: str,
             command: str,
@@ -61,6 +62,7 @@ class StatisticsCSVWriter:
             tls_info,
             protocol,
             protocol2,
+            protocol3,
             host,
             path,
             command,
@@ -100,6 +102,7 @@ class StatisticsCSVWriter:
             tls_version='',
             protocol='',
             protocol2='',
+            protocol3='',
             path='',
             status_code='',
             command='',
