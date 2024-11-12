@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.18.1 - 12.11.2024
+  * mitm, wrappers/socketw - fixes and improvements.
 * 2.18.0 - 07.11.2024
   * basics/ansi_escape_codes, file_io/docxs, http_parse - fixes and improvements.
   * mitm, wrappers/socketw - new functionality.

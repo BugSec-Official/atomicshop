@@ -72,6 +72,7 @@ def thread_worker_main(
             tls_version=tls_version,
             protocol=client_message.protocol,
             protocol2=client_message.protocol2,
+            protocol3=client_message.protocol3,
             path=http_path,
             status_code=http_status_code,
             command=http_command,
@@ -97,6 +98,8 @@ def thread_worker_main(
             raw_bytes: bytes,
             client_message: ClientMessage):
         nonlocal protocol
+        nonlocal protocol3
+
         # Parsing the raw bytes as HTTP.
         request_http_parsed, is_http_request, request_parsing_error = (
             HTTPRequestParse(raw_bytes).parse())
@@ -117,9 +120,14 @@ def thread_worker_main(
             auto_parsed = response_http_parsed
             network_logger.info(
                 f"HTTP Response Parsed: Status: {response_http_parsed.code}")
+            protocol3 = auto_parsed.headers.get('Sec-WebSocket-Protocol', None)
+            if protocol3:
+                client_message.protocol3 = protocol3
         elif protocol == 'Websocket':
             client_message.protocol2 = 'Frame'
             auto_parsed = parse_websocket(raw_bytes)
+            if protocol3:
+                client_message.protocol3 = protocol3
         else:
             auto_parsed = None
 
@@ -276,6 +284,36 @@ def thread_worker_main(
 
         return client_message
 
+    def responder_thread_worker():
+        nonlocal exception_or_close_in_receiving_thread
+
+        client_message: ClientMessage = client_message_first_start()
+        try:
+            while True:
+                client_message = responder_queue.get()
+                raw_responses: list[bytes] = create_responder_response(client_message)
+
+                is_socket_closed: bool = False
+                for response_raw_bytes in raw_responses:
+                    client_message.reinitialize_dynamic_vars()
+                    client_message.timestamp = datetime.now()
+                    client_message.response_raw_bytes = response_raw_bytes
+                    error_on_send: str = sender.Sender(
+                        ssl_socket=client_socket, class_message=client_message.response_raw_bytes,
+                        logger=network_logger).send()
+
+                    # If there was problem with sending data, we'll break the main while loop.
+                    if error_on_send:
+                        client_message.errors.append(error_on_send)
+                        record_and_statistics_write(client_message)
+                        is_socket_closed = True
+
+                if is_socket_closed:
+                    exception_or_close_in_receiving_thread = True
+                    return
+        except Exception as exc:
+            handle_exceptions_on_sub_connection_thread(client_message, client_exception_queue, exc)
+
     def receive_send_start(
             receiving_socket,
             sending_socket = None,
@@ -346,26 +384,7 @@ def thread_worker_main(
 
                 # If we're in response mode, execute responder.
                 if config_static.TCPServer.server_response_mode:
-                    raw_responses: list[bytes] = create_responder_response(client_message)
-
-                    is_socket_closed: bool = False
-                    for response_raw_bytes in raw_responses:
-                        client_message.reinitialize_dynamic_vars()
-                        client_message.timestamp = datetime.now()
-                        client_message.response_raw_bytes = response_raw_bytes
-                        error_on_send: str = sender.Sender(
-                            ssl_socket=client_socket, class_message=client_message.response_raw_bytes,
-                            logger=network_logger).send()
-
-                        # If there was problem with sending data, we'll break the main while loop.
-                        if error_on_send:
-                            client_message.errors.append(error_on_send)
-                            record_and_statistics_write(client_message)
-                            is_socket_closed = True
-
-                    if is_socket_closed:
-                        # exception_or_close_in_receiving_thread = True
-                        return
+                    responder_queue.put(client_message)
                 else:
                     # if side == 'Client':
                     #     raise NotImplementedError
@@ -397,20 +416,30 @@ def thread_worker_main(
             if isinstance(exc, OSError) and exc.errno == 10038:
                 print_api("Both sockets are closed, breaking the loop", logger=network_logger, logger_method='info')
             else:
-                exception_or_close_in_receiving_thread = True
-                # handle_exceptions(exc, client_message, recorded)
-                exception_message = tracebacks.get_as_string(one_line=True)
-                error_message = f'Socket Thread [{str(thread_id)}] Exception: {exception_message}'
-                print_api("Exception in a thread, forwarding to parent thread.", logger_method='info', logger=network_logger)
-                client_message.errors.append(error_message)
+                handle_exceptions_on_sub_connection_thread(client_message, exception_queue, exc)
 
-                # if not recorded:
-                #     record_and_statistics_write(client_message)
+    def handle_exceptions_on_sub_connection_thread(
+            client_message: ClientMessage,
+            exception_queue: queue.Queue,
+            exc: Exception
+    ):
+        nonlocal exception_or_close_in_receiving_thread
 
-                finish_thread()
-                exception_queue.put(exc)
+        exception_or_close_in_receiving_thread=True
+        # handle_exceptions(exc, client_message, recorded)
+        exception_message = tracebacks.get_as_string(one_line=True)
 
-    def handle_exceptions(
+        error_message = f'Socket Thread [{str(thread_id)}] Exception: {exception_message}'
+        print_api("Exception in a thread, forwarding to parent thread.", logger_method='info', logger=network_logger)
+        client_message.errors.append(error_message)
+
+        # if not recorded:
+        #     record_and_statistics_write(client_message)
+
+        finish_thread()
+        exception_queue.put(exc)
+
+    def handle_exceptions_on_main_connection_thread(
             exc: Exception,
             client_message: ClientMessage
     ):
@@ -441,7 +470,10 @@ def thread_worker_main(
 
     thread_id = threads.current_thread_id()
 
+    # This is the main protocols.
     protocol: str = str()
+    # This is the secondary protocol in the websocket.
+    protocol3: str = str()
     # # This is Client Masked Frame Parser.
     # websocket_masked_frame_parser = websocket_parse.WebsocketFrameParser()
     # # This is Server UnMasked Frame Parser.
@@ -465,6 +497,8 @@ def thread_worker_main(
     client_message_connection: ClientMessage = ClientMessage()
     # This is needed to indicate if there was an exception or socket was closed in any of the receiving thread.
     exception_or_close_in_receiving_thread: bool = False
+    # Responder queue for ClientMessage objects.
+    responder_queue: queue.Queue = queue.Queue()
 
     try:
         client_ip, source_port = client_socket.getpeername()
@@ -472,6 +506,12 @@ def thread_worker_main(
 
         network_logger.info(f"Thread Created - Client [{client_ip}:{source_port}] | "
                             f"Destination service: [{server_name}:{destination_port}]")
+
+        # If we're in response mode, we'll start the responder thread.
+        if config_static.TCPServer.server_response_mode:
+            responder_thread: threading.Thread = threading.Thread(
+                target=responder_thread_worker, name=f"Thread-{thread_id}-Responder", daemon=True)
+            responder_thread.start()
 
         service_client = None
         client_receive_count: int = 0
@@ -488,6 +528,11 @@ def thread_worker_main(
             if not service_client:
                 service_client = create_client_socket(client_message_connection)
                 service_socket_instance, connection_error = service_client.service_connection()
+        else:
+            client_message_connection.timestamp = datetime.now()
+            client_message_connection.action = 'service_connect'
+            client_message_connection.info = 'Server Response Mode'
+            responder_queue.put(client_message_connection)
 
         if connection_error:
             client_message_connection.timestamp = datetime.now()
@@ -524,4 +569,4 @@ def thread_worker_main(
         if not client_message_connection.timestamp:
             client_message_connection.timestamp = datetime.now()
 
-        handle_exceptions(e, client_message_connection)
+        handle_exceptions_on_main_connection_thread(e, client_message_connection)

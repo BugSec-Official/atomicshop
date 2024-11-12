@@ -31,6 +31,7 @@ class ClientMessage:
         self.errors: list = list()
         self.protocol: str = str()
         self.protocol2: str = str()
+        self.protocol3: str = str()
         self.recorded_file_path: str = str()
         self.action: str = str()
 
@@ -52,6 +53,7 @@ class ClientMessage:
         self.errors = list()
         self.protocol = str()
         self.protocol2 = str()
+        self.protocol3 = str()
         self.recorded_file_path = str()
 
     def __iter__(self):
