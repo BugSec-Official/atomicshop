@@ -3,6 +3,8 @@ import multiprocessing
 import time
 import datetime
 
+from distro import minor_version
+
 import atomicshop   # Importing atomicshop package to get the version of the package.
 
 from .. import filesystem, queues, dns, on_exit, print_api
@@ -65,7 +67,8 @@ def mitm_server(config_file_path: str):
     # Main function should return integer with error code, 0 is successful.
     # Since listening server is infinite, this will not be reached.
     # After modules import - we check for python version.
-    check_python_version_compliance(minimum_version='3.12')
+    if not check_python_version_compliance(minor_version='3.12'):
+        return 1
 
     # Import the configuration file.
     result = config_static.load_config(config_file_path)
