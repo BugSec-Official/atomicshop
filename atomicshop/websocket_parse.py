@@ -133,11 +133,11 @@ class WebsocketFrameParser:
             elif current_frame.opcode == Opcode.BINARY:
                 return current_frame.data, 'BINARY'
             elif current_frame.opcode == Opcode.CLOSE:
-                return None, 'CLOSE'
+                return current_frame.data, 'CLOSE'
             elif current_frame.opcode == Opcode.PING:
-                return None, 'PING'
+                return current_frame.data, 'PING'
             elif current_frame.opcode == Opcode.PONG:
-                return None, 'PONG'
+                return current_frame.data, 'PONG'
             else:
                 raise WebsocketParseWrongOpcode("Received unknown frame with opcode:", current_frame.opcode)
 
@@ -239,7 +239,7 @@ def create_websocket_frame(
     return frame_bytes
 
 
-def is_frame_masked(frame_bytes):
+def is_frame_masked(frame_bytes: bytes):
     """
     Determine whether a WebSocket frame is masked.
 

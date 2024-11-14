@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.18.3 - 14.11.2024
+  * mitm, python_functions, websocket_parse - fixes and improvements.
 * 2.18.2 - 12.11.2024
   * mitm/connection_thread_worker - fixes and improvements.
 * 2.18.1 - 12.11.2024

@@ -98,7 +98,6 @@ def thread_worker_main(
             raw_bytes: bytes,
             client_message: ClientMessage):
         nonlocal protocol
-        nonlocal protocol3
 
         # Parsing the raw bytes as HTTP.
         request_http_parsed, is_http_request, request_parsing_error = (
@@ -120,9 +119,6 @@ def thread_worker_main(
             auto_parsed = response_http_parsed
             network_logger.info(
                 f"HTTP Response Parsed: Status: {response_http_parsed.code}")
-            protocol3 = auto_parsed.headers.get('Sec-WebSocket-Protocol', None)
-            if protocol3:
-                client_message.protocol3 = protocol3
         elif protocol == 'Websocket':
             client_message.protocol2 = 'Frame'
             auto_parsed = parse_websocket(raw_bytes)
@@ -137,12 +133,16 @@ def thread_worker_main(
             auto_parsed,
             client_message: ClientMessage):
         nonlocal protocol
+        nonlocal protocol3
 
         if protocol == 'HTTP':
             if auto_parsed and hasattr(auto_parsed, 'headers') and 'Upgrade' in auto_parsed.headers:
                 if auto_parsed.headers['Upgrade'] == 'websocket':
                     protocol = 'Websocket'
                     client_message.protocol2 = 'Handshake'
+                    protocol3 = auto_parsed.headers.get('Sec-WebSocket-Protocol', None)
+                    if protocol3:
+                        client_message.protocol3 = protocol3
 
                     network_logger.info(f'Protocol upgraded to Websocket')
 
@@ -171,7 +171,7 @@ def thread_worker_main(
 
         # If it's the first cycle and the protocol is Websocket, then we'll create the HTTP Handshake
         # response automatically.
-        if protocol == 'Websocket' and client_receive_count == 0:
+        if protocol == 'Websocket' and client_receive_count == 1:
             responses: list = list()
             responses.append(
                 websocket_parse.create_byte_http_response(client_message.request_raw_bytes))
@@ -240,11 +240,12 @@ def thread_worker_main(
             return
 
         client_message.response_auto_parsed = parse_http(client_message.request_raw_bytes, client_message)
+        # This is needed for each cycle that is not HTTP, but its protocol maybe set by HTTP, like websocket.
         if protocol != '':
             client_message.protocol = protocol
 
         # Parse websocket frames only if it is not the first protocol upgrade request.
-        if protocol == 'Websocket' and client_receive_count != 0:
+        if protocol == 'Websocket' and client_receive_count != 1:
             client_message.request_auto_parsed = parse_websocket(client_message.request_raw_bytes)
 
         # Custom parser, should parse HTTP body or the whole message if not HTTP.
