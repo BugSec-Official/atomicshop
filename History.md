@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.18.4 - 19.11.2024
+  * mitm/mitm_main, wrappers/factw/install/install_after_restart, wrappers/mongodbw/install_mongodb_win - fixes and improvements.
 * 2.18.3 - 14.11.2024
   * mitm, python_functions, websocket_parse - fixes and improvements.
 * 2.18.2 - 12.11.2024

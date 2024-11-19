@@ -33,7 +33,7 @@ class MongoDBInstallationError(Exception):
 
 
 def get_latest_mongodb_download_url(
-        no_rc_version: bool = True,
+        rc_version: bool = True,
         major_specific: int = None
 ):
     response = requests.get(MONGODB_DOWNLOAD_PAGE_URL)
@@ -48,7 +48,7 @@ def get_latest_mongodb_download_url(
     windows_urls: list = []
     for url in urls_in_page:
         if 'windows' in url and 'x86_64' in url and url.endswith('.msi'):
-            if no_rc_version and '-rc' in url:
+            if not rc_version and '-rc' in url:
                 continue
             windows_urls.append(url)
 
@@ -68,109 +68,144 @@ def get_latest_mongodb_download_url(
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Install MongoDB Community Server.')
-    parser.add_argument(
-        '-nr', '--no-rc', action='store_true', help='Do not download release candidate versions.')
-    parser.add_argument(
-        '-m', '--major', type=int, help='Download the latest version of the specified major version.')
-    parser.add_argument(
-        '-c', '--compass', action='store_true', help='Install MongoDB Compass.')
-    parser.add_argument(
-        '-f', '--force', action='store_true', help='Force the installation even if MongoDB is already installed.')
+    # Mutually exclusive group for 'ir' and 'er'
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        '-er', '--exclude-rc',
+        action='store_true',
+        help='Install latest version, but exclude release candidate versions.'
+    )
+    group.add_argument(
+        '-ir', '--include-rc',
+        action='store_true',
+        help='Install the latest version of MongoDB including release candidates.'
+    )
 
-    return parser.parse_args()
+    # Optional arguments
+    parser.add_argument(
+        '-c', '--compass',
+        action='store_true',
+        help='Install MongoDB Compass.'
+    )
+    parser.add_argument(
+        '-m', '--major',
+        type=int,
+        help='Download the latest version of the specified major version.'
+    )
+    parser.add_argument(
+        '-f', '--force',
+        action='store_true',
+        help='Force the installation even if MongoDB is already installed.'
+    )
+
+    args = parser.parse_args()
+
+    # Validation logic: At least one of '-nr', '-ir', or '-c' must be provided
+    if not (args.no_rc or args.include_rc or args.compass):
+        parser.error("At least one of '-nr', '-ir', or '-c' must be specified.")
+
+    return args
 
 
-def download_install_latest_main(
-        no_rc_version: bool = False,
+def download_install_process(
+        rc_version: bool = False,
+        no_rc_version: bool = True,
         major_specific: int = None,
         compass: bool = False,
         force: bool = False
-):
+) -> int:
     """
     Download and install the latest version of MongoDB Community Server.
+
+    :param rc_version: bool, if True, the latest RC version will be downloaded.
     :param no_rc_version: bool, if True, the latest non-RC version will be downloaded.
     :param major_specific: int, if set, the latest version of the specified major version will be downloaded.
     :param compass: bool, if True, MongoDB Compass will be installed.
     :param force: bool, if True, MongoDB will be installed even if it is already installed.
-    :return:
+    :return: int, 0 if successful, 1 if failed.
     """
-
-    args = parse_args()
-
-    # Set the args only if they were used.
-    if args.no_rc:
-        no_rc_version = args.no_rc
-    if args.major:
-        major_specific = args.major
-    if args.compass:
-        compass = args.compass
-    if args.force:
-        force = args.force
 
     if not permissions.is_admin():
         print_api("This function requires administrator privileges.", color='red')
         return 1
 
-    if mongo_infra.is_service_running():
-        print_api("MongoDB service is running - already installed.", color='blue')
+    if rc_version and no_rc_version:
+        print_api("Both 'rc_version' and 'no_rc_version' cannot be True at the same time.", color='red')
+        return 1
 
-        if not force:
-            return 0
-    else:
-        print_api("MongoDB is service is not running.")
+    if not (rc_version or no_rc_version) and not compass:
+        print_api("At least one of 'rc_version', 'no_rc_version', or 'compass' must be True.", color='red')
+        return 1
 
-        mongo_is_installed: Union[str, None] = mongo_infra.is_installed()
-        if mongo_infra.is_installed():
-            message = f"MongoDB is installed in: {mongo_is_installed}\n" \
-                      f"The service is not running. Fix the service or use the 'force' parameter to reinstall."
-            print_api(message, color='yellow')
+    # If we need to install mongo db.
+    if rc_version or no_rc_version:
+        if rc_version:
+            download_rc_version: bool = True
+        elif no_rc_version:
+            download_rc_version: bool = False
+        else:
+            raise ValueError("Invalid value for 'rc_version' and 'no_rc_version'.")
+
+        if mongo_infra.is_service_running():
+            print_api("MongoDB service is running - already installed. Use [-f] to reinstall.", color='blue')
 
             if not force:
                 return 0
+        else:
+            print_api("MongoDB is service is not running.")
 
-    print_api("Fetching the latest MongoDB download URL...")
-    mongo_installer_url = get_latest_mongodb_download_url(no_rc_version=no_rc_version, major_specific=major_specific)
+            mongo_is_installed: Union[str, None] = mongo_infra.is_installed()
+            if mongo_infra.is_installed():
+                message = f"MongoDB is installed in: {mongo_is_installed}\n" \
+                          f"The service is not running. Fix the service or use the 'force' parameter to reinstall."
+                print_api(message, color='yellow')
 
-    print_api(f"Downloading MongoDB installer from: {mongo_installer_url}")
-    installer_file_path: str = web.download(mongo_installer_url)
+                if not force:
+                    return 0
 
-    print_api("Installing MongoDB...")
-    try:
-        msiw.install_msi(
-            installer_file_path,
-            silent_no_gui=True,
-            no_restart=True,
-            terminate_required_processes=True,
-            create_log_near_msi=True,
-            scan_log_for_errors=True,
-            additional_args='ADDLOCAL="ServerService"'
-        )
-    except msiw.MsiInstallationError as e:
-        print_api(f'{e} Exiting...', color='red')
-        return 1
+        print_api("Fetching the latest MongoDB download URL...")
+        mongo_installer_url = get_latest_mongodb_download_url(rc_version=download_rc_version, major_specific=major_specific)
 
-    # Check if MongoDB is installed.
-    message: str = ''
-    mongo_is_installed = mongo_infra.is_installed()
-    if not mongo_is_installed:
-        message += "MongoDB Executable not found.\n"
+        print_api(f"Downloading MongoDB installer from: {mongo_installer_url}")
+        installer_file_path: str = web.download(mongo_installer_url)
 
-    if not mongo_infra.is_service_running():
-        message += "MongoDB service is not running.\n"
+        print_api("Installing MongoDB...")
+        try:
+            msiw.install_msi(
+                installer_file_path,
+                silent_no_gui=True,
+                no_restart=True,
+                terminate_required_processes=True,
+                create_log_near_msi=True,
+                scan_log_for_errors=True,
+                additional_args='ADDLOCAL="ServerService"'
+            )
+        except msiw.MsiInstallationError as e:
+            print_api(f'{e} Exiting...', color='red')
+            return 1
 
-    if message:
-        message += f"MSI Path: {installer_file_path}"
-        print_api(message, color='red')
-        return 1
-    else:
-        success_message: str = f"MongoDB installed successfully to: {mongo_is_installed}\n" \
-                               f"Service is running."
-        print_api(success_message, color='green')
+        # Check if MongoDB is installed.
+        message: str = ''
+        mongo_is_installed = mongo_infra.is_installed()
+        if not mongo_is_installed:
+            message += "MongoDB Executable not found.\n"
 
-    # Clean up the installer file
-    if os.path.exists(installer_file_path):
-        os.remove(installer_file_path)
-        print_api("Cleaned up the installer file.")
+        if not mongo_infra.is_service_running():
+            message += "MongoDB service is not running.\n"
+
+        if message:
+            message += f"MSI Path: {installer_file_path}"
+            print_api(message, color='red')
+            return 1
+        else:
+            success_message: str = f"MongoDB installed successfully to: {mongo_is_installed}\n" \
+                                   f"Service is running."
+            print_api(success_message, color='green')
+
+        # Clean up the installer file
+        if os.path.exists(installer_file_path):
+            os.remove(installer_file_path)
+            print_api("Cleaned up the installer file.")
 
     if not compass:
         return 0
@@ -189,3 +224,21 @@ def download_install_latest_main(
         print_api("Cleaned up the Compass installer file.")
 
     return 0
+
+
+def download_install_latest_main() -> int:
+    """
+    Download and install the latest version of MongoDB Community Server.
+
+    :return: int, 0 if successful, 1 if failed.
+    """
+
+    args = parse_args()
+
+    return download_install_process(
+        rc_version=args.include_rc,
+        no_rc_version=args.exclude_rc,
+        major_specific=args.major,
+        compass=args.compass,
+        force=args.force
+    )
