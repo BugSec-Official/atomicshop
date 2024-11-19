@@ -3,8 +3,6 @@ import multiprocessing
 import time
 import datetime
 
-from distro import minor_version
-
 import atomicshop   # Importing atomicshop package to get the version of the package.
 
 from .. import filesystem, queues, dns, on_exit, print_api

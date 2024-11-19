@@ -103,7 +103,7 @@ def analyze_log_file(log_file: str):
 
     for plugin in PLUGIN_LIST:
         if f'{FINISHED_INSTALLING_STRINGS[0]} {plugin} {FINISHED_INSTALLING_STRINGS[1]}' not in log_content:
-            message = (f'Error: [{plugin}] installation failed.\n'
+            message = (f'Error: [{plugin}] plugin missing in the log. Installation failed.\n'
                        f'Check the log file: {log_file}\n'
                        f'Exiting...')
             print_api.print_api(message, color='red')
