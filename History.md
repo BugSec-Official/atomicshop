@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.18.5 - 19.11.2024
+  * web_apis, wrappers/playwrightw/scenarios - fixes and improvements.
 * 2.18.4 - 19.11.2024
   * mitm/mitm_main, wrappers/factw/install/install_after_restart, wrappers/mongodbw/install_mongodb_win - fixes and improvements.
 * 2.18.3 - 14.11.2024
