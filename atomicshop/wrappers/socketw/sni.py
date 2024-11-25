@@ -82,7 +82,7 @@ class SNISetup:
     ):
 
         # Create SSL Socket to wrap the raw socket with.
-        ssl_context = creator.create_ssl_context_for_server()
+        ssl_context: ssl.SSLContext = creator.create_ssl_context_for_server()
 
         self.certificator_instance = certificator.Certificator(
             ca_certificate_name=self.ca_certificate_name,

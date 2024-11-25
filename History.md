@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.18.6 - 25.11.2024
+  * permissions/ubuntu_permissions, wrappers/socketw - fixes and improvements.
 * 2.18.5 - 19.11.2024
   * web_apis, wrappers/playwrightw/scenarios - fixes and improvements.
 * 2.18.4 - 19.11.2024
