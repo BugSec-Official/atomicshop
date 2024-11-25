@@ -25,13 +25,21 @@ def add_reusable_address_option(socket_instance):
     socket_instance.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
 
-def create_ssl_context_for_server():
+def create_ssl_context_for_server() -> ssl.SSLContext:
     # Creating context with SSL certificate and the private key before the socket
     # https://docs.python.org/3/library/ssl.html
     # Creating context for SSL wrapper, specifying "PROTOCOL_TLS_SERVER" will pick the best TLS version protocol for
     # the server.
-    return ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+
+    ssl_context: ssl.SSLContext = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+
+    # # Enforce the use of TLS 1.2 only (disable TLS 1.0, TLS 1.1, and TLS 1.3)
+    # ssl_context.options |= ssl.OP_NO_TLSv1           # Disable TLS 1.0
+    # ssl_context.options |= ssl.OP_NO_TLSv1_1         # Disable TLS 1.1
+    # ssl_context.options |= ssl.OP_NO_TLSv1_3         # Disable TLS 1.3
+
     # return ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    return ssl_context
 
 
 def create_ssl_context_for_client(
@@ -130,9 +138,9 @@ def load_certificate_and_key_into_server_ssl_context(
             print_api(message, error_type=True, logger_method="critical", **print_kwargs)
 
 
-def create_server_ssl_context___load_certificate_and_key(certificate_file_path: str, key_file_path):
+def create_server_ssl_context___load_certificate_and_key(certificate_file_path: str, key_file_path) -> ssl.SSLContext:
     # Create and set ssl context for server.
-    ssl_context = create_ssl_context_for_server()
+    ssl_context: ssl.SSLContext = create_ssl_context_for_server()
     # Load certificate into context.
     load_certificate_and_key_into_server_ssl_context(ssl_context, certificate_file_path, key_file_path)
     # Return ssl context only.

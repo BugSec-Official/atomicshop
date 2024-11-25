@@ -99,3 +99,52 @@ def expand_user_path(user_name, path):
     pwnam = pwd.getpwnam(user_name)
     home_dir = pwnam.pw_dir
     return path.replace("~", home_dir)
+
+
+def set_folder_permissions(
+        folder_path: str,
+        username: str = None,
+        logged_in_non_sudo_user: bool = False
+):
+    """
+    Set ownership and permissions for an existing folder.
+
+    :param folder_path: Path to the folder (must already exist)
+    :param username: Username to assign ownership to (ignored if non_sudo_user=True)
+    :param logged_in_non_sudo_user: If True, use the current logged-in user unless running under sudo
+    """
+
+    if not username and not logged_in_non_sudo_user:
+        raise ValueError("A username must be provided, or 'non_sudo_user' must be set to True.")
+
+    # Handle non_sudo_user case
+    if logged_in_non_sudo_user:
+        # Get the current logged-in user
+        username = os.getlogin()
+
+    # Get the UID and GID of the specified user
+    user_info = pwd.getpwnam(username)
+    user_uid = user_info.pw_uid
+    user_gid = user_info.pw_gid
+
+    # Change ownership of the folder to the specified user
+    # print(f"Changing ownership of {folder_path} to user '{username}'...")
+    os.chown(folder_path, user_uid, user_gid)
+
+    # Set appropriate permissions (read, write, execute for the owner)
+    # print(f"Setting permissions for {folder_path}...")
+    os.chmod(folder_path, 0o755)  # Owner rwx, group r-x, others r-x
+
+    # print(f"Ownership and permissions updated for folder: '{folder_path}'")
+
+
+def is_directory_owner(directory_path: str, username: str) -> bool:
+    """
+    Function checks if the directory is owned by the specified user.
+    :param directory_path: str, path to the directory.
+    :param username: str, username of the user.
+    :return: bool, True / False.
+    """
+
+    uid = pwd.getpwnam(username).pw_uid
+    return os.stat(directory_path).st_uid == uid

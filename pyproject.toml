@@ -54,6 +54,8 @@ dependencies = [
     "dnslib",
     "dnspython",
     "docker",
+    "google-api-python-client",
+    "google-generativeai",
     "numpy",
     "olefile",
     "openpyxl",
