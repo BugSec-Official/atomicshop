@@ -82,7 +82,18 @@ def execute_with_live_output(
     :return: Boolean, If execution was successful, return True, if not - False.
     """
 
-    cmd = _execution_parameters_processing(cmd, wsl)
+    if isinstance(cmd, str):
+        shell = True
+    elif isinstance(cmd, list):
+        shell = False
+    else:
+        raise TypeError(f'cmd must be a string or list, not {type(cmd)}')
+
+    if wsl:
+        if isinstance(cmd, str):
+            cmd = 'wsl ' + cmd
+        elif isinstance(cmd, list):
+            cmd = ['wsl'] + cmd
 
     # Needed imports:
     # from subprocess import Popen, PIPE, STDOUT
@@ -103,7 +114,7 @@ def execute_with_live_output(
     #   The buffer size is system-dependent and usually chosen by the underlying implementation to optimize performance.
     #   # bufsize=0: This means no buffering.
     #   The I/O is unbuffered, and data is written or read from the stream immediately.
-    with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=1, text=True) as process:
+    with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=1, text=True, shell=shell) as process:
         # We'll count the number of lines from 'process.stdout'.
         counter: int = 0
         # And also get list of all the lines.

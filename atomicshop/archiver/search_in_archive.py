@@ -107,18 +107,27 @@ def _search_in_archive(
 
     # Iterate over each file in the archive.
     for item_index, item in enumerate(file_info_list):
-        if item.filename.endswith('/'):  # Skip directories
-            continue
-
         # At this stage we will get the bytes of the archived file, which is an 'item' in the archive.
         archived_file_bytes = None
         # If the main archive is zip we will use the 'open' method, if it's 7z we will use the 'read' method.
         if archive_type == 'zip':
+            # Skip directories.
+            if item.filename.endswith('/'):
+                continue
+
             with arch_obj.open(item) as file_data:
                 archived_file_bytes = file_data.read()
         elif archive_type == '7z':
+            # Skip directories.
+            if item.is_directory:
+                continue
+
+            # If 'SevenZipFile.red()' is used once, the second time you need to read it you will need to reset the
+            # SevenZipFile object in order to read again:
+            # https://py7zr.readthedocs.io/en/latest/api.html#py7zr.SevenZipFile.read
             file_dict = arch_obj.read([item.filename])
             archived_file_bytes = file_dict[item.filename].read()
+            arch_obj.reset()
 
         # After we get the file bytes we will check if the file matches the callback functions.
         callback_matched = False
@@ -129,7 +138,7 @@ def _search_in_archive(
         if callback_matched:
             _handle_file_extraction(item, extract_file_to_path, archived_file_bytes)
         else:
-            if recursive and (zips.is_zip_zipfile(archived_file_bytes) or sevenzs.is_7z(archived_file_bytes)):
+            if recursive and (zips.is_zip_zipfile(archived_file_bytes) or sevenzs.is_7z_magic_number(archived_file_bytes)):
                 _search_archive_content(
                     archived_file_bytes, file_names, results, found_set, case_sensitive, return_first_only,
                     recursive, callback_functions, extract_file_to_path)
@@ -187,7 +196,7 @@ def _get_archive_type(file_object) -> Union[str, None]:
 
     if zips.is_zip_zipfile(file_object):
         return 'zip'
-    elif sevenzs.is_7z(file_object):
+    elif sevenzs.is_7z_magic_number(file_object):
         return '7z'
     else:
         raise UnknownArchiveType(f"{file_object[:10]} is not a known archive type.")

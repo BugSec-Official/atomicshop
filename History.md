@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.18.7 - 03.12.2024
+  * archiver, filesystem, ip_addresses, process, wrappers/mongodbw/mongodbw - fixes and improvements.
 * 2.18.6 - 25.11.2024
   * permissions/ubuntu_permissions, wrappers/socketw - fixes and improvements.
 * 2.18.5 - 19.11.2024
