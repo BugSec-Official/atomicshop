@@ -1280,69 +1280,19 @@ def create_dict_of_paths_list(list_of_paths: list) -> list:
 
 def create_dict_of_path(
         path: str,
-        # structure_dict: dict,
         structure_list: list,
-        add_data_to_entry: any = None,
-        add_data_key: str = 'addon',
-        parent_entry: str = None
+        add_data_to_entry: list[dict[str, any]] = None
 ):
     """
     The function receives a path and a list, and adds the path to the list.
-
     Check the working example from 'create_dict_of_paths_list' function.
 
     :param path: string, path.
     :param structure_list: list to add the path to.
-    :param add_data_to_entry: any, data to add to the entry.
-    :param add_data_key: string, key to add the data to.
-    :param parent_entry: string, for internal use to pass the current parent entry.
+    :param add_data_to_entry: a list of dicts with data to add to the entry.
+        dict format: {key: data}
     :return:
     """
-
-    # # Normalize path for cross-platform compatibility
-    # normalized_path = path.replace("\\", "/")
-    # parts = normalized_path.strip("/").split("/")
-    # current_level = structure_dict
-    #
-    # for part in parts[:-1]:  # Iterate through the directories
-    #     # If the part is not already a key in the current level of the structure, add it
-    #     if part not in current_level:
-    #         current_level[part] = {}
-    #     current_level = current_level[part]
-    #
-    # # Create the entry for the file with additional data
-    # file_entry = {"entry": parts[-1], add_data_key: add_data_to_entry}
-    #
-    # # We're adding file entries under numeric keys.
-    # if isinstance(current_level, dict) and all(isinstance(key, int) for key in current_level.keys()):
-    #     current_level[len(current_level)] = file_entry
-    # else:
-    #     # Handle cases where there's a mix of numeric keys and directory names
-    #     # Find the next available numeric key
-    #     next_key = max([key if isinstance(key, int) else -1 for key in current_level.keys()], default=-1) + 1
-    #     current_level[next_key] = file_entry
-
-    # entries_key_name = "__entries__"
-    #
-    # # Normalize path for cross-platform compatibility
-    # normalized_path = path.replace("\\", "/")
-    # parts = normalized_path.strip("/").split("/")
-    # current_level = structure_dict
-    #
-    # for part in parts[:-1]:  # Navigate through or create directory structure
-    #     if part not in current_level:
-    #         current_level[part] = {}
-    #     current_level = current_level[part]
-    #
-    # # Create the entry for the file with additional data
-    # file_entry = {"entry": parts[-1], add_data_key: add_data_to_entry}
-    #
-    # # If the current level (final directory) does not have an "entries" key for files, create it
-    # if entries_key_name not in current_level:
-    #     current_level[entries_key_name] = []
-    #
-    # # Append the file entry to the list associated with the "entries" key
-    # current_level[entries_key_name].append(file_entry)
 
     # Normalize path for cross-platform compatibility
     normalized_path = path.replace("\\", "/")
@@ -1351,28 +1301,35 @@ def create_dict_of_path(
     current_level = structure_list
 
     for i, part in enumerate(parts):
-        # Determine if this is the last part (a file)
+        # Determine if this is the last part (a file or final component of the path)
         is_last_part = (i == len(parts) - 1)
 
         # Try to find an existing entry for this part
-        # noinspection PyTypeChecker
         existing_entry = next((item for item in current_level if item["entry"] == part), None)
 
         if existing_entry is None:
-            # For the last part, add the additional data; for directories, just create the structure
-            if is_last_part:
-                new_entry = {"entry": part, add_data_key: add_data_to_entry, "included": []}
-            else:
-                new_entry = {"entry": part, "included": []}
+            # Create a new entry
+            new_entry = {"entry": part, "included": []}
+
+            # Add additional data if it's the last part
+            if is_last_part and add_data_to_entry:
+                for data_dict in add_data_to_entry:
+                    new_entry.update(data_dict)
 
             current_level.append(new_entry)
+
             # Only update current_level if it's not the last part
             if not is_last_part:
                 current_level = new_entry["included"]
         else:
-            # If it's not the last part and the entry exists, navigate deeper
+            # If the entry exists and it's not the last part, navigate deeper
             if not is_last_part:
                 current_level = existing_entry["included"]
+
+            # If the entry exists and it's the last part, update with additional data
+            if is_last_part and add_data_to_entry:
+                for data_dict in add_data_to_entry:
+                    existing_entry.update(data_dict)
 
 
 def list_open_files_in_directory(directory):

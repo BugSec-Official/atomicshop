@@ -698,6 +698,10 @@ def find(
 
             Example for searching for a value that starts with 'test':
             filter_query = {'field_name': {'$regex': '^test'}}
+
+            If you need to escape the string for regex special characters you will typically use:
+                re.escape(test)
+            If you're string contains characters like parentheses "()", you will need to escape them.
         $options: The options for the regex search.
             'i': case-insensitive search.
                 Example for case-insensitive search:
