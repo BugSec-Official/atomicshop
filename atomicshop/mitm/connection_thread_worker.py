@@ -1,6 +1,7 @@
 from datetime import datetime
 import threading
 import queue
+import copy
 
 from ..wrappers.socketw import receiver, sender, socket_client, base
 from .. import websocket_parse
@@ -292,12 +293,17 @@ def thread_worker_main(
         try:
             while True:
                 client_message = responder_queue.get()
+                print_api(f"Got message from queue, action: [{client_message.action}]", logger=network_logger, logger_method='info')
 
                 # If the message is not a ClientMessage object, then we'll break the loop, since it is the exit signal.
                 if not isinstance(client_message, ClientMessage):
                     return
 
-                raw_responses: list[bytes] = create_responder_response(client_message)
+                if client_message.action == 'service_connect':
+                    raw_responses: list[bytes] = responder.create_connect_response(client_message)
+                else:
+                    raw_responses: list[bytes] = create_responder_response(client_message)
+                print_api(f"Got responses from responder, count: [{len(raw_responses)}]", logger=network_logger, logger_method='info')
 
                 is_socket_closed: bool = False
                 for response_raw_bytes in raw_responses:
@@ -383,14 +389,14 @@ def thread_worker_main(
                 # the close on the opposite socket.
                 record_and_statistics_write(client_message)
 
-                # if is_socket_closed:
-                #     exception_or_close_in_receiving_thread = True
-                #     finish_thread()
-                #     return
+                if is_socket_closed:
+                    exception_or_close_in_receiving_thread = True
+                    finish_thread()
+                    return
 
                 # If we're in response mode, execute responder.
                 if config_static.TCPServer.server_response_mode:
-                    responder_queue.put(client_message)
+                    responder_queue.put(copy.deepcopy(client_message))
                 else:
                     # if side == 'Client':
                     #     raise NotImplementedError
@@ -543,7 +549,7 @@ def thread_worker_main(
             client_message_connection.timestamp = datetime.now()
             client_message_connection.action = 'service_connect'
             client_message_connection.info = 'Server Response Mode'
-            responder_queue.put(client_message_connection)
+            responder_queue.put(copy.deepcopy(client_message_connection))
 
         if connection_error:
             client_message_connection.timestamp = datetime.now()
@@ -552,30 +558,32 @@ def thread_worker_main(
             record_and_statistics_write(client_message_connection)
         else:
             client_exception_queue: queue.Queue = queue.Queue()
-            service_exception_queue: queue.Queue = queue.Queue()
-
             client_thread = threading.Thread(
                 target=receive_send_start, args=(client_socket, service_socket_instance, client_exception_queue),
                 name=f"Thread-{thread_id}-Client")
             client_thread.daemon = True
             client_thread.start()
 
-            service_thread = threading.Thread(
-                target=receive_send_start, args=(service_socket_instance, client_socket, service_exception_queue),
-                name=f"Thread-{thread_id}-Service")
-            service_thread.daemon = True
-            service_thread.start()
+            if not config_static.TCPServer.server_response_mode:
+                service_exception_queue: queue.Queue = queue.Queue()
+                service_thread = threading.Thread(
+                    target=receive_send_start, args=(service_socket_instance, client_socket, service_exception_queue),
+                    name=f"Thread-{thread_id}-Service")
+                service_thread.daemon = True
+                service_thread.start()
 
             client_thread.join()
-            service_thread.join()
             if config_static.TCPServer.server_response_mode:
                 responder_thread.join()
+            else:
+                service_thread.join()
 
             # If there was an exception in any of the threads, then we'll raise it here.
             if not client_exception_queue.empty():
                 raise client_exception_queue.get()
-            if not service_exception_queue.empty():
-                raise service_exception_queue.get()
+            if not config_static.TCPServer.server_response_mode:
+                if not service_exception_queue.empty():
+                    raise service_exception_queue.get()
 
         finish_thread()
     except Exception as e:

@@ -170,10 +170,24 @@ def fetch_urls_content_in_threads(
     return contents
 
 
-def _fetch_content(url, number_of_characters_per_link):
+def fetch_urls_content(
+        urls: list[str],
+        number_of_characters_per_link: int
+) -> list[str]:
+    """ The function to fetch all URLs not concurrently without using threads """
+    contents = []
+
+    for url in urls:
+        data = _fetch_content(url, number_of_characters_per_link)
+        contents.append(data)
+
+    return contents
+
+
+def _fetch_content(url, number_of_characters_per_link, headless: bool = True):
     """ Function to fetch content from a single URL using the synchronous Playwright API """
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(headless=headless)
         page = browser.new_page()
         page.goto(url)
 
