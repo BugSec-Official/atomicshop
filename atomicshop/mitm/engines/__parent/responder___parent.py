@@ -190,10 +190,17 @@ class ResponderParent:
 
         return response_raw_bytes
 
-    def create_connect_response(self, class_client_message: ClientMessage):
+    @staticmethod
+    def create_connect_response(class_client_message: ClientMessage):
         """ This function should be overridden in the child class. """
-        pass
+
+        _ = class_client_message
+        response_bytes_list: list[bytes] = list()
+        return response_bytes_list
 
     def create_response(self, class_client_message: ClientMessage):
         """ This function should be overridden in the child class. """
-        pass
+
+        _ = class_client_message
+        response_bytes_list: list[bytes] = list()
+        return response_bytes_list

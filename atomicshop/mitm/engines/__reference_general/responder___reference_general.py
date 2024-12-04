@@ -67,18 +67,18 @@ class ResponderGeneral(ResponderParent):
         # response_bytes_list.append(byte_response)
         return response_bytes_list
 
-    def create_connect_response(self, class_client_message: ClientMessage):
-        """
-        This is almost the same as 'create_response' function, but it's used only when the client connects and before
-        sending any data.
-        """
-
-        # byte_response: bytes = b''
-        # self.logger.info(f"Response: {byte_response}")
-
-        response_bytes_list: list[bytes] = list()
-        # response_bytes_list.append(byte_response)
-        return response_bytes_list
+    # def create_connect_response(self, class_client_message: ClientMessage):
+    #     """
+    #     This is almost the same as 'create_response' function, but it's used only when the client connects and before
+    #     sending any data.
+    #     """
+    #
+    #     # byte_response: bytes = b''
+    #     # self.logger.info(f"Response: {byte_response}")
+    #
+    #     response_bytes_list: list[bytes] = list()
+    #     # response_bytes_list.append(byte_response)
+    #     return response_bytes_list
 
     # ==================================================================================================================
     # Uncomment this section in order to begin building custom responder.

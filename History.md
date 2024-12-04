@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.18.10 - 04.12.2024
+  * mitm - fixes and improvements.
 * 2.18.8-2.18.9 - 04.12.2024
   * mitm, wrappers/playwrightw/scenarios, wrappers/pywin32w/wmis/win32networkadapter, wrappers/winregw/winreg_network - fixes and improvements.
 * 2.18.7 - 03.12.2024
