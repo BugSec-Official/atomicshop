@@ -67,6 +67,8 @@ def get_wmi_network_configuration(
     current_adapter = None
     if use_default_interface:
         default_connection_name_dict: dict = networks.get_default_connection_name()
+        if not default_connection_name_dict:
+            raise NetworkAdapterNotFoundError("Default network adapter not found.")
         # Get the first key from the dictionary.
         connection_name: str = list(default_connection_name_dict.keys())[0]
 

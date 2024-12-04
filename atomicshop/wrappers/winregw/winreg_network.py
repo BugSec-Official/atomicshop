@@ -142,6 +142,7 @@ def get_default_dns_gateway() -> tuple[bool, list[str]]:
     Get the default DNS gateway from the Windows registry.
 
     :return: tuple(is dynamic boolean, list of DNS server IPv4s).
+        If nothing found will return (None, None).
     """
 
     def get_current_interface_status(current_interface_settings: dict) -> tuple[bool, list[str]]:
@@ -198,6 +199,9 @@ def get_default_dns_gateway() -> tuple[bool, list[str]]:
                 function_result = get_current_interface_status(interface_settings)
 
                 break
+
+    if not function_result:
+        function_result = (None, None)
 
     # noinspection PyTypeChecker
     return function_result

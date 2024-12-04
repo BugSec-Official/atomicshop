@@ -103,8 +103,13 @@ class ResponderParent:
 
         return parameter_value
 
-    def build_byte_response_and_fill_lists(
-            self, http_version: str, status_code: int, headers: dict, body: bytes, client_message: ClientMessage):
+    def build_byte_response(
+            self,
+            http_version: str,
+            status_code: int,
+            headers: dict,
+            body: bytes
+    ) -> bytes:
         """
         Create genuine response from input parameters.
         ---------------
@@ -145,8 +150,7 @@ class ResponderParent:
         :param status_code: HTTP Status Code of Response in HTTP Status line.
         :param headers: HTTP Headers of Response.
         :param body: HTTP body data of Response, bytes.
-        :param client_message: client message class.
-        :return:
+        :return: bytes of the response.
         """
 
         try:
@@ -174,7 +178,6 @@ class ResponderParent:
             print_api(message, error_type=True, logger=self.logger, logger_method='error', color='red')
 
             response_raw_bytes = b''
-            pass
 
         # Parsing the response we created.
         response_parse_test = HTTPResponseParse(response_raw_bytes)
@@ -182,73 +185,15 @@ class ResponderParent:
         if response_parse_test.error:
             self.logger.error(response_parse_test.error)
             response_raw_bytes = b''
-            response_decoded = None
         else:
             self.logger.info("Created Valid Byte Response.")
-            response_decoded = response_parse_test.response_raw_decoded
 
-        # Add 'response_raw_bytes' and 'response_decoded' to appropriate response lists in 'class_message'.
-        self.add_response_elements_to_lists(client_message, response_raw_bytes, response_decoded)
+        return response_raw_bytes
 
-    @staticmethod
-    def add_response_elements_to_lists(class_client_message: ClientMessage, byte_response, decoded_response):
-        """
-        Function just adds the byte response to the 'response_list_of_raw_bytes'.
-        :param class_client_message:
-        :param byte_response:
-        :param decoded_response:
-        :return:
-        """
-
-        class_client_message.response_list_of_raw_bytes.append(byte_response)
-        class_client_message.response_list_of_raw_decoded.append(decoded_response)
+    def create_connect_response(self, class_client_message: ClientMessage):
+        """ This function should be overridden in the child class. """
+        pass
 
     def create_response(self, class_client_message: ClientMessage):
-        # noinspection GrazieInspection
-        """
-        Function to create Response based on ClientMessage and its Request.
-
-        :param class_client_message: contains request and other parameters to help creating response.
-        :return: "class_client_message.response_list_of_raw_bytes" is populated with list of responses in bytes.
-        -----------------------------------
-        # Remember that 'response_list_of_raw_bytes' is a list object that will contain byte response/s.
-
-        # Example of creating 'response_list_of_raw_bytes' using 'build_byte_response' function:
-        class_client_message.response_list_of_raw_bytes.append(
-            self.build_byte_response(
-                http_version=class_client_message.request_raw_decoded.request_version,
-                status_code=200,
-                headers=response_headers,
-                body=b''
-            )
-        )
-
-        # Or you can use the 'add_byte_response_to_response_list' function that will do it for you:
-        byte_response = self.build_byte_response(
-            http_version=class_client_message.request_raw_decoded.request_version,
-            status_code=200,
-            headers=response_headers,
-            body=b''
-        )
-        self.add_byte_response_to_response_list(class_client_message, byte_response)
-        -----------------------------------
-        # Example of extracting variables from URL PATH based on custom PATH TEMPLATE:
-        # (more examples in 'self.extract_variables_from_path_template' function description)
-        template_path: str = "/hithere/<variable1>/else/<variable2>/tested/"
-        path_variables: dict = extract_variables_from_path_template(
-            path=class_client_message.request_raw_decoded.path,
-            template_path=template_path
-        )
-        -----------------------------------
-        # Example of extracting value from URL PATH parameters after question mark:
-        parameter_value = extract_value_from_path_parameter(
-            path=class_client_message.request_raw_decoded.path,
-            parameter='test_id'
-        )
-        """
-
-        byte_response = None
-        decoded_response = None
-        # class_client_message.response_list_of_raw_bytes.append(byte_response)
-        self.add_response_elements_to_lists(class_client_message, byte_response, decoded_response)
-        self.logger.info(f"Response: {class_client_message.response_list_of_raw_bytes}")
+        """ This function should be overridden in the child class. """
+        pass
