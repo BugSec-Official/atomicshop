@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.18.12 - 17.12.2024
+  * wrappers/winregw/winreg_installed_software - initial release.
 * 2.18.11 - 17.12.2024
   * atomicshop/mitm/connection_thread_worker - fixes and improvements.
 * 2.18.10 - 04.12.2024
