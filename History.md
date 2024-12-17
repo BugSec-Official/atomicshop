@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.18.11 - 17.12.2024
+  * atomicshop/mitm/connection_thread_worker - fixes and improvements.
 * 2.18.10 - 04.12.2024
   * mitm - fixes and improvements.
 * 2.18.8-2.18.9 - 04.12.2024

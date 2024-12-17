@@ -240,7 +240,7 @@ def thread_worker_main(
         if client_received_raw_data == b'':
             return
 
-        client_message.response_auto_parsed = parse_http(client_message.request_raw_bytes, client_message)
+        client_message.request_auto_parsed = parse_http(client_message.request_raw_bytes, client_message)
         # This is needed for each cycle that is not HTTP, but its protocol maybe set by HTTP, like websocket.
         if protocol != '':
             client_message.protocol = protocol
@@ -310,6 +310,9 @@ def thread_worker_main(
                     client_message.reinitialize_dynamic_vars()
                     client_message.timestamp = datetime.now()
                     client_message.response_raw_bytes = response_raw_bytes
+
+                    record_and_statistics_write(client_message)
+
                     error_on_send: str = sender.Sender(
                         ssl_socket=client_socket, class_message=client_message.response_raw_bytes,
                         logger=network_logger).send()
