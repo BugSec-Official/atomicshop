@@ -353,6 +353,78 @@ def rename_file(file_path: str, new_file_name: str) -> None:
     os.rename(file_path, renamed_file_path)
 
 
+def rename_file_with_special_characters(file_path: str) -> str:
+    """
+    The function will rename the file to replace special characters from the file name with '_'.
+    If the file already exists, then the function will add a number to the end of the file name.
+
+    :param file_path: string, full path to file.
+    :return: string, full path to file with special characters renamed.
+    """
+
+    # Get the file name without extension
+    file_stem: str = str(Path(file_path).stem)
+    file_extension: str = str(Path(file_path).suffix)
+
+    # Remove special characters from the file name
+    new_file_stem = strings.replace_strings_with_values_from_dict(
+        string_to_replace=file_stem, dictionary=FILE_NAME_REPLACEMENT_DICT)
+
+    # Rename the file
+    renamed_file_path = str(Path(file_path).parent) + os.sep + new_file_stem + file_extension
+
+    counter: int = 1
+    if os.path.isfile(renamed_file_path):
+        while True:
+            new_file_stem = f'{new_file_stem}_{counter}'
+            renamed_file_path = str(Path(file_path).parent) + os.sep + new_file_stem + file_extension
+            if not os.path.isfile(renamed_file_path):
+                break
+            counter += 1
+
+    os.rename(file_path, renamed_file_path)
+
+    return renamed_file_path
+
+
+def rename_files_and_directories_with_special_characters(base_path: str) -> None:
+    """
+    Recursively renames all files and directories in the given directory to rename special characters.
+
+    :param base_path: str, the base directory to start processing.
+    """
+
+    def sanitize_name(name: str) -> str:
+        """
+        Helper function to replace special characters in a string using a dictionary.
+        """
+        for key, value in FILE_NAME_REPLACEMENT_DICT.items():
+            name = name.replace(key, value)
+        return name
+
+    # Walk through the directory tree in reverse to ensure we rename files before directories
+    for root, dirs, files in os.walk(base_path, topdown=False):
+        # Rename files in the current directory
+        for file_name in files:
+            old_path = Path(root) / file_name
+            sanitized_name = sanitize_name(file_name)
+            new_path = Path(root) / sanitized_name
+
+            if sanitized_name != file_name:  # Rename only if the name changed
+                # print(f"Renaming file: {old_path} -> {new_path}")
+                os.rename(old_path, new_path)
+
+        # Rename directories in the current directory
+        for dir_name in dirs:
+            old_path = Path(root) / dir_name
+            sanitized_name = sanitize_name(dir_name)
+            new_path = Path(root) / sanitized_name
+
+            if sanitized_name != dir_name:  # Rename only if the name changed
+                # print(f"Renaming directory: {old_path} -> {new_path}")
+                os.rename(old_path, new_path)
+
+
 @contextmanager
 def temporary_rename(file_path: str, temp_file_path) -> None:
     # noinspection GrazieInspection
