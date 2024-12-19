@@ -329,6 +329,36 @@ def remove_directory(directory_path: str, force_readonly: bool = False, print_kw
         return False
 
 
+def remove_empty_directories(directory_path: str) -> list[str]:
+    """
+    Recursively removes empty directories in the given path, including the given path if it is empty.
+
+    :param directory_path: The starting directory path to check and remove empty directories.
+    """
+    if not os.path.isdir(directory_path):
+        # print(f"Path '{directory_path}' is not a directory or does not exist.")
+        return []
+
+    removed_directories: list = []
+    # Iterate through the directory contents
+    for root, dirs, files in os.walk(directory_path, topdown=False):
+        for directory in dirs:
+            dir_path = os.path.join(root, directory)
+            # Check if the directory is empty
+            if not os.listdir(dir_path):
+                os.rmdir(dir_path)
+                removed_directories.append(dir_path)
+                # print(f"Removed empty directory: {dir_path}")
+
+    # Finally, check if the top-level directory is empty
+    if not os.listdir(directory_path):
+        os.rmdir(directory_path)
+        removed_directories.append(directory_path)
+        # print(f"Removed top-level empty directory: {path}")
+
+    return removed_directories
+
+
 def create_directory(directory_fullpath: str):
     # Create directory if non-existent.
     # The library is used to create folder if it doesn't exist and won't raise exception if it does
