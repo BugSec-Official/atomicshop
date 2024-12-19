@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.18.15 - 19.12.2024
+  * file_io/csvs - fixes and improvements.
 * 2.18.14 - 19.12.2024
   * archiver/search_in_archive, filesystem - fixes and improvements.
 * 2.18.13 - 18.12.2024
