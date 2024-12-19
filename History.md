@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.18.14 - 19.12.2024
+  * archiver/search_in_archive, filesystem - fixes and improvements.
 * 2.18.13 - 18.12.2024
   * filesystem - fixes and improvements.
 * 2.18.12 - 17.12.2024

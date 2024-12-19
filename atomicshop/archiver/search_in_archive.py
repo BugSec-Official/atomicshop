@@ -13,7 +13,8 @@ SUPPORTED_ARCHIVE_MIMES: list = [
     'application/x-7z-compressed',
     'application/zip',
     'application/x-dosexec',      # SFX zip files.
-    'application/octet-stream'    # There are some non-standard zip files that are not recognized by magic.
+    'application/octet-stream',    # There are some non-standard zip files that are not recognized by magic.
+    'application/vnd.microsoft.portable-executable'     # PE files. Some self extracting archives are PE files, But the zip module can handle them.
 ]
 
 
