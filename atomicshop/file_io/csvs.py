@@ -102,7 +102,8 @@ def read_csv_to_list_of_lists(
 def write_list_to_csv(
         content_list: list,
         file_path: str,
-        mode: str = 'w'
+        mode: str = 'w',
+        encoding: str = None
 ) -> None:
     """
     This function got dual purpose:
@@ -114,10 +115,12 @@ def write_list_to_csv(
     :param content_list: List object that each iteration contains dictionary with same keys and different values.
     :param file_path: Full file path to CSV file.
     :param mode: String, file writing mode. Default is 'w'.
+    :param encoding: String, encoding of the file. Default is 'None'.
+        Example: 'utf-8', 'utf-16', 'cp1252'.
     :return: None.
     """
 
-    with open(file_path, mode=mode, newline='') as csv_file:
+    with open(file_path, mode=mode, newline='', encoding=encoding) as csv_file:
         if len(content_list) > 0 and isinstance(content_list[0], dict):
             # Treat the list as list of dictionaries.
             header = content_list[0].keys()
