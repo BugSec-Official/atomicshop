@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.18.16 - 19.12.2024
+  * filesystem, wrappers/winregw/winreg_installed_software - fixes and improvements.
 * 2.18.15 - 19.12.2024
   * file_io/csvs - fixes and improvements.
 * 2.18.14 - 19.12.2024

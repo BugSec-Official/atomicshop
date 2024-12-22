@@ -31,12 +31,24 @@ def get_installed_software() -> list[dict]:
                     except FileNotFoundError:
                         install_date = "N/A"
 
+                    try:
+                        install_location, _ = winreg.QueryValueEx(subkey, "InstallLocation")
+                    except FileNotFoundError:
+                        install_location = "N/A"
+
+                    try:
+                        install_source, _ = winreg.QueryValueEx(subkey, "InstallSource")
+                    except FileNotFoundError:
+                        install_source = "N/A"
+
                     if display_name != "N/A":
                         data.append({
                             "DisplayName": display_name,
                             "DisplayVersion": display_version,
                             "InstallDate": install_date,
-                            "SubkeyName": subkey_name
+                            "SubkeyName": subkey_name,
+                            "InstallLocation": install_location,
+                            "InstallSource": install_source
                         })
             except OSError:
                 break  # No more subkeys
