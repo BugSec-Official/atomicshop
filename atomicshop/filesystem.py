@@ -383,14 +383,27 @@ def rename_file(file_path: str, new_file_name: str) -> None:
     os.rename(file_path, renamed_file_path)
 
 
-def rename_file_with_special_characters(file_path: str) -> str:
+def rename_file_with_special_characters(
+        file_path: str,
+        rename_dictionary: dict = None,
+) -> str:
     """
     The function will rename the file to replace special characters from the file name with '_'.
     If the file already exists, then the function will add a number to the end of the file name.
 
     :param file_path: string, full path to file.
+    :param rename_dictionary: dictionary, with special characters to replace.
+        If not specified, the default dictionary will be used: FILE_NAME_REPLACEMENT_DICT.
+        Example:
+            rename_dictionary = {
+                '$': '_',
+                ' ': '_'
+            }
     :return: string, full path to file with special characters renamed.
     """
+
+    if rename_dictionary is None:
+        rename_dictionary = FILE_NAME_REPLACEMENT_DICT
 
     # Get the file name without extension
     file_stem: str = str(Path(file_path).stem)
@@ -398,7 +411,7 @@ def rename_file_with_special_characters(file_path: str) -> str:
 
     # Remove special characters from the file name
     new_file_stem = strings.replace_strings_with_values_from_dict(
-        string_to_replace=file_stem, dictionary=FILE_NAME_REPLACEMENT_DICT)
+        string_to_replace=file_stem, dictionary=rename_dictionary)
 
     # Rename the file
     renamed_file_path = str(Path(file_path).parent) + os.sep + new_file_stem + file_extension
@@ -417,20 +430,34 @@ def rename_file_with_special_characters(file_path: str) -> str:
     return renamed_file_path
 
 
-def rename_files_and_directories_with_special_characters(base_path: str) -> None:
+def rename_files_and_directories_with_special_characters(
+        base_path: str,
+        rename_dictionary: dict = None
+) -> None:
     """
     Recursively renames all files and directories in the given directory to rename special characters.
 
     :param base_path: str, the base directory to start processing.
+    :param rename_dictionary: dictionary, with special characters to replace.
+        If not specified, the default dictionary will be used: FILE_NAME_REPLACEMENT_DICT.
+        Example:
+            rename_dictionary = {
+                '$': '_',
+                ' ': '_'
+            }
     """
 
     def sanitize_name(name: str) -> str:
+        nonlocal rename_dictionary
         """
         Helper function to replace special characters in a string using a dictionary.
         """
-        for key, value in FILE_NAME_REPLACEMENT_DICT.items():
+        for key, value in rename_dictionary.items():
             name = name.replace(key, value)
         return name
+
+    if rename_dictionary is None:
+        rename_dictionary = FILE_NAME_REPLACEMENT_DICT
 
     # Walk through the directory tree in reverse to ensure we rename files before directories
     for root, dirs, files in os.walk(base_path, topdown=False):
