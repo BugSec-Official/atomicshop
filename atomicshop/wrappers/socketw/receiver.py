@@ -1,6 +1,8 @@
 import logging
 import socket
 import ssl
+import time
+
 import select
 from pathlib import Path
 
@@ -120,9 +122,19 @@ class Receiver:
         # We'll skip the 'is_socket_ready_for_read' check on the first run, since we want to read the data anyway,
         # to leave the socket in the blocking mode.
         first_run: bool = True
+        no_data_first_cycle: bool = True
         while True:
             # Check if there is data to be read from the socket.
             is_there_data: bool = is_socket_ready_for_read(self.ssl_socket, timeout=0)
+
+            # If there is no data to be read from the socket, and it is the first cycle, wait for a bit and try again.
+            if no_data_first_cycle and not is_there_data:
+                no_data_first_cycle = False
+                sleep_time: float = 0.5
+                self.logger.info(f"First time socket not ready. Waiting {str(sleep_time)} seconds before trying last time.")
+                time.sleep(sleep_time)
+                continue
+
             # noinspection PyTypeChecker
             if is_there_data or first_run:
                 first_run = False
