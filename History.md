@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.18.20 - 24.12.2024
+  * wrappers/psutilw/processes - fixes and improvements.
+  * wrappers/ctyping/file_details_winapi - initial release.
 * 2.18.19 - 24.12.2024
   * web_apis/google_custom_search, web_apis/google_llm, wrappers/playwrightw/scenarios - fixes and improvements.
 * 2.18.18 - 22.12.2024
