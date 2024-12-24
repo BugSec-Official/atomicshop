@@ -25,7 +25,14 @@ def search_google(
 
     try:
         service = build("customsearch", "v1", developerKey=api_key)
-        result = service.cse().list(q=query, cx=search_engine_id).execute()
+        result = service.cse().list(
+            q=query,
+            cx=search_engine_id,
+            # gl="us",  # Country code
+            # lr="lang_en",  # Language restriction
+            # safe="off",  # Safe search off
+            # dateRestrict="m1"  # Restrict results to the last month
+        ).execute()
         items = result.get('items', [])
         links = [item['link'] for item in items if 'link' in item]
         return links, error

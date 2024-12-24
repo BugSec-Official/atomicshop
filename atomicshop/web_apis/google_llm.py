@@ -1,9 +1,11 @@
 import os
+from typing import Literal
 
 import google.generativeai as genai
 
 from . import google_custom_search
 from ..wrappers.playwrightw import scenarios
+from .. import urls
 
 
 class GoogleCustomSearchError(Exception):
@@ -41,8 +43,16 @@ class GoogleLLM:
 
     def get_answer_online(
             self,
-            search_query: str,
-            additional_llm_instructions: str,
+            search_query_or_url: str,
+            text_fetch_method: Literal[
+                'playwright_text',
+                'js_text',
+                'playwright_html',
+                'js_html',
+                'playwright_copypaste'
+            ],
+            llm_query: str,
+            llm_post_instructions: str,
             number_of_top_links: int = 2,
             number_of_characters_per_link: int = 15000,
             temperature: float = 0,
@@ -52,8 +62,17 @@ class GoogleLLM:
         """
         Function to get the answer to a question by searching Google Custom Console API and processing the content using Gemini API.
 
-        :param search_query: string, the search query to search on Google Custom Search.
-        :param additional_llm_instructions: string, additional instructions to provide to the LLM.
+        :param search_query_or_url: string, is checked if it is a URL or a search query.
+            Search query: the search query to search on Google Custom Search.
+            URL: the URL to fetch content from without using Google Custom Search.
+        :param text_fetch_method: string, the method to fetch text from the URL.
+            playwright_text: uses native Playwright to fetch text from the URL.
+            js_text: uses Playwright and JavaScript evaluation to fetch text from the URL.
+            playwright_html: uses native Playwright to fetch HTML from the URL and then parse it to text using beautiful soup.
+            js_html: uses Playwright and JavaScript evaluation to fetch HTML from the URL and then parse it to text using beautiful soup.
+            playwright_copypaste: uses native Playwright to fetch text from the URL by copying and pasting the text from rendered page using clipboard.
+        :param llm_query: string, the question to ask the LLM about the text content that is returned from the search query or the URL.
+        :param llm_post_instructions: string, additional instructions to provide to the LLM on the answer it provided after the llm_query.
         :param number_of_top_links: integer, the number of top links to fetch content from.
         :param number_of_characters_per_link: integer, the number of characters to fetch from each link.
         :param temperature: float, the temperature parameter for the LLM.
@@ -63,22 +82,31 @@ class GoogleLLM:
         :return: string, the answer by LLM to the question.
         """
 
-        # Search Google for links related to the query
-        links, search_error = google_custom_search.search_google(
-            query=search_query, api_key=self.search_api_key, search_engine_id=self.search_engine_id)
+        # Check if the search query is a URL.
+        if urls.is_valid_url(search_query_or_url):
+            # Fetch content from the URL
+            contents = scenarios.fetch_urls_content_in_threads(
+                urls=[search_query_or_url], number_of_characters_per_link=number_of_characters_per_link,
+                text_fetch_method=text_fetch_method)
+        # If not a URL, Search Google for links related to the query
+        else:
+            links, search_error = google_custom_search.search_google(
+                query=search_query_or_url, api_key=self.search_api_key, search_engine_id=self.search_engine_id)
 
-        if search_error:
-            raise GoogleCustomSearchError(f"Error occurred when searching Google: {search_error}")
+            if search_error:
+                raise GoogleCustomSearchError(f"Error occurred when searching Google: {search_error}")
 
-        # Get only the first X links to not overload the LLM.
-        contents = scenarios.fetch_urls_content_in_threads(links[:number_of_top_links], number_of_characters_per_link)
+            # Get only the first X links to not overload the LLM.
+            contents = scenarios.fetch_urls_content_in_threads(
+                urls=links[:number_of_top_links], number_of_characters_per_link=number_of_characters_per_link,
+                text_fetch_method=text_fetch_method)
 
         combined_content = ""
         for content in contents:
             combined_content += f'{content}\n\n\n\n================================================================'
 
-        final_question = (f'Answer this question: {search_query}\n\n'
-                          f'Follow these instructions: {additional_llm_instructions}\n\n'
+        final_question = (f'Answer this question: {llm_query}\n\n'
+                          f'Follow these instructions: {llm_post_instructions}\n\n'
                           f'Based on these data contents:\n\n'
                           f'{combined_content}')
 

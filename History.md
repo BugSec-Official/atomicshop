@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.18.19 - 24.12.2024
+  * web_apis/google_custom_search, web_apis/google_llm, wrappers/playwrightw/scenarios - fixes and improvements.
 * 2.18.18 - 22.12.2024
   * wrappers/socketw/receiver - fixes and improvements.
 * 2.18.17 - 22.12.2024

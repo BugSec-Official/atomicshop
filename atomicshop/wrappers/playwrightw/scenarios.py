@@ -4,9 +4,11 @@ For example: run playwright, navigate to URL, get text from a locator.
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Literal
 
 from playwright.sync_api import sync_playwright
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+from bs4 import BeautifulSoup
 
 from . import engine, base, combos
 from ...basics import threads, multiprocesses
@@ -148,7 +150,14 @@ def _get_page_content_in_process(
 
 def fetch_urls_content_in_threads(
         urls: list[str],
-        number_of_characters_per_link: int
+        number_of_characters_per_link: int,
+        text_fetch_method: Literal[
+            'playwright_text',
+            'js_text',
+            'playwright_html',
+            'js_html',
+            'playwright_copypaste'
+        ]
 ) -> list[str]:
     """ The function to fetch all URLs concurrently using threads """
     contents = []
@@ -156,7 +165,7 @@ def fetch_urls_content_in_threads(
     # Use ThreadPoolExecutor to run multiple threads
     with ThreadPoolExecutor() as executor:
         # Submit tasks for each URL
-        future_to_url = {executor.submit(_fetch_content, url, number_of_characters_per_link): url for url in urls}
+        future_to_url = {executor.submit(_fetch_content, url, number_of_characters_per_link, text_fetch_method): url for url in urls}
 
         # Collect results as they complete
         for future in as_completed(future_to_url):
@@ -172,23 +181,62 @@ def fetch_urls_content_in_threads(
 
 def fetch_urls_content(
         urls: list[str],
-        number_of_characters_per_link: int
+        number_of_characters_per_link: int,
+        text_fetch_method: Literal[
+            'playwright_text',
+            'js_text',
+            'playwright_html',
+            'js_html',
+            'playwright_copypaste'
+        ],
 ) -> list[str]:
     """ The function to fetch all URLs not concurrently without using threads """
     contents = []
 
     for url in urls:
-        data = _fetch_content(url, number_of_characters_per_link)
+        data = _fetch_content(url, number_of_characters_per_link, text_fetch_method)
         contents.append(data)
 
     return contents
 
 
-def _fetch_content(url, number_of_characters_per_link, headless: bool = True):
+def _fetch_content(
+        url,
+        number_of_characters_per_link,
+        text_fetch_method: Literal[
+            'playwright_text',
+            'js_text',
+            'playwright_html',
+            'js_html',
+            'playwright_copypaste'
+        ],
+        headless: bool = True):
     """ Function to fetch content from a single URL using the synchronous Playwright API """
+
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=headless)
-        page = browser.new_page()
+        browser = p.chromium.launch(headless=headless)  # Set headless=True if you don't want to see the browser
+
+        if text_fetch_method == "playwright_copypaste":
+            context = browser.new_context(permissions=["clipboard-read", "clipboard-write"])
+        else:
+            context = browser.new_context()
+
+        page = context.new_page()
+
+        # from playwright_stealth import stealth_sync
+        # stealth_sync(page)
+
+        # # Block specific script by URL or partial URL match
+        # def block_script(route):
+        #     if "custom.js" in route.request.url:
+        #         print(f"Blocking: {route.request.url}")
+        #         route.abort()  # Block the request
+        #     else:
+        #         route.continue_()  # Allow other requests
+        #
+        # # Intercept and handle network requests
+        # page.route("**/*", block_script)
+
         page.goto(url)
 
         # Wait for the page to load using all possible methods, since there is no specific method
@@ -207,8 +255,32 @@ def _fetch_content(url, number_of_characters_per_link, headless: bool = True):
             except PlaywrightTimeoutError:
                 break
 
-        # Use JavaScript to extract only the visible text from the page
-        text_content: str = page.evaluate("document.body.innerText")
+        if text_fetch_method == "playwright_text":
+            text_content = page.inner_text('body')
+        elif text_fetch_method == "js_text":
+            # Use JavaScript to extract only the visible text from the page
+            text_content: str = page.evaluate("document.body.innerText")
+        elif text_fetch_method == "playwright_html":
+            # Get the full HTML content of the page
+            html = page.content()
+            # Parse the HTML using BeautifulSoup and extract the text
+            soup = BeautifulSoup(html, 'html.parser')
+            text_content = soup.get_text()
+        elif text_fetch_method == "js_html":
+            # Use JavaScript to extract the full text from the page
+            html = page.evaluate('document.documentElement.outerHTML')
+            # Parse the HTML using BeautifulSoup and extract the text
+            soup = BeautifulSoup(html, 'html.parser')
+            text_content = soup.get_text()
+        elif text_fetch_method == "playwright_copypaste":
+            # Focus the page and simulate Ctrl+A and Ctrl+C
+            page.keyboard.press("Control+a")  # Select all text
+            page.keyboard.press("Control+c")  # Copy text to clipboard
+            # Retrieve copied text from the clipboard
+            text_content = page.evaluate("navigator.clipboard.readText()")
+        else:
+            raise ValueError(f"Invalid text_fetch_method: {text_fetch_method}")
+
         # text = page.evaluate('document.body.textContent')
         # text = page.eval_on_selector('body', 'element => element.innerText')
         # text = page.eval_on_selector('body', 'element => element.textContent')
@@ -217,8 +289,6 @@ def _fetch_content(url, number_of_characters_per_link, headless: bool = True):
 
         # text = page.evaluate('document.documentElement.innerText')
         # text = page.inner_text(':root')
-        # html = page.content()
-        # html = page.evaluate('document.documentElement.outerHTML')
 
         browser.close()
     # Return only the first X characters of the text content to not overload the LLM.
