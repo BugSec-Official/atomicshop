@@ -35,7 +35,7 @@ def install_mongodb(version):
     # Step 1: Import the MongoDB public GPG key
     print_api.print_api("Step 1: Importing the MongoDB public GPG key...")
     run_command(f"curl -fsSL https://pgp.mongodb.com/server-{version}.asc | "
-                f"sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-{version}.gpg")
+                f"sudo gpg --dearmor --yes -o /usr/share/keyrings/mongodb-server-{version}.gpg")
 
     # Step 2: Create the MongoDB list file for APT
     print_api.print_api("Step 2: Creating MongoDB APT list file...")
@@ -71,7 +71,7 @@ def install_main(
     # Ensure the user provides a MongoDB major version as an argument.
     if len(sys.argv) != 2:
         message: str = ("Usage: python install_mongodb.py <mongo_major_version>\n"
-                        "Example: python install_mongodb.py 7")
+                        "Example: python install_mongodb.py 8")
         print_api.print_api(message, color='red')
         return 1
 
