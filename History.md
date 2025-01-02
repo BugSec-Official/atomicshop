@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.18.22 - 02.01.2025
+  * wrappers/ctyping/file_details_winapi - fixes and improvements.
 * 2.18.21 - 26.12.2024
   * wrappers/mongodbw/install_mongodb_ubuntu - fixes and improvements.
 * 2.18.20 - 24.12.2024

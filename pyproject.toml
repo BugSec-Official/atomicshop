@@ -54,6 +54,7 @@ dependencies = [
     "dnslib",
     "dnspython",
     "docker",
+    "flask_socketio",
     "google-api-python-client",
     "google-generativeai",
     "numpy",
