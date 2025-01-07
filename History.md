@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.18.25 - 07.01.2025
+  * mitm/connection_thread_worker - fixes and improvements.
 * 2.18.24 - 07.01.2025
   * mitm/connection_thread_worker, wrappers/dockerw/dockerw - fixes and improvements.
 * 2.18.23 - 05.01.2025

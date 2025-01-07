@@ -36,7 +36,12 @@ def thread_worker_main(
 
         # Same goes for the '.path' attribute, if it is not HTTP message then there will be no path.
         try:
-            http_path: str = client_message.request_auto_parsed.path
+            if client_message.request_auto_parsed and client_message.request_auto_parsed.path:
+                http_path: str = client_message.request_auto_parsed.path
+            elif client_message.response_auto_parsed.path:
+                http_path: str = client_message.response_auto_parsed.path
+            else:
+                http_path: str = str()
         except AttributeError:
             http_path: str = str()
 
@@ -114,12 +119,17 @@ def thread_worker_main(
             auto_parsed = request_http_parsed
             network_logger.info(
                 f"HTTP Request Parsed: Method: {request_http_parsed.command} | Path: {request_http_parsed.path}")
+            http_path_queue.put(request_http_parsed.path)
+            network_logger.info(f"HTTP Request Parsed: Putting PATH to queue.")
 
             is_http_request_a_websocket(auto_parsed, client_message)
         elif is_http_response:
             auto_parsed = response_http_parsed
             network_logger.info(
                 f"HTTP Response Parsed: Status: {response_http_parsed.code}")
+
+            auto_parsed.path = http_path_queue.get()
+            network_logger.info(f"HTTP Response Parsed: Got PATH from queue: [{auto_parsed.path}]")
         elif protocol == 'Websocket':
             client_message.protocol2 = 'Frame'
             auto_parsed = parse_websocket(raw_bytes)
@@ -516,6 +526,8 @@ def thread_worker_main(
     exception_or_close_in_receiving_thread: bool = False
     # Responder queue for ClientMessage objects.
     responder_queue: queue.Queue = queue.Queue()
+    # Queue for http request URI paths.
+    http_path_queue: queue.Queue = queue.Queue()
 
     try:
         client_ip, source_port = client_socket.getpeername()
