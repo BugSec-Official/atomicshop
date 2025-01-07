@@ -36,13 +36,13 @@ def thread_worker_main(
 
         # Same goes for the '.path' attribute, if it is not HTTP message then there will be no path.
         try:
-            http_path: str = client_message.response_auto_parsed.path
+            http_path: str = client_message.request_auto_parsed.path
         except AttributeError:
             http_path: str = str()
 
         # Same goes for the '.command' attribute, if it is not HTTP message then there will be no command.
         try:
-            http_command: str = client_message.response_auto_parsed.command
+            http_command: str = client_message.request_auto_parsed.command
         except AttributeError:
             http_command: str = str()
 

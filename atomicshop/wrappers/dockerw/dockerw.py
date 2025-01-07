@@ -1,4 +1,5 @@
 import docker
+from docker.models.containers import Container
 
 from ...print_api import print_api
 
@@ -167,3 +168,57 @@ def add_execution_permissions_for_file(image_id_or_name: str, file_path: str, pr
         list_of_commands=[f"chmod +x {file_path}"],
         print_kwargs=print_kwargs
     )
+
+
+def stop_remove_containers_by_image_name(image_name: str):
+    """
+    Remove all containers by image name.
+    :param image_name: str, the name of the image.
+    :return:
+    """
+    client = docker.from_env()
+    all_containers = client.containers.list(all=True)
+    for container in all_containers:
+        if any(image_name in tag for tag in container.image.tags):
+            if container.status == "running":
+                print_api(f"Stopping container: [{container.name}]. Short ID: [{container.short_id}]")
+                container.stop()
+            container.remove()
+    client.close()
+
+
+def start_container_without_stop(image_name: str, **kwargs) -> Container:
+    """
+    Start a container in detached mode, this container will not run the entry point, but will run the infinite sleep.
+    This way the container will continue running, you can execute commands in it and stop it manually when needed.
+    :param image_name: str, the name of the image.
+    :return:
+    """
+    client = docker.from_env()
+
+    kwargs.setdefault('detach', True)
+    kwargs.setdefault('mem_limit', '512m')
+    kwargs.setdefault('ulimits', [docker.types.Ulimit(name='nofile', soft=20000, hard=50000)])
+    kwargs.setdefault('remove', False)
+
+    # Start the container with a "do nothing" command so it stays running
+    print_api(f"Starting container from image '{image_name}'...")
+    container = client.containers.run(
+        image=image_name,
+        entrypoint=["/bin/sh", "-c", "tail -f /dev/null"],
+        **kwargs
+    )
+
+    stdout = container.logs(stdout=True, stderr=False).decode()
+    stderr = container.logs(stdout=False, stderr=True).decode()
+    if stdout:
+        print_api(f"Container stdout: {stdout}")
+    if stderr:
+        print_api(f"Container stderr: {stderr}")
+
+    if not stderr:
+        print_api("Container started successfully.")
+
+    print_api(f"Started container: [{container.name}]. Short ID: [{container.short_id}]")
+
+    return container
