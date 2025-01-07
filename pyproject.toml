@@ -62,6 +62,7 @@ dependencies = [
     "openpyxl",
     "pandas",
     "paramiko",
+    "pefile",
     "playwright",
     "playwright-stealth",
     "protobuf",

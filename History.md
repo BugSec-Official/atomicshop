@@ -1,6 +1,10 @@
 <!-- HISTORY -->
 ## History
 
+* 2.18.24 - 07.01.2025
+  * mitm/connection_thread_worker, wrappers/dockerw/dockerw - fixes and improvements.
+* 2.18.23 - 05.01.2025
+  * added 'pefile' as a dependency.
 * 2.18.22 - 02.01.2025
   * wrappers/ctyping/file_details_winapi - fixes and improvements.
 * 2.18.21 - 26.12.2024
