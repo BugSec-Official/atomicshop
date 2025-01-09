@@ -1,5 +1,6 @@
 import docker
 from docker.models.containers import Container
+from docker import DockerClient
 
 from ...print_api import print_api
 
@@ -187,14 +188,20 @@ def stop_remove_containers_by_image_name(image_name: str):
     client.close()
 
 
-def start_container_without_stop(image_name: str, **kwargs) -> Container:
+def start_container_without_stop(
+        image_name: str,
+        client: DockerClient = None,
+    **kwargs) -> tuple[DockerClient, Container]:
     """
     Start a container in detached mode, this container will not run the entry point, but will run the infinite sleep.
     This way the container will continue running, you can execute commands in it and stop it manually when needed.
     :param image_name: str, the name of the image.
-    :return:
+    :param client: docker.DockerClient, the docker client. If not provided, it will use the default client.
+    :return: Container, the docker container object.
     """
-    client = docker.from_env()
+
+    if client is None:
+        client = docker.from_env()
 
     kwargs.setdefault('detach', True)
     kwargs.setdefault('mem_limit', '512m')
@@ -221,4 +228,34 @@ def start_container_without_stop(image_name: str, **kwargs) -> Container:
 
     print_api(f"Started container: [{container.name}]. Short ID: [{container.short_id}]")
 
-    return container
+    return client, container
+
+
+def run_command_in_running_container(container: Container, command: list) -> tuple[int, bytes, str]:
+    """
+    Run a command in a running container.
+    :param container: Container, the docker container object.
+    :param command: list, the command to run.
+    :return: tuple of (exit_code, output, string_output).
+    """
+
+    # Run the command inside the already running container
+    exec_result = container.exec_run(cmd=command, stdout=True, stderr=True)
+    # Capture logs
+    output_text = exec_result.output.decode("utf-8", errors="replace")
+    execution_result_message: str = str()
+    if output_text:
+        execution_result_message = f"Container execution result:\n{output_text}"
+
+    if exec_result.exit_code != 0:
+        # logging.warning(f"Extraction command returned code {exec_result.exit_code} for '{filename}'")
+        code_message = f"Extraction command returned code {exec_result.exit_code}"
+    else:
+        code_message = "Extraction succeeded"
+
+    if execution_result_message:
+        execution_result_message += f"\n{code_message}"
+    else:
+        execution_result_message = code_message
+
+    return exec_result.exit_code, exec_result.output, execution_result_message
