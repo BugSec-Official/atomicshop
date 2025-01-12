@@ -120,7 +120,7 @@ def set_folder_permissions(
     # Handle non_sudo_user case
     if logged_in_non_sudo_user:
         # Get the current logged-in user
-        username = os.getlogin()
+        username = pwd.getpwuid(os.getuid())[0]
 
     # Get the UID and GID of the specified user
     user_info = pwd.getpwnam(username)

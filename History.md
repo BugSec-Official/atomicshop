@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.18.27 - 12.01.2025
+  * permissions/ubuntu_permissions - fixes and improvements.
 * 2.18.26 - 09.01.2025
   * wrappers/dockerw/dockerw - fixes and improvements.
 * 2.18.25 - 07.01.2025
