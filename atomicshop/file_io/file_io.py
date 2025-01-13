@@ -1,5 +1,6 @@
 from typing import Union
 import functools
+import os
 
 from .. import print_api
 from .. import inspect_wrapper
@@ -23,7 +24,7 @@ def write_file_decorator(function_name):
         print_api.print_api(message=f"Writing file: {kwargs['file_path']}", **kwargs)
 
         enable_long_file_path = kwargs.get('enable_long_file_path', False)
-        if enable_long_file_path:
+        if enable_long_file_path and os.name == 'nt':
             # A simpler string method would be to add '\\?\' to the beginning of the file path.
             # kwargs['file_path'] = rf"\\?\{kwargs['file_path']}"
 

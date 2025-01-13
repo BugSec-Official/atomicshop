@@ -133,3 +133,52 @@ def is_dict_json_serializable(
             raise e
         else:
             return False, str(e)
+
+
+def append_to_json(
+        dict_or_list: Union[dict, list],
+        json_file_path: str,
+        indent=None,
+        use_default_indent=False,
+        enable_long_file_path=False,
+        print_kwargs: dict = None
+) -> None:
+    """
+    Append dictionary or list of dictionaries to json file.
+
+    :param dict_or_list: dictionary or list of dictionaries to append.
+    :param json_file_path: full file path to the json file.
+    :param indent: integer number of spaces for indentation.
+        If 'ident=0' new lines still will be created. The most compact is 'indent=None' (from documentation)
+        So, using default as 'None' and not something else.
+    :param use_default_indent: boolean. Default indent for 'json' format in many places is '2'. So, if you don't want
+        to set 'indent=2', just set this to 'True'.
+    :param enable_long_file_path: Boolean, by default Windows has a limit of 260 characters for file path. If True,
+        the long file path will be enabled, and the limit will be 32,767 characters.
+    :param print_kwargs: dict, the print_api arguments.
+    :return:
+    """
+
+    # Read existing data from the file
+    try:
+        with open(json_file_path, 'r') as f:
+            current_json_file = json.load(f)
+    except FileNotFoundError:
+        current_json_file: list = []
+
+    # Append the new message to the existing data
+    final_json_list_of_dicts: list[dict] = []
+    if isinstance(current_json_file, list):
+        current_json_file.append(dict_or_list)
+        final_json_list_of_dicts = current_json_file
+    elif isinstance(current_json_file, dict):
+        final_json_list_of_dicts.append(current_json_file)
+        final_json_list_of_dicts.append(dict_or_list)
+    else:
+        error_message = "The current file is neither a list nor a dictionary."
+        raise TypeError(error_message)
+
+    # Write the data back to the file
+    write_json_file(
+        final_json_list_of_dicts, json_file_path, indent=indent, use_default_indent=use_default_indent,
+        enable_long_file_path=enable_long_file_path, **print_kwargs)

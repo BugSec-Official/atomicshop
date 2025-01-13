@@ -113,30 +113,14 @@ def save_message_worker(
         if record_message_dict is None:
             break
 
-        # Read existing data from the file
         try:
-            with open(record_file_path, 'r') as f:
-                current_json_file = json.load(f)
-        except FileNotFoundError:
-            current_json_file: list = []
-
-        # Append the new message to the existing data
-        final_json_list_of_dicts: list[dict] = []
-        if isinstance(current_json_file, list):
-            current_json_file.append(record_message_dict)
-            final_json_list_of_dicts = current_json_file
-        elif isinstance(current_json_file, dict):
-            final_json_list_of_dicts.append(current_json_file)
-            final_json_list_of_dicts.append(record_message_dict)
-        else:
-            error_message = "The current file is neither a list nor a dictionary."
-            print_api(error_message, logger_method="critical", logger=logger)
-            raise TypeError(error_message)
-
-        # Write the data back to the file
-        jsons.write_json_file(
-            final_json_list_of_dicts, record_file_path, indent=2,
-            enable_long_file_path=True, **{'logger': logger})
+            jsons.append_to_json(
+                record_message_dict, record_file_path, indent=2,
+                enable_long_file_path=True, print_kwargs={'logger': logger}
+            )
+        except TypeError as e:
+            print_api(str(e), logger_method="critical", logger=logger)
+            raise e
 
         logger.info(f"Recorded to file: {record_file_path}")
 

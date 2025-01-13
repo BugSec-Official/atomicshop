@@ -1,4 +1,3 @@
-# v1.0.3 - 01.04.2021 - 15:30
 import os
 import datetime
 import tempfile
