@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.18.28 - 13.01.2025
+  * file_io, mitm/engines/__parent/recorder___parent - fixes and improvements.
 * 2.18.27 - 12.01.2025
   * permissions/ubuntu_permissions - fixes and improvements.
 * 2.18.26 - 09.01.2025
