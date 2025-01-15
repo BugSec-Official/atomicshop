@@ -1716,9 +1716,7 @@ def create_ubuntu_desktop_shortcut(
 ):
     """
     Create a desktop shortcut on Ubuntu.
-
     Either file_path or command must be specified.
-    If command is specified, working_directory must be specified.
 
     :param file_path: string, The file_path to execute when the shortcut is clicked.
         Example2: '/path/to/script.sh'
@@ -1745,15 +1743,13 @@ def create_ubuntu_desktop_shortcut(
         raise ValueError("Either 'file_path' or 'command' must be specified.")
     if command and file_path:
         raise ValueError("Only one of 'file_path' or 'command' can be specified.")
-    if command and not working_directory:
-        raise ValueError("Working directory must be specified if 'command' is specified.")
 
     from .permissions import ubuntu_permissions
 
     # Get the user's directory.
     desktop_dir = os.path.expanduser("~/Desktop")
 
-    if not working_directory:
+    if not working_directory and file_path:
         working_directory = os.path.dirname(file_path)
 
     if not shortcut_name:
@@ -1769,7 +1765,7 @@ def create_ubuntu_desktop_shortcut(
         "Type=Application",
         f"Name={shortcut_name}",
         f"Exec={file_path}",
-        f"Path={working_directory}",
+        f"Path={working_directory}" if working_directory else "",
         f"Icon={icon_path}" if icon_path else "",
         f"Terminal={'true' if terminal else 'false'}",
         f"Comment={comment}",
