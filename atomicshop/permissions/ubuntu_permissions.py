@@ -33,6 +33,48 @@ def set_executable(file_path: str):
     os.chmod(file_path, os.stat(file_path).st_mode | stat.S_IXUSR)
 
 
+def set_trusted_executable(file_path: str):
+    """
+    Function sets the executable permission on a file and marks it as trusted.
+    :param file_path: str, path to the file.
+    :return:
+    """
+
+    # Check if the file exists
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"The file does not exist: {file_path} ")
+
+    # Execute the `gio set` command
+    subprocess.run(
+        ["gio", "set", file_path, "metadata::trusted", "true"],
+        check=True
+    )
+
+
+def set_xfce_exe_checksum(desktop_file_path):
+    # Expand `~` to the full home directory path
+    desktop_file_path = os.path.expanduser(desktop_file_path)
+
+    # Ensure the file exists
+    if not os.path.exists(desktop_file_path):
+        raise FileNotFoundError(f"The file does not exist: {desktop_file_path} ")
+
+    # Calculate the SHA256 checksum of the file
+    result = subprocess.run(
+        ["sha256sum", desktop_file_path],
+        stdout=subprocess.PIPE,
+        check=True,
+        text=True
+    )
+    checksum = result.stdout.split()[0]
+
+    # Set the metadata::xfce-exe-checksum attribute using `gio`
+    subprocess.run(
+        ["gio", "set", "-t", "string", desktop_file_path, "metadata::xfce-exe-checksum", checksum],
+        check=True
+    )
+
+
 def change_file_owner(file_path: str, username: str):
     """
     Function changes the owner of the file to the specified user.

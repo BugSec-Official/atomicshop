@@ -329,6 +329,30 @@ def remove_directory(directory_path: str, force_readonly: bool = False, print_kw
         return False
 
 
+def clear_directory(directory: str) -> tuple[list[str], list[str]]:
+    """
+    The function will clear the directory of all files and subdirectories.
+    :param directory:
+    :return: tuple of lists of removed file paths and removed directory paths.
+    """
+
+    file_paths: list = []
+    directory_paths: list = []
+    # Iterate through all files and subdirectories in the directory
+    for item in os.listdir(directory):
+        item_path = os.path.join(directory, item)
+        # If it's a file, remove it
+        if os.path.isfile(item_path) or os.path.islink(item_path):  # Handle symbolic links too
+            os.remove(item_path)
+            file_paths.append(item_path)
+        # If it's a directory, remove it and its contents
+        elif os.path.isdir(item_path):
+            shutil.rmtree(item_path)
+            directory_paths.append(item_path)
+
+    return file_paths, directory_paths
+
+
 def remove_empty_directories(directory_path: str) -> list[str]:
     """
     Recursively removes empty directories in the given path, including the given path if it is empty.
@@ -675,12 +699,12 @@ def move_folder_contents_to_folder(
 
         if os.path.isdir(s):
             if os.path.exists(d) and not overwrite:
-                print(f"Directory {d} already exists. Skipping due to overwrite=False.")
+                raise FileExistsError(f"Directory already exists: {d}. Skipping due to overwrite=False.")
             else:
                 shutil.move(s, d)
         else:
             if os.path.exists(d) and not overwrite:
-                print(f"File {d} already exists. Skipping due to overwrite=False.")
+                raise FileExistsError(f"File {d} already exists. Skipping due to overwrite=False.")
             else:
                 shutil.move(s, d)
 
@@ -1675,3 +1699,88 @@ def find_file(file_name: str, directory_path: str):
             if filename == file_name:
                 return os.path.join(dir_path, filename)
     return None
+
+
+def create_ubuntu_desktop_shortcut(
+        file_path: str = None,
+        shortcut_name: str = None,
+        command: str = None,
+        working_directory: str = None,
+        icon_path: str = None,
+        terminal: bool = False,
+        comment: str = "Shortcut to execute the Python script",
+        categories: str = "Utility",
+        set_executable: bool = False,
+        set_xfce_exe_checksum: bool = False
+):
+    """
+    Create a desktop shortcut on Ubuntu.
+
+    Either file_path or command must be specified.
+    If command is specified, working_directory must be specified.
+
+    :param file_path: string, The file_path to execute when the shortcut is clicked.
+        Example2: '/path/to/script.sh'
+    :param shortcut_name: string, The name of the shortcut.
+        Example: 'My Python Script'
+        Result: 'My Python Script.desktop'
+    :param command: string, The command to execute when the shortcut is clicked.
+        Example: 'python3 /path/to/script.py'
+    :param working_directory: string, The working directory for the command.
+        If None, the command will be executed in the same script's directory.
+    :param icon_path: string, The path to the icon file.
+    :param terminal: boolean, If True, the command will be executed in a terminal.
+    :param comment: string, A comment to describe the shortcut.
+    :param categories: string, The categories of the shortcut.
+    :param set_executable: boolean, If True, the shortcut will be made executable.
+    :param set_xfce_exe_checksum: boolean, If True, the shortcut will be made safe executable for XFCE.
+
+    :return: None
+    """
+
+    if not file_path and not command:
+        raise ValueError("Either 'file_path' or 'command' must be specified.")
+    if command and file_path:
+        raise ValueError("Only one of 'file_path' or 'command' can be specified.")
+    if command and not working_directory:
+        raise ValueError("Working directory must be specified if 'command' is specified.")
+
+    from .permissions import ubuntu_permissions
+
+    # Get the user's directory.
+    desktop_dir = os.path.expanduser("~/Desktop")
+
+    # Full path to the .desktop file
+    shortcut_path = os.path.join(desktop_dir, f"{shortcut_name}.desktop")
+
+    if not working_directory:
+        working_directory = os.path.dirname(file_path)
+
+    if not shortcut_name:
+        shortcut_name: str = Path(file_path).stem
+
+    # Generate the content for the .desktop file
+    desktop_entry = [
+        "[Desktop Entry]",
+        "Version=1.0",
+        "Type=Application",
+        f"Name={shortcut_name}",
+        f"Exec={file_path}",
+        f"Path={working_directory}",
+        f"Icon={icon_path}" if icon_path else "",
+        f"Terminal={'true' if terminal else 'false'}",
+        f"Comment={comment}",
+        f"Categories={categories};",
+    ]
+
+    # Write the .desktop file
+    with open(shortcut_path, "w") as shortcut_file:
+        shortcut_file.write("\n".join(line for line in desktop_entry if line))  # Skip empty lines
+
+    # Make the .desktop file executable
+    if set_executable:
+        ubuntu_permissions.set_executable(shortcut_path)
+
+    # Make the .desktop file safe executable for XFCE
+    if set_xfce_exe_checksum:
+        ubuntu_permissions.set_xfce_exe_checksum(shortcut_path)

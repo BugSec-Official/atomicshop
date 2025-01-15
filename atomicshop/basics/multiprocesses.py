@@ -125,8 +125,8 @@ class MultiProcessorRecursive:
                         result = async_result.get()
                         # Assuming process_function returns a list, extend new_input_list
                         new_input_list.extend(result)
-                    except Exception as e:
-                        print(f"An error occurred: {e}")
+                    except Exception:
+                        raise
 
                 # Update the input_list for the next iteration
                 self.input_list = new_input_list
