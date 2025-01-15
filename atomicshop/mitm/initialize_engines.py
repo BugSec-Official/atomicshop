@@ -53,9 +53,9 @@ class ModuleCategory:
             raise ValueError(f"Engine Configuration file doesn't contain any domains: {engine_config_file_path}")
 
         # Full path to file
-        self.parser_file_path = f'{engine_directory_path}{os.sep}{configuration_data['parser_file']}'
-        self.responder_file_path = f'{engine_directory_path}{os.sep}{configuration_data['responder_file']}'
-        self.recorder_file_path = f'{engine_directory_path}{os.sep}{configuration_data['recorder_file']}'
+        self.parser_file_path = f"{engine_directory_path}{os.sep}{configuration_data['parser_file']}"
+        self.responder_file_path = f"{engine_directory_path}{os.sep}{configuration_data['responder_file']}"
+        self.recorder_file_path = f"{engine_directory_path}{os.sep}{configuration_data['recorder_file']}"
 
         for subdomain, file_name in self.mtls.items():
             self.mtls[subdomain] = f'{engine_directory_path}{os.sep}{file_name}'
