@@ -1743,6 +1743,8 @@ def create_ubuntu_desktop_shortcut(
         raise ValueError("Either 'file_path' or 'command' must be specified.")
     if command and file_path:
         raise ValueError("Only one of 'file_path' or 'command' can be specified.")
+    if command and not shortcut_name:
+        raise ValueError("The 'shortcut_name' must be specified when 'command' is used.")
 
     from .permissions import ubuntu_permissions
 
@@ -1755,6 +1757,13 @@ def create_ubuntu_desktop_shortcut(
     if not shortcut_name:
         shortcut_name: str = Path(file_path).stem
 
+    if command:
+        executable: str = command
+    elif file_path:
+        executable: str = file_path
+    else:
+        raise ValueError("Either 'file_path' or 'command' must be specified.")
+
     # Full path to the .desktop file
     shortcut_path = os.path.join(desktop_dir, f"{shortcut_name}.desktop")
 
@@ -1764,7 +1773,7 @@ def create_ubuntu_desktop_shortcut(
         "Version=1.0",
         "Type=Application",
         f"Name={shortcut_name}",
-        f"Exec={file_path}",
+        f"Exec={executable}",
         f"Path={working_directory}" if working_directory else "",
         f"Icon={icon_path}" if icon_path else "",
         f"Terminal={'true' if terminal else 'false'}",
