@@ -1711,6 +1711,7 @@ def create_ubuntu_desktop_shortcut(
         comment: str = "Shortcut to execute the Python script",
         categories: str = "Utility",
         set_executable: bool = False,
+        set_trusted: bool = False,
         set_xfce_exe_checksum: bool = False
 ):
     """
@@ -1733,6 +1734,8 @@ def create_ubuntu_desktop_shortcut(
     :param comment: string, A comment to describe the shortcut.
     :param categories: string, The categories of the shortcut.
     :param set_executable: boolean, If True, the shortcut will be made executable.
+    :param set_trusted: boolean, If True, the shortcut will be marked as trusted.
+        This is needed for GNOME.
     :param set_xfce_exe_checksum: boolean, If True, the shortcut will be made safe executable for XFCE.
 
     :return: None
@@ -1750,14 +1753,14 @@ def create_ubuntu_desktop_shortcut(
     # Get the user's directory.
     desktop_dir = os.path.expanduser("~/Desktop")
 
-    # Full path to the .desktop file
-    shortcut_path = os.path.join(desktop_dir, f"{shortcut_name}.desktop")
-
     if not working_directory:
         working_directory = os.path.dirname(file_path)
 
     if not shortcut_name:
         shortcut_name: str = Path(file_path).stem
+
+    # Full path to the .desktop file
+    shortcut_path = os.path.join(desktop_dir, f"{shortcut_name}.desktop")
 
     # Generate the content for the .desktop file
     desktop_entry = [
@@ -1780,6 +1783,10 @@ def create_ubuntu_desktop_shortcut(
     # Make the .desktop file executable
     if set_executable:
         ubuntu_permissions.set_executable(shortcut_path)
+
+    # Mark the .desktop file as trusted
+    if set_trusted:
+        ubuntu_permissions.set_trusted_executable(shortcut_path)
 
     # Make the .desktop file safe executable for XFCE
     if set_xfce_exe_checksum:
