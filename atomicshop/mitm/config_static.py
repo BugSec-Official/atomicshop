@@ -4,12 +4,6 @@ from dataclasses import dataclass
 from . import import_config
 
 
-SCRIPT_VERSION: str = '1.7.8'
-"""
-added ca cert check and installation
-"""
-
-
 # CONFIG = None
 LIST_OF_BOOLEANS: list = [
     ('dns', 'enable'),

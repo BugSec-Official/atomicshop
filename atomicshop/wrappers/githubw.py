@@ -3,6 +3,14 @@ import fnmatch
 
 from .. import web, urls
 from ..print_api import print_api
+from ..basics import strings
+
+
+class MoreThanOneReleaseFoundError(Exception):
+    pass
+
+class NoReleaseFoundError(Exception):
+    pass
 
 
 class GitHubWrapper:
@@ -174,16 +182,19 @@ class GitHubWrapper:
                     download_urls.remove(download_url)
 
         # Find urls against 'string_pattern'.
-        found_urls = fnmatch.filter(download_urls, string_pattern)
+        found_urls: list = fnmatch.filter(download_urls, string_pattern)
 
         # If more than 1 url answer the criteria, we can't download it. The user must be more specific in his input
         # strings.
         if len(found_urls) > 1:
             message = f'More than 1 result found in JSON response, try changing search string or extension.\n' \
                       f'{found_urls}'
-            print_api(message, color="red", error_type=True, **kwargs)
-
-        return found_urls[0]
+            raise MoreThanOneReleaseFoundError(message)
+        elif len(found_urls) == 0:
+            message = f'No result found in JSON response, try changing search string or extension.'
+            raise NoReleaseFoundError(message)
+        else:
+            return found_urls[0]
 
     def download_latest_release(
             self,

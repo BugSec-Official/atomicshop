@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.19.0 - 17.01.2025
+  * mitm, wrappers/githubw - fixes and improvements.
+  * a_installs/win/robocorp - initial release.
 * 2.18.34 - 15.01.2025
   * filesystem - fixes and improvements.
 * 2.18.33 - 15.01.2025

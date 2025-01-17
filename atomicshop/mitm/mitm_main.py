@@ -59,7 +59,7 @@ def exit_cleanup():
         RECS_PROCESS_INSTANCE.join()
 
 
-def mitm_server(config_file_path: str):
+def mitm_server(config_file_path: str, script_version: str):
     on_exit.register_exit_handler(exit_cleanup, at_exit=False)
 
     # Main function should return integer with error code, 0 is successful.
@@ -109,7 +109,7 @@ def mitm_server(config_file_path: str):
     system_logger.info("======================================")
     system_logger.info("Server Started.")
     system_logger.info(f"Python Version: {get_current_python_version_string()}")
-    system_logger.info(f"Script Version: {config_static.SCRIPT_VERSION}")
+    system_logger.info(f"Script Version: {script_version}")
     system_logger.info(f"Atomic Workshop Version: {atomicshop.__version__}")
     system_logger.info(f"Log folder: {config_static.LogRec.logs_path}")
     if config_static.LogRec.enable_request_response_recordings_in_logs:
@@ -411,10 +411,10 @@ def _loop_at_midnight_recs_archive():
         time.sleep(60)
 
 
-def mitm_server_main(config_file_path: str):
+def mitm_server_main(config_file_path: str, script_version: str):
     try:
         # Main function should return integer with error code, 0 is successful.
-        return mitm_server(config_file_path)
+        return mitm_server(config_file_path, script_version)
     except KeyboardInterrupt:
         print_api.print_api("Server Stopped by [KeyboardInterrupt].", color='blue')
         exit_cleanup()
