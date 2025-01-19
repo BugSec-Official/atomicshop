@@ -52,7 +52,7 @@ class MultiProcessorRecursive:
         :param process_function: function, function to execute on the input list.
         :param input_list: list, list of inputs to process.
         :param max_workers: integer, number of workers to execute functions in parallel. Default is None, which
-            is the number of CPUs.
+            is the number of CPUs that will be counted automatically by the multiprocessing module.
         :param cpu_percent_max: integer, maximum CPU percentage. Above that usage, we will wait before starting new
             execution.
         :param memory_percent_max: integer, maximum memory percentage. Above that usage, we will wait, before starting
@@ -65,7 +65,7 @@ class MultiProcessorRecursive:
             If this is used, the system resources will be checked before starting each new execution from this
             shared dict instead of performing new checks.
 
-        Usage:
+        Usage Examples:
             def unpack_file(file_path):
                 # Process the file at file_path and unpack it.
                 # Return a list of new file paths that were extracted from the provided path.
@@ -74,19 +74,68 @@ class MultiProcessorRecursive:
             # List of file paths to process
             file_paths = ["path1", "path2", "path3"]
 
-            # Create an instance of MultiProcessor
-            # Note: unpacking.unpack_file is passed without parentheses
-            processor = MultiProcessor(
-                process_function=unpack_file,
-                input_list=file_paths,
-                max_workers=4,  # Number of parallel workers
-                cpu_percent_max=80,  # Max CPU usage percentage
-                memory_percent_max=80,  # Max memory usage percentage
-                wait_time=5  # Time to wait if resources are overused
-            )
+            # Note: unpack_file Callable is passed to init without parentheses.
 
-            # Run the processing
-            processor.run_process()
+            1. Providing the list directly to process at once:
+                # Initialize the processor.
+                processor = MultiProcessor(
+                    process_function=unpack_file,
+                    input_list=file_paths,
+                    max_workers=4,  # Number of parallel workers
+                    cpu_percent_max=80,  # Max CPU usage percentage
+                    memory_percent_max=80,  # Max memory usage percentage
+                    wait_time=5  # Time to wait if resources are overused
+                )
+
+                # Process the list of files at once.
+                processor.run_process()
+                # Shutdown the pool processes after processing.
+                processor.shutdown_pool()
+
+            2. Processing each file in the list differently then adding to the list of the multiprocessing instance then executing.
+                # Initialize the processor once, before the loop, with empty input_list.
+                processor = MultiProcessor(
+                    process_function=unpack_file,
+                    input_list=[],
+                    max_workers=4,  # Number of parallel workers
+                    cpu_percent_max=80,  # Max CPU usage percentage
+                    memory_percent_max=80,  # Max memory usage percentage
+                    wait_time=5  # Time to wait if resources are overused
+                )
+
+                for file_path in file_paths:
+                    # <Process each file>.
+                    # Add the result to the input_list of the processor.
+                    processor.input_list.append(file_path)
+
+                # Process the list of files at once.
+                processor.run_process()
+                # Shutdown the pool processes after processing.
+                processor.shutdown_pool()
+
+            3. Processing each file in the list separately, since we're using an unpacking function that
+               will create more files, but the context for this operation is different for extraction
+               of each main file inside the list:
+
+                # Initialize the processor once, before the loop, with empty input_list.
+                processor = MultiProcessor(
+                    process_function=unpack_file,
+                    input_list=[],
+                    max_workers=4,  # Number of parallel workers
+                    cpu_percent_max=80,  # Max CPU usage percentage
+                    memory_percent_max=80,  # Max memory usage percentage
+                    wait_time=5  # Time to wait if resources are overused
+                )
+
+                for file_path in file_paths:
+                    # <Process each file>.
+                    # Add the result to the input_list of the processor.
+                    processor.input_list.append(file_path)
+                    # Process the added file path separately.
+                    processor.run_process()
+
+                # Shutdown the pool processes after processing.
+                processor.shutdown_pool()
         """
 
         self.process_function = process_function
@@ -97,41 +146,57 @@ class MultiProcessorRecursive:
         self.wait_time: float = wait_time
         self.system_monitor_manager_dict: multiprocessing.managers.DictProxy = system_monitor_manager_dict
 
+        # Create the pool once and reuse it
+        self.pool: multiprocessing.Pool = multiprocessing.Pool(processes=self.max_workers)
+
+        # Keep track of outstanding async results across calls
+        self.async_results: list = []
+
     def run_process(self):
-        with multiprocessing.Pool(processes=self.max_workers) as pool:
-            # Keep track of the async results
-            async_results = []
+        # This method can be called multiple times to add new tasks without creating a new pool
+        if not self.input_list:
+            return  # Nothing to process
 
-            while self.input_list:
-                new_input_list = []
-                for item in self.input_list:
-                    # Check system resources before processing each item
-                    system_resources.wait_for_resource_availability(
-                        cpu_percent_max=self.cpu_percent_max,
-                        memory_percent_max=self.memory_percent_max,
-                        wait_time=self.wait_time,
-                        system_monitor_manager_dict=self.system_monitor_manager_dict)
+        new_input_list = []
 
-                    # Process the item
-                    async_result = pool.apply_async(self.process_function, (item,))
-                    async_results.append(async_result)
+        for item in self.input_list:
+            # Check system resources before scheduling each item
+            system_resources.wait_for_resource_availability(
+                cpu_percent_max=self.cpu_percent_max,
+                memory_percent_max=self.memory_percent_max,
+                wait_time=self.wait_time,
+                system_monitor_manager_dict=self.system_monitor_manager_dict
+            )
 
-                # Reset input_list for next round of processing
-                self.input_list = []
+            # Schedule the task on the existing pool
+            async_result = self.pool.apply_async(self.process_function, (item,))
+            self.async_results.append(async_result)
 
-                # Collect results as they complete
-                for async_result in async_results:
-                    try:
-                        result = async_result.get()
-                        # Assuming process_function returns a list, extend new_input_list
-                        new_input_list.extend(result)
-                    except Exception:
-                        raise
+        # Clear the input_list now that tasks are scheduled
+        self.input_list = []
 
-                # Update the input_list for the next iteration
-                self.input_list = new_input_list
-                # Clear the async_results for the next iteration
-                async_results.clear()
+        # Collect results for the tasks that were scheduled
+        for async_result in self.async_results:
+            try:
+                result = async_result.get()  # Blocking wait for result
+                # Assuming process_function returns a list, extend new_input_list
+                new_input_list.extend(result)
+            except Exception as e:
+                # Handle exceptions as needed
+                raise e
+
+        # Clear collected async results since they've been processed
+        self.async_results.clear()
+
+        # Update input_list with new files (if any) for further processing
+        self.input_list = new_input_list
+
+    def shutdown_pool(self):
+        """Shuts down the pool gracefully."""
+        if self.pool:
+            self.pool.close()  # Stop accepting new tasks
+            self.pool.join()  # Wait for all tasks to complete
+            self.pool = None
 
 
 class ConcurrentProcessorRecursive:

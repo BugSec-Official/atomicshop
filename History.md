@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.19.1 - 19.01.2025
+  * basics/multiprocesses - fixes and improvements.
 * 2.19.0 - 17.01.2025
   * mitm, wrappers/githubw - fixes and improvements.
   * a_installs/win/robocorp - initial release.
