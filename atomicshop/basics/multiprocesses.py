@@ -3,6 +3,7 @@ import multiprocessing.managers
 import queue
 import concurrent.futures
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from typing import Callable
 
 from ..import system_resources
 
@@ -38,7 +39,7 @@ def process_wrap_queue(function_reference, *args, **kwargs):
 class MultiProcessorRecursive:
     def __init__(
             self,
-            process_function,
+            process_function: Callable,
             input_list: list,
             max_workers: int = None,
             cpu_percent_max: int = 80,
@@ -138,7 +139,7 @@ class MultiProcessorRecursive:
                 processor.shutdown_pool()
         """
 
-        self.process_function = process_function
+        self.process_function: Callable = process_function
         self.input_list: list = input_list
         self.max_workers: int = max_workers
         self.cpu_percent_max: int = cpu_percent_max
@@ -153,43 +154,36 @@ class MultiProcessorRecursive:
         self.async_results: list = []
 
     def run_process(self):
-        # This method can be called multiple times to add new tasks without creating a new pool
-        if not self.input_list:
-            return  # Nothing to process
+        while self.input_list:
+            new_input_list = []
+            for item in self.input_list:
+                # Check system resources before processing each item
+                system_resources.wait_for_resource_availability(
+                    cpu_percent_max=self.cpu_percent_max,
+                    memory_percent_max=self.memory_percent_max,
+                    wait_time=self.wait_time,
+                    system_monitor_manager_dict=self.system_monitor_manager_dict)
 
-        new_input_list = []
+                # Process the item
+                async_result = self.pool.apply_async(self.process_function, (item,))
+                self.async_results.append(async_result)
 
-        for item in self.input_list:
-            # Check system resources before scheduling each item
-            system_resources.wait_for_resource_availability(
-                cpu_percent_max=self.cpu_percent_max,
-                memory_percent_max=self.memory_percent_max,
-                wait_time=self.wait_time,
-                system_monitor_manager_dict=self.system_monitor_manager_dict
-            )
+            # Reset input_list for next round of processing
+            self.input_list = []
 
-            # Schedule the task on the existing pool
-            async_result = self.pool.apply_async(self.process_function, (item,))
-            self.async_results.append(async_result)
+            # Collect results as they complete
+            for async_result in self.async_results:
+                try:
+                    result = async_result.get()
+                    # Assuming process_function returns a list, extend new_input_list
+                    new_input_list.extend(result)
+                except Exception:
+                    raise
 
-        # Clear the input_list now that tasks are scheduled
-        self.input_list = []
-
-        # Collect results for the tasks that were scheduled
-        for async_result in self.async_results:
-            try:
-                result = async_result.get()  # Blocking wait for result
-                # Assuming process_function returns a list, extend new_input_list
-                new_input_list.extend(result)
-            except Exception as e:
-                # Handle exceptions as needed
-                raise e
-
-        # Clear collected async results since they've been processed
-        self.async_results.clear()
-
-        # Update input_list with new files (if any) for further processing
-        self.input_list = new_input_list
+            # Update the input_list for the next iteration
+            self.input_list = new_input_list
+            # Clear the async_results for the next iteration
+            self.async_results.clear()
 
     def shutdown_pool(self):
         """Shuts down the pool gracefully."""
