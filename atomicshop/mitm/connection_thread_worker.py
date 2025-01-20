@@ -247,7 +247,7 @@ def thread_worker_main(
         if error_string:
             client_message.errors.append(error_string)
 
-        if client_received_raw_data == b'':
+        if client_received_raw_data == b'' or client_received_raw_data is None:
             return
 
         client_message.request_auto_parsed = parse_http(client_message.request_raw_bytes, client_message)
@@ -278,7 +278,7 @@ def thread_worker_main(
         if error_string:
             client_message.errors.append(error_string)
 
-        if service_received_raw_data == b'':
+        if service_received_raw_data == b'' or service_received_raw_data is None:
             return
 
         client_message.response_auto_parsed = parse_http(client_message.response_raw_bytes, client_message)
