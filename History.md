@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.19.5 - 21.01.2025
+  * a_installs/win/robocorp, wrappers/nodejsw/install_nodejs_ubuntu - fixes and improvements.
+  * a_installs/ubuntu/nodejs, a_installs/win/nodejs, wrappers/nodejsw/install_nodejs_windows - initial release.
 * 2.19.4 - 21.01.2025
   * mitm/mitm_main, wrappers/pywin32w/cert_store, wrappers/socketw/socket_wrapper - fixes and improvements.
 * 2.19.3 - 20.01.2025

@@ -1,5 +1,6 @@
 import subprocess
 import requests
+import argparse
 
 from ...basics import booleans
 from .. import githubw, ubuntu_terminal
@@ -119,6 +120,46 @@ def install_nodejs_ubuntu(
 
     # Check if Node.js is installed.
     is_nodejs_installed()
+
+
+def install_nodejs_main():
+    """
+    The function will install Node.js on Ubuntu.
+    :return:
+    """
+
+    # Create the parser.
+    parser = argparse.ArgumentParser(description="Install Node.js on Ubuntu.")
+    parser.add_argument(
+        '--latest',
+        action='store_true',
+        help="Install the latest version of Node.js."
+    )
+    parser.add_argument(
+        '--lts',
+        action='store_true',
+        help="Install the LTS version of Node.js."
+    )
+    parser.add_argument(
+        '--version',
+        type=str,
+        help="Install a specific version of Node.js."
+    )
+    parser.add_argument(
+        '--force',
+        action='store_true',
+        help="Force the installation of Node.js."
+    )
+
+    # Parse the arguments.
+    args = parser.parse_args()
+
+    install_nodejs_ubuntu(
+        install_latest_version=args.latest,
+        install_lts=args.lts,
+        install_by_version_number=args.version,
+        force_install=args.force
+    )
 
 
 def install_npm_package_ubuntu(package_name: str, sudo: bool = True):
