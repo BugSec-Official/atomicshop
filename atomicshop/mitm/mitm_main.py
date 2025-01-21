@@ -420,6 +420,7 @@ def mitm_server_main(config_file_path: str, script_version: str):
         exit_cleanup()
         return 0
     except Exception as e:
+        print_api.print_api('', error_type=True, color='red', traceback_string=True)
         # The error logger will not be initiated if there will be a problem with configuration file or checks.
         if MITM_ERROR_LOGGER is not None:
             MITM_ERROR_LOGGER.write(e)

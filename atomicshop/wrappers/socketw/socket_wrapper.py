@@ -298,7 +298,7 @@ class SocketWrapper:
             # Check file existence.
             if not filesystem.is_file_exists(file_path=self.custom_server_certificate_path):
                 message = f"File not found: {self.custom_server_certificate_path}"
-                print_api(message, color='red')
+                print_api(message, color='red', logger=self.logger)
                 return 1
 
             # And if 'custom_private_key_path' field was populated in [advanced] section, we'll check its existence.
@@ -306,7 +306,7 @@ class SocketWrapper:
                 # Check private key file existence.
                 if not filesystem.is_file_exists(file_path=self.custom_private_key_path):
                     message = f"File not found: {self.custom_private_key_path}"
-                    print_api(message, color='red')
+                    print_api(message, color='red', logger=self.logger)
                     return 1
 
         port_in_use = networks.get_processes_using_port_list(self.listening_port_list)
@@ -345,6 +345,8 @@ class SocketWrapper:
                     issuer_name=self.ca_certificate_name)
                 # If there is more than one certificate with the same name, delete them all.
                 if is_installed_by_name and len(certificate_list_by_name) > 1:
+                    message = f"More than one certificate with the same issuer name is installed. Removing all..."
+                    print_api(message, color='yellow', logger=self.logger)
                     certificates.delete_certificate_by_issuer_name(self.ca_certificate_name)
                 # If there is only one certificate with the same name, check if it is the same certificate.
                 elif is_installed_by_name and len(certificate_list_by_name) == 1:
@@ -355,6 +357,10 @@ class SocketWrapper:
                         if not permissions.is_admin():
                             raise SocketWrapperConfigurationValuesError(
                                 "You need to run the script with admin rights to uninstall the unused certificates.")
+                        message = (
+                            f"Certificate with the same issuer name is installed, but it is not the same certificate. "
+                            f"Removing...")
+                        print_api(message, color='yellow', logger=self.logger)
                         certificates.delete_certificate_by_issuer_name(
                             self.ca_certificate_name, store_location="ROOT", print_kwargs={'logger': self.logger})
 
@@ -367,7 +373,8 @@ class SocketWrapper:
                         raise SocketWrapperConfigurationValuesError(
                             "You need to run the script with admin rights to install the CA certificate.")
                     certificates.install_certificate_file(
-                        self.ca_certificate_filepath, store_location="ROOT", print_kwargs={'logger': self.logger})
+                        self.ca_certificate_filepath, store_location="ROOT",
+                        print_kwargs={'logger': self.logger, 'color': 'blue'})
 
     # Creating listening sockets.
     def create_socket_ipv4_tcp(self, ip_address: str, port: int):

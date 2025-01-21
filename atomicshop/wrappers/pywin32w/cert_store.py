@@ -41,17 +41,44 @@ def delete_certificate_by_issuer_name(
     :param print_kwargs: dict, print_api kwargs.
     """
 
-    store = wcrypt.CertOpenStore(
-        CERT_STORE_PROV_SYSTEM, 0, None, STORE_LOCATION_TO_CERT_SYSTEM_STORE[store_location], store_location)
+    """
+    WinAPI doesn't like to do 2 actions in one iteration. So, first we will collect all certificates to remove,
+    and in the second iteration remove them.
+    
+    Full Explanation:
+    When you iterate with for cert in store.CertEnumCertificatesInStore(): and call 
+    cert.CertDeleteCertificateFromStore() inside that loop, you’re modifying the underlying certificate store 
+    while its internal enumeration is still active. This can lead to a segmentation fault (access violation 0xC0000005).
+    By collecting the certificates in the first pass, you freeze the iteration so the store 
+    doesn’t get mutated mid-enumeration.
+    In the second pass, when you actually remove them, you’re no longer in the middle of enumerating. 
+    This prevents the store’s pointer from becoming invalid.
+    
+    This approach should stop the Process finished with exit code -1073741819 (0xC0000005) issue.
+    """
 
+    store = wcrypt.CertOpenStore(
+        CERT_STORE_PROV_SYSTEM,
+        0,
+        None,
+        STORE_LOCATION_TO_CERT_SYSTEM_STORE[store_location],
+        store_location
+    )
+
+    # Collect all matching certificates in a list
+    certs_to_remove = []
     for cert in store.CertEnumCertificatesInStore():
         # Certificate properties.
         # cert.CertEnumCertificateContextProperties()
         subject_string: str = wcrypt.CertNameToStr(cert.Subject)
         if subject_string == issuer_name:
             # Remove the certificate.
-            cert.CertDeleteCertificateFromStore()
-            print_api(f"Removed the Certificate with issuer: {issuer_name}", **(print_kwargs or {}))
+            certs_to_remove.append(cert)
+
+    # Remove all certificates from the list.
+    for cert in certs_to_remove:
+        cert.CertDeleteCertificateFromStore()
+        print_api(f"Removed the Certificate from store [{store_location}] with issuer [{issuer_name}]", **(print_kwargs or {}))
 
     # There is an exception about store close.
     # store.CertCloseStore()

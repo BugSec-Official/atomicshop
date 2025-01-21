@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.19.4 - 21.01.2025
+  * mitm/mitm_main, wrappers/pywin32w/cert_store, wrappers/socketw/socket_wrapper - fixes and improvements.
 * 2.19.3 - 20.01.2025
   * mitm/connection_thread_worker, wrappers/socketw/receiver - fixes and improvements.
 * 2.19.2 - 19.01.2025
