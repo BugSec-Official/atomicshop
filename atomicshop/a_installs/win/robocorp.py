@@ -16,7 +16,12 @@ def main():
         print_api("Please run this script as an Administrator.", color="red")
         return 1
 
-    install_nodejs_windows.install_nodejs_windows()
+    if not install_nodejs_windows.is_nodejs_installed():
+        install_nodejs_windows.install_nodejs_windows()
+    install_nodejs_windows.add_nodejs_to_path()
+    if not install_nodejs_windows.is_nodejs_installed():
+        print_api("Node.js installation failed.")
+        return 1
 
     print_api("PIP Installing Robocorp.")
     subprocess.check_call(["pip", "install", "--upgrade", "rpaframework"])

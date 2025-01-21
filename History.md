@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.19.6 - 21.01.2025
+  * a_installs/win/robocorp, wrappers/nodejsw/install_nodejs_windows - fixes and improvements.
 * 2.19.5 - 21.01.2025
   * a_installs/win/robocorp, wrappers/nodejsw/install_nodejs_ubuntu - fixes and improvements.
   * a_installs/ubuntu/nodejs, a_installs/win/nodejs, wrappers/nodejsw/install_nodejs_windows - initial release.
