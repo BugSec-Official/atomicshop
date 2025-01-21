@@ -1,3 +1,4 @@
+import subprocess
 import os
 import requests
 import time
@@ -26,6 +27,58 @@ class NodeJSWindowsInstallerFailedToExtractFileNameFromString(Exception):
 
 class NodeJSWindowsInstallerFailedToExtractVersionInString(Exception):
     pass
+
+
+def is_nodejs_installed():
+    """
+    Check if Node.js is installed by trying to run 'node -v'.
+    """
+    print_api("Checking if Node.js is installed...")
+    try:
+        try:
+            node_version = subprocess.check_output(["node", "-v"], text=True)
+        except FileNotFoundError:
+            print_api(f"node.exe is not found.", color="red")
+            raise
+
+        node_version = node_version.replace("\n", "")
+        print_api(f"node.exe is found. Version: {node_version}", color="green")
+
+        try:
+            npm_version = subprocess.check_output(["npm.cmd", "-v"], text=True).strip()
+        except FileNotFoundError:
+            print_api(f"npm.cmd is not found.", color="red")
+            raise
+
+        npm_version = npm_version.replace("\n", "")
+        print_api(f"npm.cmd is found. Version: {npm_version}", color="green")
+        print_api("Node.js is installed.")
+        return True
+    except FileNotFoundError:
+        print_api("Node.js is not installed.")
+        return False
+
+
+def add_nodejs_to_path():
+    """
+    Add Node.js to the PATH for the current CMD session.
+    """
+    print_api("Adding Node.js to the PATH for the current session...")
+    # Get the installation directory from the default Node.js install path
+    program_files = os.environ.get("ProgramFiles", "C:\\Program Files")
+    nodejs_path = os.path.join(program_files, "nodejs")
+
+    if os.path.exists(nodejs_path):
+        print_api(f"Node.js installation found at: {nodejs_path}")
+        current_path = os.environ.get("PATH", "")
+        if nodejs_path not in current_path:
+            # Add Node.js to the PATH for the current process
+            os.environ["PATH"] = f"{nodejs_path};{current_path}"
+            print_api("Node.js has been added to the PATH for this session.")
+        else:
+            print_api("Node.js is already in the PATH.")
+    else:
+        print_api("Node.js installation directory not found.")
 
 
 def get_latest_nodejs_version():
@@ -93,6 +146,18 @@ def clean_up(installer_path):
 
 
 def install_nodejs_windows() -> int:
+    """
+    Install Node.js on Windows.
+    If you're installing as part of a cmd script that continues and installs npm packages, you can do something like this:
+        if not install_nodejs_windows.is_nodejs_installed():
+            install_nodejs_windows.is_nodejs_installed()
+        install_nodejs_windows.install_nodejs_windows()
+        install_nodejs_windows.add_nodejs_to_path()
+        if not install_nodejs_windows.is_nodejs_installed():
+            print_api("Node.js installation failed.")
+            return 1
+    :return:
+    """
     if not permissions.is_admin():
         print_api("This script requires administrative privileges to install Node.js.")
         return 1
