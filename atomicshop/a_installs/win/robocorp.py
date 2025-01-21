@@ -5,6 +5,7 @@ import tempfile
 from atomicshop.print_api import print_api
 from atomicshop.wrappers import githubw
 from atomicshop.permissions import permissions
+from atomicshop.wrappers.nodejsw import install_nodejs_windows
 
 
 WINDOWS_TESSERACT_DEFAULT_INSTALLATION_DIRECTORY: str = r"C:\Program Files\Tesseract-OCR"
@@ -14,7 +15,9 @@ def main():
     if not permissions.is_admin():
         print_api("Please run this script as an Administrator.", color="red")
         return 1
-    """
+
+    install_nodejs_windows.install_nodejs_windows()
+
     print_api("PIP Installing Robocorp.")
     subprocess.check_call(["pip", "install", "--upgrade", "rpaframework"])
 
@@ -43,7 +46,7 @@ def main():
 
     # The Admin needed to install Tesseract.
     subprocess.check_call([tesseract_installer, "/S"])
-    """
+
     # Add Tesseract to the PATH.
     subprocess.check_call(["setx", "PATH", f"%PATH%;{WINDOWS_TESSERACT_DEFAULT_INSTALLATION_DIRECTORY}"])
 
