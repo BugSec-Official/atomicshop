@@ -11,10 +11,14 @@ EVENT_CONTROL_CODE_ENABLE_PROVIDER = 1
 
 MAXIMUM_LOGGERS = 64
 ULONG64 = ctypes.c_uint64
+UCHAR = ctypes.c_ubyte
 
 INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
 TRACEHANDLE = ULONG64
 
+PROCESS_TRACE_MODE_EVENT_RECORD = 0x10000000     # new event-record callback
+PROCESS_TRACE_MODE_REAL_TIME = 0x00000100
+INVALID_PROCESSTRACE_HANDLE = 0xFFFFFFFFFFFFFFFF  # Often -1 in 64-bit
 
 
 """
@@ -69,10 +73,7 @@ class EVENT_TRACE_PROPERTIES(ctypes.Structure):
         ("RealTimeBuffersLost", wintypes.ULONG),
         ("LoggerThreadId", wintypes.HANDLE),
         ("LogFileNameOffset", wintypes.ULONG),
-        ("LoggerNameOffset", wintypes.ULONG),
-        # Allocate space for the names at the end of the structure
-        ("_LoggerName", wintypes.WCHAR * 1024),
-        ("_LogFileName", wintypes.WCHAR * 1024)
+        ("LoggerNameOffset", wintypes.ULONG)
     ]
 
 
@@ -183,55 +184,59 @@ class EVENT_HEADER(ctypes.Structure):
         ("RelatedActivityId", GUID),
     ]
 
-class EVENT_RECORD(ctypes.Structure):
+
+class ETW_BUFFER_CONTEXT(ctypes.Structure):
+    _fields_ = [('ProcessorNumber', ctypes.c_ubyte),
+                ('Alignment', ctypes.c_ubyte),
+                ('LoggerId', ctypes.c_ushort)]
+
+
+class EVENT_HEADER_EXTENDED_DATA_ITEM(ctypes.Structure):
     _fields_ = [
-        ("EventHeader", EVENT_HEADER),
-        ("BufferContext", wintypes.ULONG),
-        ("ExtendedDataCount", wintypes.USHORT),
-        ("UserDataLength", wintypes.USHORT),
-        ("ExtendedData", wintypes.LPVOID),
-        ("UserData", wintypes.LPVOID),
-        ("UserContext", wintypes.LPVOID)
+        ('Reserved1', ctypes.c_ushort),
+        ('ExtType', ctypes.c_ushort),
+        ('Linkage', ctypes.c_ushort),    # struct{USHORT :1, USHORT :15}
+        ('DataSize', ctypes.c_ushort),
+        ('DataPtr', ctypes.c_ulonglong)
     ]
 
 
-# class EVENT_TRACE_LOGFILE(ctypes.Structure):
-#     _fields_ = [
-#         ("LogFileName", wintypes.LPWSTR),
-#         ("LoggerName", wintypes.LPWSTR),
-#         ("CurrentTime", wintypes.LARGE_INTEGER),
-#         ("BuffersRead", wintypes.ULONG),
-#         ("ProcessTraceMode", wintypes.ULONG),
-#         ("EventRecordCallback", wintypes.LPVOID),
-#         ("BufferSize", wintypes.ULONG),
-#         ("Filled", wintypes.ULONG),
-#         ("EventsLost", wintypes.ULONG),
-#         ("BuffersLost", wintypes.ULONG),
-#         ("RealTimeBuffersLost", wintypes.ULONG),
-#         ("LogBuffersLost", wintypes.ULONG),
-#         ("BuffersWritten", wintypes.ULONG),
-#         ("LogFileMode", wintypes.ULONG),
-#         ("IsKernelTrace", wintypes.ULONG),
-#         ("Context", wintypes.ULONG)  # Placeholder for context pointer
-#     ]
+class EVENT_RECORD(ctypes.Structure):
+    _fields_ = [
+        ('EventHeader', EVENT_HEADER),
+        ('BufferContext', ETW_BUFFER_CONTEXT),
+        ('ExtendedDataCount', ctypes.c_ushort),
+        ('UserDataLength', ctypes.c_ushort),
+        ('ExtendedData', ctypes.POINTER(EVENT_HEADER_EXTENDED_DATA_ITEM)),
+        ('UserData', ctypes.c_void_p),
+        ('UserContext', ctypes.c_void_p)
+    ]
+
+
+class EVENT_TRACE_LOGFILE(ctypes.Structure):
+    pass
+
+
+EVENT_RECORD_CALLBACK = ctypes.WINFUNCTYPE(None, ctypes.POINTER(EVENT_RECORD))
+EVENT_TRACE_BUFFER_CALLBACK = ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.POINTER(EVENT_TRACE_LOGFILE))
 
 
 class EVENT_TRACE_LOGFILE(ctypes.Structure):
     _fields_ = [
-        ("LogFileName", wintypes.LPWSTR),
-        ("LoggerName", wintypes.LPWSTR),
-        ("CurrentTime", wintypes.LARGE_INTEGER),
-        ("BuffersRead", wintypes.ULONG),
-        ("ProcessTraceMode", wintypes.ULONG),
-        ("CurrentEvent", EVENT_RECORD),
-        ("LogfileHeader", TRACE_LOGFILE_HEADER),
-        ("BufferCallback", wintypes.LPVOID),
-        ("BufferSize", wintypes.ULONG),
-        ("Filled", wintypes.ULONG),
-        ("EventsLost", wintypes.ULONG),
-        ("EventCallback", ctypes.c_void_p),
-        ("IsKernelTrace", wintypes.ULONG),
-        ("Context", wintypes.LPVOID)
+        ('LogFileName', ctypes.c_wchar_p),
+        ('LoggerName', ctypes.c_wchar_p),
+        ('CurrentTime', ctypes.c_longlong),
+        ('BuffersRead', ctypes.c_ulong),
+        ('ProcessTraceMode', ctypes.c_ulong),
+        ('CurrentEvent', EVENT_TRACE),
+        ('LogfileHeader', TRACE_LOGFILE_HEADER),
+        ('BufferCallback', EVENT_TRACE_BUFFER_CALLBACK),
+        ('BufferSize', ctypes.c_ulong),
+        ('Filled', ctypes.c_ulong),
+        ('EventsLost', ctypes.c_ulong),
+        ('EventRecordCallback', EVENT_RECORD_CALLBACK),
+        ('IsKernelTrace', ctypes.c_ulong),
+        ('Context', ctypes.c_void_p)
     ]
 
 
@@ -255,12 +260,52 @@ class PROVIDER_INFORMATION(ctypes.Structure):
 
 
 # Load the necessary library
-advapi32 = ctypes.WinDLL('advapi32')
+advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
 tdh = ctypes.windll.tdh
 
 # Define necessary TDH functions
 tdh.TdhEnumerateProviders.argtypes = [ctypes.POINTER(PROVIDER_ENUMERATION_INFO), ctypes.POINTER(ULONG)]
 tdh.TdhEnumerateProviders.restype = ULONG
+
+
+# Make sure StartTraceW has proper argtypes (if not set in consts)
+StartTrace = advapi32.StartTraceW
+StartTrace.argtypes = [
+    ctypes.POINTER(TRACEHANDLE),
+    wintypes.LPCWSTR,
+    ctypes.POINTER(EVENT_TRACE_PROPERTIES)
+]
+StartTrace.restype = wintypes.ULONG
+
+
+class EVENT_FILTER_DESCRIPTOR(ctypes.Structure):
+    _fields_ = [('Ptr', ctypes.c_ulonglong),
+                ('Size', ctypes.c_ulong),
+                ('Type', ctypes.c_ulong)]
+
+
+class ENABLE_TRACE_PARAMETERS(ctypes.Structure):
+    _fields_ = [
+        ('Version', ctypes.c_ulong),
+            ('EnableProperty', ctypes.c_ulong),
+            ('ControlFlags', ctypes.c_ulong),
+            ('SourceId', GUID),
+            ('EnableFilterDesc', ctypes.POINTER(EVENT_FILTER_DESCRIPTOR)),
+            ('FilterDescCount', ctypes.c_ulong)
+    ]
+
+
+EnableTraceEx2 = advapi32.EnableTraceEx2
+EnableTraceEx2.argtypes = [
+    TRACEHANDLE,                                # TraceHandle (c_uint64)
+    ctypes.POINTER(GUID),                       # ProviderId
+    ctypes.c_ulong,                             # ControlCode
+    ctypes.c_char,                              # Level
+    ctypes.c_ulonglong,                         # MatchAnyKeyword
+    ctypes.c_ulonglong,                         # MatchAllKeyword
+    ctypes.c_ulong,                             # Timeout
+    ctypes.POINTER(ENABLE_TRACE_PARAMETERS)]    # PENABLE_TRACE_PARAMETERS (optional) -> None or pointer
+EnableTraceEx2.restype = ctypes.c_ulong
 
 
 # Define the function prototype
@@ -277,8 +322,13 @@ OpenTrace.argtypes = [ctypes.POINTER(EVENT_TRACE_LOGFILE)]
 OpenTrace.restype = wintypes.ULONG
 
 ProcessTrace = advapi32.ProcessTrace
-ProcessTrace.argtypes = [ctypes.POINTER(wintypes.ULONG), wintypes.ULONG, wintypes.LARGE_INTEGER, wintypes.LARGE_INTEGER]
-ProcessTrace.restype = wintypes.ULONG
+ProcessTrace.argtypes = [
+    ctypes.POINTER(ctypes.c_uint64),  # pointer to array of 64-bit handles
+    wintypes.ULONG,     # handle count
+    ctypes.c_void_p,           # LPFILETIME (start)
+    ctypes.c_void_p            # LPFILETIME (end)
+]
+ProcessTrace.restype  = wintypes.ULONG
 
 CloseTrace = advapi32.CloseTrace
 CloseTrace.argtypes = [wintypes.ULONG]

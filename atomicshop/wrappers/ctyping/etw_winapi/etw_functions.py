@@ -1,5 +1,5 @@
 import ctypes
-from ctypes import wintypes
+import queue
 from ctypes.wintypes import ULONG
 import uuid
 from typing import Literal
@@ -34,7 +34,7 @@ def start_etw_session(
         provider_name_list: list = None,
         verbosity_mode: int = 4,
         maximum_buffers: int = 38
-):
+) -> const.TRACEHANDLE:
     """
     Start an ETW session and enable the specified provider.
 
@@ -77,57 +77,89 @@ def start_etw_session(
         for provider_name in provider_name_list:
             provider_guid_list.append(providers.get_provider_guid_by_name(provider_name))
 
-    properties_size = ctypes.sizeof(const.EVENT_TRACE_PROPERTIES) + (2 * wintypes.MAX_PATH)
-    properties = (ctypes.c_byte * properties_size)()
-    properties_ptr = ctypes.cast(properties, ctypes.POINTER(const.EVENT_TRACE_PROPERTIES))
+        # (1) Allocate a buffer large enough for EVENT_TRACE_PROPERTIES + space for 2 strings
+        #     The typical approach is to allow enough space for:
+        #       - The structure
+        #       - The "LoggerName" string
+        #       - The "LogFileName" string (even if we don't use it, we must leave offset space)
+        #
+        props_size = ctypes.sizeof(const.EVENT_TRACE_PROPERTIES)
+        # Add space for 2 x 1024 wide-chars (one for LoggerName, one for LogFileName)
+        # Each wide char = ctypes.sizeof(ctypes.c_wchar).
+        props_size += (2 * 1024 * ctypes.sizeof(ctypes.c_wchar))  # for logger name
+        props_size += (2 * 1024 * ctypes.sizeof(ctypes.c_wchar))  # for log file name
 
-    # Initialize the EVENT_TRACE_PROPERTIES structure
-    properties_ptr.contents.Wnode.BufferSize = properties_size
-    properties_ptr.contents.Wnode.Guid = const.GUID()
-    properties_ptr.contents.Wnode.Flags = const.WNODE_FLAG_TRACED_GUID
-    properties_ptr.contents.Wnode.ClientContext = 1   # QPC clock resolution
-    properties_ptr.contents.BufferSize = 1024
-    properties_ptr.contents.MinimumBuffers = 1
-    properties_ptr.contents.MaximumBuffers = maximum_buffers
-    properties_ptr.contents.MaximumFileSize = 0
-    properties_ptr.contents.LogFileMode = const.EVENT_TRACE_REAL_TIME_MODE
-    properties_ptr.contents.FlushTimer = 1
-    properties_ptr.contents.EnableFlags = 0
+        properties_buffer = ctypes.create_string_buffer(props_size)
+        properties_ptr = ctypes.cast(properties_buffer, ctypes.POINTER(const.EVENT_TRACE_PROPERTIES))
+        props = properties_ptr.contents
 
-    # Start the ETW session
-    session_handle = wintypes.HANDLE()
-    status = ctypes.windll.advapi32.StartTraceW(
-        ctypes.byref(session_handle),
-        ctypes.c_wchar_p(session_name),
-        properties_ptr
-    )
+        # (2) Fill in basic fields
+        props.Wnode.BufferSize = props_size
+        props.Wnode.Flags = const.WNODE_FLAG_TRACED_GUID  # 0x00020000
+        props.Wnode.ClientContext = 1  # QPC clock
+        props.BufferSize = 1024
+        props.MinimumBuffers = 1
+        props.MaximumBuffers = maximum_buffers
+        props.MaximumFileSize = 0
+        props.LogFileMode = const.EVENT_TRACE_REAL_TIME_MODE  # real-time
+        props.FlushTimer = 1
+        props.EnableFlags = 0
 
-    if status != 0:
-        if status == 183:
-            raise ETWSessionExists(f"ETW session [{session_name}] already exists")
-        else:
-            raise Exception(f"StartTraceW failed with error {status}")
+        # (3) Indicate where in this allocated buffer the strings should go
+        struct_size = ctypes.sizeof(const.EVENT_TRACE_PROPERTIES)
+        props.LoggerNameOffset = struct_size
+        props.LogFileNameOffset = struct_size + (2 * 1024 * ctypes.sizeof(ctypes.c_wchar))
 
-    # Enable each provider
-    for provider_guid in provider_guid_list:
-        provider_guid_struct = _string_to_guid(provider_guid)
-        status = ctypes.windll.advapi32.EnableTraceEx2(
-            session_handle,
-            ctypes.byref(provider_guid_struct),
-            const.EVENT_CONTROL_CODE_ENABLE_PROVIDER,
-            verbosity_mode,
-            0,
-            0,
-            0,
-            None
+        # (4) Copy the session name into the LoggerName space
+        logger_name_address = ctypes.addressof(properties_buffer) + props.LoggerNameOffset
+        session_name_wchar = ctypes.create_unicode_buffer(session_name)
+        ctypes.memmove(
+            logger_name_address,
+            session_name_wchar,
+            len(session_name) * ctypes.sizeof(ctypes.c_wchar)
+        )
+
+        # (5) Start the session
+        session_handle = const.TRACEHANDLE(0)
+        status = const.StartTrace(
+            ctypes.byref(session_handle),
+            session_name,  # The session name as an LPCWSTR
+            properties_ptr  # pointer to EVENT_TRACE_PROPERTIES
         )
 
         if status != 0:
-            raise Exception(f"EnableTraceEx2 failed for provider {provider_guid} with error {status}")
+            # 183 => ERROR_ALREADY_EXISTS
+            if status == 183:
+                raise ETWSessionExists(f"ETW session [{session_name}] already exists")
+            else:
+                raise Exception(f"StartTraceW failed with error code {status}")
 
-    print("ETW session started successfully")
+        # (6) If we have providers to enable, enable each
+        if provider_guid_list:
+            for guid_str in provider_guid_list:
+                guid_struct = _string_to_guid(guid_str)
 
-    return session_handle
+                # Typically you'd do something like:
+                #   advapi32.EnableTraceEx2(TRACEHANDLE, PGUID, CONTROL_CODE, LEVEL, KW, KW, TIMEOUT, FILTER)
+
+                enable_status = const.EnableTraceEx2(
+                    session_handle,  # The session handle
+                    ctypes.byref(guid_struct),  # The provider GUID
+                    const.EVENT_CONTROL_CODE_ENABLE_PROVIDER,  # 1 => enable
+                    verbosity_mode,  # level
+                    0xFFFFFFFFFFFFFFFF, # matchAnyKeyword
+                    0,  # matchAllKeyword
+                    0,  # timeout
+                    None  # enableParameters (optional)
+                )
+
+                if enable_status != 0:
+                    raise Exception(
+                        f"EnableTraceEx2 failed for provider {guid_str} (error={enable_status})"
+                    )
+
+        print(f"ETW session '{session_name}' started successfully.")
+        return session_handle
 
 
 # Function to stop and delete ETW session
@@ -163,6 +195,103 @@ def stop_and_delete_etw_session(session_name: str) -> tuple[bool, int]:
     else:
         # print("ETW session stopped and deleted successfully.")
         return True, status
+
+
+@const.EVENT_CALLBACK_TYPE
+def _default_callback(
+        event_record_ptr
+):
+    """
+    This function will be called by Windows for every incoming ETW event.
+    'event_record_ptr' is a pointer to an EVENT_RECORD structure.
+    """
+    # Convert pointer to a Python EVENT_RECORD object
+    event_record = event_record_ptr.contents
+
+    # Do something with event_record (e.g., parse via TDH)
+    print("Received an ETW event!", event_record.EventHeader.ProviderId)
+
+
+def start_etw_consumer(
+        session_name: str,
+        record_queue: queue.Queue
+):
+    """
+    Attach to an existing real-time ETW session by 'session_name'
+    using the "new" EVENT_RECORD callback approach.
+    This call blocks until the ETW session is stopped or an error occurs.
+    """
+    # 1) Create a closure callback that references the queue
+    #    We define an inner function that sees 'record_queue' from outer scope.
+    #    Then we wrap that in EVENT_CALLBACK_TYPE.
+    if record_queue is not None:
+        @const.EVENT_CALLBACK_TYPE
+        def _queue_callback(event_record_ptr):
+            event_record = event_record_ptr.contents
+            # # Example: put a simple dict with the provider ID & possibly more info
+            # record_queue.put({
+            #     "provider_id": str(event_record.EventHeader.ProviderId),
+            #     "process_id": event_record.EventHeader.ProcessId,
+            #     "thread_id": event_record.EventHeader.ThreadId,
+            #     # ... more fields or parse them with TdhGetEventInformation, etc.
+            # })
+            print("Received an ETW event!", event_record.EventHeader.ProviderId)
+            record_queue.put(event_record)
+    else:
+        _queue_callback = _default_callback
+
+    # Keep a reference to the callback so Python doesn't GC it.
+    start_etw_consumer._callback_ref = _queue_callback
+
+    # Prepare the EVENT_TRACE_LOGFILE structure
+    logfile = const.EVENT_TRACE_LOGFILE()
+    # You can also do: logfile.LoggerName = session_name
+    # If you assign session_name (a Python str), ctypes automatically converts it to a temporary c_wchar_p under the hood.
+    # logfile.LoggerName = ctypes.c_wchar_p(session_name)
+    logfile.LoggerName = session_name
+    logfile.LogFileName = None  # Real-time, not from a file
+    logfile.ProcessTraceMode = (const.PROCESS_TRACE_MODE_REAL_TIME | const.PROCESS_TRACE_MODE_EVENT_RECORD)
+
+    # Point to our Python callback
+    logfile.EventRecordCallback = const.EVENT_RECORD_CALLBACK(_default_callback)
+
+    # Open the trace
+    trace_handle = const.OpenTrace(ctypes.byref(logfile))
+    if trace_handle == const.INVALID_PROCESSTRACE_HANDLE:
+        error_code = ctypes.get_last_error()
+        raise OSError(f"OpenTrace failed with error code: {error_code}")
+
+    # trace_handle is actually an unsigned long, but in 64-bit it's a 64-bit handle.
+    # We'll create an array of one handle for ProcessTrace:
+    trace_handle_array = (ctypes.c_uint64 * 1)(trace_handle)
+
+    # Blocking call - will not return until the session is stopped (or error).
+    status = const.ProcessTrace(
+        trace_handle_array,
+        1,  # HandleCount = 1
+        None,  # StartTime = None
+        None  # EndTime = None
+    )
+    if status != 0:
+        raise OSError(f"ProcessTrace failed with error code: {status}")
+
+    print("ProcessTrace returned. ETW consumer finished.")
+
+
+def start_etw_consumer_in_thread(
+        session_name: str,
+        record_queue: queue.Queue
+):
+    """
+    Start an ETW consumer in a separate thread.
+    """
+    import threading
+
+    def _start_etw_consumer():
+        start_etw_consumer(session_name, record_queue)
+
+    thread = threading.Thread(target=_start_etw_consumer)
+    thread.start()
 
 
 def get_all_providers(key_as: Literal['name', 'guid'] = 'name') -> dict:
