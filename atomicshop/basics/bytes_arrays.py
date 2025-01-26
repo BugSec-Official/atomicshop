@@ -1,3 +1,7 @@
+from typing import Union
+import string
+
+
 def get_single_byte_from_byte_string(byte_string, index: int):
     """
     Function extracts single byte as byte from byte string object.
@@ -179,3 +183,18 @@ def read_bytes_from_position(
         # Read the specified number of bytes.
         data = file.read(num_bytes)
     return data
+
+
+def convert_bytes_to_printable_string_only(
+        byte_sequence: Union[bytes, bytearray],
+        non_printable_character: str = '.'
+) -> str:
+    """
+    Convert bytes to printable string. If byte is not printable, replace it with 'non_printable_character'.
+    :param byte_sequence: bytes or bytearray, sequence of bytes.
+    :param non_printable_character: string, character to replace non-printable characters.
+    :return:
+    """
+
+    printable = set(string.printable)
+    return ''.join(chr(byte) if chr(byte) in printable else non_printable_character for byte in byte_sequence)

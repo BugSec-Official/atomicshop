@@ -29,6 +29,8 @@ class EventTrace(etw.ETW):
         :param providers: List of tuples with provider name and provider GUID.
             tuple[0] = provider name
             tuple[1] = provider GUID
+
+            Example: [('Microsoft-Windows-DNS-Client', '{1c95126e-7ee8-4e23-86b2-6e7e4a5a8e9b}')]
         :param event_callback: Reference to the callable callback function that will be called for each occurring event.
         :param event_id_filters: List of event IDs that we want to filter. If not provided, all events will be returned.
             The default in the 'etw.ETW' method is 'None'.
