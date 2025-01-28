@@ -32,6 +32,9 @@ def main():
     print_api("PIP Installing Robocorp-Recognition.")
     subprocess.check_call(["pip", "install", "--upgrade", "rpaframework-recognition"])
 
+    print_api("PIP Installing pynput.")
+    subprocess.check_call(["pip", "install", "--upgrade", "pynput"])
+
     print_api("Installing Playwright browsers.")
     subprocess.check_call(["playwright", "install"])
 

@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.19.8 - 28.01.2025
+  * a_installs/win/robocorp, wrappers/mongodbw/mongodbw - fixes and improvements.
 * 2.19.7 - 26.01.2025
   * basics/bytes_arrays, etws/trace, wrappers/ctyping/etw_winapi - fixes and improvements.
 * 2.19.6 - 21.01.2025
