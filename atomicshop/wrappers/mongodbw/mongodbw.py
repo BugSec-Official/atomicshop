@@ -404,6 +404,33 @@ class MongoDBWrapper:
 
         return count
 
+    def aggregate_entries_in_collection(
+            self,
+            collection_name: str,
+            pipeline: list[dict]
+    ) -> list[dict]:
+        """
+        Aggregate entries in a MongoDB collection by query.
+
+        :param collection_name: str, the name of the collection.
+        :param pipeline: list of dictionaries, the pipeline to search for.
+            Example, search for all entries with column name 'name' equal to 'John':
+                pipeline = [{'$match': {'name': 'John'}}]
+            Example, return all entries from collection:
+                pipeline = []
+
+        :return: list of dictionaries, the list of entries that match the query.
+        """
+
+        self.connect()
+
+        aggregation: list[dict] = aggregate_entries_in_collection(
+            database=self.db, collection_name=collection_name,
+            pipeline=pipeline, mongo_client=self.client, close_client=False)
+
+        return aggregation
+
+
     def get_client(self):
         return self.client
 
@@ -1146,6 +1173,60 @@ def count_entries_in_collection(
         mongo_client.close()
 
     return count
+
+
+def aggregate_entries_in_collection(
+        database: Union[str, pymongo.database.Database],
+        collection_name: str,
+        pipeline: list,
+        mongo_client: pymongo.MongoClient = None,
+        close_client: bool = False
+) -> list:
+    """
+    Perform an aggregation pipeline operation on a MongoDB collection.
+    For example, we count the number of entries with the same 'sha256' value that is provided in a list:
+        pipeline = [
+            {"$match": {"sha256": {"$in": ["hash1", "hash2"]}}},
+            {"$group": {"_id": "$sha256", "count": {"$sum": 1}}}
+        ]
+    And we will get the result:
+        [
+            {"_id": "hash1", "count": 1},
+            {"_id": "hash2", "count": 1}
+        ]
+    Meaning we will get separate counts for each 'sha256' value in the list.
+
+    :param database: String or the database object.
+        str - the name of the database. In this case the database object will be created.
+        pymongo.database.Database - the database object that will be used instead of creating a new one.
+    :param collection_name: str, the name of the collection.
+    :param pipeline: list, the aggregation pipeline to execute.
+        Example:
+            pipeline = [
+                {"$match": {"sha256": {"$in": ["hash1", "hash2"]}}},
+                {"$group": {"_id": "$sha256", "count": {"$sum": 1}}}
+            ]
+    :param mongo_client: pymongo.MongoClient, the connection object.
+        If None, a new connection will be created to default URI.
+    :param close_client: bool, if True, the connection will be closed after the operation.
+
+    :return: list, the results of the aggregation pipeline.
+    """
+    if not mongo_client:
+        mongo_client = connect()
+        close_client = True
+
+    db = _get_pymongo_db_from_string_or_pymongo_db(database, mongo_client)
+    collection = db[collection_name]
+
+    # Perform aggregation
+    results = collection.aggregate(pipeline)
+
+    if close_client:
+        mongo_client.close()
+
+    # Return the results as a list
+    return list(results)
 
 
 def delete_all_entries_from_collection(
