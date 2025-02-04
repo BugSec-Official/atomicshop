@@ -153,6 +153,7 @@ def download(
         file_url: str,
         target_directory: str = None,
         file_name: str = None,
+        headers: dict = None,
         **kwargs
 ) -> str:
     """
@@ -163,6 +164,7 @@ def download(
         If not specified, temporary directory will be used.
     :param file_name: string, file name (example: file.zip) that you want the downloaded file to be saved as.
         If not specified, the default filename from 'file_url' will be used.
+    :param headers: dictionary, HTTP headers to use when downloading the file.
     :return: string, full file path of downloaded file. If download failed, 'None' will be returned.
     """
 
@@ -194,7 +196,10 @@ def download(
     # In order to use 'urllib.request', it is not enough to 'import urllib', you need to 'import urllib.request'.
     # Open the URL for data gathering with SSL context from certifi
     ssl_context = ssl.create_default_context(cafile=certifi.where())
-    file_to_download = urllib.request.urlopen(file_url, context=ssl_context)
+
+    # Build a Request object with headers if provided.
+    req = urllib.request.Request(file_url, headers=headers or {})
+    file_to_download = urllib.request.urlopen(req, context=ssl_context)
 
     # Check status of url.
     if not is_status_ok(status_code=file_to_download.status, **kwargs):
@@ -225,6 +230,7 @@ def download(
             else:
                 print_to_console()
                 break
+
     if aggregated_bytes_int == file_size_bytes_int:
         print_api.print_api(f'Successfully Downloaded to: {file_path}', color="green", **kwargs)
     else:
@@ -236,8 +242,13 @@ def download(
 
 
 def download_and_extract_file(
-        file_url: str, target_directory: str, file_name: str = str(), archive_remove_first_directory: bool = False,
-        **kwargs):
+        file_url: str,
+        target_directory: str,
+        file_name: str = str(),
+        archive_remove_first_directory: bool = False,
+        headers: dict = None,
+        **kwargs
+):
     """
     This function will download the branch file from GitHub, extract the file and remove the file, leaving
     only the extracted folder.
@@ -248,12 +259,13 @@ def download_and_extract_file(
     :param target_directory: string, target directory where to save the file.
     :param archive_remove_first_directory: boolean, sets if archive extract function will extract the archive without
         first directory in the archive. Check reference in the 'extract_archive_with_zipfile' function.
+    :param headers: dictionary, HTTP headers to use when downloading the file.
     :return:
     """
 
     # Download the repo to current working directory and return full file path of downloaded file.
     file_path = download(
-        file_url=file_url, target_directory=target_directory, file_name=file_name, **kwargs)
+        file_url=file_url, target_directory=target_directory, file_name=file_name, headers=headers, **kwargs)
 
     # Extract the archive and remove the first directory.
     zips.extract_archive_with_zipfile(

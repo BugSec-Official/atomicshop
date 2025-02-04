@@ -1,13 +1,18 @@
 import threading
 from pathlib import Path
 import time
+import multiprocessing.managers
 
 from ..wrappers.pywin32w.win_event_log.subscribes import process_create, process_terminate
-from .. import get_process_list
+from .. import get_process_list, get_process_name_cmd_dll
+from ..print_api import print_api
 
 
 WAIT_BEFORE_PROCESS_TERMINATION_CHECK_SECONDS: float = 3
 WAIT_BEFORE_PROCESS_TERMINATION_CHECK_COUNTS: float = WAIT_BEFORE_PROCESS_TERMINATION_CHECK_SECONDS * 10
+
+WAIT_FOR_PROCESS_POLLER_PID_SECONDS: int = 3
+WAIT_FOR_PROCESS_POLLER_PID_COUNTS: int = WAIT_FOR_PROCESS_POLLER_PID_SECONDS * 10
 
 
 class SimpleProcessPool:
@@ -22,14 +27,48 @@ class SimpleProcessPool:
 
     def __init__(
             self,
-            wait_before_pid_remove_seconds: float = 5
+            wait_before_pid_remove_seconds: float = 5,
+            process_pool_shared_dict_proxy: multiprocessing.managers.DictProxy = None
     ):
         """
         :param wait_before_pid_remove_seconds: float, how many seconds to wait before the process is removed from
             the pool after process termination event is received for that pid.
+        :param process_pool_shared_dict_proxy: multiprocessing.managers.DictProxy, shared dict proxy to update
+            the process pool.
+            If you run a function from other multiprocessing.Process, you can pass the shared_dict_proxy to the function
+            and update the process pool from that function.
+
+            Example:
+            import multiprocessing.managers
+
+            manager: multiprocessing.managers.SyncManager = multiprocessing.Manager()
+            multiprocess_dict_proxy: multiprocessing.managers.DictProxy = manager.dict()
+
+            process_poller = SimpleProcessPool()
+            process_poller.start()
+
+            while True:
+                #============================
+                # your function where you get info with pid
+                # result = {
+                #    'pid': 1234,
+                #    'info': 'some info'
+                # }
+                #============================
+                info_with_process_details = {
+                    'pid': result['pid'],
+                    'info': result['info']
+                    'process_details': shared_dict_proxy[result['pid']]
+                }
+
+                break
+
+            process_poller.stop()
+            manager.shutdown()
         """
 
         self.wait_before_pid_remove_seconds: float = wait_before_pid_remove_seconds
+        self.process_pool_shared_dict_proxy: multiprocessing.managers.DictProxy = process_pool_shared_dict_proxy
 
         self._processes: dict = dict()
         self._running: bool = False
@@ -68,6 +107,11 @@ class SimpleProcessPool:
                 'name': process_name,
                 'cmdline': command_line
             }
+
+            # Update the multiprocessing shared dict proxy.
+            if self.process_pool_shared_dict_proxy:
+                self.process_pool_shared_dict_proxy.clear()
+                self.process_pool_shared_dict_proxy.update(self._processes)
 
             # print_api(f'Process [{process_id}] added to the pool.', color='blue')
 
@@ -109,3 +153,56 @@ class SimpleProcessPool:
         time.sleep(self.wait_before_pid_remove_seconds)
         _ = self._processes.pop(process_id, None)
         # print_api(f'Process [{process_id}] removed from the pool.', color='yellow')
+
+
+class PidProcessConverter:
+    """
+    This class is used to get the process details by PID from the process pool shared dict proxy.
+    """
+
+    def __init__(
+            self,
+            process_pool_shared_dict_proxy: multiprocessing.managers.DictProxy
+    ):
+        """
+        :param process_pool_shared_dict_proxy: multiprocessing.managers.DictProxy, multiprocessing shared dict proxy.
+        """
+
+        self.process_pool_shared_dict_proxy: multiprocessing.managers.DictProxy = process_pool_shared_dict_proxy
+
+        self.get_process_with_dll_instance = get_process_name_cmd_dll.ProcessNameCmdline(load_dll=True)
+
+    def get_process_by_pid(self, pid: int):
+        """
+        THIS FUNCTION WILL RUN OUTSIDE THE PROCESS POOL PROCESS. Inside the function that needs
+        the pid to process conversion.
+        Get the process details by PID from the process pool shared dict proxy.
+
+        :param pid: int, the process ID.
+        :return: dict, the process details.
+        """
+
+        counter = 0
+        process_dict: dict = dict()
+        while counter < WAIT_FOR_PROCESS_POLLER_PID_COUNTS:
+            if pid not in self.process_pool_shared_dict_proxy:
+                time.sleep(0.1)
+                counter += 1
+            else:
+                process_dict = self.process_pool_shared_dict_proxy[pid]
+                break
+
+        if counter == WAIT_FOR_PROCESS_POLLER_PID_COUNTS and not process_dict:
+            # Last resort, try to get the process name by current process snapshot.
+            processes = self.get_process_with_dll_instance.get_process_details(as_dict=True)
+            if pid not in processes:
+                print_api(f"Error: Couldn't get the process name for PID: {pid}.", color='red')
+                process_dict = {
+                    'name': pid,
+                    'cmdline': ''
+                }
+            else:
+                process_dict = processes[pid]
+
+        return process_dict
+

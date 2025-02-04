@@ -1,6 +1,8 @@
+import multiprocessing.managers
+
 from .. import trace, const
 from ...basics import dicts
-from ... import dns
+from ... import dns, ip_addresses
 
 
 ETW_DEFAULT_SESSION_NAME: str = 'AtomicShopDnsTrace'
@@ -8,9 +10,6 @@ ETW_DEFAULT_SESSION_NAME: str = 'AtomicShopDnsTrace'
 PROVIDER_NAME: str = const.ETW_DNS['provider_name']
 PROVIDER_GUID: str = const.ETW_DNS['provider_guid']
 REQUEST_RESP_EVENT_ID: int = const.ETW_DNS['event_ids']['dns_request_response']
-
-WAIT_FOR_PROCESS_POLLER_PID_SECONDS: int = 3
-WAIT_FOR_PROCESS_POLLER_PID_COUNTS: int = WAIT_FOR_PROCESS_POLLER_PID_SECONDS * 10
 
 
 class DnsRequestResponseTrace:
@@ -20,7 +19,8 @@ class DnsRequestResponseTrace:
             attrs: list = None,
             session_name: str = None,
             close_existing_session_name: bool = True,
-            skip_record_list: list = None
+            skip_record_list: list = None,
+            process_pool_shared_dict_proxy: multiprocessing.managers.DictProxy = None
     ):
         """
         :param attrs: List of attributes to return. If None, all attributes will be returned.
@@ -32,6 +32,13 @@ class DnsRequestResponseTrace:
                 created. Instead, the existing session will be used. If there is a buffer from the previous session,
                 you will get the events from the buffer.
         :param skip_record_list: List of DNS Records to skip emitting. Example: ['PTR', 'SRV']
+        :param process_pool_shared_dict_proxy: multiprocessing.managers.DictProxy, multiprocessing shared dict proxy
+            that contains current processes.
+            Check the 'atomicshop\process_poller\simple_process_pool.py' SimpleProcessPool class for more information.
+
+            For this specific class it means that you can run the process poller outside of this class and pass the
+            'process_pool_shared_dict_proxy' to this class. Then you can get the process name and command line for
+            the DNS events from the 'process_pool_shared_dict_proxy' and use it also in other classes.
 
         -------------------------------------------------
 
@@ -53,6 +60,7 @@ class DnsRequestResponseTrace:
         """
 
         self.attrs = attrs
+        self.process_pool_shared_dict_proxy: multiprocessing.managers.DictProxy = process_pool_shared_dict_proxy
 
         if skip_record_list:
             self.skip_record_list: list = skip_record_list
@@ -68,7 +76,8 @@ class DnsRequestResponseTrace:
             event_id_filters=[REQUEST_RESP_EVENT_ID],
             session_name=session_name,
             close_existing_session_name=close_existing_session_name,
-            enable_process_poller=True
+            enable_process_poller=True,
+            process_pool_shared_dict_proxy=self.process_pool_shared_dict_proxy
         )
 
     def start(self):
@@ -90,13 +99,51 @@ class DnsRequestResponseTrace:
         :return: Dictionary with the event data.
         """
 
+        # Get the event from ETW as is.
         event = self.event_trace.emit()
+
+        # Get the raw query results string from the event.
+        query_results: str = event['EventHeader']['QueryResults']
+
+        if query_results != '':
+            query_results_list: list = query_results.split(';')
+
+            addresses_ips: list = list()
+            addresses_cnames: list = list()
+            for query_result in query_results_list:
+                # If there is a type in the query result, it means it is a cname (domain).
+                if 'type' in query_result:
+                    query_result = query_result.split(' ')[-1]
+
+                # But we'll still make sure that the query result is an IP address or not.
+                if ip_addresses.is_ip_address(query_result):
+                    addresses_ips.append(query_result)
+                # If it is not empty, then it is a cname.
+                elif query_result != '':
+                    addresses_cnames.append(query_result)
+        # if the query results are empty, then we'll just set the addresses to empty lists.
+        else:
+            addresses_ips: list = list()
+            addresses_cnames: list = list()
+
+        status_id: str = str(event['EventHeader']['QueryStatus'])
+
+        # Getting the 'QueryStatus' key. If DNS Query Status is '0' then it was executed successfully.
+        # And if not, it means there was an error. The 'QueryStatus' indicate what number of an error it is.
+        if status_id == '0':
+            status = 'Success'
+        else:
+            status = 'Error'
 
         event_dict: dict = {
             'event_id': event['EventId'],
-            'domain': event['EventHeader']['QueryName'],
+            'query': event['EventHeader']['QueryName'],
             'query_type_id': str(event['EventHeader']['QueryType']),
             'query_type': dns.TYPES_DICT[str(event['EventHeader']['QueryType'])],
+            'result_ips': ','.join(addresses_ips),
+            'result_cnames': ','.join(addresses_cnames),
+            'status_id': status_id,
+            'status': status,
             'pid': event['pid'],
             'name': event['name'],
             'cmdline': event['cmdline']
@@ -106,42 +153,6 @@ class DnsRequestResponseTrace:
         # Just recall the function to get the next event and return it.
         if event_dict['query_type'] in self.skip_record_list:
             return self.emit()
-
-        # Defining list if ips and other answers, which aren't IPs.
-        list_of_ips = list()
-        list_of_other_domains = list()
-        # Parse DNS results, only if 'QueryResults' key isn't empty, since many of the events are, mostly due errors.
-        if event['EventHeader']['QueryResults']:
-            # 'QueryResults' key contains a string with all the 'Answers' divided by type and ';' character.
-            # Basically, we can parse each type out of string, but we need only IPs and other answers.
-            list_of_parameters = event['EventHeader']['QueryResults'].split(';')
-
-            # Iterating through all the parameters that we got from 'QueryResults' key.
-            for parameter in list_of_parameters:
-                # If 'type' string is present it means that entry is a domain;
-                if 'type' in parameter:
-                    # Remove the 'type' string and get the domain name.
-                    current_iteration_parameter = parameter.rsplit(' ', maxsplit=1)[1]
-                    # Add the variable to the list of other answers.
-                    list_of_other_domains.append(current_iteration_parameter)
-                # If 'type' string is not present it means that entry is an IP.
-                else:
-                    # Sometimes the last parameter in the 'QueryResults' key after ';' character will be empty, skip it.
-                    if parameter:
-                        list_of_ips.append(parameter)
-
-        event_dict['ips'] = list_of_ips
-        event_dict['other_domains'] = list_of_other_domains
-
-        # Getting the 'QueryStatus' key.
-        event_dict['status_id'] = event['EventHeader']['QueryStatus']
-
-        # Getting the 'QueryStatus' key. If DNS Query Status is '0' then it was executed successfully.
-        # And if not, it means there was an error. The 'QueryStatus' indicate what number of an error it is.
-        if event['EventHeader']['QueryStatus'] == '0':
-            event_dict['status'] = 'Success'
-        else:
-            event_dict['status'] = 'Error'
 
         if self.attrs:
             event_dict = dicts.reorder_keys(

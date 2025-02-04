@@ -69,7 +69,7 @@ def enable_audit_process_creation(print_kwargs: dict = None):
     :param print_kwargs: Optional keyword arguments for the print function.
     """
     if is_audit_process_creation_enabled():
-        print_api("Audit Process Creation is already enabled.", color='yellow', **(print_kwargs or {}))
+        print_api("Audit Process Creation is already enabled.", color='blue', **(print_kwargs or {}))
         return
 
     # Enable "Audit Process Creation" policy
@@ -124,7 +124,7 @@ def enable_command_line_auditing(print_kwargs: dict = None):
 
     if is_command_line_auditing_enabled():
         print_api(
-            "'Include command line in process creation events' is already enabled.", color='yellow',
+            "[Include command line in process creation events] is already enabled.", color='blue',
             **(print_kwargs or {}))
         return
 
@@ -135,11 +135,11 @@ def enable_command_line_auditing(print_kwargs: dict = None):
             winreg.SetValueEx(reg_key, PROCESS_CREATION_INCLUDE_CMDLINE_VALUE, 0, winreg.REG_DWORD, 1)
 
         print_api(
-            "Successfully enabled 'Include command line in process creation events'.",
+            "Successfully enabled [Include command line in process creation events].",
             color='green', **(print_kwargs or {}))
     except WindowsError as e:
         print_api(
-            f"Failed to enable 'Include command line in process creation events': {e}", error_type=True,
+            f"Failed to enable [Include command line in process creation events]: {e}", error_type=True,
             color='red', **(print_kwargs or {}))
 
 

@@ -33,11 +33,21 @@ class GoogleLLM:
         os.environ["API_KEY"] = llm_api_key
         genai.configure(api_key=os.environ["API_KEY"])
 
-    def get_current_models(self) -> list[str]:
-        """ Function to get the current models available in the Gemini API """
-        result_list: list[str] = []
+    def get_current_models(
+            self,
+            full_info: bool = False
+    ) -> list:
+        """
+        Function to get the current models available in the Gemini API
+
+        :param full_info: bool, if True, returns the full information about the models, otherwise only the names for API usage.
+        """
+        result_list: list = []
         for model in self.genai.list_models():
-            result_list.append(model.name)
+            if full_info:
+                result_list.append(model)
+            else:
+                result_list.append(model.name)
 
         return result_list
 
@@ -57,7 +67,7 @@ class GoogleLLM:
             number_of_characters_per_link: int = 15000,
             temperature: float = 0,
             max_output_tokens: int = 4096,
-            model_name: str = 'gemini-pro'
+            model_name: str = 'gemini-2.0-flash-thinking-exp-01-21'
     ) -> str:
         """
         Function to get the answer to a question by searching Google Custom Console API and processing the content using Gemini API.

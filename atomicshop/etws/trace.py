@@ -1,6 +1,7 @@
 import queue
 import sys
 import time
+import multiprocessing.managers
 
 # Import FireEye Event Tracing library.
 import etw
@@ -11,19 +12,16 @@ from ..process_poller import simple_process_pool
 from ..wrappers.psutilw import psutilw
 
 
-WAIT_FOR_PROCESS_POLLER_PID_SECONDS: int = 3
-WAIT_FOR_PROCESS_POLLER_PID_COUNTS: int = WAIT_FOR_PROCESS_POLLER_PID_SECONDS * 10
-
-
 class EventTrace(etw.ETW):
     def __init__(
             self,
             providers: list,
-            event_callback=None,
+            event_callback: callable = None,
             event_id_filters: list = None,
             session_name: str = None,
             close_existing_session_name: bool = True,
-            enable_process_poller: bool = False
+            enable_process_poller: bool = False,
+            process_pool_shared_dict_proxy: multiprocessing.managers.DictProxy = None
     ):
         """
         :param providers: List of tuples with provider name and provider GUID.
@@ -39,6 +37,13 @@ class EventTrace(etw.ETW):
         :param enable_process_poller: Boolean to enable process poller. Gets the process PID, Name and CommandLine.
             Since the DNS events doesn't contain the process name and command line, only PID.
             Then DNS events will be enriched with the process name and command line from the process poller.
+        :param process_pool_shared_dict_proxy: multiprocessing.managers.DictProxy,
+            multiprocessing shared dict proxy that contains current processes.
+            Check the 'atomicshop\process_poller\simple_process_pool.py' SimpleProcessPool class for more information.
+
+            If None, the process poller will create a new shared dict proxy.
+            If provided, then the provided shared dict proxy will be used.
+            Off course valid only if 'enable_process_poller' is True.
 
         ------------------------------------------
 
@@ -62,6 +67,7 @@ class EventTrace(etw.ETW):
         self.event_queue = queue.Queue()
         self.close_existing_session_name: bool = close_existing_session_name
         self.enable_process_poller: bool = enable_process_poller
+        self.process_pool_shared_dict_proxy: multiprocessing.managers.DictProxy = process_pool_shared_dict_proxy
 
         # If no callback function is provided, we will use the default one, which will put the event in the queue.
         if not event_callback:
@@ -75,8 +81,16 @@ class EventTrace(etw.ETW):
         for provider in providers:
             etw_format_providers.append(etw.ProviderInfo(provider[0], etw.GUID(provider[1])))
 
+        self.self_hosted_poller: bool = False
         if self.enable_process_poller:
-            self.process_poller = simple_process_pool.SimpleProcessPool()
+            if not self.process_pool_shared_dict_proxy:
+                self.self_hosted_poller = True
+                self.process_poller = simple_process_pool.SimpleProcessPool()
+                self.multiprocessing_manager: multiprocessing.managers.SyncManager = multiprocessing.Manager()
+                self.process_pool_shared_dict_proxy = self.multiprocessing_manager.dict()
+
+            self.pid_process_converter = simple_process_pool.PidProcessConverter(
+                process_pool_shared_dict_proxy=self.process_pool_shared_dict_proxy)
 
         super().__init__(
             providers=etw_format_providers, event_callback=function_callable, event_id_filters=event_id_filters,
@@ -112,6 +126,9 @@ class EventTrace(etw.ETW):
         if self.enable_process_poller:
             self.process_poller.stop()
 
+            if self.self_hosted_poller:
+                self.multiprocessing_manager.shutdown()
+
     def emit(self):
         """
         The Function will return the next event from the queue.
@@ -143,21 +160,9 @@ class EventTrace(etw.ETW):
         }
 
         if self.enable_process_poller:
-            processes = self.process_poller.get_processes()
-            if event_dict['pid'] not in processes:
-                counter = 0
-                while counter < WAIT_FOR_PROCESS_POLLER_PID_COUNTS:
-                    processes = self.process_poller.get_processes()
-                    if event_dict['pid'] not in processes:
-                        time.sleep(0.1)
-                        counter += 1
-                    else:
-                        break
-
-                if counter == WAIT_FOR_PROCESS_POLLER_PID_COUNTS:
-                    print_api(f"Error: Couldn't get the process name for PID: {event_dict['pid']}.", color='red')
-
-            event_dict = psutilw.cross_single_connection_with_processes(event_dict, processes)
+            process_info: dict = self.pid_process_converter.get_process_by_pid(event_dict['pid'])
+            event_dict['name'] = process_info['name']
+            event_dict['cmdline'] = process_info['cmdline']
 
         return event_dict
 
