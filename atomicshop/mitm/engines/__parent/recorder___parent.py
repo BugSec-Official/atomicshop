@@ -1,8 +1,8 @@
 import os
 from datetime import datetime
-import json
 import queue
 import threading
+from pathlib import Path
 
 from ...shared_functions import build_module_names, create_custom_logger
 from ... import message, recs_files
@@ -48,14 +48,9 @@ class RecorderParent:
         self.engine_record_path = self.record_path + os.sep + self.engine_name
 
     def build_record_full_file_path(self):
-        # current date and time in object
-        now = datetime.now()
-        # Formatting the date and time and converting it to string object
-        day_time_format: str = now.strftime(recs_files.REC_FILE_DATE_TIME_FORMAT)
-
         # If HTTP Path is not defined, 'http_path' will be empty, and it will not interfere with file name.
         self.record_file_path: str = (
-            f"{self.engine_record_path}{os.sep}{day_time_format}_th{self.class_client_message.thread_id}_"
+            f"{self.engine_record_path}{os.sep}th{self.class_client_message.thread_id}_"
             f"{self.class_client_message.server_name}{self.file_extension}")
 
     def convert_messages(self):
@@ -100,11 +95,22 @@ class RecorderParent:
 
 
 def save_message_worker(
-        record_file_path: str,
+        record_file_path_no_date: str,
         message_queue: queue.Queue,
         logger
 ):
     """Worker function to process messages from the queue and write them to the file."""
+    file_created: bool = False
+
+    original_file_path_object: Path = Path(record_file_path_no_date)
+    original_file_stem: str = original_file_path_object.stem
+    original_file_extension: str = original_file_path_object.suffix
+    original_file_directory: str = str(original_file_path_object.parent)
+
+    original_datetime_string: str = get_datetime_string()
+
+    record_file_path: str = f'{original_file_directory}{os.sep}{original_datetime_string}_{original_file_stem}{original_file_extension}'
+
     while True:
         # Get a message from the queue
         record_message_dict = message_queue.get()
@@ -112,6 +118,14 @@ def save_message_worker(
         # Check for the "stop" signal
         if record_message_dict is None:
             break
+
+        # If the file not created yet, create it and change the creation flag.
+        if not file_created and not os.path.exists(record_file_path):
+            file_created = True
+        # If the file was created, and it doesn't exist, change the path recording file path to notify about it.
+        elif file_created and not os.path.exists(record_file_path):
+            current_datetime_string: str = get_datetime_string()
+            record_file_path = f'{original_file_directory}{os.sep}{current_datetime_string}_{original_file_stem}_partof_{original_datetime_string}{original_file_extension}'
 
         try:
             jsons.append_to_json(
@@ -126,3 +140,11 @@ def save_message_worker(
 
         # Indicate task completion
         message_queue.task_done()
+
+
+def get_datetime_string():
+    # current date and time in object
+    now = datetime.now()
+    # Formatting the date and time and converting it to string object
+    day_time_format: str = now.strftime(recs_files.REC_FILE_DATE_TIME_FORMAT)
+    return day_time_format
