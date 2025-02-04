@@ -58,7 +58,7 @@ def enable_audit_process_termination(print_kwargs: dict = None):
     :param print_kwargs: Optional keyword arguments for the print function.
     """
     if is_audit_process_termination_enabled():
-        print_api("Audit Process Termination is already enabled.", color='yellow', **(print_kwargs or {}))
+        print_api("Audit Process Termination is already enabled.", color='blue', **(print_kwargs or {}))
         return
 
     audit_policy_command = [

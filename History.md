@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.19.9 - 04.02.2025
+  * etws, monitor/checks/dns, process_poller/simple_process_pool, web, web_apis/google_llm, wrappers/githubw, wrappers/pywin32w/win_event_log/subscribes - fixes and improvements.
 * 2.19.8 - 28.01.2025
   * a_installs/win/robocorp, wrappers/mongodbw/mongodbw - fixes and improvements.
 * 2.19.7 - 26.01.2025
