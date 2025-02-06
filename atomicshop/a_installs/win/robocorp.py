@@ -41,6 +41,9 @@ def main():
     print_api("Initializing Robocorp Browser.")
     subprocess.check_call(["rfbrowser", "init"])
 
+    print_api("Installing Additional modules.")
+    subprocess.check_call(["pip", "install", "--upgrade", "matplotlib", "imagehash"])
+
     print_api("Installing Tesseract OCR.")
     github_wrapper = githubw.GitHubWrapper(
         user_name="tesseract-ocr",

@@ -23,6 +23,40 @@ class SimpleProcessPool:
     The idea is similar to the process_poller.process_pool.ProcessPool class, but this class is simpler and uses
     only the pywin32 tracing of the Windows Event Log Process Creation and Process Termination events.
     The simple process pool is used to get things simpler than the process_pool.ProcessPool class.
+
+    Example of starting the process pool in multiprocess:
+        import sys
+
+        from atomicshop.process_poller import simple_process_pool
+
+
+        def start_process_pool(process_pool_shared_dict_proxy):
+            process_poller = simple_process_pool.SimpleProcessPool(
+                process_pool_shared_dict_proxy=process_pool_shared_dict_proxy)
+            process_poller.start()
+
+            try:
+                # Keep the process alive.
+                while True:
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                process_poller.stop()
+
+
+        def main():
+            # Create the shared multiprocessing dictionary of the process pool.
+            manager = multiprocessing.Manager()
+            multiprocess_dict_proxy = manager.dict()
+
+            # Start the process pool in a separate process.
+            pool_process = multiprocessing.Process(target=start_process_pool, args=(multiprocess_dict_proxy,))
+            pool_process.start()
+
+            # Pass the shared dict proxy to other functions.
+
+
+        if __name__ == '__main__':
+            sys.exit(main())
     """
 
     def __init__(
@@ -79,7 +113,7 @@ class SimpleProcessPool:
         self._processes = get_process_list.GetProcessList(
             get_method='pywin32', connect_on_init=True).get_processes(as_dict=True)
 
-        thread_get_queue = threading.Thread(target=self._start_main_thread)
+        thread_get_queue = threading.Thread(target=self._start_main_thread, args=(self.process_pool_shared_dict_proxy,))
         thread_get_queue.daemon = True
         thread_get_queue.start()
 
@@ -93,7 +127,7 @@ class SimpleProcessPool:
     def get_processes(self):
         return self._processes
 
-    def _start_main_thread(self):
+    def _start_main_thread(self, process_pool_shared_dict_proxy):
         get_instance = process_create.ProcessCreateSubscriber()
         get_instance.start()
 
@@ -109,9 +143,9 @@ class SimpleProcessPool:
             }
 
             # Update the multiprocessing shared dict proxy.
-            if self.process_pool_shared_dict_proxy:
-                self.process_pool_shared_dict_proxy.clear()
-                self.process_pool_shared_dict_proxy.update(self._processes)
+            if process_pool_shared_dict_proxy is not None:
+                process_pool_shared_dict_proxy.clear()
+                process_pool_shared_dict_proxy.update(self._processes)
 
             # print_api(f'Process [{process_id}] added to the pool.', color='blue')
 
@@ -186,6 +220,7 @@ class PidProcessConverter:
         process_dict: dict = dict()
         while counter < WAIT_FOR_PROCESS_POLLER_PID_COUNTS:
             if pid not in self.process_pool_shared_dict_proxy:
+                # print(dict(self.process_pool_shared_dict_proxy))
                 time.sleep(0.1)
                 counter += 1
             else:
@@ -193,6 +228,7 @@ class PidProcessConverter:
                 break
 
         if counter == WAIT_FOR_PROCESS_POLLER_PID_COUNTS and not process_dict:
+            print_api(f"Error: The PID [{pid}] is not in the pool, trying DLL snapshot.", color='yellow')
             # Last resort, try to get the process name by current process snapshot.
             processes = self.get_process_with_dll_instance.get_process_details(as_dict=True)
             if pid not in processes:

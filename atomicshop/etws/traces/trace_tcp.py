@@ -1,25 +1,28 @@
 import multiprocessing.managers
 
-from .. import trace, const
+from .. import trace, const, providers
 from ...basics import dicts
 from ... import dns, ip_addresses
 
 
-ETW_DEFAULT_SESSION_NAME: str = 'AtomicShopDnsTrace'
+ETW_DEFAULT_SESSION_NAME: str = 'AtomicShopTcpTrace'
 
-PROVIDER_NAME: str = const.ETW_DNS['provider_name']
-PROVIDER_GUID: str = const.ETW_DNS['provider_guid']
-REQUEST_RESP_EVENT_ID: int = const.ETW_DNS['event_ids']['dns_request_response']
+PROVIDER_NAME: str = "Microsoft-Windows-TCPIP"
+PROVIDER_GUID: str = '{' + providers.get_provider_guid_by_name(PROVIDER_NAME) + '}'
+REQUEST_RESP_EVENT_ID: int = 1033
 
 
-class DnsRequestResponseTrace:
-    """DnsTrace class use to trace DNS events from Windows Event Tracing for EventId 3008."""
+class TcpIpNewConnectionsTrace:
+    """
+    TcpIpNewConnectionsTrace class use to trace new connection events from Windows Event Tracing:
+    Provider: Microsoft-Windows-TCPIP
+    EventId: 1033
+    """
     def __init__(
             self,
             attrs: list = None,
             session_name: str = None,
             close_existing_session_name: bool = True,
-            skip_record_list: list = None,
             process_pool_shared_dict_proxy: multiprocessing.managers.DictProxy = None
     ):
         """
@@ -31,7 +34,6 @@ class DnsRequestResponseTrace:
             False: if ETW session with 'session_name' exists, you will be notified and the new session will not be
                 created. Instead, the existing session will be used. If there is a buffer from the previous session,
                 you will get the events from the buffer.
-        :param skip_record_list: List of DNS Records to skip emitting. Example: ['PTR', 'SRV']
         :param process_pool_shared_dict_proxy: multiprocessing.managers.DictProxy, multiprocessing shared dict proxy
             that contains current processes.
             Check the 'atomicshop\process_poller\simple_process_pool.py' SimpleProcessPool class for more information.
@@ -43,29 +45,24 @@ class DnsRequestResponseTrace:
         -------------------------------------------------
 
         Usage Example:
-            from atomicshop.etw import dns_trace
+            from atomicshop.etw import tcp_trace
 
 
-            dns_trace_w = dns_trace.DnsTrace(
-                attrs=['pid', 'name', 'cmdline', 'query', 'query_type'],
-                session_name='MyDnsTrace',
+            tcp_trace_w = tcp_trace.TcpIpNewConnectionsTrace(
+                attrs=['pid', 'name', 'cmdline', 'domain', 'query_type'],
+                session_name='MyTcpTrace',
                 close_existing_session_name=True,
                 enable_process_poller=True
             )
-            dns_trace_w.start()
+            tcp_trace_w.start()
             while True:
-                dns_dict = dns_trace_w.emit()
-                print(dns_dict)
-            dns_trace_w.stop()
+                tcp_dict = tcp_trace_w.emit()
+                print(tcp_dict)
+            tcp_trace_w.stop()
         """
 
         self.attrs = attrs
         self.process_pool_shared_dict_proxy: multiprocessing.managers.DictProxy = process_pool_shared_dict_proxy
-
-        if skip_record_list:
-            self.skip_record_list: list = skip_record_list
-        else:
-            self.skip_record_list: list = list()
 
         if not session_name:
             session_name = ETW_DEFAULT_SESSION_NAME
@@ -93,8 +90,8 @@ class DnsRequestResponseTrace:
 
         Usage Example:
             while True:
-                dns_dict = dns_trace.emit()
-                print(dns_dict)
+                tcp_dict = tcp_trace.emit()
+                print(tcp_dict)
 
         :return: Dictionary with the event data.
         """
@@ -102,57 +99,29 @@ class DnsRequestResponseTrace:
         # Get the event from ETW as is.
         event = self.event_trace.emit()
 
-        # Get the raw query results string from the event.
-        query_results: str = event['EventHeader']['QueryResults']
+        local_address_port: str = event['EventHeader']['LocalAddress']
+        remote_address_port: str = event['EventHeader']['RemoteAddress']
 
-        if query_results != '':
-            query_results_list: list = query_results.split(';')
+        if 'ffff' in local_address_port:
+            pass
 
-            addresses_ips: list = list()
-            addresses_cnames: list = list()
-            for query_result in query_results_list:
-                # If there is a type in the query result, it means it is a cname (domain).
-                if 'type' in query_result:
-                    query_result = query_result.split(' ')[-1]
+        local_address, local_port = local_address_port.rsplit(':', 1)
+        local_address = local_address.replace('[', '').replace(']', '')
 
-                # But we'll still make sure that the query result is an IP address or not.
-                if ip_addresses.is_ip_address(query_result):
-                    addresses_ips.append(query_result)
-                # If it is not empty, then it is a cname.
-                elif query_result != '':
-                    addresses_cnames.append(query_result)
-        # if the query results are empty, then we'll just set the addresses to empty lists.
-        else:
-            addresses_ips: list = list()
-            addresses_cnames: list = list()
-
-        status_id: str = str(event['EventHeader']['QueryStatus'])
-
-        # Getting the 'QueryStatus' key. If DNS Query Status is '0' then it was executed successfully.
-        # And if not, it means there was an error. The 'QueryStatus' indicate what number of an error it is.
-        if status_id == '0':
-            status = 'Success'
-        else:
-            status = 'Error'
+        remote_address, remote_port = remote_address_port.rsplit(':', 1)
+        remote_address = remote_address.replace('[', '').replace(']', '')
 
         event_dict: dict = {
             'event_id': event['EventId'],
-            'query': event['EventHeader']['QueryName'],
-            'query_type_id': str(event['EventHeader']['QueryType']),
-            'query_type': dns.TYPES_DICT[str(event['EventHeader']['QueryType'])],
-            'result_ips': ','.join(addresses_ips),
-            'result_cnames': ','.join(addresses_cnames),
-            'status_id': status_id,
-            'status': status,
+            'local_ip': local_address,
+            'local_port': local_port,
+            'remote_ip': remote_address,
+            'remote_port': remote_port,
+            'status': event['EventHeader']['Status'],
             'pid': event['pid'],
             'name': event['name'],
             'cmdline': event['cmdline']
         }
-
-        # Skip emitting the record if it is in the 'skip_record_list'.
-        # Just recall the function to get the next event and return it.
-        if event_dict['query_type'] in self.skip_record_list:
-            return self.emit()
 
         if self.attrs:
             event_dict = dicts.reorder_keys(

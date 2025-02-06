@@ -83,7 +83,7 @@ class EventTrace(etw.ETW):
 
         self.self_hosted_poller: bool = False
         if self.enable_process_poller:
-            if not self.process_pool_shared_dict_proxy:
+            if self.process_pool_shared_dict_proxy is None:
                 self.self_hosted_poller = True
                 self.process_poller = simple_process_pool.SimpleProcessPool()
                 self.multiprocessing_manager: multiprocessing.managers.SyncManager = multiprocessing.Manager()
@@ -98,7 +98,7 @@ class EventTrace(etw.ETW):
         )
 
     def start(self):
-        if self.enable_process_poller:
+        if self.enable_process_poller and self.self_hosted_poller:
             self.process_poller.start()
 
         # Check if the session name already exists.
@@ -123,11 +123,10 @@ class EventTrace(etw.ETW):
     def stop(self):
         super().stop()
 
-        if self.enable_process_poller:
+        if self.self_hosted_poller:
             self.process_poller.stop()
 
-            if self.self_hosted_poller:
-                self.multiprocessing_manager.shutdown()
+            self.multiprocessing_manager.shutdown()
 
     def emit(self):
         """
@@ -146,18 +145,17 @@ class EventTrace(etw.ETW):
         :return: etw event object.
         """
 
-        # Get the processes first, since we need the process name and command line.
-        # If they're not ready, we will get just pids from DNS tracing.
-        if self.enable_process_poller:
-            self._get_processes_from_poller()
-
         event: tuple = self.event_queue.get()
 
         event_dict: dict = {
             'EventId': event[0],
-            'EventHeader': event[1],
-            'pid': event[1]['EventHeader']['ProcessId']
+            'EventHeader': event[1]
         }
+
+        if 'ProcessId' not in event[1]:
+            event_dict['pid'] = event[1]['EventHeader']['ProcessId']
+        else:
+            event_dict['pid'] = event[1]['ProcessId']
 
         if self.enable_process_poller:
             process_info: dict = self.pid_process_converter.get_process_by_pid(event_dict['pid'])
@@ -165,13 +163,3 @@ class EventTrace(etw.ETW):
             event_dict['cmdline'] = process_info['cmdline']
 
         return event_dict
-
-    def _get_processes_from_poller(self):
-        processes: dict = {}
-        while not processes:
-            processes = self.process_poller.get_processes()
-
-            if isinstance(processes, BaseException):
-                raise processes
-
-        return processes
