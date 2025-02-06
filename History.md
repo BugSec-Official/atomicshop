@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.19.11 - 06.02.2025
+  * etws/trace, etws/traces/trace_dns, atomicshop/process_poller/simple_process_pool - fixes and improvements.
+  * etws/traces/trace_tcp - initial release.
 * 2.19.10 - 04.02.2025
   * mitm/engines/__parent/recorder___parent - fixes and improvements.
 * 2.19.9 - 04.02.2025
