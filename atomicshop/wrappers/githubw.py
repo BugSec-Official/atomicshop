@@ -1,7 +1,10 @@
 import requests
 import fnmatch
+import os
+import tempfile
+from typing import Literal
 
-from .. import web, urls
+from .. import web, urls, filesystem
 from ..print_api import print_api
 
 
@@ -21,7 +24,9 @@ class GitHubWrapper:
             branch: str = 'master',
             path: str = None,
             pat: str = None,
-            branch_file_extension: str = '.zip'
+            branch_file_extension: Literal[
+                'zip',
+                'tar.gz'] = 'zip'
     ):
         """
         This class is a wrapper for GitHub repositories. It can download the branch file from the repository and extract
@@ -37,8 +42,8 @@ class GitHubWrapper:
         :param path: str, the path to the file/folder inside the repo that we'll do certain actions on.
              Actions example: get_latest_commit_comment, download_path_from_branch.
         :param pat: str, the personal access token to the repo.
-        :param branch_file_extension: str, the branch file extension. The default is '.zip'.
-            You also can use '.tar.gz' as extension.
+        :param branch_file_extension: str, the branch file extension. The default is 'zip'.
+            You also can use 'tar.gz' as extension.
 
         ================================================================================================================
         Usage to download the 'master' branch file:
@@ -93,13 +98,19 @@ class GitHubWrapper:
         self.branch_file_extension: str = branch_file_extension
 
         # Default variables.
-        self.archive_directory: str = 'archive'
-        self.branch_file_name: str = f'{self.branch}{self.branch_file_extension}'
+        if self.branch_file_extension == 'zip':
+            self.branch_type_directory: str = 'zipball'
+        elif self.branch_file_extension == 'tar.gz':
+            self.branch_type_directory: str = 'tarball'
+        else:
+            raise ValueError(f"Unsupported branch file extension: {self.branch_file_extension}")
+
         self.domain: str = 'github.com'
 
         # Initialize variables.
         self.branch_download_link: str = str()
         self.branch_downloaded_folder_name: str = str()
+        self.branch_file_name: str = str()
         self.api_url: str = str()
         self.latest_release_json_url: str = str()
         self.commits_url: str = str()
@@ -126,14 +137,15 @@ class GitHubWrapper:
             raise ValueError("'user_name' or 'repo_name' is empty.")
 
         self.repo_url = f'https://{self.domain}/{self.user_name}/{self.repo_name}'
-        self.branch_download_link = f'{self.repo_url}/{self.archive_directory}/{self.branch_file_name}'
         self.branch_downloaded_folder_name = f'{self.repo_name}-{self.branch}'
+        self.branch_file_name: str = f'{self.repo_name}-{self.branch}.{self.branch_file_extension}'
 
         self.api_url = f'https://api.{self.domain}/repos/{self.user_name}/{self.repo_name}'
 
         self.latest_release_json_url: str = f'{self.api_url}/releases/latest'
         self.commits_url: str = f'{self.api_url}/commits'
         self.contents_url: str = f'{self.api_url}/contents'
+        self.branch_download_link = f'{self.api_url}/{self.branch_type_directory}/{self.branch}'
 
     def build_links_from_repo_url(self, **kwargs):
         if not self.repo_url:
@@ -178,47 +190,87 @@ class GitHubWrapper:
         :return:
         """
 
-        headers: dict = self._get_headers()
+        def download_file(file_url: str, target_dir: str, file_name: str, current_headers: dict) -> None:
+            os.makedirs(target_dir, exist_ok=True)
 
-        if not download_each_file:
-            # Download the repo to current working directory, extract and remove the archive.
-            web.download_and_extract_file(
-                file_url=self.branch_download_link,
-                target_directory=target_directory,
-                archive_remove_first_directory=archive_remove_first_directory,
-                headers=headers,
-                **kwargs)
-        else:
-            # Build the URL for the contents API
-            contents_url = f"{self.contents_url}/{self.path}"
+            web.download(
+                file_url=file_url,
+                target_directory=target_dir,
+                file_name=file_name,
+                headers=current_headers
+            )
+
+        def download_directory(folder_path: str, target_dir: str, current_headers: dict) -> None:
+            # Construct the API URL for the current folder.
+            contents_url = f"{self.contents_url}/{folder_path}"
             params = {'ref': self.branch}
 
-            response = requests.get(contents_url, headers=headers, params=params)
+            response = requests.get(contents_url, headers=current_headers, params=params)
             response.raise_for_status()
 
+            # Get the list of items (files and subdirectories) in the folder.
             items = response.json()
 
-            # Ensure the target directory exists.
-            os.makedirs(target_directory, exist_ok=True)
+            # Ensure the local target directory exists.
+            os.makedirs(target_dir, exist_ok=True)
 
+            # Process each item.
             for item in items:
-                item_path = os.path.join(target_directory, item['name'])
+                local_item_path = os.path.join(target_dir, item['name'])
                 if item['type'] == 'file':
-                    # Download the file using the provided download URL.
-                    file_url = item['download_url']
-                    # You can reuse your download function here, passing the headers.
-                    download(
-                        file_url=file_url,
-                        target_directory=target_directory,
+                    download_file(
+                        file_url=item['download_url'],
+                        target_dir=target_dir,
                         file_name=item['name'],
-                        headers=headers
+                        current_headers=current_headers
                     )
                 elif item['type'] == 'dir':
                     # Recursively download subdirectories.
-                    self.download_folder_contents(
-                        folder_path=os.path.join(folder_path, item['name']),
-                        target_directory=item_path
+                    download_directory(
+                        folder_path=f"{folder_path}/{item['name']}",
+                        target_dir=local_item_path,
+                        current_headers=current_headers
                     )
+
+        headers: dict = self._get_headers()
+
+        if not download_each_file:
+            if self.path:
+                download_target_directory = tempfile.mkdtemp()
+                current_archive_remove_first_directory = True
+            else:
+                download_target_directory = target_directory
+                current_archive_remove_first_directory = archive_remove_first_directory
+
+            # Download the repo to current working directory, extract and remove the archive.
+            web.download_and_extract_file(
+                file_url=self.branch_download_link,
+                file_name=self.branch_file_name,
+                target_directory=download_target_directory,
+                archive_remove_first_directory=current_archive_remove_first_directory,
+                headers=headers,
+                **kwargs)
+
+            if self.path:
+                source_path: str = f"{download_target_directory}{os.sep}{self.path}"
+
+                if not archive_remove_first_directory:
+                    target_directory = os.path.join(target_directory, self.path)
+                filesystem.create_directory(target_directory)
+
+                # Move the path to the target directory.
+                filesystem.move_folder_contents_to_folder(
+                    source_path, target_directory)
+
+                # Remove the downloaded branch directory.
+                filesystem.remove_directory(download_target_directory)
+        else:
+            if archive_remove_first_directory:
+                current_target_directory = target_directory
+            else:
+                current_target_directory = os.path.join(target_directory, self.path)
+
+            download_directory(self.path, current_target_directory, headers)
 
     def get_latest_release_url(
             self,
@@ -430,8 +482,7 @@ def github_wrapper_main(
 
     if download_branch:
         git_wrapper.download_and_extract_branch(
-            target_directory=target_directory, download_each_file=True, download_branch_and_extract=False,
-            archive_remove_first_directory=True)
+            target_directory=target_directory, download_each_file=False, archive_remove_first_directory=True)
 
         return 0
 
@@ -445,5 +496,6 @@ def github_wrapper_main_with_args():
         path=args.path,
         target_directory=args.target_directory,
         pat=args.pat,
-        get_latest_commit_comment=args.get_latest_commit_comment
+        get_latest_commit_comment=args.get_latest_commit_comment,
+        download_branch=args.download_branch
     )

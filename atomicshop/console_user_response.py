@@ -1,11 +1,12 @@
-# v1.0.2 - 26.03.2023 20:40
 import sys
 
 
-def query_positive_negative(question_string: str,
-                            add_first_values_to_question: bool = True,
-                            positive_answers: list = None,
-                            negative_answers: list = None) -> bool:
+def query_positive_negative(
+        question_string: str,
+        add_first_values_to_question: bool = True,
+        positive_answers: list = None,
+        negative_answers: list = None
+) -> bool:
     """
     Ask for "yes" / "no" input to a question that is passed as a "question_string".
     Returns 'True' for 'positive' answers and 'False' for 'negative' answers.
@@ -31,10 +32,8 @@ def query_positive_negative(question_string: str,
     if add_first_values_to_question:
         question_string = f'{question_string} [{positive_answers[0]}/{negative_answers[0]}]'
 
-    # Defining variable as False for While loop to run
-    right_answer = False
     # As long as "right_answer" is False the loop will execute again
-    while not right_answer:
+    while True:
         # Print the passed question
         print(question_string)
         # Get the input from the console in lowercase
@@ -42,22 +41,16 @@ def query_positive_negative(question_string: str,
 
         # If the gathered value is in "Yes" answers array
         if choice in positive_answers:
-            # "right_answer" variable is True, so the loop will not execute again
-            right_answer = True
             # Function will return True
             return True
         # Else If the gathered value is in "No" answers array
         elif choice in negative_answers:
-            # "right_answer" variable is True, so the loop will not execute again
-            right_answer = True
             # Function will return False
             return False
         # If the gathered input is not in the arrays
         else:
             # Then output to console the message
             print("Please respond with either:", positive_answers, negative_answers)
-            # "right_answer" variable stays False, so the loop will execute again
-            right_answer = False
 
 
 def do_you_want_to_continue_yn(message: str) -> None:
