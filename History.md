@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 2.19.12 - 09.02.2025
+  * console_user_response, web, wrappers/githubw - fixes and improvements.
+  * versioning - initial release.
 * 2.19.11 - 06.02.2025
   * etws/trace, etws/traces/trace_dns, atomicshop/process_poller/simple_process_pool - fixes and improvements.
   * etws/traces/trace_tcp - initial release.

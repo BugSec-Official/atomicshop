@@ -233,6 +233,8 @@ def download(
 
     if aggregated_bytes_int == file_size_bytes_int:
         print_api.print_api(f'Successfully Downloaded to: {file_path}', color="green", **kwargs)
+    elif file_size_bytes_int is None:
+        pass
     else:
         message = f'Download failed: {aggregated_bytes_int} / {file_size_bytes_int}. File: {file_path}'
         print_api.print_api(
