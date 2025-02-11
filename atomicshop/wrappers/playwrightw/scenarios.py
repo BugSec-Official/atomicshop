@@ -207,7 +207,9 @@ def _fetch_content(
             'playwright_text',
             'js_text',
             'playwright_html',
+            'playwright_html_to_text',
             'js_html',
+            'js_html_to_text',
             'playwright_copypaste'
         ],
         headless: bool = True):
@@ -260,18 +262,12 @@ def _fetch_content(
         elif text_fetch_method == "js_text":
             # Use JavaScript to extract only the visible text from the page
             text_content: str = page.evaluate("document.body.innerText")
-        elif text_fetch_method == "playwright_html":
+        elif "playwright_html" in text_fetch_method:
             # Get the full HTML content of the page
-            html = page.content()
-            # Parse the HTML using BeautifulSoup and extract the text
-            soup = BeautifulSoup(html, 'html.parser')
-            text_content = soup.get_text()
-        elif text_fetch_method == "js_html":
+            text_content = page.content()
+        elif "js_html" in text_fetch_method:
             # Use JavaScript to extract the full text from the page
-            html = page.evaluate('document.documentElement.outerHTML')
-            # Parse the HTML using BeautifulSoup and extract the text
-            soup = BeautifulSoup(html, 'html.parser')
-            text_content = soup.get_text()
+            text_content = page.evaluate('document.documentElement.outerHTML')
         elif text_fetch_method == "playwright_copypaste":
             # Focus the page and simulate Ctrl+A and Ctrl+C
             page.keyboard.press("Control+a")  # Select all text
@@ -280,6 +276,11 @@ def _fetch_content(
             text_content = page.evaluate("navigator.clipboard.readText()")
         else:
             raise ValueError(f"Invalid text_fetch_method: {text_fetch_method}")
+
+        if "to_text" in text_fetch_method:
+            # Convert HTML to plain text using BeautifulSoup
+            soup = BeautifulSoup(text_content, "html.parser")
+            text_content = soup.get_text()
 
         # text = page.evaluate('document.body.textContent')
         # text = page.eval_on_selector('body', 'element => element.innerText')
