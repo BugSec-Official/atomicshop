@@ -10,6 +10,8 @@ from ..file_io.file_io import read_file
 
 
 """
+Using logger in the class only once during the import of the module.
+ 
 class ParserParent:
     # Initializing the logger in the "class variable" section will leave the instance of the logger initiated
     # and the rest of the instances of the class will use the same logger.
@@ -27,6 +29,58 @@ class ParserParent:
     # Usage: self.logger.info("Message")
 """
 
+
+"""
+Using Base class for easier interfacing on subclasses.
+
+recognition/recognition_base.py:
+    from abc import abstractmethod
+    
+    
+    class Recognizer:
+        @abstractmethod
+        def recognize_vendor(self, file_path: str) -> str:
+            pass
+    
+        @abstractmethod
+        def recognize_family(self, bytes_list: list[str]]) -> str:
+            pass
+
+
+recognition/super_vendor.py:
+    from .recognition_base import Recognizer
+    
+    class SupervendorRecognizer(Recognizer):
+        def recognize_vendor(self, file_path: str) -> str:
+            classification_string: str = <Some logic to classify the SuperVendor>
+            return classification_string
+    
+        def recognize_family(self, bytes_list: list[str]]) -> str:
+            family_classification_string: str = <Some logic to classify the family of the SuperVendor>
+            return family_classification_string
+            
+
+main_script.py:
+    from . import recognition
+    from .recognition.recognition_base import Recognizer
+    
+    # Get the list of all the recognizers in the recognition package.
+    recognizers_list: list = classes.get_list_of_classes_in_module(
+        imported_package=recognition, imported_base_class=Recognizer)
+    
+    # Get the list of all the vendors from the file.
+    vendors_list: list = list()
+    for recognizer in recognizers_list:
+        recognizer_instance = recognizer()
+        vendor_name: str = recognizer_instance.recognize_vendor(file_object=file_path)
+        if vendor_name:
+            vendors_list.append((vendor_name, recognizer_instance))
+    
+    # Get the families of the vendors.
+    for vendor_name, recognizer_instance in vendors_list:
+        family_name: str = recognizer_instance.recognize_family(bytes_list=file_bytes_list)
+        print(f"Vendor: {vendor_name}, Family: {family_name}")
+"""
 
 def get_list_of_classes_in_module(
         imported_package,
@@ -65,6 +119,22 @@ def get_list_of_classes_in_module(
         import unpackers
         # Get the list of classes
         unpacker_classes = get_list_of_classes_in_module(imported_package=unpackers, imported_base_class=Unpacker)
+
+        # Initialize the classes
+        for unpacker_class in unpacker_classes:
+            unpacker_instance = unpacker_class()
+            unpacker_instance.unpack("file_path")
+        ----------------------------
+        # You can also initialize the list of classes dynamically and after that execute methods.
+        # Example:
+        unpacker_classes = get_list_of_classes_in_module(imported_package=unpackers, imported_base_class=Unpacker)
+
+        instance_list: list = []
+        for unpacker_class in unpacker_classes:
+            instance_list.append(unpacker_class())
+
+        for instance in instance_list:
+            instance.unpack("file_path")
 
     :param imported_package:
     :param imported_base_class:
