@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.19.14 - 12.02.2025
+  * process_poller/simple_process_pool - fixes and improvements.
 * 2.19.13 - 11.02.2025
   * wrappers/playwrightw/scenarios - fixes and improvements.
 * 2.19.12 - 09.02.2025
