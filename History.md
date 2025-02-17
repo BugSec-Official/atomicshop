@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.19.15 - 17.02.2025  
+  * a_mains/update_config_toml - new release.
 * 2.19.14 - 12.02.2025
   * process_poller/simple_process_pool - fixes and improvements.
 * 2.19.13 - 11.02.2025
