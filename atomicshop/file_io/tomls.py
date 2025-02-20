@@ -5,6 +5,7 @@ try:
     import tomllib
 except ModuleNotFoundError:
     # This is library from pypi.
+    # noinspection PyPackageRequirements
     import tomli as tomllib
 
 from . import file_io
@@ -14,6 +15,7 @@ class TomlValueNotImplementedError(Exception):
     pass
 
 
+# noinspection PyUnusedLocal
 @file_io.read_file_decorator
 def read_toml_file(file_path: str,
                    file_mode: str = 'rb',
@@ -35,6 +37,7 @@ def read_toml_file(file_path: str,
     return tomllib.load(file_object)
 
 
+# noinspection PyUnusedLocal
 @file_io.write_file_decorator
 def write_toml_file(
         toml_content: dict,
@@ -112,7 +115,11 @@ def update_toml_file_with_new_config(
         If not, the changes will be written to the 'main_config_file_path'.
     """
 
-    # Sync the config files.
+    if not changes_config_file_path and not changes_dict:
+        raise ValueError("You must provide either 'changes_config_file_path' or 'changes_dict'.")
+    if changes_config_file_path and changes_dict:
+        raise ValueError("You can't provide both 'changes_config_file_path' and 'changes_dict'.")
+
     with open(main_config_file_path, 'r') as file:
         main_config_file_text_lines: list = file.readlines()
 
@@ -121,30 +128,29 @@ def update_toml_file_with_new_config(
     # Read the new config file.
     main_config_file_dict: dict = read_toml_file(main_config_file_path)
 
-    if changes_dict:
-        changes_config_file_dict = changes_dict
-    else:
-        changes_config_file_dict: dict = read_toml_file(changes_config_file_path)
+    if not changes_dict:
+        changes_dict: dict = read_toml_file(changes_config_file_path)
 
     # Update the config text lines.
     for category, settings in main_config_file_dict.items():
-        if category not in changes_config_file_dict:
+        if category not in changes_dict:
             continue
 
         for key, value in settings.items():
             # If the key is in the old config file, use the old value.
-            if key not in changes_config_file_dict[category]:
+            if key not in changes_dict[category]:
                 continue
 
-            if main_config_file_dict[category][key] != changes_config_file_dict[category][key]:
+            if main_config_file_dict[category][key] != changes_dict[category][key]:
                 # Get the line of the current category line.
                 current_category_line_index_in_text = None
                 for current_category_line_index_in_text, line in enumerate(main_config_file_text_lines):
                     if f"[{category}]" in line:
                         break
 
-                # current_category_line_index_in_text = main_config_file_text_lines.index(f"[{category}]\n")
-                current_category_index_in_main_config_dict = list(main_config_file_dict.keys()).index(category)
+                # Get the index inside the main config file dictionary of the current category.
+                main_config_list_of_keys: list = list(main_config_file_dict.keys())
+                current_category_index_in_main_config_dict = main_config_list_of_keys.index(category)
 
                 try:
                     next_category_name = list(
@@ -191,20 +197,20 @@ def update_toml_file_with_new_config(
                     # noinspection PyUnboundLocalVariable
                     comment = main_config_file_text_lines[line_index].replace(string_to_check, '')
 
-                    object_type = type(changes_config_file_dict[category][key])
+                    object_type = type(changes_dict[category][key])
                     if object_type == bool:
-                        value_string_to_set = str(changes_config_file_dict[category][key]).lower()
+                        value_string_to_set = str(changes_dict[category][key]).lower()
                     elif object_type == str:
-                        value_string_to_set = f"'{changes_config_file_dict[category][key]}'"
+                        value_string_to_set = f"'{changes_dict[category][key]}'"
                     elif object_type == int:
-                        value_string_to_set = str(changes_config_file_dict[category][key])
+                        value_string_to_set = str(changes_dict[category][key])
 
                     # noinspection PyUnboundLocalVariable
                     line_to_set = f"{key} = {value_string_to_set}{comment}"
                     # Replace the line with the old value.
                     main_config_file_text_lines[line_index] = line_to_set
 
-                    main_config_file_dict[category][key] = changes_config_file_dict[category][key]
+                    main_config_file_dict[category][key] = changes_dict[category][key]
 
     if new_config_file_path:
         file_path_to_write = new_config_file_path
