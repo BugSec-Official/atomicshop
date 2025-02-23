@@ -136,6 +136,7 @@ class DnsRequestResponseTrace:
             status = 'Error'
 
         event_dict: dict = {
+            'timestamp': event['timestamp'],
             'event_id': event['EventId'],
             'query': event['EventHeader']['QueryName'],
             'query_type_id': str(event['EventHeader']['QueryType']),

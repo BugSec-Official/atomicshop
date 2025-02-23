@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.19.17 - 23.02.2025
+  * etws - fixes and improvements.
 * 2.19.16 - 20.02.2025
   * file_io/tomls - fixes and improvements.
 * 2.19.15 - 17.02.2025  
