@@ -112,6 +112,7 @@ class TcpIpNewConnectionsTrace:
         remote_address = remote_address.replace('[', '').replace(']', '')
 
         event_dict: dict = {
+            'timestamp': event['timestamp'],
             'event_id': event['EventId'],
             'local_ip': local_address,
             'local_port': local_port,

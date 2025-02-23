@@ -1,7 +1,7 @@
 import queue
 import sys
-import time
 import multiprocessing.managers
+from datetime import datetime
 
 # Import FireEye Event Tracing library.
 import etw
@@ -9,7 +9,6 @@ import etw
 from ..print_api import print_api
 from . import sessions
 from ..process_poller import simple_process_pool
-from ..wrappers.psutilw import psutilw
 
 
 class EventTrace(etw.ETW):
@@ -147,9 +146,13 @@ class EventTrace(etw.ETW):
 
         event: tuple = self.event_queue.get()
 
+        current_datetime = datetime.now()
+        readable_time = current_datetime.strftime('%Y-%m-%d %H:%M:%S.%f')
+
         event_dict: dict = {
             'EventId': event[0],
-            'EventHeader': event[1]
+            'EventHeader': event[1],
+            'timestamp': readable_time
         }
 
         if 'ProcessId' not in event[1]:
