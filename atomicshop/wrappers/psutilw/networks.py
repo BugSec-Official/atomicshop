@@ -22,7 +22,7 @@ def get_process_using_port(ip_port: str) -> Union[dict, None]:
                 # if conn.laddr.port == port:
                 # Status LISTEN is for TCP sockets and NONE is for UDP sockets.
                 # Sometimes after socket close, the port will be in TIME_WAIT state.
-                if conn.laddr.port == port and (conn.status == 'LISTEN' or conn.status == 'NONE'):
+                if (conn.laddr.port == port and (conn.status == 'LISTEN' or conn.status == 'NONE')) and conn.laddr.ip == ip_address:
                     cmdline = proc.info['cmdline']
                     if not cmdline:
                         cmdline = '<EMPTY: TRY RUNNING AS ADMIN>'
