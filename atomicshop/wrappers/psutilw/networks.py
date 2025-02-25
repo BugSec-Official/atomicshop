@@ -5,12 +5,16 @@ import socket
 import psutil
 
 
-def get_process_using_port(port: int) -> Union[dict, None]:
+def get_process_using_port(ip_port: str) -> Union[dict, None]:
     """
     Function to find the process using the port.
-    :param port: Port number.
+    :param ip_port: string, Listening IP and port number. Example: '192.168.0.1:443'
     :return: dict['pid', 'name', 'cmdline'] or None.
     """
+
+    ip_address, port = ip_port.split(':')
+    port = int(port)
+
     for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
         try:
             connections = proc.connections(kind='inet')
@@ -34,17 +38,18 @@ def get_process_using_port(port: int) -> Union[dict, None]:
     return None
 
 
-def get_processes_using_port_list(ports: list) -> Union[dict, None]:
+def get_processes_using_port_list(ips_ports: list) -> Union[dict, None]:
     """
     Function to find the process using the port.
-    :param ports: List of port numbers.
+    :param ips_ports: List of listening ips and port numbers. Example:
+        ['192.168.0.1:443', '192.168.0.2:443']
     :return: dict[port: {'pid', 'name', 'cmdline'}] or None.
     """
     port_process_map = {}
-    for port in ports:
-        process_info = get_process_using_port(port)
+    for ip_port in ips_ports:
+        process_info = get_process_using_port(ip_port)
         if process_info:
-            port_process_map[port] = process_info
+            port_process_map[ip_port] = process_info
 
     return port_process_map
 

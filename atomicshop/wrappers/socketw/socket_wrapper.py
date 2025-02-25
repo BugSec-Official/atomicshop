@@ -309,7 +309,11 @@ class SocketWrapper:
                     print_api(message, color='red', logger=self.logger)
                     return 1
 
-        port_in_use = networks.get_processes_using_port_list(self.listening_port_list)
+        ips_ports: list[str] = list()
+        for port in self.listening_port_list:
+            ips_ports.append(f"{self.listening_interface}:{port}")
+
+        port_in_use = networks.get_processes_using_port_list(ips_ports)
         if port_in_use:
             error_messages: list = list()
             for port, process_info in port_in_use.items():

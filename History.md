@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.19.18 - 25.02.2025
+  * wrappers/psutilw/networks, wrappers/socketw - fixes and improvements.
 * 2.19.17 - 23.02.2025
   * etws - fixes and improvements.
 * 2.19.16 - 20.02.2025
