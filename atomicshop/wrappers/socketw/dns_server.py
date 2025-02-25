@@ -273,7 +273,8 @@ class DnsServer:
         except ValueError as e:
             raise DnsConfigurationValuesError(e)
 
-        port_in_use = networks.get_processes_using_port_list([self.listening_port])
+        ips_ports: list[str] = [f'{self.listening_interface}:{self.listening_port}']
+        port_in_use = networks.get_processes_using_port_list(ips_ports)
         if port_in_use:
             error_messages: list = list()
             for port, process_info in port_in_use.items():
