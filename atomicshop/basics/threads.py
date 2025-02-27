@@ -18,6 +18,20 @@ def current_thread_id():
     return thread_id
 
 
+def get_current_thread_name():
+    return threading.current_thread().name
+
+
+def set_current_thread_name(name: str):
+    threading.current_thread().name = name
+
+
+def set_current_thread_name_by_process_name():
+    import multiprocessing
+    current_process_name = multiprocessing.current_process().name
+    threading.current_thread().name = current_process_name
+
+
 def get_number_of_active_threads():
     return threading.active_count()
 

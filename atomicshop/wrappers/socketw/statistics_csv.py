@@ -6,7 +6,7 @@ from ..loggingw import loggingw
 
 LOGGER_NAME: str = 'statistics'
 STATISTICS_HEADER: str = (
-    'request_time_sent,thread_id,tls,protocol,protocol2,protocol3,host,path,command,status_code,request_size_bytes,'
+    'request_time_sent,thread_id,engine,source_host,source_ip,tls,protocol,protocol2,protocol3,dest_port,host,path,command,status_code,request_size_bytes,'
     'response_size_bytes,file_path,process_cmd,action,error')
 
 
@@ -22,7 +22,7 @@ class StatisticsCSVWriter:
         self.csv_logger = loggingw.create_logger(
             logger_name=LOGGER_NAME,
             directory_path=statistics_directory_path,
-            add_timedfile=True,
+            add_timedfile_with_internal_queue=True,
             formatter_filehandler='MESSAGE',
             file_type='csv',
             header=STATISTICS_HEADER
@@ -31,12 +31,16 @@ class StatisticsCSVWriter:
     def write_row(
             self,
             thread_id: str,
+            engine: str,
+            source_host: str,
+            source_ip: str,
             host: str,
             tls_type: str,
             tls_version: str,
             protocol: str,
             protocol2: str,
             protocol3: str,
+            dest_port: str,
             path: str,
             status_code: str,
             command: str,
@@ -59,10 +63,14 @@ class StatisticsCSVWriter:
         escaped_line_string: str = csvs.escape_csv_line_to_string([
             timestamp,
             thread_id,
+            engine,
+            source_host,
+            source_ip,
             tls_info,
             protocol,
             protocol2,
             protocol3,
+            dest_port,
             host,
             path,
             command,
@@ -79,7 +87,11 @@ class StatisticsCSVWriter:
 
     def write_accept_error(
             self,
+            engine: str,
+            source_ip: str,
+            source_host: str,
             error_message: str,
+            dest_port: str,
             host: str,
             process_name: str,
             thread_id: str = str()
@@ -88,7 +100,11 @@ class StatisticsCSVWriter:
         Write the error message to the statistics CSV file.
         This is used for easier execution, since most of the parameters will be empty on accept.
 
+        :param engine: string, engine name.
+        :param source_ip: string, source IP address.
+        :param source_host: string, source host name.
         :param error_message: string, error message.
+        :param dest_port: string, destination port.
         :param host: string, host, the domain or IP address.
         :param process_name: process name, the command line of the process.
         :param thread_id: integer, the id of the thread.
@@ -97,12 +113,16 @@ class StatisticsCSVWriter:
 
         self.write_row(
             thread_id=thread_id,
-            host=host,
+            engine=engine,
+            source_host=source_host,
+            source_ip=source_ip,
             tls_type='',
             tls_version='',
             protocol='',
             protocol2='',
             protocol3='',
+            dest_port=dest_port,
+            host=host,
             path='',
             status_code='',
             command='',

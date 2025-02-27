@@ -10,6 +10,7 @@ class ClientMessage:
     def __init__(self):
         # noinspection PyTypeChecker
         self.timestamp: datetime = None
+        self.engine_name: str = str()
         # noinspection PyTypeChecker
         self.request_raw_bytes: bytes = None
         self.request_auto_parsed: Union[http_parse.HTTPRequestParse, any] = None
@@ -22,6 +23,7 @@ class ClientMessage:
         self.response_raw_hex: hex = None
         self.server_name: str = str()
         self.server_ip: str = str()
+        self.client_name: str = str()
         self.client_ip: str = str()
         self.source_port: int = int()
         self.destination_port: int = int()

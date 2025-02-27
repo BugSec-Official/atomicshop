@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.20.00 - 27.02.2025
+  * mitm, print_api, wrappers/loggingw, wrappers/socketw - fixes and improvements.
 * 2.19.19 - 25.02.2025
   * wrappers/psutilw/networks - fixes and improvements.
 * 2.19.18 - 25.02.2025

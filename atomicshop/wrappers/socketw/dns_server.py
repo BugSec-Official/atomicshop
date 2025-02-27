@@ -6,6 +6,7 @@ import socket
 import logging
 from pathlib import Path
 from typing import Literal
+import multiprocessing
 
 from ...print_api import print_api
 from ..loggingw import loggingw
@@ -45,7 +46,7 @@ class DnsStatisticsCSVWriter:
         self.csv_logger = loggingw.create_logger(
             logger_name=LOGGER_NAME,
             directory_path=statistics_directory_path,
-            add_timedfile=True,
+            add_timedfile_with_internal_queue=True,
             formatter_filehandler='MESSAGE',
             file_type='csv',
             header=DNS_STATISTICS_HEADER
@@ -156,12 +157,14 @@ class DnsServer:
             offline_mode: bool = False,
             tcp_target_server_ipv4: str = '127.0.0.1',
             tcp_resolve_domain_list: list = None,
-            request_domain_queue: queues.NonBlockQueue = None,
+            request_domain_queue: multiprocessing.Queue = None,
             buffer_size_receive: int = 8192,
             response_ttl: int = 60,
             dns_service_retries: int = 5,
             cache_timeout_minutes: int = 60,
-            logger: logging.Logger = None
+            logger: logging.Logger = None,
+            logging_queue: multiprocessing.Queue = None,
+            logger_name: str = None
     ):
         """
         Initialize the DNS Server object with all the necessary settings.
@@ -186,14 +189,20 @@ class DnsServer:
             the domains to.
         :param tcp_resolve_domain_list: list: List of domains that will be resolved to the TCP Server.
             This means that all the requests will be resolved to the specified offline IPv4 address.
-        :param request_domain_queue: queues.NonBlockQueue: Queue to pass all the requested domains that hit the DNS
+        :param request_domain_queue: multiprocessing Queue to pass all the requested domains that hit the DNS
         :param buffer_size_receive: int: Buffer size of the connection while receiving messages.
         :param response_ttl: int, Time to live of the DNS Response that will be returned. Default is 60 seconds.
         :param dns_service_retries: int, How many times the request will be sent to forwarded DNS Service on errors:
             (socket connect / request send / response receive).
         :param cache_timeout_minutes: int: Timeout in minutes to clear the DNS Cache.
             server. Each domain will be pass in the queue as a string.
+
         :param logger: logging.Logger: Logger object to use for logging. If not provided, a new logger will be created.
+        :param logging_queue: multiprocessing.Queue: Queue to pass the logs to the QueueListener.
+            You will use this in case you run the DNS Server in a separate process.
+            Of course, you need to have a QueueListener to listen to this queue.
+
+        You can pass only one of the following: 'logger', 'logging_queue'.
         """
 
         self.listening_interface: str = listening_interface
@@ -207,11 +216,16 @@ class DnsServer:
         self.resolve_to_tcp_server_only_tcp_resolve_domains: bool = resolve_to_tcp_server_only_tcp_resolve_domains
         self.resolve_to_tcp_server_all_domains: bool = resolve_to_tcp_server_all_domains
         self.resolve_regular: bool = resolve_regular
-        self.request_domain_queue: queues.NonBlockQueue = request_domain_queue
+        self.request_domain_queue: multiprocessing.Queue = request_domain_queue
         self.buffer_size_receive: int = buffer_size_receive
         self.response_ttl: int = response_ttl
         self.dns_service_retries: int = dns_service_retries
         self.cache_timeout_minutes: int = cache_timeout_minutes
+        self.logging_queue: multiprocessing.Queue = logging_queue
+        self.logging_name: str = logger_name
+
+        if logger and logging_queue:
+            raise ValueError("You can pass only one of the following: 'logger', 'logging_queue'.")
 
         if not tcp_resolve_domain_list:
             self.tcp_resolve_domain_list = list()
@@ -242,20 +256,31 @@ class DnsServer:
         # network log of TCP Server module.
         self.dns_statistics_csv_writer = DnsStatisticsCSVWriter(statistics_directory_path=log_directory_path)
 
+        if not logger_name and not logger and not logging_queue:
+            self.logger_name = Path(__file__).stem
+        elif logger_name and (logger or logging_queue):
+            self.logger_name = f'{logger_name}.{Path(__file__).stem}'
+
         # Check if the logger was provided, if not, create a new logger.
-        if not logger:
-            self.logger = loggingw.create_logger(
+        if not logger and not logging_queue:
+            self.logger: logging.Logger = loggingw.create_logger(
                 logger_name=Path(__file__).stem,
                 directory_path=self.log_directory_path,
                 add_stream=True,
-                add_timedfile=True,
+                add_timedfile_with_internal_queue=True,
                 formatter_streamhandler='DEFAULT',
                 formatter_filehandler='DEFAULT',
                 backupCount=backupCount_log_files_x_days
             )
-        else:
+        elif logger:
             # Create child logger for the provided logger with the module's name.
-            self.logger: logging.Logger = loggingw.get_logger_with_level(f'{logger.name}.{Path(__file__).stem}')
+            self.logger: logging.Logger = loggingw.get_logger_with_level(self.logger_name)
+        elif logging_queue:
+            self.logger: logging.Logger = loggingw.create_logger(
+                logger_name=self.logger_name,
+                add_queue_handler=True,
+                log_queue=self.logging_queue
+            )
 
         self.test_config()
 
@@ -271,6 +296,9 @@ class DnsServer:
                 raise_if_all_false=True
             )
         except ValueError as e:
+            print_api(f'DnsConfigurationValuesError: {str(e)}', error_type=True, color="red", logger=self.logger)
+            # Wait for the message to be printed and saved to file.
+            time.sleep(1)
             raise DnsConfigurationValuesError(e)
 
         ips_ports: list[str] = [f'{self.listening_interface}:{self.listening_port}']
@@ -279,7 +307,12 @@ class DnsServer:
             error_messages: list = list()
             for port, process_info in port_in_use.items():
                 error_messages.append(f"Port [{port}] is already in use by process: {process_info}")
-            raise DnsPortInUseError("\n".join(error_messages))
+
+            message = "\n".join(error_messages)
+            print_api(f'DnsPortInUseError: {str(e)}', error_type=True, color="red", logger=self.logger)
+            # Wait for the message to be printed and saved to file.
+            time.sleep(1)
+            raise DnsPortInUseError(message)
 
     def thread_worker_empty_dns_cache(self, function_sleep_time: int):
         """
@@ -457,7 +490,7 @@ class DnsServer:
                         if forward_to_tcp_server:
                             # If the request is forwarded to TCP server, then we'll put the domain in the domain queue.
                             # self.request_domain_queue.put(question_domain)
-                            self.request_domain_queue.queue = question_domain
+                            self.request_domain_queue.put(question_domain)
 
                             # Make DNS response that will refer TCP traffic to our server
                             dns_built_response = DNSRecord(
@@ -846,3 +879,58 @@ class DnsServer:
                     self.logger.info("==========")
                     pass
                     continue
+
+
+# noinspection PyPep8Naming
+def start_dns_server_multiprocessing_worker(
+        listening_interface: str,
+        listening_port: int,
+        log_directory_path: str,
+        backupCount_log_files_x_days: int,
+        forwarding_dns_service_ipv4: str,
+        tcp_target_server_ipv4: str,
+        # Passing the engine domain list to DNS server to work with.
+        # 'list' function re-initializes the current list, or else it will be the same instance object.
+        tcp_resolve_domain_list: list,
+        offline_mode: bool,
+        resolve_to_tcp_server_only_tcp_resolve_domains: bool,
+        resolve_to_tcp_server_all_domains: bool,
+        resolve_regular: bool,
+        cache_timeout_minutes: int,
+        request_domain_queue: multiprocessing.Queue,
+        logging_queue: multiprocessing.Queue,
+        logger_name: str
+):
+    # Setting the current thread name to the current process name.
+    current_process_name = multiprocessing.current_process().name
+    threading.current_thread().name = current_process_name
+
+
+
+    try:
+        dns_server_instance = DnsServer(
+            listening_interface=listening_interface,
+            listening_port=listening_port,
+            log_directory_path=log_directory_path,
+            backupCount_log_files_x_days=backupCount_log_files_x_days,
+            forwarding_dns_service_ipv4=forwarding_dns_service_ipv4,
+            tcp_target_server_ipv4=tcp_target_server_ipv4,
+            # Passing the engine domain list to DNS server to work with.
+            # 'list' function re-initializes the current list, or else it will be the same instance object.
+            tcp_resolve_domain_list=tcp_resolve_domain_list,
+            offline_mode=offline_mode,
+            resolve_to_tcp_server_only_tcp_resolve_domains=resolve_to_tcp_server_only_tcp_resolve_domains,
+            resolve_to_tcp_server_all_domains=resolve_to_tcp_server_all_domains,
+            resolve_regular=resolve_regular,
+            cache_timeout_minutes=cache_timeout_minutes,
+            request_domain_queue=request_domain_queue,
+            logging_queue=logging_queue,
+            logger_name=logger_name
+        )
+    except (DnsPortInUseError, DnsConfigurationValuesError) as e:
+        print_api(e, error_type=True, color="red", logger=dns_server_instance.logger)
+        # Wait for the message to be printed and saved to file.
+        time.sleep(1)
+        return 1
+
+    dns_server_instance.start()

@@ -87,3 +87,16 @@ def is_socket_closed(socket_object) -> bool:
             return False
     except socket.error:
         return False
+
+
+def get_host_name_from_ip_address(ip_address: str) -> str:
+    """
+    Get the host name from the IP address.
+    :param ip_address: string, IP address.
+    :return: string, host name.
+    """
+
+    host_name, alias_list, ipaddr_list = socket.gethostbyaddr(ip_address)
+    _ = alias_list, ipaddr_list
+
+    return host_name
