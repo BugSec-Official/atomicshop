@@ -2,6 +2,7 @@ from datetime import datetime
 import threading
 import queue
 import copy
+import socket
 
 from ..wrappers.socketw import receiver, sender, socket_client, base
 from .. import websocket_parse
@@ -73,12 +74,16 @@ def thread_worker_main(
 
         statistics_writer.write_row(
             thread_id=str(thread_id),
-            host=client_message.server_name,
+            engine=client_message.engine_name,
+            source_host=client_message.client_name,
+            source_ip=client_message.client_ip,
             tls_type=tls_type,
             tls_version=tls_version,
             protocol=client_message.protocol,
             protocol2=client_message.protocol2,
             protocol3=client_message.protocol3,
+            dest_port=client_message.destination_port,
+            host=client_message.server_name,
             path=http_path,
             status_code=http_status_code,
             command=http_command,
@@ -287,12 +292,14 @@ def thread_worker_main(
 
     def client_message_first_start() -> ClientMessage:
         client_message: ClientMessage = ClientMessage()
+        client_message.client_name = client_name
         client_message.client_ip = client_ip
         client_message.source_port = source_port
         client_message.destination_port = destination_port
         client_message.server_name = server_name
         client_message.thread_id = thread_id
         client_message.process_name = process_commandline
+        client_message.engine_name = engine_name
 
         return client_message
 
@@ -530,7 +537,9 @@ def thread_worker_main(
     http_path_queue: queue.Queue = queue.Queue()
 
     try:
+        engine_name: str = recorder.engine_name
         client_ip, source_port = client_socket.getpeername()
+        client_name = socket.gethostbyaddr(client_ip)[0]
         destination_port = client_socket.getsockname()[1]
 
         network_logger.info(f"Thread Created - Client [{client_ip}:{source_port}] | "

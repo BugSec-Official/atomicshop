@@ -3,6 +3,8 @@ import select
 from typing import Literal, Union
 from pathlib import Path
 import logging
+import socket
+import multiprocessing
 
 from ..psutilw import networks
 from ..certauthw import certauthw
@@ -67,7 +69,8 @@ class SocketWrapper:
             logger: logging.Logger = None,
             exceptions_logger: loggingw.ExceptionCsvLogger = None,
             statistics_logs_directory: str = None,
-            request_domain_from_dns_server_queue: queues.NonBlockQueue = None
+            request_domain_from_dns_server_queue: multiprocessing.Queue = None,
+            engines_domains: dict = None
     ):
         """
         Socket Wrapper class that will be used to create sockets, listen on them, accept connections and send them to
@@ -160,10 +163,18 @@ class SocketWrapper:
 
             statistics_writer: statistics_csv.StatisticsCSVWriter object, there is a logger object that
                 will be used to write the statistics file.
-        :param request_domain_from_dns_server_queue: queues.NonBlockQueue object, non-blocking queue that will be used
+        :param request_domain_from_dns_server_queue: multiprocessing queue that will be used
             to get the domain name that was requested from the DNS server (atomicshop.wrappers.socketw.dns_server).
             This is used to get the domain name that got to the DNS server and set it to the socket in case SNI
             was empty (in the SNIHandler class to set the 'server_hostname' for the socket).
+        :param engines_domains: dictionary of engines that will be used to process the requests. Example:
+            [
+                {'this_is_engine_name': ['example.com', 'example.org']},
+                {'this_is_engine_name2': ['example2.com', 'example2.org']}
+            ]
+
+            the 'engine_name' for statistics.csv file will be taken from the key of the dictionary, while correlated
+            by the domain name from the list in the dictionary.
         """
 
         self.listening_interface: str = listening_interface
@@ -199,7 +210,8 @@ class SocketWrapper:
         self.statistics_logs_directory: str = statistics_logs_directory
         self.forwarding_dns_service_ipv4_list___only_for_localhost = (
             forwarding_dns_service_ipv4_list___only_for_localhost)
-        self.request_domain_from_dns_server_queue = request_domain_from_dns_server_queue
+        self.request_domain_from_dns_server_queue: multiprocessing.Queue = request_domain_from_dns_server_queue
+        self.engines_domains: dict = engines_domains
 
         self.socket_object = None
 
@@ -232,7 +244,7 @@ class SocketWrapper:
                 logger_name='SocketWrapper',
                 directory_path=self.statistics_logs_directory,
                 add_stream=True,
-                add_timedfile=True,
+                add_timedfile_with_internal_queue=True,
                 formatter_streamhandler='DEFAULT',
                 formatter_filehandler='DEFAULT'
             )
@@ -452,10 +464,9 @@ class SocketWrapper:
                 # Get the domain queue. Tried using "Queue.Queue" object, but it stomped the SSL Sockets
                 # from accepting connections.
                 domain_from_dns_server = None
-                if self.request_domain_from_dns_server_queue.queue:
-                    domain_from_dns_server = self.request_domain_from_dns_server_queue.queue
-                    self.logger.info(
-                        f"Requested domain from DNS Server: {self.request_domain_from_dns_server_queue.queue}")
+                if self.request_domain_from_dns_server_queue is not None:
+                    domain_from_dns_server = self.request_domain_from_dns_server_queue.get()
+                    self.logger.info(f"Requested domain from DNS Server: {domain_from_dns_server}")
 
                 # Wait from any connection on "accept()".
                 # 'client_socket' is socket or ssl socket, 'client_address' is a tuple (ip_address, port).
@@ -476,6 +487,11 @@ class SocketWrapper:
                         ssh_pass=self.ssh_pass,
                         logger=self.logger)
                     process_name = get_command_instance.get_process_name(print_kwargs={'logger': self.logger})
+
+                source_ip: str = client_address[0]
+                source_hostname: str = socket.gethostbyaddr(source_ip)[0]
+                engine_name: str = get_engine_name(domain_from_dns_server, self.engines_domains)
+                dest_port: int = listening_socket_object.getsockname()[1]
 
                 # If 'accept()' function worked well, SSL worked well, then 'client_socket' won't be empty.
                 if client_socket:
@@ -527,10 +543,21 @@ class SocketWrapper:
                                 print_kwargs={'logger': self.logger}
                             )
 
+                        # If the 'domain_from_dns_server' is empty, it means that the 'engine_name' is not set.
+                        # In this case we will set the 'engine_name' to from the SNI.
+                        if engine_name == '':
+                            sni_hostname: str = ssl_client_socket.server_hostname
+                            if sni_hostname:
+                                engine_name = get_engine_name(sni_hostname, self.engines_domains)
+
                         if accept_error_message:
                             # Write statistics after wrap is there was an error.
                             self.statistics_writer.write_accept_error(
+                                engine=engine_name,
+                                source_host=source_hostname,
+                                source_ip=source_ip,
                                 error_message=accept_error_message,
+                                dest_port=str(dest_port),
                                 host=domain_from_dns_server,
                                 process_name=process_name)
 
@@ -564,7 +591,11 @@ class SocketWrapper:
                 else:
                     # Write statistics after accept.
                     self.statistics_writer.write_accept_error(
+                        engine=engine_name,
+                        source_host=source_hostname,
+                        source_ip=source_ip,
                         error_message=accept_error_message,
+                        dest_port=str(dest_port),
                         host=domain_from_dns_server,
                         process_name=process_name)
             except Exception as e:
@@ -601,3 +632,22 @@ def before_socket_thread_worker(
         callable_function(*thread_args)
     except Exception as e:
         exceptions_logger.write(e)
+
+
+def get_engine_name(domain: str, engines_domains: dict):
+    """
+    Function that will get the engine name from the domain name.
+    :param domain: string, domain name.
+    :param engines_domains: dictionary, dictionary that contains the engine names and domains. Example:
+        [
+            {'this_is_engine_name': ['example.com', 'example.org']},
+            {'this_is_engine_name2': ['example2.com', 'example2.org']}
+        ]
+    :return: string, engine name.
+    """
+
+    for engine_name, engine_domain_list in engines_domains.items():
+        if any(engine_domain in domain for engine_domain in engine_domain_list):
+            return engine_name
+
+    return ''

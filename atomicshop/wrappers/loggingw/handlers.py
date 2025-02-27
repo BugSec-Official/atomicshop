@@ -9,6 +9,7 @@ from typing import Literal, Union
 import threading
 from datetime import datetime
 import contextlib
+import multiprocessing
 
 from . import loggers, formatters, filters, consts
 from ... import datetimes, filesystem
@@ -48,17 +49,16 @@ def _process_formatter_attribute(
         return formatter
 
 
-def add_stream_handler(
-        logger: logging.Logger,
+def get_stream_handler_extended(
         logging_level: str = "DEBUG",
         formatter: Union[
             Literal['DEFAULT', 'MESSAGE'],
             str,
             None] = None,
         formatter_use_nanoseconds: bool = False
-):
+) -> logging.StreamHandler:
     """
-    Function to add StreamHandler to logger.
+    Function to get StreamHandler with extended configuration.
     Stream formatter will output messages to the console.
     """
 
@@ -76,11 +76,7 @@ def add_stream_handler(
             formatter=formatter, use_nanoseconds=formatter_use_nanoseconds)
         set_formatter(stream_handler, logging_formatter)
 
-    # Adding the handler to the main logger
-    loggers.add_handler(logger, stream_handler)
-
-    # Disable propagation from the 'root' logger, so we will not see the messages twice.
-    loggers.set_propagation(logger)
+    return stream_handler
 
 
 # Function to start the interval-based rotation check
@@ -140,96 +136,12 @@ def _wrap_do_rollover(handler, header):
     handler.doRollover = new_do_rollover
 
 
-# noinspection PyPep8Naming
-def add_timedfilehandler_with_queuehandler(
-        logger: logging.Logger,
-        file_path: str,
-        file_type: Literal[
-            'txt',
-            'csv',
-            'json'] = 'txt',
-        logging_level="DEBUG",
-        formatter: Union[
-            Literal['DEFAULT', 'MESSAGE'],
-            str,
-            None] = None,
-        formatter_use_nanoseconds: bool = False,
-        rotate_at_rollover_time: bool = True,
-        rotation_date_format: str = None,
-        rotation_callback_namer_function: callable = None,
-        rotation_use_default_callback_namer_function: bool = True,
-        when: str = 'midnight',
-        interval: int = 1,
-        delay: bool = True,
-        backupCount: int = 0,
-        encoding=None,
-        header: str = None
-):
+def get_queue_handler_and_start_queue_listener_for_file_handler(file_handler):
     """
-    Function to add TimedRotatingFileHandler and QueueHandler to logger.
-    TimedRotatingFileHandler will output messages to the file through QueueHandler.
-    This is needed, since TimedRotatingFileHandler is not thread-safe, though official docs say it is.
-    """
-
-    # Setting the TimedRotatingFileHandler, without adding it to the logger.
-    # It will be added to the QueueListener, which will use the TimedRotatingFileHandler to write logs.
-    # This is needed since there's a bug in TimedRotatingFileHandler, which won't let it be used with
-    # threads the same way it would be used for multiprocess.
-
-    # Creating file handler with log filename. At this stage the log file is created and locked by the handler,
-    # Unless we use "delay=True" to tell the class to write the file only if there's something to write.
-
-    filesystem.create_directory(os.path.dirname(file_path))
-
-    file_handler = get_timed_rotating_file_handler(
-        file_path, when=when, interval=interval, delay=delay, backupCount=backupCount, encoding=encoding)
-
-    loggers.set_logging_level(file_handler, logging_level)
-
-    formatter = _process_formatter_attribute(formatter, file_type=file_type)
-
-    # If formatter was passed to the function we'll add it to handler.
-    # noinspection GrazieInspection
-    if formatter:
-        # Convert string to Formatter object. Moved to newer styling of python 3: style='{'.
-        logging_formatter = formatters.get_logging_formatter_from_string(
-            formatter=formatter, use_nanoseconds=formatter_use_nanoseconds)
-        # Setting the formatter in file handler.
-        set_formatter(file_handler, logging_formatter)
-
-    # This function will change the suffix behavior of the rotated file name.
-    change_rotated_filename(
-        file_handler=file_handler, date_format_string=rotation_date_format,
-        callback_namer_function=rotation_callback_namer_function,
-        use_default_callback_namer_function=rotation_use_default_callback_namer_function
-    )
-
-    # If header is set, we'll add the filter to the handler that will create the header on file rotation.
-    if header:
-        # Filter is added to write header on logger startup.
-        add_filter_to_handler(file_handler, filters.HeaderFilter(header, file_handler.baseFilename))
-        # Wrap the doRollover method to write the header after each rotation, since adding the filter
-        # will only write the header on log file creation.
-        _wrap_do_rollover(file_handler, header)
-
-    # Start the interval-based rotation forcing.
-    if rotate_at_rollover_time:
-        _start_interval_rotation(file_handler)
-
-    queue_handler = start_queue_listener_for_file_handler_and_get_queue_handler(file_handler)
-    loggers.set_logging_level(queue_handler, logging_level)
-
-    # Add the QueueHandler to the logger.
-    loggers.add_handler(logger, queue_handler)
-
-    # Disable propagation from the 'root' logger, so we will not see the messages twice.
-    loggers.set_propagation(logger)
-
-
-def start_queue_listener_for_file_handler_and_get_queue_handler(file_handler):
-    """
-    Function to start QueueListener, which will put the logs from FileHandler to the Queue.
-    QueueHandler will get the logs from the Queue and put them to the file that was set in the FileHandler.
+    Function to create QueueHandler and start QueueListener for the FileHandler.
+    The QueueListener, which will get the logs from the queue and use the FileHandler to write them to the
+    file.
+    The QueueHandler will put the logs to the queue.
 
     :param file_handler: FileHandler object.
     :return: QueueHandler object.
@@ -239,10 +151,14 @@ def start_queue_listener_for_file_handler_and_get_queue_handler(file_handler):
     # put in the Queue. if integer is bigger than 0, it means that this will be the maximum
     # number of items.
     queue_object = queue.Queue(-1)
-    # Create QueueListener, which will put the logs from FileHandler to the Queue and put the logs to the queue.
-    start_queue_listener_for_file_handler(file_handler, queue_object)
 
-    return get_queue_handler(queue_object)
+    # Create QueueListener, which will get the logs from the queue and use the FileHandler to write them to the file.
+    start_queue_listener_for_handlers((file_handler,), queue_object)
+
+    # Get the QueueHandler, which will put the logs to the queue.
+    queue_handler = get_queue_handler(queue_object)
+
+    return queue_handler
 
 
 # BASE FUNCTIONS =======================================================================================================
@@ -292,19 +208,134 @@ def get_timed_rotating_file_handler(
         filename=log_file_path, when=when, interval=interval, backupCount=backupCount, delay=delay, encoding=encoding)
 
 
-def start_queue_listener_for_file_handler(
-        file_handler: logging.FileHandler, queue_object) -> logging.handlers.QueueListener:
+# noinspection PyPep8Naming
+def get_timed_rotating_file_handler_extended(
+        file_path: str,
+        file_type: Literal[
+            'txt',
+            'csv',
+            'json'] = 'txt',
+        logging_level="DEBUG",
+        formatter: Union[
+            Literal['DEFAULT', 'MESSAGE'],
+            str,
+            None] = None,
+        formatter_use_nanoseconds: bool = False,
+        rotate_at_rollover_time: bool = True,
+        rotation_date_format: str = None,
+        rotation_callback_namer_function: callable = None,
+        rotation_use_default_callback_namer_function: bool = True,
+        use_internal_queue_listener: bool = False,
+        when: str = 'midnight',
+        interval: int = 1,
+        delay: bool = True,
+        backupCount: int = 0,
+        encoding=None,
+        header: str = None
+) -> Union[TimedRotatingFileHandler, logging.handlers.QueueHandler]:
+    """
+    :param file_path: Path to the log file.
+    :param file_type: Type of the file. Possible values: 'txt', 'csv', 'json'.
+    :param logging_level: Logging level for the handler.
+    :param formatter: Formatter for the handler.
+    :param formatter_use_nanoseconds: If set to True, the formatter will use nanoseconds.
+    :param rotate_at_rollover_time: If set to True, the handler will rotate the log file at the rollover time.
+    :param rotation_date_format: Date format string to set to the handler's suffix.
+    :param rotation_callback_namer_function: Callback function to change the filename on rotation.
+    :param rotation_use_default_callback_namer_function: If set to True, the default callback namer function will be used
+        and the filename will be changed on rotation instead of using the default like this:
+        'file.log.2021-12-24' -> 'file_2021-12-24.log'.
+    :param use_internal_queue_listener: If set to True, the handler will use internal QueueListener to write logs.
+    :param when: When to rotate the log file. Possible values:
+        "S" - Seconds
+        "M" - Minutes
+        "H" - Hours
+        "D" - Days
+        "midnight" - Roll over at midnight
+    :param use_internal_queue_listener: If set to True, the handler will use internal QueueListener to write logs.
+        Function to add TimedRotatingFileHandler and QueueHandler to logger.
+        TimedRotatingFileHandler will output messages to the file through QueueHandler.
+        This is needed, since TimedRotatingFileHandler is not thread-safe, though official docs say it is.
+    :param interval: Interval to rotate the log file.
+    :param delay: If set to True, the log file will be created only if there's something to write.
+    :param backupCount: Number of backup files to keep. Default is 0.
+        If backupCount is > 0, when rollover is done, no more than backupCount files are kept, the oldest are deleted.
+        If backupCount is == 0, all the backup files will be kept.
+    :param encoding: Encoding to use for the log file. Same as for the TimeRotatingFileHandler, which uses Default None.
+    :param header: Header to write to the log file.
+    :return: TimedRotatingFileHandler or QueueHandler (if, use_internal_queue_listener is set to True).
+    """
+
+    # Creating file handler with log filename. At this stage the log file is created and locked by the handler,
+    # Unless we use "delay=True" to tell the class to write the file only if there's something to write.
+
+    filesystem.create_directory(os.path.dirname(file_path))
+
+    file_handler = get_timed_rotating_file_handler(
+        file_path, when=when, interval=interval, delay=delay, backupCount=backupCount, encoding=encoding)
+
+    loggers.set_logging_level(file_handler, logging_level)
+
+    formatter = _process_formatter_attribute(formatter, file_type=file_type)
+
+    # If formatter was passed to the function we'll add it to handler.
+    # noinspection GrazieInspection
+    if formatter:
+        # Convert string to Formatter object. Moved to newer styling of python 3: style='{'.
+        logging_formatter = formatters.get_logging_formatter_from_string(
+            formatter=formatter, use_nanoseconds=formatter_use_nanoseconds)
+        # Setting the formatter in file handler.
+        set_formatter(file_handler, logging_formatter)
+
+    # This function will change the suffix behavior of the rotated file name.
+    change_rotated_filename(
+        file_handler=file_handler, date_format_string=rotation_date_format,
+        callback_namer_function=rotation_callback_namer_function,
+        use_default_callback_namer_function=rotation_use_default_callback_namer_function
+    )
+
+    # If header is set, we'll add the filter to the handler that will create the header on file rotation.
+    if header:
+        # Filter is added to write header on logger startup.
+        add_filter_to_handler(file_handler, filters.HeaderFilter(header, file_handler.baseFilename))
+        # Wrap the doRollover method to write the header after each rotation, since adding the filter
+        # will only write the header on log file creation.
+        _wrap_do_rollover(file_handler, header)
+
+    # Start the interval-based rotation forcing.
+    if rotate_at_rollover_time:
+        _start_interval_rotation(file_handler)
+
+    # Setting the TimedRotatingFileHandler, without adding it to the logger.
+    # It will be added to the QueueListener, which will use the TimedRotatingFileHandler to write logs.
+    # This is needed since there's a bug in TimedRotatingFileHandler, which won't let it be used with
+    # threads the same way it would be used for multiprocess.
+
+    # If internal queue listener is set to True, we'll start the QueueListener for the FileHandler.
+    if use_internal_queue_listener:
+        queue_handler = get_queue_handler_and_start_queue_listener_for_file_handler(file_handler)
+        loggers.set_logging_level(queue_handler, logging_level)
+        return queue_handler
+    else:
+        return file_handler
+
+
+def start_queue_listener_for_handlers(
+        handlers: tuple[logging.Handler],
+        queue_object: Union[queue.Queue, multiprocessing.Queue]
+) -> logging.handlers.QueueListener:
     """
     Function to get a QueueListener for the FileHandler.
     This handler get the messages from the FileHandler and put them in the Queue.
 
-    :param file_handler: FileHandler to get the messages from.
+    :param handlers: Tuple of handlers to put in the QueueListener.
+        For example, it can be (stream_handler, file_handler).
     :param queue_object: Queue object to put the messages in.
     :return: QueueListener.
     """
 
     # Create the QueueListener based on TimedRotatingFileHandler
-    queue_listener = QueueListener(queue_object, file_handler)
+    queue_listener: logging.handlers.QueueListener = QueueListener(queue_object, *handlers)
     # Start the QueueListener. Each logger will have its own instance of the Queue
     queue_listener.start()
 
@@ -322,6 +353,25 @@ def get_queue_handler(queue_object) -> logging.handlers.QueueHandler:
     """
 
     return QueueHandler(queue_object)
+
+
+def get_queue_handler_extended(
+        queue_object: Union[
+            queue.Queue,
+            multiprocessing.Queue],
+        logging_level: str = "DEBUG"):
+    """
+    Function to get the QueueHandler.
+    QueueHandler of the logger will pass the logs to the Queue and the opposite QueueListener will write them
+    from the Queue to the file that was set in the FileHandler.
+    """
+
+    # Getting the QueueHandler.
+    queue_handler = get_queue_handler(queue_object)
+    # Setting log level for the handler, that will use the logger while initiated.
+    loggers.set_logging_level(queue_handler, logging_level)
+
+    return queue_handler
 
 
 def set_formatter(handler: logging.Handler, logging_formatter: logging.Formatter):

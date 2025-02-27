@@ -112,7 +112,7 @@ def print_api(
             elif logger_method == 'critical' and not color:
                 color = 'red'
 
-            if color is not None and logger is None:
+            if color is not None:
                 message = ansi_escape_codes.get_colors_basic_dict(color) + message + ansi_escape_codes.ColorsBasic.END
 
         # If 'online' is set to 'True', we'll output message as oneline.
@@ -126,13 +126,10 @@ def print_api(
         if logger:
             # Emit to logger only if 'print_end' is default, since we can't take responsibility for anything else.
             if print_end == '\n':
-                if stdcolor and color is not None:
-                    # Use logger to output message.
-                    with loggingw.temporary_change_logger_stream_record_color(logger, color):
-                        getattr(logger, logger_method)(message)
-                else:
-                    # Use logger to output message.
-                    getattr(logger, logger_method)(message)
+                # Use logger to output message.
+                getattr(logger, logger_method)(message)
+            else:
+                raise ValueError("Logger can't output messages with 'print_end' other than '\\n'.")
         # If logger wasn't passed.
         else:
             # Use print to output the message.

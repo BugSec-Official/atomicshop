@@ -66,7 +66,7 @@ class ModuleCategory:
         #     logger_name=self.engine_name,
         #     directory_path=logs_path,
         #     add_stream=True,
-        #     add_timedfile=True,
+        #     add_timedfile_with_internal_queue=True,
         #     formatter_streamhandler='DEFAULT',
         #     formatter_filehandler='DEFAULT',
         #     backupCount=config_static.LogRec.store_logs_for_x_days

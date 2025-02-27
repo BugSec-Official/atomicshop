@@ -133,6 +133,7 @@ def register_exit_handler(
         Same goes for all the exceptions.
     :param console_close: Register the console close handler.
     :param kill_signal: Register the kill signal handler.
+        Same problem as with atexit handler, it will be called right away on [Ctrl+C].
     :param args: The arguments to pass to the cleanup action.
     :param kwargs: The keyword arguments to pass to the cleanup action.
     """

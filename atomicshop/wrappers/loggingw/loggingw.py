@@ -1,9 +1,13 @@
 import logging
 import os
+from logging import Logger
+from logging.handlers import QueueListener
 from typing import Literal, Union
 import datetime
 import contextlib
 import threading
+import queue
+import multiprocessing
 
 from . import loggers, handlers, filters
 from ...file_io import csvs
@@ -17,11 +21,17 @@ class LoggingwLoggerAlreadyExistsError(Exception):
 
 # noinspection PyPep8Naming
 def create_logger(
-        logger_name: str,
-        file_path: str = None,
-        directory_path: str = None,
+        logger_name: str = None,
+        get_queue_listener: bool = False,
+
         add_stream: bool = False,
         add_timedfile: bool = False,
+        add_timedfile_with_internal_queue: bool = False,
+        add_queue_handler: bool = False,
+
+        log_queue: Union[queue.Queue, multiprocessing.Queue] = None,
+        file_path: str = None,
+        directory_path: str = None,
         file_type: Literal[
             'txt',
             'csv',
@@ -47,17 +57,30 @@ def create_logger(
         delay: bool = False,
         encoding=None,
         header: str = None
-) -> logging.Logger:
+) -> None | QueueListener | Logger:
     """
     Function to get a logger and add StreamHandler and TimedRotatingFileHandler to it.
 
     :param logger_name: Name of the logger.
+    :param get_queue_listener: bool, If set to True, QueueListener will be started with all the handlers
+        like 'add_timedfile' and 'add_stream', using the 'log_queue'.
+
+    Only one of the following parameters can be set at a time: 'logger_name', 'get_queue_listener'.
+
     :param file_path: full path to the log file. If you don't want to use the file, set it to None.
         You can set the directory_path only and then the 'logger_name' will be used as the file name with the
         'file_type' as the file extension.
     :param directory_path: full path to the directory where the log file will be saved.
     :param add_stream: bool, If set to True, StreamHandler will be added to the logger.
-    :param add_timedfile: bool, If set to True, TimedRotatingFileHandler will be added to the logger.
+    :param add_timedfile: bool, If set to True, TimedRotatingFileHandler will be added to the logger directly.
+    :param add_timedfile_with_internal_queue: bool, If set to True, TimedRotatingFileHandler will be added
+        to the logger, but not directly.
+        Internal queue.Queue will be created, then used by the QueueListener, which will get the
+        TimerRotatingFileHandler as the handler.
+        Then the QueueHandler using the same internal queue will be added to the logger.
+        This is done to improve the multithreading compatibility.
+    :param add_queue_handler: bool, If set to True, QueueHandler will be added to the logger, using the 'log_queue'.
+    :param log_queue: queue.Queue or multiprocessing.Queue, Queue to use for the QueueHandler.
     :param file_type: string, file type of the log file. Default is 'txt'.
         'txt': Text file.
         'csv': CSV file.
@@ -133,7 +156,7 @@ def create_logger(
         error_logger = loggingw.create_logger(
             logger_name=f'{self.__class__.__name__}_CSV',
             file_path=output_log_file,
-            add_timedfile=True,
+            add_timedfile_with_internal_queue=True,
             file_type='csv',
             formatter_filehandler='MESSAGE',
             header=header
@@ -159,7 +182,7 @@ def create_logger(
             logger_name=f'{self.__class__.__name__}',
             file_path=output_log_file,
             add_stream=True,
-            add_timedfile=True,
+            add_timedfile_with_internal_queue=True,
             file_type='txt',
             formatter_streamhandler='DEFAULT',
             formatter_filehandler='DEFAULT'
@@ -170,16 +193,93 @@ def create_logger(
 
     if __name__ == "__main__":
         main()
+
+    ------------------------------
+
+    Example to use StreamHandler to output to console and TimedRotatingFileHandler to write to file in multiprocessing,
+    while QueueListener is in the main process writes to the file and outputs to the console and the QueueHandler
+    in two child subprocesses sends the logs to the main process through the multiprocessing.Queue:
+
+    import sys
+    import multiprocessing
+    from atomicshop.wrappers.loggingw import loggingw
+
+
+    def worker1(log_queue: multiprocessing.Queue):
+        error_logger = loggingw.create_logger(
+            logger_name='network',
+            add_queue_handler=True,
+            log_queue=log_queue
+        )
+
+        error_logger.info("Worker1 log message for 'network' logger.")
+
+
+    def worker2(log_queue: multiprocessing.Queue):
+        error_logger = loggingw.create_logger(
+            logger_name='network',
+            add_queue_handler=True,
+            log_queue=log_queue
+        )
+
+        error_logger.info("Worker2 log message for 'network' logger.")
+
+
+    def main():
+        log_queue = multiprocessing.Queue()
+
+        queue_listener = loggingw.create_logger(
+            get_queue_listener=True,
+            add_stream=True,
+            add_timedfile=True,
+            log_queue=log_queue,
+            file_type='txt',
+            formatter_streamhandler='DEFAULT',
+            formatter_filehandler='DEFAULT'
+        )
+
+        process1 = multiprocessing.Process(target=worker1, args=(log_queue,))
+        process2 = multiprocessing.Process(target=worker2, args=(log_queue,))
+
+        process1.start()
+        process2.start()
+
+        process1.join()
+        process2.join()
+
+        queue_listener.stop()
+
+        return 0
+
+
+    if __name__ == "__main__":
+        sys.exit(main())
     """
 
-    # Check if the logger exists before creating it.
-    if loggers.is_logger_exists(logger_name):
-        raise LoggingwLoggerAlreadyExistsError(f"Logger '{logger_name}' already exists.")
+    if logger_name and get_queue_listener:
+        raise ValueError("You can't set both 'logger_name' and 'get_queue_listener'.")
+    if not logger_name and not get_queue_listener:
+        raise ValueError("You need to provide 'logger_name' or 'get_queue_listener'.")
 
-    if not directory_path and not file_path:
-        raise ValueError("You need to provide 'directory_path' or 'file_path'.")
-    if directory_path and file_path:
-        raise ValueError("You can't provide both 'directory_path' and 'file_path'.")
+    # Check if the logger exists before creating it.
+    if logger_name:
+        if loggers.is_logger_exists(logger_name):
+            raise LoggingwLoggerAlreadyExistsError(f"Logger '{logger_name}' already exists.")
+
+    if not logger_name and not file_path:
+        raise ValueError("You need to provide 'file_path' if 'logger_name' is not set.")
+
+    if get_queue_listener and not log_queue:
+        raise ValueError("You need to provide 'log_queue' if 'get_queue_listener' is set to True.")
+
+    if add_queue_handler and not log_queue:
+        raise ValueError("You need to provide 'log_queue' if 'add_queue_handler' is set to True.")
+
+    if add_timedfile or add_timedfile_with_internal_queue:
+        if not directory_path and not file_path:
+            raise ValueError("You need to provide 'directory_path' or 'file_path'.")
+        if directory_path and file_path:
+            raise ValueError("You can't provide both 'directory_path' and 'file_path'.")
 
     if directory_path:
         if directory_path.endswith(os.sep):
@@ -187,24 +287,83 @@ def create_logger(
 
         file_path = f"{directory_path}{os.sep}{logger_name}.{file_type}"
 
-    logger = get_logger_with_level(logger_name, logging_level)
+    # --- Add the handlers to a tuple ---
 
+    handlers_tuple: tuple = ()
     if add_stream:
-        handlers.add_stream_handler(
-            logger=logger, logging_level=logging_level, formatter=formatter_streamhandler,
+        stream_handler = handlers.get_stream_handler_extended(
+            logging_level=logging_level,
+            formatter=formatter_streamhandler,
             formatter_use_nanoseconds=formatter_streamhandler_use_nanoseconds)
 
+        handlers_tuple += (stream_handler,)
+
     if add_timedfile:
-        handlers.add_timedfilehandler_with_queuehandler(
-            logger=logger, file_path=file_path, logging_level=logging_level, formatter=formatter_filehandler,
-            formatter_use_nanoseconds=formatter_filehandler_use_nanoseconds, file_type=file_type,
+        timed_file_handler = handlers.get_timed_rotating_file_handler_extended(
+            file_path=file_path,
+            logging_level=logging_level,
+            formatter=formatter_filehandler,
+            formatter_use_nanoseconds=formatter_filehandler_use_nanoseconds,
+            file_type=file_type,
             rotate_at_rollover_time=filehandler_rotate_at_rollover_time,
             rotation_date_format=filehandler_rotation_date_format,
             rotation_callback_namer_function=filehandler_rotation_callback_namer_function,
             rotation_use_default_callback_namer_function=filehandler_rotation_use_default_namer_function,
-            when=when, interval=interval, delay=delay, backupCount=backupCount, encoding=encoding, header=header)
+            when=when,
+            interval=interval,
+            delay=delay,
+            backupCount=backupCount,
+            encoding=encoding,
+            header=header
+        )
 
-    return logger
+        handlers_tuple += (timed_file_handler,)
+
+    if add_timedfile_with_internal_queue:
+        timed_file_handler_with_queue = handlers.get_timed_rotating_file_handler_extended(
+            file_path=file_path,
+            logging_level=logging_level,
+            formatter=formatter_filehandler,
+            formatter_use_nanoseconds=formatter_filehandler_use_nanoseconds,
+            file_type=file_type,
+            rotate_at_rollover_time=filehandler_rotate_at_rollover_time,
+            rotation_date_format=filehandler_rotation_date_format,
+            rotation_callback_namer_function=filehandler_rotation_callback_namer_function,
+            rotation_use_default_callback_namer_function=filehandler_rotation_use_default_namer_function,
+            use_internal_queue_listener=True,
+            when=when,
+            interval=interval,
+            delay=delay,
+            backupCount=backupCount,
+            encoding=encoding,
+            header=header
+        )
+
+        handlers_tuple += (timed_file_handler_with_queue,)
+
+    if add_queue_handler:
+        queue_handler = handlers.get_queue_handler_extended(log_queue)
+        handlers_tuple += (queue_handler,)
+
+    # --- Create the logger ---
+
+    if logger_name:
+        logger = get_logger_with_level(logger_name, logging_level)
+
+        # Add the handlers to the logger.
+        for handler in handlers_tuple:
+            loggers.add_handler(logger, handler)
+
+        # Disable propagation from the 'root' logger, so we will not see the messages twice.
+        loggers.set_propagation(logger)
+
+        return logger
+
+    # --- create the QueueListener ---
+
+    if get_queue_listener:
+        queue_listener: logging.handlers.QueueListener = handlers.start_queue_listener_for_handlers(handlers_tuple, log_queue)
+        return queue_listener
 
 
 def get_logger_with_level(
@@ -276,7 +435,7 @@ def is_logger_exists(logger_name: str) -> bool:
     return loggers.is_logger_exists(logger_name)
 
 
-def find_the_parent_logger_with_stream_handler(logger: logging.Logger) -> logging.Logger:
+def find_the_parent_logger_with_stream_handler(logger: logging.Logger) -> logging.Logger | None:
     """
     Function to find the parent logger with StreamHandler.
     Example:
@@ -286,7 +445,7 @@ def find_the_parent_logger_with_stream_handler(logger: logging.Logger) -> loggin
         StreamHandler from the 'parent' logger.
 
     :param logger: Logger to find the parent logger with StreamHandler.
-    :return: Parent logger with StreamHandler.
+    :return: Parent logger with StreamHandler or None if the logger doesn't have StreamHandler.
     """
 
     # Start with current logger to see if it has a stream handler.
@@ -301,6 +460,10 @@ def find_the_parent_logger_with_stream_handler(logger: logging.Logger) -> loggin
         if not found:
             # If the current logger doesn't have the stream handler, let's move to the parent.
             current_logger = current_logger.parent
+
+            # If none of the parent loggers have the stream handler, break the loop.
+            if current_logger is None:
+                break
 
     return current_logger
 

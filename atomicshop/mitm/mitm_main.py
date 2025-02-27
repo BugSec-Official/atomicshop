@@ -2,10 +2,11 @@ import threading
 import multiprocessing
 import time
 import datetime
+import os
 
 import atomicshop   # Importing atomicshop package to get the version of the package.
 
-from .. import filesystem, queues, dns, on_exit, print_api
+from .. import filesystem, dns, on_exit, print_api
 from ..permissions import permissions
 from ..python_functions import get_current_python_version_string, check_python_version_compliance
 from ..wrappers.socketw import socket_wrapper, dns_server, base
@@ -28,6 +29,12 @@ EXCEPTIONS_CSV_LOGGER_NAME: str = 'exceptions'
 EXCEPTIONS_CSV_LOGGER_HEADER: str = 'time,exception'
 # noinspection PyTypeChecker
 MITM_ERROR_LOGGER: loggingw.ExceptionCsvLogger = None
+
+# Create request domain queue.
+DOMAIN_QUEUE: multiprocessing.Queue = multiprocessing.Queue()
+
+# Create logger's queue.
+NETWORK_LOGGER_QUEUE: multiprocessing.Queue = multiprocessing.Queue()
 
 
 try:
@@ -58,9 +65,20 @@ def exit_cleanup():
         RECS_PROCESS_INSTANCE.terminate()
         RECS_PROCESS_INSTANCE.join()
 
+    # Before terminating multiprocessing child processes, we need to put None to all the QueueListeners' queues,
+    # so they will stop waiting for new logs and will be able to terminate.
+    # Or else we will get a BrokenPipeError exception. This happens for because the QueueListener is waiting for
+    # new logs to come through the ".get()" method, but the main process is already terminated.
+    NETWORK_LOGGER_QUEUE.put(None)
+    # Get all the child processes and terminate them.
+    for process in multiprocessing.active_children():
+        process.terminate()
+        # We need for processes to finish, since there is a logger there that needs to write the last log.
+        process.join()
+
 
 def mitm_server(config_file_path: str, script_version: str):
-    on_exit.register_exit_handler(exit_cleanup, at_exit=False)
+    on_exit.register_exit_handler(exit_cleanup, at_exit=False, kill_signal=False)
 
     # Main function should return integer with error code, 0 is successful.
     # Since listening server is infinite, this will not be reached.
@@ -91,15 +109,21 @@ def mitm_server(config_file_path: str, script_version: str):
             config_static.Certificates.sni_server_certificate_from_server_socket_download_directory)
 
     network_logger_name = config_static.MainConfig.LOGGER_NAME
-    network_logger = loggingw.create_logger(
-        logger_name=network_logger_name,
-        directory_path=config_static.LogRec.logs_path,
+
+    _ = loggingw.create_logger(
+        get_queue_listener=True,
+        log_queue=NETWORK_LOGGER_QUEUE,
+        file_path=f'{config_static.LogRec.logs_path}{os.sep}{network_logger_name}.txt',
         add_stream=True,
         add_timedfile=True,
         formatter_streamhandler='DEFAULT',
         formatter_filehandler='DEFAULT',
-        backupCount=config_static.LogRec.store_logs_for_x_days
-    )
+        backupCount=config_static.LogRec.store_logs_for_x_days)
+
+    network_logger_with_queue_handler = loggingw.create_logger(
+        logger_name=network_logger_name,
+        add_queue_handler=True,
+        log_queue=NETWORK_LOGGER_QUEUE)
 
     # Initiate Listener logger, which is a child of network logger, so he uses the same settings and handlers
     listener_logger = loggingw.get_logger_with_level(f'{network_logger_name}.listener')
@@ -242,44 +266,53 @@ def mitm_server(config_file_path: str, script_version: str):
 
     print_api.print_api("Press [Ctrl]+[C] to stop.", color='blue')
 
-    # Create request domain queue.
-    domain_queue = queues.NonBlockQueue()
-
     # === Initialize DNS module ====================================================================================
     if config_static.DNSServer.enable:
-        try:
-            dns_server_instance = dns_server.DnsServer(
-                listening_interface=config_static.DNSServer.listening_interface,
-                listening_port=config_static.DNSServer.listening_port,
-                log_directory_path=config_static.LogRec.logs_path,
-                backupCount_log_files_x_days=config_static.LogRec.store_logs_for_x_days,
-                forwarding_dns_service_ipv4=config_static.DNSServer.forwarding_dns_service_ipv4,
-                tcp_target_server_ipv4=config_static.DNSServer.target_tcp_server_ipv4,
+        dns_process = multiprocessing.Process(
+            target=dns_server.start_dns_server_multiprocessing_worker,
+            kwargs={
+                'listening_interface': config_static.DNSServer.listening_interface,
+                'listening_port' :config_static.DNSServer.listening_port,
+                'log_directory_path': config_static.LogRec.logs_path,
+                'backupCount_log_files_x_days': config_static.LogRec.store_logs_for_x_days,
+                'forwarding_dns_service_ipv4': config_static.DNSServer.forwarding_dns_service_ipv4,
+                'tcp_target_server_ipv4': config_static.DNSServer.target_tcp_server_ipv4,
                 # Passing the engine domain list to DNS server to work with.
                 # 'list' function re-initializes the current list, or else it will be the same instance object.
-                tcp_resolve_domain_list=list(config_static.Certificates.domains_all_times),
-                offline_mode=config_static.DNSServer.offline_mode,
-                resolve_to_tcp_server_only_tcp_resolve_domains=(
+                'tcp_resolve_domain_list': list(config_static.Certificates.domains_all_times),
+                'offline_mode': config_static.DNSServer.offline_mode,
+                'resolve_to_tcp_server_only_tcp_resolve_domains': (
                     config_static.DNSServer.resolve_to_tcp_server_only_engine_domains),
-                resolve_to_tcp_server_all_domains=config_static.DNSServer.resolve_to_tcp_server_all_domains,
-                resolve_regular=config_static.DNSServer.resolve_regular,
-                cache_timeout_minutes=config_static.DNSServer.cache_timeout_minutes,
-                request_domain_queue=domain_queue,
-                logger=network_logger
-            )
-        except (dns_server.DnsPortInUseError, dns_server.DnsConfigurationValuesError) as e:
-            print_api.print_api(e, error_type=True, color="red", logger=system_logger)
-            # Wait for the message to be printed and saved to file.
-            time.sleep(1)
-            return 1
+                'resolve_to_tcp_server_all_domains': config_static.DNSServer.resolve_to_tcp_server_all_domains,
+                'resolve_regular': config_static.DNSServer.resolve_regular,
+                'cache_timeout_minutes': config_static.DNSServer.cache_timeout_minutes,
+                'request_domain_queue': DOMAIN_QUEUE,
+                'logging_queue': NETWORK_LOGGER_QUEUE,
+                'logger_name': network_logger_name
+            },
+            name="dns_server")
+        dns_process.daemon = True
+        dns_process.start()
 
-        dns_thread = threading.Thread(target=dns_server_instance.start, name="dns_server")
-        dns_thread.daemon = True
-        dns_thread.start()
+        is_alive: bool = False
+        max_wait_time: int = 5
+        while not is_alive:
+            is_alive = dns_process.is_alive()
+            time.sleep(1)
+            max_wait_time -= 1
+            if max_wait_time == 0:
+                message = "DNS Server process didn't start."
+                print_api.print_api(message, error_type=True, color="red", logger=system_logger)
+                # Wait for the message to be printed and saved to file.
+                time.sleep(1)
+                return 1
 
     # === EOF Initialize DNS module ================================================================================
     # === Initialize TCP Server ====================================================================================
     if config_static.TCPServer.enable:
+        engines_domains: dict = dict()
+        for engine in engines_list:
+            engines_domains[engine.engine_name] = engine.domain_list
         try:
             socket_wrapper_instance = socket_wrapper.SocketWrapper(
                 listening_interface=config_static.TCPServer.listening_interface,
@@ -319,7 +352,8 @@ def mitm_server(config_file_path: str, script_version: str):
                 forwarding_dns_service_ipv4_list___only_for_localhost=(
                     config_static.TCPServer.forwarding_dns_service_ipv4_list___only_for_localhost),
                 skip_extension_id_list=config_static.SkipExtensions.SKIP_EXTENSION_ID_LIST,
-                request_domain_from_dns_server_queue=domain_queue
+                request_domain_from_dns_server_queue=DOMAIN_QUEUE,
+                engines_domains=engines_domains
             )
         except socket_wrapper.SocketWrapperPortInUseError as e:
             print_api.print_api(e, error_type=True, color="red", logger=system_logger)
@@ -376,7 +410,7 @@ def mitm_server(config_file_path: str, script_version: str):
             target=socket_wrapper_instance.loop_for_incoming_sockets,
             kwargs={
                 'reference_function_name': thread_worker_main,
-                'reference_function_args': (network_logger, statistics_writer, engines_list, reference_module,)
+                'reference_function_args': (network_logger_with_queue_handler, statistics_writer, engines_list, reference_module,)
             },
             name="accepting_loop"
         )
