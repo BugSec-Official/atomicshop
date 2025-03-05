@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup
 
 from . import engine, base, combos
 from ...basics import threads, multiprocesses
+from ...web import USER_AGENTS
 
 
 def get_text_from_html_tag(url: str, tag_name: str, attribute: str, value: str) -> str:
@@ -218,10 +219,12 @@ def _fetch_content(
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless)  # Set headless=True if you don't want to see the browser
 
+        user_agent: str = USER_AGENTS['Windows_Chrome_Latest']
+
         if text_fetch_method == "playwright_copypaste":
-            context = browser.new_context(permissions=["clipboard-read", "clipboard-write"])
+            context = browser.new_context(permissions=["clipboard-read", "clipboard-write"], user_agent=user_agent)
         else:
-            context = browser.new_context()
+            context = browser.new_context(user_agent=user_agent)
 
         page = context.new_page()
 
