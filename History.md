@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.20.02 - 05.03.2025
+  * wrappers/playwrightw/scenarios - fixes and improvements.
 * 2.20.01 - 05.03.2025
   * web, wrappers/playwrightw/scenarios - fixes and improvements.
 * 2.20.00 - 27.02.2025
