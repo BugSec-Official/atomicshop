@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.20.03 - 13.03.2025
+  * mitm/connection_thread_worker - fixes and improvements.
 * 2.20.02 - 05.03.2025
   * wrappers/playwrightw/scenarios - fixes and improvements.
 * 2.20.01 - 05.03.2025

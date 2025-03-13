@@ -294,6 +294,7 @@ def thread_worker_main(
         client_message: ClientMessage = ClientMessage()
         client_message.client_name = client_name
         client_message.client_ip = client_ip
+        client_message.server_ip = server_ip
         client_message.source_port = source_port
         client_message.destination_port = destination_port
         client_message.server_name = server_name
@@ -542,6 +543,13 @@ def thread_worker_main(
         client_name = socket.gethostbyaddr(client_ip)[0]
         destination_port = client_socket.getsockname()[1]
 
+        if config_static.TCPServer.server_response_mode:
+            # If in response mode, then we'll get the TCP server's input address.
+            server_ip = client_socket.getsockname()[0]
+        else:
+            # If not in response mode, we will get the ip from the socket that will connect later to the service.
+            server_ip = ""
+
         network_logger.info(f"Thread Created - Client [{client_ip}:{source_port}] | "
                             f"Destination service: [{server_name}:{destination_port}]")
 
@@ -569,6 +577,9 @@ def thread_worker_main(
             if not service_client:
                 service_client = create_client_socket(client_message_connection)
                 service_socket_instance, connection_error = service_client.service_connection()
+                # Now we'll update the server IP with the IP of the service.
+                server_ip = service_socket_instance.getpeername()[0]
+                client_message_connection.server_ip = server_ip
         else:
             client_message_connection.timestamp = datetime.now()
             client_message_connection.action = 'service_connect'
