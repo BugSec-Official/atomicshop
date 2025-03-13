@@ -128,16 +128,26 @@ class GoogleLLM:
     def ask_gemini(
             question: str,
             temperature: float,
-            max_output_tokens: int,
-            model_name: str = 'gemini-pro'
+            # max_output_tokens: int,
+            model_name: str = 'gemini-2.0-flash-thinking-exp-01-21'
     ) -> str:
         """
         Function to ask the Gemini API a question and get the response.
         :param question: str, the question to ask the Gemini API.
         :param temperature: float, the temperature parameter for the LLM.
             While 0 is deterministic, higher values can lead to more creative responses.
-        :param max_output_tokens: int, the maximum number of tokens to generate in the LLM response.
         :param model_name: str, the name of the model to use for the LLM.
+
+        max_output_tokens: int, the maximum number of tokens to generate in the LLM response.
+            UPDATE: Disabled this feature since it gave exceptions in some situations.
+            Example:
+                  File ".\Lib\site-packages\google\generativeai\types\generation_types.py", line 464, in text
+                    parts = self.parts
+                            ^^^^^^^^^^
+                  File ".\Lib\site-packages\google\generativeai\types\generation_types.py", line 447, in parts
+                    raise ValueError(msg)
+                ValueError: Invalid operation: The `response.parts` quick accessor requires a single candidate, but but `response.candidates` is empty.
+
 
         :return: str, the response from the Gemini API.
         """
@@ -146,7 +156,7 @@ class GoogleLLM:
             "temperature": temperature,
             "top_p": 0.99,
             "top_k": 0,
-            "max_output_tokens": max_output_tokens,
+            # "max_output_tokens": max_output_tokens,
         }
 
         # model = genai.GenerativeModel('gemini-1.5-pro-latest',
