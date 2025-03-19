@@ -52,10 +52,17 @@ class ModuleCategory:
         if not self.domain_list or self.domain_list[0] == '':
             raise ValueError(f"Engine Configuration file doesn't contain any domains: {engine_config_file_path}")
 
+        # This is needed for backwards compatibility before glass 1.8.2, atomicshop 2.20.6
+        # When the name of each file was following the pattern: parser_<EngineName>.py, responder_<EngineName>.py, recorder_<EngineName>.py
+        if os.path.isfile(f"{engine_directory_path}{os.sep}parser.py"):
+            file_name_suffix: str = ''
+        else:
+            file_name_suffix: str = f"_{self.engine_name}"
+
         # Full path to file
-        self.parser_file_path = f"{engine_directory_path}{os.sep}{configuration_data['parser_file']}"
-        self.responder_file_path = f"{engine_directory_path}{os.sep}{configuration_data['responder_file']}"
-        self.recorder_file_path = f"{engine_directory_path}{os.sep}{configuration_data['recorder_file']}"
+        self.parser_file_path = f"{engine_directory_path}{os.sep}parser{file_name_suffix}.py"
+        self.responder_file_path = f"{engine_directory_path}{os.sep}responder{file_name_suffix}.py"
+        self.recorder_file_path = f"{engine_directory_path}{os.sep}recorder{file_name_suffix}.py"
 
         for subdomain, file_name in self.mtls.items():
             self.mtls[subdomain] = f'{engine_directory_path}{os.sep}{file_name}'

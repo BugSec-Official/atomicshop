@@ -45,9 +45,9 @@ class CreateModuleTemplate:
         self.responder_general_path: str = reference_folder_path + os.sep + REFERENCE_RESPONDER_FILE_NAME
         self.recorder_general_path: str = reference_folder_path + os.sep + REFERENCE_RECORDER_FILE_NAME
 
-        self.parser_file_name: str = f"parser_{self.engine_name}.py"
-        self.responder_file_name: str = f"responder_{self.engine_name}.py"
-        self.recorder_file_name: str = f"recorder_{self.engine_name}.py"
+        self.parser_file_name: str = f"parser.py"
+        self.responder_file_name: str = f"responder.py"
+        self.recorder_file_name: str = f"recorder.py"
 
         self.create_template()
 
@@ -58,7 +58,7 @@ class CreateModuleTemplate:
         # Create the 'engines' directory if it doesn't exist.
         filesystem.create_directory(ENGINES_DIRECTORY_PATH)
 
-        # Create new engines folder.
+        # Create new engines' folder.
         filesystem.create_directory(self.new_engine_directory)
 
         self._create_engine_module_from_reference(file_path=self.parser_general_path, module_type='parser')
@@ -74,10 +74,6 @@ class CreateModuleTemplate:
         # Add "" to each domain.
         domains_with_quotes: list = [f'"{domain}"' for domain in self.domains]
         config_lines_list.append(f'"domains" = [{", ".join(domains_with_quotes)}]\n')
-        # config_lines_list.append(f'\n')
-        config_lines_list.append(f'"parser_file" = "{self.parser_file_name}"')
-        config_lines_list.append(f'"responder_file" = "{self.responder_file_name}"')
-        config_lines_list.append(f'"recorder_file" = "{self.recorder_file_name}"\n')
         # config_lines_list.append(f'\n')
         config_lines_list.append(f'[mtls]')
         config_lines_list.append(f'# "subdomain.domain.com" = "file_name_in_current_dir.pem"')
