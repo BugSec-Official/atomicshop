@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.20.06 - 19.03.2025
+  * mitm, wrappers/socketw - fixes and improvements.
 * 2.20.05 - 19.03.2025
   * mitm, wrappers/socketw - fixes and improvements.
 * 2.20.04 - 13.03.2025

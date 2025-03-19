@@ -268,8 +268,8 @@ def mitm_server(config_file_path: str, script_version: str):
 
     # === Initialize DNS module ====================================================================================
     if config_static.DNSServer.enable:
-        # dns_process = multiprocessing.Process(
-        dns_process = threading.Thread(
+        dns_process = multiprocessing.Process(
+        # dns_process = threading.Thread(
             target=dns_server.start_dns_server_multiprocessing_worker,
             kwargs={
                 'listening_interface': config_static.DNSServer.listening_interface,
@@ -295,6 +295,7 @@ def mitm_server(config_file_path: str, script_version: str):
         dns_process.daemon = True
         dns_process.start()
 
+        # Wait for the DNS server to start and do the port test.
         is_alive: bool = False
         max_wait_time: int = 5
         while not is_alive:
@@ -307,6 +308,21 @@ def mitm_server(config_file_path: str, script_version: str):
                 # Wait for the message to be printed and saved to file.
                 time.sleep(1)
                 return 1
+
+        # Now we can check if the process wasn't terminated after the check.
+        max_wait_time: int = 5
+        while max_wait_time > 0:
+            is_alive = dns_process.is_alive()
+
+            if not is_alive:
+                message = "DNS Server process terminated."
+                print_api.print_api(message, error_type=True, color="red", logger=system_logger)
+                # Wait for the message to be printed and saved to file.
+                time.sleep(1)
+                return 1
+
+            time.sleep(1)
+            max_wait_time -= 1
 
     # === EOF Initialize DNS module ================================================================================
     # === Initialize TCP Server ====================================================================================

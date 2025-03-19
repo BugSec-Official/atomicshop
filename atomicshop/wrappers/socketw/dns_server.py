@@ -309,7 +309,7 @@ class DnsServer:
                 error_messages.append(f"Port [{port}] is already in use by process: {process_info}")
 
             message = "\n".join(error_messages)
-            print_api(f'DnsPortInUseError: {str(e)}', error_type=True, color="red", logger=self.logger)
+            print_api(f'DnsPortInUseError: {str(message)}', error_type=True, color="red", logger=self.logger)
             # Wait for the message to be printed and saved to file.
             time.sleep(1)
             raise DnsPortInUseError(message)
@@ -905,8 +905,6 @@ def start_dns_server_multiprocessing_worker(
     current_process_name = multiprocessing.current_process().name
     threading.current_thread().name = current_process_name
 
-
-
     try:
         dns_server_instance = DnsServer(
             listening_interface=listening_interface,
@@ -928,7 +926,6 @@ def start_dns_server_multiprocessing_worker(
             logger_name=logger_name
         )
     except (DnsPortInUseError, DnsConfigurationValuesError) as e:
-        print_api(e, error_type=True, color="red", logger=dns_server_instance.logger)
         # Wait for the message to be printed and saved to file.
         time.sleep(1)
         return 1
