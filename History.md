@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 2.20.05 - 19.03.2025
+  * mitm, wrappers/socketw - fixes and improvements.
 * 2.20.04 - 13.03.2025
   * web_apis/google_llm - fixes and improvements.
 * 2.20.03 - 13.03.2025

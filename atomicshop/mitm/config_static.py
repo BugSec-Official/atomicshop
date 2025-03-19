@@ -99,8 +99,7 @@ class TCPServer:
     engines_usage: bool
     server_response_mode: bool
 
-    listening_interface: str
-    listening_port_list: list[int]
+    listening_address_list: list[str]
 
     forwarding_dns_service_ipv4_list___only_for_localhost: list[str]
 

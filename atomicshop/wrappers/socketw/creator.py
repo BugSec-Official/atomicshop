@@ -245,7 +245,7 @@ def wrap_socket_with_ssl_context_client___default_certs___ignore_verification(
 
     :param socket_object: socket.socket object
     :param server_hostname: string, hostname of the server. Default is None.
-    :param custom_pem_client_certificate_file_path: string, full file path for the client certificate PWM file.
+    :param custom_pem_client_certificate_file_path: string, full file path for the client certificate PEM file.
         Default is None.
     :param enable_sslkeylogfile_env_to_client_ssl_context: boolean, enables the SSLKEYLOGFILE environment variable
         to the SSL context. Default is False.

@@ -261,12 +261,12 @@ class SNIHandler:
                     self.sni_received_parameters.destination_name = self.domain_from_dns_server
                     message = \
                         f"SNI Handler: No SNI was passed, using domain from DNS Server: {self.domain_from_dns_server}"
-                    print_api(message, **(print_kwargs or {}))
+                    print_api(message, color="yellow", **(print_kwargs or {}))
                 # If DNS server is disabled, the domain from dns server will be empty.
                 else:
                     message = f"SNI Handler: No SNI was passed, No domain passed from DNS Server. " \
                               f"Service name will be 'None'."
-                    print_api(message, **(print_kwargs or {}))
+                    print_api(message, color="yellow", **(print_kwargs or {}))
 
             # Setting "server_hostname" as a domain.
             self.sni_received_parameters.ssl_socket.server_hostname = self.sni_received_parameters.destination_name
