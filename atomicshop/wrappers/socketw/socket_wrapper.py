@@ -32,8 +32,7 @@ SNI_QUEUE = queues.NonBlockQueue()
 class SocketWrapper:
     def __init__(
             self,
-            listening_interface: str,
-            listening_port_list: list[int],
+            listening_address_list: list[str],
             forwarding_dns_service_ipv4_list___only_for_localhost: list = None,
             ca_certificate_name: str = None,
             ca_certificate_filepath: str = None,
@@ -76,9 +75,8 @@ class SocketWrapper:
         Socket Wrapper class that will be used to create sockets, listen on them, accept connections and send them to
         new threads.
 
-        :param listening_interface: string, interface that will be listened on.
-            Example: '0.0.0.0'. For all interfaces.
-        :param listening_port_list: list, of ports that will be listened on.
+        :param listening_address_list: list, of ips+ports that will be listened on.
+            Example: ['0.0.0.0:443', '0.0.0.0:80']
         :param ca_certificate_name: CA certificate name.
         :param ca_certificate_filepath: CA certificate file path with '.pem' extension.
         :param ca_certificate_crt_filepath: CA certificate file path with '.crt' extension.
@@ -177,8 +175,7 @@ class SocketWrapper:
             by the domain name from the list in the dictionary.
         """
 
-        self.listening_interface: str = listening_interface
-        self.listening_port_list: list[int] = listening_port_list
+        self.listening_address_list: list[str] = listening_address_list
         self.ca_certificate_name: str = ca_certificate_name
         self.ca_certificate_filepath: str = ca_certificate_filepath
         self.ca_certificate_crt_filepath: str = ca_certificate_crt_filepath
@@ -321,11 +318,7 @@ class SocketWrapper:
                     print_api(message, color='red', logger=self.logger)
                     return 1
 
-        ips_ports: list[str] = list()
-        for port in self.listening_port_list:
-            ips_ports.append(f"{self.listening_interface}:{port}")
-
-        port_in_use = networks.get_processes_using_port_list(ips_ports)
+        port_in_use = networks.get_processes_using_port_list(self.listening_address_list)
         if port_in_use:
             error_messages: list = list()
             for port, process_info in port_in_use.items():
@@ -409,9 +402,11 @@ class SocketWrapper:
             self.listening_sockets = list()
 
         # Creating a socket for each port in the list set in configuration file
-        for port in self.listening_port_list:
+        for address in self.listening_address_list:
+            ip_address, port_str = address.split(':')
+            port = int(port_str)
             socket_by_port = self.create_socket_ipv4_tcp(
-                self.listening_interface, port)
+                ip_address, port)
 
             self.listening_sockets.append(socket_by_port)
 

@@ -20,31 +20,31 @@ def main():
         install_nodejs_windows.install_nodejs_windows()
     install_nodejs_windows.add_nodejs_to_path()
     if not install_nodejs_windows.is_nodejs_installed():
-        print_api("Node.js installation failed.")
+        print_api("Node.js installation failed.", color="red")
         return 1
 
-    print_api("PIP Installing Robocorp.")
+    print_api("PIP Installing Robocorp.", color="blue")
     subprocess.check_call(["pip", "install", "--upgrade", "rpaframework"])
 
-    print_api("PIP Installing Robocorp-Browser.")
+    print_api("PIP Installing Robocorp-Browser.", color="blue")
     subprocess.check_call(["pip", "install", "--upgrade", "robotframework-browser"])
 
-    print_api("PIP Installing Robocorp-Recognition.")
+    print_api("PIP Installing Robocorp-Recognition.", color="blue")
     subprocess.check_call(["pip", "install", "--upgrade", "rpaframework-recognition"])
 
-    print_api("PIP Installing pynput.")
+    print_api("PIP Installing pynput.", color="blue")
     subprocess.check_call(["pip", "install", "--upgrade", "pynput"])
 
-    print_api("Installing Playwright browsers.")
+    print_api("Installing Playwright browsers.", color="blue")
     subprocess.check_call(["playwright", "install"])
 
-    print_api("Initializing Robocorp Browser.")
+    print_api("Initializing Robocorp Browser.", color="blue")
     subprocess.check_call(["rfbrowser", "init"])
 
-    print_api("Installing Additional modules.")
+    print_api("Installing Additional modules.", color="blue")
     subprocess.check_call(["pip", "install", "--upgrade", "matplotlib", "imagehash"])
 
-    print_api("Installing Tesseract OCR.")
+    print_api("Installing Tesseract OCR.", color="blue")
     github_wrapper = githubw.GitHubWrapper(
         user_name="tesseract-ocr",
         repo_name="tesseract",
@@ -60,6 +60,22 @@ def main():
 
     # Add Tesseract to the PATH.
     subprocess.check_call(["setx", "PATH", f"%PATH%;{WINDOWS_TESSERACT_DEFAULT_INSTALLATION_DIRECTORY}"])
+
+    # Patch robocorp: Remove mouse to the center of the screen on control command.
+    # Import the library to find its path.
+    print_api("Patching: .\RPA\Windows\keywords\window.py", color="blue")
+    import RPA.Windows.keywords.window as window
+    window_file_path = window.__file__
+
+    # Patch the file.
+    with open(window_file_path, "r") as file:
+        file_content = file.read()
+    file_content = file_content.replace(
+        "window.item.MoveCursorToMyCenter(simulateMove=self.ctx.simulate_move)",
+        "# window.item.MoveCursorToMyCenter(simulateMove=self.ctx.simulate_move)    # Patched to remove center placement during foreground window control."
+    )
+    with open(window_file_path, "w") as file:
+        file.write(file_content)
 
 
 if __name__ == '__main__':

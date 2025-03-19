@@ -268,7 +268,8 @@ def mitm_server(config_file_path: str, script_version: str):
 
     # === Initialize DNS module ====================================================================================
     if config_static.DNSServer.enable:
-        dns_process = multiprocessing.Process(
+        # dns_process = multiprocessing.Process(
+        dns_process = threading.Thread(
             target=dns_server.start_dns_server_multiprocessing_worker,
             kwargs={
                 'listening_interface': config_static.DNSServer.listening_interface,
@@ -313,10 +314,10 @@ def mitm_server(config_file_path: str, script_version: str):
         engines_domains: dict = dict()
         for engine in engines_list:
             engines_domains[engine.engine_name] = engine.domain_list
+
         try:
             socket_wrapper_instance = socket_wrapper.SocketWrapper(
-                listening_interface=config_static.TCPServer.listening_interface,
-                listening_port_list=config_static.TCPServer.listening_port_list,
+                listening_address_list=config_static.TCPServer.listening_address_list,
                 ca_certificate_name=config_static.MainConfig.ca_certificate_name,
                 ca_certificate_filepath=config_static.MainConfig.ca_certificate_filepath,
                 ca_certificate_crt_filepath=config_static.MainConfig.ca_certificate_crt_filepath,
