@@ -196,10 +196,10 @@ def download(
     print_api.print_api(f'Downloading: {file_url}', **kwargs)
     print_api.print_api(f'To: {file_path}', **kwargs)
 
-    # In order to use 'urllib.request', it is not enough to 'import urllib', you need to 'import urllib.request'.
-    # Open the URL for data gathering with SSL context from certifi
-    ssl_context = ssl.create_default_context(cafile=certifi.where())
+    # Open the URL for data gathering with SSL context with default CA store of the system.
+    ssl_context = ssl.create_default_context()
 
+    # In order to use 'urllib.request', it is not enough to 'import urllib', you need to 'import urllib.request'.
     # Build a Request object with headers if provided.
     req = urllib.request.Request(file_url, headers=headers or {})
     file_to_download = urllib.request.urlopen(req, context=ssl_context)
