@@ -144,6 +144,7 @@ def check_configurations() -> int:
     #     print_api(message, color='red')
     #     return 1
 
+
     return 0
 
 

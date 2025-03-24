@@ -76,7 +76,9 @@ class CreateModuleTemplate:
         config_lines_list.append(f'"domains" = [{", ".join(domains_with_quotes)}]\n')
         # config_lines_list.append(f'\n')
         config_lines_list.append(f'[mtls]')
-        config_lines_list.append(f'# "subdomain.domain.com" = "file_name_in_current_dir.pem"')
+        config_lines_list.append(f'# "subdomain.domain.com" = "file_name_in_current_dir.pem"\n')
+        config_lines_list.append(f'[no_sni]')
+        config_lines_list.append(f'# "domain" = "example.com"\n')
 
         config_file_path = self.new_engine_directory + os.sep + CONFIG_FILE_NAME
 
