@@ -328,8 +328,11 @@ def mitm_server(config_file_path: str, script_version: str):
     # === Initialize TCP Server ====================================================================================
     if config_static.TCPServer.enable:
         engines_domains: dict = dict()
+        no_sni_domain: str = str()
         for engine in engines_list:
             engines_domains[engine.engine_name] = engine.domain_list
+            if no_sni_domain == '':
+                no_sni_domain = engine.no_sni['domain']
 
         try:
             socket_wrapper_instance = socket_wrapper.SocketWrapper(
@@ -370,7 +373,8 @@ def mitm_server(config_file_path: str, script_version: str):
                     config_static.TCPServer.forwarding_dns_service_ipv4_list___only_for_localhost),
                 skip_extension_id_list=config_static.SkipExtensions.SKIP_EXTENSION_ID_LIST,
                 request_domain_from_dns_server_queue=DOMAIN_QUEUE,
-                engines_domains=engines_domains
+                engines_domains=engines_domains,
+                engine_no_sni_domain=no_sni_domain
             )
         except socket_wrapper.SocketWrapperPortInUseError as e:
             print_api.print_api(e, error_type=True, color="red", logger=system_logger)

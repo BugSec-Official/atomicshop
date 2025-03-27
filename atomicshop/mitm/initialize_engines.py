@@ -26,6 +26,7 @@ class ModuleCategory:
         self.responder_instance = None
 
         self.mtls: dict = dict()
+        self.no_sni: dict = dict()
 
     def fill_engine_fields_from_general_reference(self, engines_fullpath: str):
         # Reference module variables.
@@ -46,6 +47,7 @@ class ModuleCategory:
         # Getting the parameters from engine config file
         self.domain_list = configuration_data['domains']
         self.mtls = configuration_data['mtls']
+        self.no_sni = configuration_data['no_sni']
 
         # If there's module configuration file, but no domains in it, there's no point to continue.
         # Since, each engine is based on domains.

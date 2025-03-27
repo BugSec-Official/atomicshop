@@ -69,7 +69,8 @@ class SocketWrapper:
             exceptions_logger: loggingw.ExceptionCsvLogger = None,
             statistics_logs_directory: str = None,
             request_domain_from_dns_server_queue: multiprocessing.Queue = None,
-            engines_domains: dict = None
+            engines_domains: dict = None,
+            engine_no_sni_domain: str = None
     ):
         """
         Socket Wrapper class that will be used to create sockets, listen on them, accept connections and send them to
@@ -173,6 +174,8 @@ class SocketWrapper:
 
             the 'engine_name' for statistics.csv file will be taken from the key of the dictionary, while correlated
             by the domain name from the list in the dictionary.
+        :param engine_no_sni_domain: string, domain name that will be used if there is no SNI in the request,
+            and no domain hit the dns server. This is used to set the 'server_hostname' for the socket.
         """
 
         self.listening_address_list: list[str] = listening_address_list
@@ -209,6 +212,7 @@ class SocketWrapper:
             forwarding_dns_service_ipv4_list___only_for_localhost)
         self.request_domain_from_dns_server_queue: multiprocessing.Queue = request_domain_from_dns_server_queue
         self.engines_domains: dict = engines_domains
+        self.engine_no_sni_domain: str = engine_no_sni_domain
 
         self.socket_object = None
 
@@ -460,7 +464,13 @@ class SocketWrapper:
                 # from accepting connections.
                 domain_from_dns_server = None
                 if self.request_domain_from_dns_server_queue is not None:
-                    domain_from_dns_server = self.request_domain_from_dns_server_queue.get()
+                    # domain_from_dns_server = self.request_domain_from_dns_server_queue.get()
+                    import queue
+                    try:
+                        domain_from_dns_server = self.request_domain_from_dns_server_queue.get_nowait()
+                    except queue.Empty:
+                        domain_from_dns_server = self.engine_no_sni_domain
+
                     self.logger.info(f"Requested domain from DNS Server: {domain_from_dns_server}")
 
                 # Wait from any connection on "accept()".
