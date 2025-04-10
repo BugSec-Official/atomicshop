@@ -5,7 +5,9 @@ from pathlib import Path
 import logging
 import socket
 import multiprocessing
+import queue
 
+from ...mitm import initialize_engines
 from ..psutilw import networks
 from ..certauthw import certauthw
 from ..loggingw import loggingw
@@ -32,7 +34,6 @@ SNI_QUEUE = queues.NonBlockQueue()
 class SocketWrapper:
     def __init__(
             self,
-            listening_address_list: list[str],
             forwarding_dns_service_ipv4_list___only_for_localhost: list = None,
             ca_certificate_name: str = None,
             ca_certificate_filepath: str = None,
@@ -69,15 +70,14 @@ class SocketWrapper:
             exceptions_logger: loggingw.ExceptionCsvLogger = None,
             statistics_logs_directory: str = None,
             request_domain_from_dns_server_queue: multiprocessing.Queue = None,
-            engines_domains: dict = None,
-            engine_no_sni_domain: str = None
+            no_engine_usage_enable: bool = False,
+            no_engines_listening_address_list: list[str] = None,
+            engines_list: list[initialize_engines.ModuleCategory] = None
     ):
         """
         Socket Wrapper class that will be used to create sockets, listen on them, accept connections and send them to
         new threads.
 
-        :param listening_address_list: list, of ips+ports that will be listened on.
-            Example: ['0.0.0.0:443', '0.0.0.0:80']
         :param ca_certificate_name: CA certificate name.
         :param ca_certificate_filepath: CA certificate file path with '.pem' extension.
         :param ca_certificate_crt_filepath: CA certificate file path with '.crt' extension.
@@ -166,19 +166,24 @@ class SocketWrapper:
             to get the domain name that was requested from the DNS server (atomicshop.wrappers.socketw.dns_server).
             This is used to get the domain name that got to the DNS server and set it to the socket in case SNI
             was empty (in the SNIHandler class to set the 'server_hostname' for the socket).
-        :param engines_domains: dictionary of engines that will be used to process the requests. Example:
-            [
-                {'this_is_engine_name': ['example.com', 'example.org']},
-                {'this_is_engine_name2': ['example2.com', 'example2.org']}
-            ]
+        :param no_engine_usage_enable: boolean, if True, 'engines_list' will be used to listen on the addresses,
+            but the "no_engines_listening_address_list" parameter will be used instead.
+        :param no_engines_listening_address_list: list, of ips+ports that will be listened on.
+            Example: ['0.0.0.0:443', '0.0.0.0:80']
+        :param engines_list: list, of engines that will be used to process the requests. Structure of engine_config.toml:
+            [engine]
+            "domains" = ["example.com"]
 
-            the 'engine_name' for statistics.csv file will be taken from the key of the dictionary, while correlated
-            by the domain name from the list in the dictionary.
-        :param engine_no_sni_domain: string, domain name that will be used if there is no SNI in the request,
-            and no domain hit the dns server. This is used to set the 'server_hostname' for the socket.
+            [mtls]
+            # "subdomain.domain.com" = "file_name_in_current_dir.pem"
+
+            [no_sni]
+            #get_from_dns = 1         # Blocking, the accept function will wait until the domain is received from DNS.
+            #get_from_engine = 0
+            #try_to_get_from_dns_on_empty_get_from_engine = 0    # Non-blocking, on empty DNS server queue, accept() will connect to the domain from below.
+            #"domain" = "example.com"
         """
 
-        self.listening_address_list: list[str] = listening_address_list
         self.ca_certificate_name: str = ca_certificate_name
         self.ca_certificate_filepath: str = ca_certificate_filepath
         self.ca_certificate_crt_filepath: str = ca_certificate_crt_filepath
@@ -211,8 +216,21 @@ class SocketWrapper:
         self.forwarding_dns_service_ipv4_list___only_for_localhost = (
             forwarding_dns_service_ipv4_list___only_for_localhost)
         self.request_domain_from_dns_server_queue: multiprocessing.Queue = request_domain_from_dns_server_queue
-        self.engines_domains: dict = engines_domains
-        self.engine_no_sni_domain: str = engine_no_sni_domain
+        self.no_engine_usage_enable: bool = no_engine_usage_enable
+        self.no_engines_listening_address_list: list[str] = no_engines_listening_address_list
+        self.engines_list: list[initialize_engines.ModuleCategory] = engines_list
+
+        # dictionary of engines that will be used to find the engine name. Example:
+        # [{'this_is_engine_name': ['example.com', 'example.org']},
+        # {'this_is_engine_name2': ['example2.com', 'example2.org']}]
+        self.engines_domains: dict = dict()
+        for engine in self.engines_list:
+            self.engines_domains[engine.engine_name] = engine.domain_list
+
+            if engine.no_sni.serve_domain_on_address_enable:
+                for domain, ip_port_address in engine.no_sni.serve_domain_on_address_dict.items():
+                    if domain not in self.engines_domains[engine.engine_name]:
+                        self.engines_domains[engine.engine_name].append(domain)
 
         self.socket_object = None
 
@@ -275,6 +293,13 @@ class SocketWrapper:
                 "You can't set both [sni_use_default_callback_function = True] and [sni_custom_callback_function]."
             raise SocketWrapperConfigurationValuesError(message)
 
+        if self.no_engine_usage_enable and not self.no_engines_listening_address_list:
+            message = "You set [no_engine_usage_enable = True], but you didn't set [no_engines_listening_address_list]."
+            raise SocketWrapperConfigurationValuesError(message)
+        elif not self.no_engine_usage_enable and not self.engines_list:
+            message = "You set [no_engine_usage_enable = False], but you didn't set [engines_list]."
+            raise SocketWrapperConfigurationValuesError(message)
+
         try:
             booleans.is_only_1_true_in_list(
                 booleans_list_of_tuples=[
@@ -322,7 +347,16 @@ class SocketWrapper:
                     print_api(message, color='red', logger=self.logger)
                     return 1
 
-        port_in_use = networks.get_processes_using_port_list(self.listening_address_list)
+        # Checking if listening address is in use.
+        listening_check_list: list = list()
+        if self.engines_list:
+            for engine in self.engines_list:
+                for address in engine.tcp_listening_address_list:
+                    if address not in listening_check_list:
+                        listening_check_list.append(address)
+        else:
+            listening_check_list = self.no_engines_listening_address_list
+        port_in_use = networks.get_processes_using_port_list(listening_check_list)
         if port_in_use:
             error_messages: list = list()
             for port, process_info in port_in_use.items():
@@ -399,26 +433,74 @@ class SocketWrapper:
 
         return self.socket_object
 
-    def create_tcp_listening_socket_list(self, overwrite_list: bool = False):
-        # If 'overwrite_list' was set to 'True', we will create new list. The default is 'False', since it is meant to`
-        # add new sockets to already existing ones.
-        if overwrite_list:
-            self.listening_sockets = list()
-
-        # Creating a socket for each port in the list set in configuration file
-        for address in self.listening_address_list:
-            ip_address, port_str = address.split(':')
-            port = int(port_str)
-            socket_by_port = self.create_socket_ipv4_tcp(
-                ip_address, port)
-
-            self.listening_sockets.append(socket_by_port)
-
-    def loop_for_incoming_sockets(
+    def start_listening_sockets(
             self,
             reference_function_name,
             reference_function_args=(),
-            listening_socket_list: list = None,
+            pass_function_reference_to_thread: bool = True
+    ):
+        """
+        Start listening sockets with parameters.
+        """
+
+        # If engines were passed, we will use the listening addresses from the engines.
+        if not self.no_engine_usage_enable:
+            for engine in self.engines_list:
+                # Start all the regular listening interfaces.
+                for address in engine.tcp_listening_address_list:
+                    ip_address, port_str = address.split(':')
+                    port = int(port_str)
+                    socket_by_port = self.create_socket_ipv4_tcp(ip_address, port)
+                    threading.Thread(
+                        target=self.listening_socket_loop,
+                        args=(socket_by_port, engine, reference_function_name,
+                              reference_function_args, pass_function_reference_to_thread),
+                        name=f"acceptor-{engine.engine_name}-{ip_address}:{port}",
+                        daemon=True
+                    ).start()
+
+                # Start all the interfaces configured in the no_sni section.
+                if engine.no_sni.serve_domain_on_address_enable:
+                    for domain, ip_port_address in engine.no_sni.serve_domain_on_address_dict.items():
+                        ip_address, port_str = ip_port_address.split(':')
+                        port = int(port_str)
+                        socket_by_port = self.create_socket_ipv4_tcp(ip_address, port)
+                        threading.Thread(
+                            target=self.listening_socket_loop,
+                            args=(socket_by_port, engine, reference_function_name,
+                                  reference_function_args, pass_function_reference_to_thread),
+                            name=f"acceptor-{engine.engine_name}-{ip_address}:{port}",
+                            daemon=True
+                        ).start()
+        else:
+            # If no engines were passed, we will use the listening addresses from the configuration.
+            for address in self.no_engines_listening_address_list:
+                ip_address, port_str = address.split(':')
+                port = int(port_str)
+                socket_by_port = self.create_socket_ipv4_tcp(ip_address, port)
+                threading.Thread(
+                    target=self.listening_socket_loop,
+                    args=(socket_by_port, None, reference_function_name,
+                          reference_function_args, pass_function_reference_to_thread),
+                    name=f"acceptor-{ip_address}:{port}",
+                    daemon=True
+                ).start()
+
+        # # Creating a socket for each port in the list set in configuration file
+        # for address in self.listening_address_list:
+        #     ip_address, port_str = address.split(':')
+        #     port = int(port_str)
+        #     socket_by_port = self.create_socket_ipv4_tcp(
+        #         ip_address, port)
+        #
+        #     self.listening_sockets.append(socket_by_port)
+
+    def listening_socket_loop(
+            self,
+            listening_socket_object: socket.socket,
+            engine: initialize_engines.ModuleCategory,
+            reference_function_name,
+            reference_function_args=(),
             pass_function_reference_to_thread: bool = True
     ):
         """
@@ -426,6 +508,8 @@ class SocketWrapper:
         The boolean variable was declared True in the beginning of the script and will be set to False if the process
         will be killed or closed.
 
+        :param listening_socket_object: listening socket that was created with bind.
+        :param engine: ModuleCategory.
         :param reference_function_name: callable, function reference that you want to execute when client
             socket received by 'accept()' and connection has been made.
         :param reference_function_args: tuple, that will be passed to 'function_reference' when it will be called.
@@ -439,17 +523,13 @@ class SocketWrapper:
             process_name: string, process name that was gathered from the socket.
             is_tls: boolean, if the socket is SSL/TLS.
             domain_from_dns_server: string, domain that was requested from DNS server.
-        :param listening_socket_list: list, of sockets that you want to listen on.
         :param pass_function_reference_to_thread: boolean, that sets if 'function_reference' will be
             executed as is, or passed to thread. 'function_reference' can include passing to a thread,
             but you don't have to use it, since SocketWrapper can do it for you.
         :return:
         """
 
-        # If 'listening_socket_list' wasn't specified and 'self.listening_sockets' is not empty.
-        if not listening_socket_list and self.listening_sockets:
-            # Then assign 'self.listening_sockets'.
-            listening_socket_list = self.listening_sockets
+        listening_sockets: list = [listening_socket_object]
 
         while True:
             try:
@@ -457,7 +537,7 @@ class SocketWrapper:
                 # operating system types: Windows / Linux / BSD.
                 # To accept connection, we don't need "writable" and "exceptional", since "readable" holds the currently
                 # connected socket.
-                readable, writable, exceptional = select.select(listening_socket_list, [], [])
+                readable, writable, exceptional = select.select(listening_sockets, [], [])
                 listening_socket_object = readable[0]
 
                 # Get the domain queue. Tried using "Queue.Queue" object, but it stomped the SSL Sockets
@@ -465,11 +545,21 @@ class SocketWrapper:
                 domain_from_dns_server = None
                 if self.request_domain_from_dns_server_queue is not None:
                     # domain_from_dns_server = self.request_domain_from_dns_server_queue.get()
-                    import queue
-                    try:
-                        domain_from_dns_server = self.request_domain_from_dns_server_queue.get_nowait()
-                    except queue.Empty:
-                        domain_from_dns_server = self.engine_no_sni_domain
+                    if engine.no_sni.get_from_dns:
+                        domain_from_dns_server = self.request_domain_from_dns_server_queue.get()
+
+                    if engine.no_sni.serve_domain_on_address_enable:
+                        # try:
+                        #     domain_from_dns_server = self.request_domain_from_dns_server_queue.get_nowait()
+                        # except queue.Empty:
+                        #     domain_from_dns_server = engine.no_sni['domain']
+
+                        listening_ip, listening_port = listening_socket_object.getsockname()
+                        for domain, ip_port_address in engine.no_sni.serve_domain_on_address_dict.items():
+                            ip_address: str = ip_port_address.split(':')[0]
+                            if ip_address == listening_ip:
+                                domain_from_dns_server = domain
+                                break
 
                     self.logger.info(f"Requested domain from DNS Server: {domain_from_dns_server}")
 

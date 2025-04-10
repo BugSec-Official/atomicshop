@@ -6,16 +6,15 @@ from . import import_config
 
 # CONFIG = None
 LIST_OF_BOOLEANS: list = [
+    ('dnstcp', 'offline'),
     ('dns', 'enable'),
-    ('dns', 'offline_mode'),
-    ('dns', 'resolve_to_tcp_server_only_engine_domains'),
-    ('dns', 'resolve_to_tcp_server_all_domains'),
-    ('dns', 'resolve_regular'),
+    ('dns', 'resolve_by_engine'),
+    ('dns', 'resolve_regular_pass_thru'),
+    ('dns', 'resolve_all_domains_to_ipv4'),
     ('dns', 'set_default_dns_gateway_to_localhost'),
     ('dns', 'set_default_dns_gateway_to_default_interface_ipv4'),
     ('tcp', 'enable'),
-    ('tcp', 'engines_usage'),
-    ('tcp', 'server_response_mode'),
+    ('tcp', 'no_engines_usage_to_listen_addresses'),
     ('logrec', 'enable_request_response_recordings_in_logs'),
     ('certificates', 'install_ca_certificate_to_root_store'),
     ('certificates', 'uninstall_unused_ca_certificates_with_mitm_ca_name'),
@@ -32,6 +31,7 @@ LIST_OF_BOOLEANS: list = [
 
 
 TOML_TO_STATIC_CATEGORIES: dict = {
+    'dnstcp': 'MainConfig',
     'dns': 'DNSServer',
     'tcp': 'TCPServer',
     'logrec': 'LogRec',
@@ -39,6 +39,10 @@ TOML_TO_STATIC_CATEGORIES: dict = {
     'skip_extensions': 'SkipExtensions',
     'process_name': 'ProcessName'
 }
+
+# noinspection PyTypeChecker
+ENGINES_LIST: list = None           # list[initialize_engines.ModuleCategory]
+REFERENCE_MODULE = None             # initialize_engines.ModuleCategory
 
 
 class MainConfig:
@@ -61,6 +65,7 @@ class MainConfig:
     # Default server certificate file name and path.
     default_server_certificate_filename = f'{default_server_certificate_name}.pem'
     default_server_certificate_filepath: str = None
+    offline: bool = False
 
     @classmethod
     def update(cls):
@@ -77,32 +82,34 @@ class DNSServer:
     enable: bool
     offline_mode: bool
 
-    listening_interface: str
-    listening_port: int
+    listening_address: str
     forwarding_dns_service_ipv4: str
     cache_timeout_minutes: int
 
-    resolve_to_tcp_server_only_engine_domains: bool
-    resolve_to_tcp_server_all_domains: bool
-    resolve_regular: bool
-    target_tcp_server_ipv4: str
+    resolve_by_engine: bool
+    resolve_regular_pass_thru: bool
+    resolve_all_domains_to_ipv4_enable: bool
+    target_ipv4: str
 
     set_default_dns_gateway: str
     set_default_dns_gateway_to_localhost: bool
     set_default_dns_gateway_to_default_interface_ipv4: bool
 
+    # Convertable variables.
+    resolve_all_domains_to_ipv4: dict
+
+    # Static variables.
+    forwarding_dns_service_port: int = 53
+
 
 @dataclass
 class TCPServer:
     enable: bool
+    no_engines_usage_to_listen_addresses_enable: bool
+    no_engines_listening_address_list: list[str]
 
-    engines_usage: bool
-    server_response_mode: bool
-
-    listening_address_list: list[str]
-
-    forwarding_dns_service_ipv4_list___only_for_localhost: list[str]
-
+    # Convertable variables.
+    no_engines_usage_to_listen_addresses: dict
 
 @dataclass
 class LogRec:
@@ -161,7 +168,7 @@ def load_config(config_toml_file_path: str):
     MainConfig.update()
 
     # Load the configuration file.
-    result = import_config.import_config_file(config_toml_file_path)
+    result = import_config.import_config_files(config_toml_file_path)
     return result
 
 

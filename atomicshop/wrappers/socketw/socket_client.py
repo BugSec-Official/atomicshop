@@ -28,7 +28,7 @@ class SocketClient:
             service_port: int,
             tls: bool = False,
             connection_ip=None,
-            dns_servers_list=None,
+            dns_servers_list: list[str] = None,
             logger: logging.Logger = None,
             custom_pem_client_certificate_file_path: str = None,
             enable_sslkeylogfile_env_to_client_ssl_context: bool = False

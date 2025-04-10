@@ -205,7 +205,7 @@ def thread_worker_main(
         # If there is a custom certificate for the client for this domain, then we'll use it.
         # noinspection PyTypeChecker
         custom_client_pem_certificate_path: str = None
-        for subdomain, pem_file_path in mtls_dict.items():
+        for subdomain, pem_file_path in found_domain_module.mtls.items():
             if subdomain == client_message.server_name:
                 custom_client_pem_certificate_path = pem_file_path
                 break
@@ -217,8 +217,7 @@ def thread_worker_main(
                 service_name=client_message.server_name,
                 service_port=client_message.destination_port,
                 tls=is_tls,
-                dns_servers_list=(
-                    config_static.TCPServer.forwarding_dns_service_ipv4_list___only_for_localhost),
+                dns_servers_list=[config_static.DNSServer.forwarding_dns_service_ipv4],
                 logger=network_logger,
                 custom_pem_client_certificate_file_path=custom_client_pem_certificate_path,
                 enable_sslkeylogfile_env_to_client_ssl_context=(
@@ -415,8 +414,8 @@ def thread_worker_main(
                     finish_thread()
                     return
 
-                # If we're in response mode, execute responder.
-                if config_static.TCPServer.server_response_mode:
+                # If we're in offline mode, execute responder.
+                if config_static.MainConfig.offline:
                     responder_queue.put(copy.deepcopy(client_message))
                 else:
                     # if side == 'Client':
@@ -517,15 +516,21 @@ def thread_worker_main(
 
     # Loading parser by domain, if there is no parser for current domain - general reference parser is loaded.
     # These should be outside any loop and initialized only once entering the thread.
-    parser, responder, recorder_no_init, mtls_dict = assign_class_by_domain(
-        engines_usage=config_static.TCPServer.engines_usage,
+    found_domain_module = assign_class_by_domain(
         engines_list=engines_list,
         message_domain_name=server_name,
-        reference_module=reference_module,
-        logger=network_logger
+        reference_module=reference_module
     )
-
+    parser = found_domain_module.parser_class_object
+    responder = found_domain_module.responder_class_object
+    recorder_no_init = found_domain_module.recorder_class_object
     recorder = recorder_no_init(record_path=config_static.LogRec.recordings_path)
+
+    network_logger.info(f"Assigned Modules for [{server_name}]: "
+        f"{parser.__name__}, "
+        f"{responder.__name__}, "
+        f"{recorder_no_init.__name__}")
+
 
     # Initializing the client message object with current thread's data.
     # This is needed only to skip error alerts after 'try'.
@@ -543,18 +548,18 @@ def thread_worker_main(
         client_name = socket.gethostbyaddr(client_ip)[0]
         destination_port = client_socket.getsockname()[1]
 
-        if config_static.TCPServer.server_response_mode:
-            # If in response mode, then we'll get the TCP server's input address.
+        if config_static.MainConfig.offline:
+            # If in offline mode, then we'll get the TCP server's input address.
             server_ip = client_socket.getsockname()[0]
         else:
-            # If not in response mode, we will get the ip from the socket that will connect later to the service.
+            # If not in offline mode, we will get the ip from the socket that will connect later to the service.
             server_ip = ""
 
         network_logger.info(f"Thread Created - Client [{client_ip}:{source_port}] | "
                             f"Destination service: [{server_name}:{destination_port}]")
 
-        # If we're in response mode, we'll start the responder thread.
-        if config_static.TCPServer.server_response_mode:
+        # If we're in offline mode, we'll start the responder thread.
+        if config_static.MainConfig.offline:
             responder_thread: threading.Thread = threading.Thread(
                 target=responder_thread_worker, name=f"Thread-{thread_id}-Responder", daemon=True)
             responder_thread.start()
@@ -567,11 +572,11 @@ def thread_worker_main(
         server_receive_count: int = 0
         client_message_connection = client_message_first_start()
 
-        # If we're not in response mode, then we'll create the client socket to the service.
+        # If we're not in offline mode, then we'll create the client socket to the service.
         # noinspection PyTypeChecker
         connection_error: str = None
         service_socket_instance = None
-        if not config_static.TCPServer.server_response_mode:
+        if not config_static.MainConfig.offline:
             # If "service_client" object is not defined, we'll define it.
             # If it's defined, then there's still active "ssl_socket" with connection to the service domain.
             if not service_client:
@@ -599,7 +604,7 @@ def thread_worker_main(
             client_thread.daemon = True
             client_thread.start()
 
-            if not config_static.TCPServer.server_response_mode:
+            if not config_static.MainConfig.offline:
                 service_exception_queue: queue.Queue = queue.Queue()
                 service_thread = threading.Thread(
                     target=receive_send_start, args=(service_socket_instance, client_socket, service_exception_queue),
@@ -608,7 +613,7 @@ def thread_worker_main(
                 service_thread.start()
 
             client_thread.join()
-            if config_static.TCPServer.server_response_mode:
+            if config_static.MainConfig.offline:
                 responder_thread.join()
             else:
                 service_thread.join()
@@ -616,7 +621,7 @@ def thread_worker_main(
             # If there was an exception in any of the threads, then we'll raise it here.
             if not client_exception_queue.empty():
                 raise client_exception_queue.get()
-            if not config_static.TCPServer.server_response_mode:
+            if not config_static.MainConfig.offline:
                 if not service_exception_queue.empty():
                     raise service_exception_queue.get()
 
