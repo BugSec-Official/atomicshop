@@ -77,6 +77,107 @@ def exit_cleanup():
         process.join()
 
 
+def startup_output(system_logger, script_version: str):
+    """
+    The function outputs the startup information to the console.
+    """
+
+    # Writing first log.
+    system_logger.info("======================================")
+    system_logger.info("Server Started.")
+    system_logger.info(f"Python Version: {get_current_python_version_string()}")
+    system_logger.info(f"Script Version: {script_version}")
+    system_logger.info(f"Atomic Workshop Version: {atomicshop.__version__}")
+    system_logger.info(f"Log folder: {config_static.LogRec.logs_path}")
+    if config_static.LogRec.enable_request_response_recordings_in_logs:
+        system_logger.info(f"Recordings folder for Requests/Responses: {config_static.LogRec.recordings_path}")
+    system_logger.info(f"Loaded system logger: {system_logger}")
+
+    # Some 'config.ini' settings logging ===========================================================================
+    if config_static.Certificates.default_server_certificate_usage:
+        system_logger.info(
+            f"Default server certificate usage enabled, if no SNI available: "
+            f"{config_static.MainConfig.default_server_certificate_filepath}")
+
+    if config_static.Certificates.sni_server_certificates_cache_directory:
+        system_logger.info(
+            f"SNI function certificates creation enabled. Certificates cache: "
+            f"{config_static.Certificates.sni_server_certificates_cache_directory}")
+    else:
+        system_logger.info(f"SNI function certificates creation disabled.")
+
+    if config_static.Certificates.custom_server_certificate_usage:
+        system_logger.info(f"Custom server certificate usage is enabled.")
+        system_logger.info(f"Custom Certificate Path: {config_static.Certificates.custom_server_certificate_path}")
+
+        # If 'custom_private_key_path' field was populated.
+        if config_static.Certificates.custom_private_key_path:
+            system_logger.info(
+                f"Custom Certificate Private Key Path: {config_static.Certificates.custom_private_key_path}")
+        else:
+            system_logger.info(f"Custom Certificate Private Key Path wasn't provided in [advanced] section. "
+                               f"Assuming the private key is inside the certificate file.")
+
+    # === Engine logging ===========================================================================================
+    # Printing the parsers using "start=1" for index to start counting from "1" and not "0"
+    system_logger.info("Imported engine info.")
+    print_api.print_api(f"[*] Found Engines:", logger=system_logger)
+
+    if not config_static.ENGINES_LIST:
+        message = \
+            f"No engines found, the TCP server will use general response engine for all the input domains."
+        print_api.print_api(message, color="blue", logger=system_logger)
+
+    for index, engine in enumerate(config_static.ENGINES_LIST, start=1):
+        message = f"[*] {index}: {engine.engine_name} | {engine.domain_list}"
+        print_api.print_api(message, logger=system_logger)
+
+        message = (f"[*] Modules: {engine.parser_class_object.__name__}, "
+                   f"{engine.responder_class_object.__name__}, "
+                   f"{engine.recorder_class_object.__name__}")
+        print_api.print_api(message, logger=system_logger)
+        print_api.print_api(f"[*] Name: {engine.engine_name}", logger=system_logger)
+        print_api.print_api(f"[*] Domains: {engine.domain_list}", logger=system_logger)
+        print_api.print_api(f"[*] DNS Target: {engine.dns_target}", logger=system_logger)
+        print_api.print_api(f"[*] TCP Listening Interfaces: {engine.tcp_listening_address_list}", logger=system_logger)
+
+        if engine.no_sni.get_from_dns:
+            print_api.print_api(f"[*] No SNI setting: Will fetch from DNS Server", logger=system_logger)
+        if engine.no_sni.serve_domain_on_address_enable:
+            print_api.print_api(
+                f"[*] No SNI setting: The DNS Server will send the domains to interfaces [{engine.no_sni.serve_domain_on_address_dict}]",
+                logger=system_logger)
+
+    if config_static.DNSServer.enable:
+        print_api.print_api("DNS Server is enabled.", logger=system_logger)
+
+        # If engines were found and dns is set to route by the engine domains.
+        if config_static.ENGINES_LIST and config_static.DNSServer.resolve_by_engine:
+            print_api.print_api(
+                "Engine domains will be routed by the DNS server to Built-in TCP Server.", logger=system_logger)
+        # If engines were found, but the dns isn't set to route to engines.
+        elif config_static.ENGINES_LIST and not config_static.DNSServer.resolve_by_engine:
+            message = f"[*] Engines found, but the DNS routing is set not to use them for routing."
+            print_api.print_api(message, color="yellow", logger=system_logger)
+
+        if config_static.DNSServer.resolve_all_domains_to_ipv4_enable:
+            print_api.print_api(
+                f"All domains will be routed by the DNS server to Built-in TCP Server: [{config_static.DNSServer.target_ipv4}]",
+                color="blue", logger=system_logger)
+
+        if config_static.DNSServer.resolve_regular_pass_thru:
+            print_api.print_api(
+                "Regular DNS resolving is enabled. Built-in TCP server will not be routed to",
+                logger=system_logger, color="yellow")
+    else:
+        print_api.print_api("DNS Server is disabled.", logger=system_logger, color="yellow")
+
+    if config_static.TCPServer.enable:
+        print_api.print_api("TCP Server is enabled.", logger=system_logger)
+    else:
+        print_api.print_api("TCP Server is disabled.", logger=system_logger, color="yellow")
+
+
 def mitm_server(config_file_path: str, script_version: str):
     on_exit.register_exit_handler(exit_cleanup, at_exit=False, kill_signal=False)
 
@@ -110,7 +211,8 @@ def mitm_server(config_file_path: str, script_version: str):
 
     network_logger_name = config_static.MainConfig.LOGGER_NAME
 
-    _ = loggingw.create_logger(
+    # If we exit the function, we need to stop the listener: network_logger_queue_listener.stop()
+    network_logger_queue_listener = loggingw.create_logger(
         get_queue_listener=True,
         log_queue=NETWORK_LOGGER_QUEUE,
         file_path=f'{config_static.LogRec.logs_path}{os.sep}{network_logger_name}.txt',
@@ -129,163 +231,27 @@ def mitm_server(config_file_path: str, script_version: str):
     listener_logger = loggingw.get_logger_with_level(f'{network_logger_name}.listener')
     system_logger = loggingw.get_logger_with_level(f'{network_logger_name}.system')
 
-    # Writing first log.
-    system_logger.info("======================================")
-    system_logger.info("Server Started.")
-    system_logger.info(f"Python Version: {get_current_python_version_string()}")
-    system_logger.info(f"Script Version: {script_version}")
-    system_logger.info(f"Atomic Workshop Version: {atomicshop.__version__}")
-    system_logger.info(f"Log folder: {config_static.LogRec.logs_path}")
-    if config_static.LogRec.enable_request_response_recordings_in_logs:
-        system_logger.info(f"Recordings folder for Requests/Responses: {config_static.LogRec.recordings_path}")
-    system_logger.info(f"Loaded system logger: {system_logger}")
-
-    system_logger.info(f"TCP Server Target IP: {config_static.DNSServer.target_tcp_server_ipv4}")
-
-    # Some 'config.ini' settings logging ===========================================================================
-    if config_static.Certificates.default_server_certificate_usage:
-        system_logger.info(
-            f"Default server certificate usage enabled, if no SNI available: "
-            f"{config_static.MainConfig.default_server_certificate_filepath}")
-
-    if config_static.Certificates.sni_server_certificates_cache_directory:
-        system_logger.info(
-            f"SNI function certificates creation enabled. Certificates cache: "
-            f"{config_static.Certificates.sni_server_certificates_cache_directory}")
-    else:
-        system_logger.info(f"SNI function certificates creation disabled.")
-
-    if config_static.Certificates.custom_server_certificate_usage:
-        system_logger.info(f"Custom server certificate usage is enabled.")
-        system_logger.info(f"Custom Certificate Path: {config_static.Certificates.custom_server_certificate_path}")
-
-        # If 'custom_private_key_path' field was populated.
-        if config_static.Certificates.custom_private_key_path:
-            system_logger.info(
-                f"Custom Certificate Private Key Path: {config_static.Certificates.custom_private_key_path}")
-        else:
-            system_logger.info(f"Custom Certificate Private Key Path wasn't provided in [advanced] section. "
-                               f"Assuming the private key is inside the certificate file.")
-
-    # === Importing engine modules =================================================================================
-    system_logger.info("Importing engine modules.")
-
-    # Get full paths of all the 'engine_config.ini' files.
-    engine_config_path_list = filesystem.get_paths_from_directory(
-        directory_path=config_static.MainConfig.ENGINES_DIRECTORY_PATH,
-        get_file=True,
-        file_name_check_pattern=config_static.MainConfig.ENGINE_CONFIG_FILE_NAME)
-
-    # Iterate through all the 'engine_config.ini' file paths.
-    domains_engine_list_full: list = list()
-    engines_list: list = list()
-    for engine_config_path in engine_config_path_list:
-        # Initialize engine.
-        current_module = ModuleCategory(config_static.MainConfig.SCRIPT_DIRECTORY)
-        current_module.fill_engine_fields_from_config(engine_config_path.path)
-        current_module.initialize_engine(logs_path=config_static.LogRec.logs_path,
-                                         logger=system_logger)
-
-        # Extending the full engine domain list with this list.
-        domains_engine_list_full.extend(current_module.domain_list)
-        # Append the object to the engines list
-        engines_list.append(current_module)
-    # === EOF Importing engine modules =============================================================================
-    # ==== Initialize Reference Module =============================================================================
-    reference_module = ModuleCategory(config_static.MainConfig.SCRIPT_DIRECTORY)
-    reference_module.fill_engine_fields_from_general_reference(config_static.MainConfig.ENGINES_DIRECTORY_PATH)
-    reference_module.initialize_engine(logs_path=config_static.LogRec.logs_path,
-                                       logger=system_logger, stdout=False, reference_general=True)
-    # === EOF Initialize Reference Module ==========================================================================
-    # === Engine logging ===========================================================================================
-    # Printing the parsers using "start=1" for index to start counting from "1" and not "0"
-    print_api.print_api(f"[*] Found Engines:", logger=system_logger)
-    for index, engine in enumerate(engines_list, start=1):
-        message = f"[*] {index}: {engine.engine_name} | {engine.domain_list}"
-        print_api.print_api(message, logger=system_logger)
-
-        message = (f"[*] Modules: {engine.parser_class_object.__name__}, "
-                   f"{engine.responder_class_object.__name__}, "
-                   f"{engine.recorder_class_object.__name__}")
-        print_api.print_api(message, logger=system_logger)
-
-    if config_static.DNSServer.enable:
-        print_api.print_api("DNS Server is enabled.", logger=system_logger)
-
-        # If engines were found and dns is set to route by the engine domains.
-        if engines_list and config_static.DNSServer.resolve_to_tcp_server_only_engine_domains:
-            print_api.print_api(
-                "Engine domains will be routed by the DNS server to Built-in TCP Server.", logger=system_logger)
-        # If engines were found, but the dns isn't set to route to engines.
-        elif engines_list and not config_static.DNSServer.resolve_to_tcp_server_only_engine_domains:
-            message = f"[*] Engine domains found, but the DNS routing is set not to use them for routing."
-            print_api.print_api(message, color="yellow", logger=system_logger)
-        elif not engines_list and config_static.DNSServer.resolve_to_tcp_server_only_engine_domains:
-            error_message = (
-                f"No engines were found in: [{config_static.MainConfig.ENGINES_DIRECTORY_PATH}]\n"
-                f"But the DNS routing is set to use them for routing.\n"
-                f"Please check your DNS configuration in the 'config.ini' file.")
-            print_api.print_api(error_message, color="red")
-            return 1
-
-        if config_static.DNSServer.resolve_to_tcp_server_all_domains:
-            print_api.print_api(
-                "All domains will be routed by the DNS server to Built-in TCP Server.", logger=system_logger)
-
-        if config_static.DNSServer.resolve_regular:
-            print_api.print_api(
-                "Regular DNS resolving is enabled. Built-in TCP server will not be routed to",
-                logger=system_logger, color="yellow")
-    else:
-        print_api.print_api("DNS Server is disabled.", logger=system_logger, color="yellow")
-
-    if config_static.TCPServer.enable:
-        print_api.print_api("TCP Server is enabled.", logger=system_logger)
-
-        if engines_list and not config_static.TCPServer.engines_usage:
-            message = \
-                f"Engines found, but the TCP server is set not to use them for processing. General responses only."
-            print_api.print_api(message, color="yellow", logger=system_logger)
-        elif engines_list and config_static.TCPServer.engines_usage:
-            message = f"Engines found, and the TCP server is set to use them for processing."
-            print_api.print_api(message, logger=system_logger)
-        elif not engines_list and config_static.TCPServer.engines_usage:
-            error_message = (
-                f"No engines were found in: [{config_static.MainConfig.ENGINES_DIRECTORY_PATH}]\n"
-                f"But the TCP server is set to use them for processing.\n"
-                f"Please check your TCP configuration in the 'config.ini' file.")
-            print_api.print_api(error_message, color="red")
-            return 1
-    else:
-        print_api.print_api("TCP Server is disabled.", logger=system_logger, color="yellow")
-
-    # === EOF Engine Logging =======================================================================================
-
-    # Assigning all the engines domains to all time domains, that will be responsible for adding new domains.
-    config_static.Certificates.domains_all_times = list(domains_engine_list_full)
+    # Logging Startup information.
+    startup_output(system_logger, script_version)
 
     print_api.print_api("Press [Ctrl]+[C] to stop.", color='blue')
 
     # === Initialize DNS module ====================================================================================
     if config_static.DNSServer.enable:
         dns_process = multiprocessing.Process(
-        # dns_process = threading.Thread(
             target=dns_server.start_dns_server_multiprocessing_worker,
             kwargs={
-                'listening_interface': config_static.DNSServer.listening_interface,
-                'listening_port' :config_static.DNSServer.listening_port,
+                'listening_address': config_static.DNSServer.listening_address,
                 'log_directory_path': config_static.LogRec.logs_path,
                 'backupCount_log_files_x_days': config_static.LogRec.store_logs_for_x_days,
                 'forwarding_dns_service_ipv4': config_static.DNSServer.forwarding_dns_service_ipv4,
-                'tcp_target_server_ipv4': config_static.DNSServer.target_tcp_server_ipv4,
-                # Passing the engine domain list to DNS server to work with.
-                # 'list' function re-initializes the current list, or else it will be the same instance object.
-                'tcp_resolve_domain_list': list(config_static.Certificates.domains_all_times),
-                'offline_mode': config_static.DNSServer.offline_mode,
-                'resolve_to_tcp_server_only_tcp_resolve_domains': (
-                    config_static.DNSServer.resolve_to_tcp_server_only_engine_domains),
-                'resolve_to_tcp_server_all_domains': config_static.DNSServer.resolve_to_tcp_server_all_domains,
-                'resolve_regular': config_static.DNSServer.resolve_regular,
+                'forwarding_dns_service_port': config_static.DNSServer.forwarding_dns_service_port,
+                'resolve_by_engine': (
+                    config_static.DNSServer.resolve_by_engine, config_static.ENGINES_LIST),
+                'resolve_regular_pass_thru': config_static.DNSServer.resolve_regular_pass_thru,
+                'resolve_all_domains_to_ipv4': (
+                    config_static.DNSServer.resolve_all_domains_to_ipv4_enable, config_static.DNSServer.target_ipv4),
+                'offline_mode': config_static.MainConfig.offline,
                 'cache_timeout_minutes': config_static.DNSServer.cache_timeout_minutes,
                 'request_domain_queue': DOMAIN_QUEUE,
                 'logging_queue': NETWORK_LOGGER_QUEUE,
@@ -307,6 +273,7 @@ def mitm_server(config_file_path: str, script_version: str):
                 print_api.print_api(message, error_type=True, color="red", logger=system_logger)
                 # Wait for the message to be printed and saved to file.
                 time.sleep(1)
+                network_logger_queue_listener.stop()
                 return 1
 
         # Now we can check if the process wasn't terminated after the check.
@@ -319,6 +286,7 @@ def mitm_server(config_file_path: str, script_version: str):
                 print_api.print_api(message, error_type=True, color="red", logger=system_logger)
                 # Wait for the message to be printed and saved to file.
                 time.sleep(1)
+                network_logger_queue_listener.stop()
                 return 1
 
             time.sleep(1)
@@ -327,16 +295,8 @@ def mitm_server(config_file_path: str, script_version: str):
     # === EOF Initialize DNS module ================================================================================
     # === Initialize TCP Server ====================================================================================
     if config_static.TCPServer.enable:
-        engines_domains: dict = dict()
-        no_sni_domain: str = str()
-        for engine in engines_list:
-            engines_domains[engine.engine_name] = engine.domain_list
-            if no_sni_domain == '':
-                no_sni_domain = engine.no_sni['domain']
-
         try:
             socket_wrapper_instance = socket_wrapper.SocketWrapper(
-                listening_address_list=config_static.TCPServer.listening_address_list,
                 ca_certificate_name=config_static.MainConfig.ca_certificate_name,
                 ca_certificate_filepath=config_static.MainConfig.ca_certificate_filepath,
                 ca_certificate_crt_filepath=config_static.MainConfig.ca_certificate_crt_filepath,
@@ -369,27 +329,25 @@ def mitm_server(config_file_path: str, script_version: str):
                 logger=listener_logger,
                 exceptions_logger=MITM_ERROR_LOGGER,
                 statistics_logs_directory=config_static.LogRec.logs_path,
-                forwarding_dns_service_ipv4_list___only_for_localhost=(
-                    config_static.TCPServer.forwarding_dns_service_ipv4_list___only_for_localhost),
+                forwarding_dns_service_ipv4_list___only_for_localhost=[config_static.DNSServer.forwarding_dns_service_ipv4],
                 skip_extension_id_list=config_static.SkipExtensions.SKIP_EXTENSION_ID_LIST,
                 request_domain_from_dns_server_queue=DOMAIN_QUEUE,
-                engines_domains=engines_domains,
-                engine_no_sni_domain=no_sni_domain
+                no_engine_usage_enable=config_static.TCPServer.no_engines_usage_to_listen_addresses_enable,
+                no_engines_listening_address_list=config_static.TCPServer.no_engines_listening_address_list,
+                engines_list=config_static.ENGINES_LIST
             )
         except socket_wrapper.SocketWrapperPortInUseError as e:
             print_api.print_api(e, error_type=True, color="red", logger=system_logger)
             # Wait for the message to be printed and saved to file.
             time.sleep(1)
+            network_logger_queue_listener.stop()
             return 1
         except socket_wrapper.SocketWrapperConfigurationValuesError as e:
             print_api.print_api(e, error_type=True, color="red", logger=system_logger, logger_method='critical')
             # Wait for the message to be printed and saved to file.
             time.sleep(1)
+            network_logger_queue_listener.stop()
             return 1
-
-        statistics_writer = socket_wrapper_instance.statistics_writer
-
-        socket_wrapper_instance.create_tcp_listening_socket_list()
 
         # Before we start the loop. we can set the default gateway if specified.
         set_dns_gateway = False
@@ -425,19 +383,27 @@ def mitm_server(config_file_path: str, script_version: str):
                     print_api.print_api(e, error_type=True, color="red", logger=system_logger)
                     # Wait for the message to be printed and saved to file.
                     time.sleep(1)
+                    network_logger_queue_listener.stop()
                     return 1
 
-        socket_thread = threading.Thread(
-            target=socket_wrapper_instance.loop_for_incoming_sockets,
-            kwargs={
-                'reference_function_name': thread_worker_main,
-                'reference_function_args': (network_logger_with_queue_handler, statistics_writer, engines_list, reference_module,)
-            },
-            name="accepting_loop"
+        statistics_writer = socket_wrapper_instance.statistics_writer
+
+        socket_wrapper_instance.start_listening_sockets(
+            reference_function_name=thread_worker_main,
+            reference_function_args=(network_logger_with_queue_handler, statistics_writer, config_static.ENGINES_LIST, config_static.REFERENCE_MODULE)
         )
 
-        socket_thread.daemon = True
-        socket_thread.start()
+        # socket_thread = threading.Thread(
+        #     target=socket_wrapper_instance.loop_for_incoming_sockets,
+        #     kwargs={
+        #         'reference_function_name': thread_worker_main,
+        #         'reference_function_args': (network_logger_with_queue_handler, statistics_writer, engines_list, reference_module,)
+        #     },
+        #     name="accepting_loop"
+        # )
+        #
+        # socket_thread.daemon = True
+        # socket_thread.start()
 
         # Compress recordings each day in a separate process.
         recs_archiver_thread = threading.Thread(target=_loop_at_midnight_recs_archive)

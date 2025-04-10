@@ -73,12 +73,18 @@ class CreateModuleTemplate:
 
         # Add "" to each domain.
         domains_with_quotes: list = [f'"{domain}"' for domain in self.domains]
-        config_lines_list.append(f'"domains" = [{", ".join(domains_with_quotes)}]\n')
+
+        config_lines_list.append('[engine]')
+        config_lines_list.append(f'domains = [{", ".join(domains_with_quotes)}]')
+        config_lines_list.append('dns_target = "127.0.0.1"')
+        config_lines_list.append('tcp_listening_address_list = ["0.0.0.0:443"]\n')
         # config_lines_list.append(f'\n')
-        config_lines_list.append(f'[mtls]')
-        config_lines_list.append(f'# "subdomain.domain.com" = "file_name_in_current_dir.pem"\n')
-        config_lines_list.append(f'[no_sni]')
-        config_lines_list.append(f'# "domain" = "example.com"\n')
+        config_lines_list.append('[mtls]')
+        config_lines_list.append('# "subdomain.domain.com" = "file_name_in_current_dir.pem"\n')
+        # config_lines_list.append(f'\n')
+        config_lines_list.append('[no_sni]')
+        config_lines_list.append('get_from_dns = 1         # Blocking, the accept function will wait until the domain is received from DNS.')
+        config_lines_list.append('serve_domain_on_address = {0 = [{"example.com" = "127.0.0.2:443"}]}')
 
         config_file_path = self.new_engine_directory + os.sep + CONFIG_FILE_NAME
 

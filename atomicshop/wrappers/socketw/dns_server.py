@@ -11,7 +11,6 @@ import multiprocessing
 from ...print_api import print_api
 from ..loggingw import loggingw
 from ..psutilw import networks
-from ... import queues
 from ...basics import booleans, tracebacks
 from ...file_io import csvs
 
@@ -145,18 +144,15 @@ class DnsServer:
     # noinspection PyPep8Naming
     def __init__(
             self,
-            listening_interface: str,
-            listening_port: int,
+            listening_address: str,
             log_directory_path: str,
             backupCount_log_files_x_days: int = 0,
             forwarding_dns_service_ipv4: str = '8.8.8.8',
             forwarding_dns_service_port: int = 53,
-            resolve_to_tcp_server_only_tcp_resolve_domains: bool = False,
-            resolve_to_tcp_server_all_domains: bool = False,
-            resolve_regular: bool = False,
+            resolve_by_engine: tuple[bool, list] = (False, None),
+            resolve_regular_pass_thru: bool = False,
+            resolve_all_domains_to_ipv4: tuple[bool, str] = (False, '127.0.0.1'),
             offline_mode: bool = False,
-            tcp_target_server_ipv4: str = '127.0.0.1',
-            tcp_resolve_domain_list: list = None,
             request_domain_queue: multiprocessing.Queue = None,
             buffer_size_receive: int = 8192,
             response_ttl: int = 60,
@@ -169,9 +165,8 @@ class DnsServer:
         """
         Initialize the DNS Server object with all the necessary settings.
 
-        :param listening_interface: str: Interface that the DNS Server will listen on.
-            Example: '0.0.0.0'. For all interfaces.
-        :param listening_port: int: Port number that the DNS Server will listen on.
+        :param listening_address: str: Interface and a port that the DNS Server will listen on.
+            Example: '0.0.0.0:53'. For all interfaces on port 53.
         :param log_directory_path: str: Path to the directory where the logs will be saved.
         :param backupCount_log_files_x_days: int: How many days the log files will be kept.
             Default is 0, which means that the log files will be kept indefinitely.
@@ -180,15 +175,14 @@ class DnsServer:
             Example: '8.8.8.8'. For Google DNS Service.
         :param forwarding_dns_service_port: int: Port number of the DNS Service that will be used for resolving.
             Default is 53.
-        :param resolve_to_tcp_server_only_tcp_resolve_domains: bool: If the DNS Server should route only the
-            domains from 'tcp_resolve_domain_list' to the TCP Server in 'tcp_target_server_ipv4'.
-        :param resolve_to_tcp_server_all_domains: bool: If the DNS Server should route all domains to the TCP Server.
-        :param resolve_regular: bool: If the DNS Server should resolve all the domains to the Live DNS Service.
+        :param resolve_by_engine: tuple(boolean to enable the feature, list of engines).
+            True, The list of predefined engines will be used to resolve the domains.
+                Each list has a list of specific domains that will be routed to specified destination IPv4 address.
+        :param resolve_all_domains_to_ipv4: bool: If the DNS Server should resolve all the domains
+            to the provided origin DNS Service without altering the DNS request/response.
+        :param resolve_all_domains_to_ipv4: tuple(boolean to enable the feature, string IPv4 of the target).
+            True, the DNS Server will route all domains to the specified IPv4.
         :param offline_mode: bool: If the DNS Server should work in offline mode.
-        :param tcp_target_server_ipv4: str: IPv4 address of the TCP Server that the specified booleans will resolve
-            the domains to.
-        :param tcp_resolve_domain_list: list: List of domains that will be resolved to the TCP Server.
-            This means that all the requests will be resolved to the specified offline IPv4 address.
         :param request_domain_queue: multiprocessing Queue to pass all the requested domains that hit the DNS
         :param buffer_size_receive: int: Buffer size of the connection while receiving messages.
         :param response_ttl: int, Time to live of the DNS Response that will be returned. Default is 60 seconds.
@@ -205,17 +199,15 @@ class DnsServer:
         You can pass only one of the following: 'logger', 'logging_queue'.
         """
 
-        self.listening_interface: str = listening_interface
-        self.listening_port: int = listening_port
+        self.listening_address: str = listening_address
         self.log_directory_path: str = log_directory_path
+        self.backupCount_log_files_x_days: int = backupCount_log_files_x_days
         self.forwarding_dns_service_ipv4: str = forwarding_dns_service_ipv4
         self.forwarding_dns_service_port: int = forwarding_dns_service_port
-        self.tcp_target_server_ipv4: str = tcp_target_server_ipv4
-        self.tcp_resolve_domain_list: list = tcp_resolve_domain_list
+        self.resolve_by_engine: tuple[bool, list] = resolve_by_engine
+        self.resolve_regular_pass_thru: bool = resolve_regular_pass_thru
+        self.resolve_all_domains_to_ipv4: tuple[bool, str] = resolve_all_domains_to_ipv4
         self.offline_mode: bool = offline_mode
-        self.resolve_to_tcp_server_only_tcp_resolve_domains: bool = resolve_to_tcp_server_only_tcp_resolve_domains
-        self.resolve_to_tcp_server_all_domains: bool = resolve_to_tcp_server_all_domains
-        self.resolve_regular: bool = resolve_regular
         self.request_domain_queue: multiprocessing.Queue = request_domain_queue
         self.buffer_size_receive: int = buffer_size_receive
         self.response_ttl: int = response_ttl
@@ -227,10 +219,27 @@ class DnsServer:
         if logger and logging_queue:
             raise ValueError("You can pass only one of the following: 'logger', 'logging_queue'.")
 
-        if not tcp_resolve_domain_list:
-            self.tcp_resolve_domain_list = list()
-        else:
-            self.tcp_resolve_domain_list = tcp_resolve_domain_list
+        self.listening_interface, listening_port = self.listening_address.split(':')
+        self.listening_interface: str
+        self.listening_port: int = int(listening_port)
+        self.resolve_by_engine_enable, self.engine_list = self.resolve_by_engine
+        self.resolve_by_engine_enable: bool
+        self.engine_list: list
+        self.resolve_all_domains_to_ipv4_enable, self.resolve_all_domains_target = self.resolve_all_domains_to_ipv4
+        self.resolve_all_domains_to_ipv4_enable: bool
+        self.resolve_all_domains_target: str
+
+        self.intercept_domain_list: list = list()
+        for engine in self.engine_list:
+            # If the engine is not a reference engine.
+            if engine.engine_name != '__reference_general':
+                # Get the domains from the engine.
+                self.intercept_domain_list.extend(engine.domain_list)
+
+                # If the engine has no_sni section enabled, get the domains from it.
+                if engine.no_sni.serve_domain_on_address_enable:
+                    for domain, ip_address in engine.no_sni.serve_domain_on_address_dict.items():
+                        self.intercept_domain_list.append(domain)
 
         # Settings for static DNS Responses in offline mode.
         self.offline_route_ipv4: str = '10.10.10.10'
@@ -270,7 +279,7 @@ class DnsServer:
                 add_timedfile_with_internal_queue=True,
                 formatter_streamhandler='DEFAULT',
                 formatter_filehandler='DEFAULT',
-                backupCount=backupCount_log_files_x_days
+                backupCount=self.backupCount_log_files_x_days
             )
         elif logger:
             # Create child logger for the provided logger with the module's name.
@@ -288,10 +297,9 @@ class DnsServer:
         try:
             booleans.is_only_1_true_in_list(
                 booleans_list_of_tuples=[
-                    (self.resolve_to_tcp_server_only_tcp_resolve_domains,
-                     'resolve_to_tcp_server_only_tcp_resolve_domains'),
-                    (self.resolve_to_tcp_server_all_domains, 'resolve_to_tcp_server_all_domains'),
-                    (self.resolve_regular, 'resolve_regular')
+                    (self.resolve_by_engine_enable, 'resolve_by_engine_enable'),
+                    (self.resolve_regular_pass_thru, 'resolve_regular_pass_thru'),
+                    (self.resolve_all_domains_to_ipv4_enable, 'resolve_all_domains_to_ipv4_enable')
                 ],
                 raise_if_all_false=True
             )
@@ -345,19 +353,19 @@ class DnsServer:
         known_a_records_ipv4_dict: dict = dict()
 
         # Check if 'route_to_tcp_server_only_engine_domains' was set to 'True' and output message accordingly.
-        if self.resolve_to_tcp_server_only_tcp_resolve_domains:
-            message = "Routing only engine domains to Built-in TCP Server."
+        if self.resolve_by_engine_enable:
+            message = "Routing engine domains to the specified IPv4 targets."
             print_api(message, logger=self.logger)
 
-            message = f"Current engine domains: {self.tcp_resolve_domain_list}"
+            message = f"Current all engines domains: {self.intercept_domain_list}"
             print_api(message, logger=self.logger, color='blue')
 
-        if self.resolve_to_tcp_server_all_domains:
-            message = "Routing all domains to Built-in TCP Server."
+        if self.resolve_all_domains_to_ipv4_enable:
+            message = f"Routing all domains to the specified target: [{self.resolve_all_domains_target}]"
             print_api(message, logger=self.logger, color='blue')
 
-        if self.resolve_regular:
-            message = f"Routing all domains to Live DNS Service: {self.forwarding_dns_service_ipv4}"
+        if self.resolve_regular_pass_thru:
+            message = f"Routing all domains to the specified Origin DNS Service: {self.forwarding_dns_service_ipv4}:{self.forwarding_dns_service_port}"
             print_api(message, logger=self.logger, color='blue')
 
         # The list that will hold all the threads that can be joined later
@@ -462,10 +470,10 @@ class DnsServer:
                         if qtype_string == "A":
                             # Check if 'resolve_to_tcp_server_only_tcp_resolve_domains' is set to 'True'.
                             # If so, we need to check if the incoming domain contain any of the domains in the list.
-                            if self.resolve_to_tcp_server_only_tcp_resolve_domains:
+                            if self.resolve_by_engine_enable:
                                 # If current query domain (+ subdomains) CONTAIN any of the domains from modules config
                                 # files and current request contains "A" (IPv4) record.
-                                if any(x in question_domain for x in self.tcp_resolve_domain_list):
+                                if any(x in question_domain for x in self.intercept_domain_list):
                                     # If incoming domain contains any of the 'engine_domains' then domain will
                                     # be forwarded to our TCP Server.
                                     forward_to_tcp_server = True
@@ -474,12 +482,12 @@ class DnsServer:
 
                             # If 'route_to_tcp_server_all_domains' was set to 'False' in 'config.ini' file then
                             # we'll forward all 'A' records domains to the Built-in TCP Server.
-                            if self.resolve_to_tcp_server_all_domains:
+                            if self.resolve_all_domains_to_ipv4_enable:
                                 forward_to_tcp_server = True
 
                             # If 'regular_resolving' was set to 'True' in 'config.ini' file then
                             # we'll forward all 'A' records domains to the Live DNS Service.
-                            if self.resolve_regular:
+                            if self.resolve_regular_pass_thru:
                                 forward_to_tcp_server = False
 
                         # If incoming record is not an "A" record, then it will not be forwarded to our TCP Server.
@@ -488,9 +496,33 @@ class DnsServer:
 
                         # If 'forward_to_tcp_server' is 'True' we'll resolve the record with our TCP Server IP address.
                         if forward_to_tcp_server:
-                            # If the request is forwarded to TCP server, then we'll put the domain in the domain queue.
-                            # self.request_domain_queue.put(question_domain)
-                            self.request_domain_queue.put(question_domain)
+                            if self.resolve_by_engine_enable:
+                                for engine in self.engine_list:
+                                    # Check if the incoming domain contain any of the domains in the list.
+                                    if any(x in question_domain for x in engine.domain_list):
+                                        # Get the target IP address from the engine.
+                                        resolved_target_ipv4 = engine.dns_target
+
+                                        if engine.no_sni.get_from_dns:
+                                            # If the request is forwarded to TCP server, then we'll put the domain in the domain queue.
+                                            # self.request_domain_queue.put(question_domain)
+                                            self.request_domain_queue.put(question_domain)
+
+                                        break
+
+                                    if engine.no_sni.serve_domain_on_address_enable:
+                                        if question_domain in engine.no_sni.serve_domain_on_address_dict:
+                                            ip_port_address: str = engine.no_sni.serve_domain_on_address_dict[question_domain]
+                                            target_ip = ip_port_address.split(':')[0]
+                                            resolved_target_ipv4 = target_ip
+                                            break
+
+                            if self.resolve_all_domains_to_ipv4_enable:
+                                # Assign the target IPv4 address to the resolved target IPv4 variable.
+                                resolved_target_ipv4 = self.resolve_all_domains_target
+
+                                # Put the domain in the domain queue.
+                                self.request_domain_queue.put(question_domain)
 
                             # Make DNS response that will refer TCP traffic to our server
                             dns_built_response = DNSRecord(
@@ -499,7 +531,7 @@ class DnsServer:
                                 # q=DNSQuestion(question_domain),
                                 q=dns_object.q,
                                 a=RR(question_domain,
-                                     rdata=A(self.tcp_target_server_ipv4),
+                                     rdata=A(resolved_target_ipv4),
                                      ttl=self.response_ttl)
                             )
                             # Encode the response that was built above to legit DNS Response
@@ -883,19 +915,15 @@ class DnsServer:
 
 # noinspection PyPep8Naming
 def start_dns_server_multiprocessing_worker(
-        listening_interface: str,
-        listening_port: int,
+        listening_address: str,
         log_directory_path: str,
         backupCount_log_files_x_days: int,
         forwarding_dns_service_ipv4: str,
-        tcp_target_server_ipv4: str,
-        # Passing the engine domain list to DNS server to work with.
-        # 'list' function re-initializes the current list, or else it will be the same instance object.
-        tcp_resolve_domain_list: list,
+        forwarding_dns_service_port: int,
+        resolve_by_engine: tuple[bool, list],
+        resolve_regular_pass_thru: bool,
+        resolve_all_domains_to_ipv4: tuple[bool, str],
         offline_mode: bool,
-        resolve_to_tcp_server_only_tcp_resolve_domains: bool,
-        resolve_to_tcp_server_all_domains: bool,
-        resolve_regular: bool,
         cache_timeout_minutes: int,
         request_domain_queue: multiprocessing.Queue,
         logging_queue: multiprocessing.Queue,
@@ -907,19 +935,15 @@ def start_dns_server_multiprocessing_worker(
 
     try:
         dns_server_instance = DnsServer(
-            listening_interface=listening_interface,
-            listening_port=listening_port,
+            listening_address=listening_address,
             log_directory_path=log_directory_path,
             backupCount_log_files_x_days=backupCount_log_files_x_days,
             forwarding_dns_service_ipv4=forwarding_dns_service_ipv4,
-            tcp_target_server_ipv4=tcp_target_server_ipv4,
-            # Passing the engine domain list to DNS server to work with.
-            # 'list' function re-initializes the current list, or else it will be the same instance object.
-            tcp_resolve_domain_list=tcp_resolve_domain_list,
+            forwarding_dns_service_port=forwarding_dns_service_port,
+            resolve_by_engine=resolve_by_engine,
+            resolve_regular_pass_thru=resolve_regular_pass_thru,
+            resolve_all_domains_to_ipv4=resolve_all_domains_to_ipv4,
             offline_mode=offline_mode,
-            resolve_to_tcp_server_only_tcp_resolve_domains=resolve_to_tcp_server_only_tcp_resolve_domains,
-            resolve_to_tcp_server_all_domains=resolve_to_tcp_server_all_domains,
-            resolve_regular=resolve_regular,
             cache_timeout_minutes=cache_timeout_minutes,
             request_domain_queue=request_domain_queue,
             logging_queue=logging_queue,

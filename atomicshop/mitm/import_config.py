@@ -8,7 +8,7 @@ from ..permissions import permissions
 from ..wrappers.socketw import base
 from ..basics import booleans
 
-from . import config_static
+from . import config_static, initialize_engines
 
 
 def assign_bool(dict_instance: dict, section: str, key: str):
@@ -19,16 +19,27 @@ def assign_bool(dict_instance: dict, section: str, key: str):
         dict_instance[section][key] = True
     elif dict_instance[section][key] == 0:
         dict_instance[section][key] = False
+    elif isinstance(dict_instance[section][key], dict):
+        for subkey, subvalue in dict_instance[section][key].items():
+            if subkey == '1':
+                dict_instance[section][key] = {True: subvalue}
+            elif subkey == '0':
+                dict_instance[section][key] = {False: subvalue}
+            else:
+                print_api(f"Error: {section}.{key}.{subkey} must be 0 or 1.", color='red')
+                return 1
+            break
     else:
         print_api(f"Error: {section}.{key} must be 0 or 1.", color='red')
         return 1
 
 
-def import_config_file(
+def import_config_files(
         config_file_path: str
 ):
     """
     Import the configuration file 'config.toml' and write all the values to 'config_static' dataclasses module.
+
     :param config_file_path:
     :return:
     """
@@ -50,8 +61,53 @@ def import_config_file(
 
     manipulations_after_import()
 
+    result = import_engines_configs()
+    if result != 0:
+        return result
+
     result = check_configurations()
     return result
+
+
+def import_engines_configs() -> int:
+    """
+    Import the engines configuration files and write all the values to 'config_static' dataclasses module.
+
+    :return: int, status code.
+    """
+
+    # Get full paths of all the 'engine_config.ini' files.
+    engine_config_path_list = filesystem.get_paths_from_directory(
+        directory_path=config_static.MainConfig.ENGINES_DIRECTORY_PATH,
+        get_file=True,
+        file_name_check_pattern=config_static.MainConfig.ENGINE_CONFIG_FILE_NAME)
+
+    # Iterate through all the 'engine_config.ini' file paths.
+    domains_engine_list_full: list = list()
+    engines_list: list = list()
+    for engine_config_path in engine_config_path_list:
+        # Initialize engine.
+        current_module: initialize_engines.ModuleCategory = initialize_engines.ModuleCategory(config_static.MainConfig.SCRIPT_DIRECTORY)
+        current_module.fill_engine_fields_from_config(engine_config_path.path)
+        current_module.initialize_engine()
+
+        # Extending the full engine domain list with this list.
+        domains_engine_list_full.extend(current_module.domain_list)
+        # Append the object to the engines list
+        engines_list.append(current_module)
+    # === EOF Importing engine modules =============================================================================
+    # ==== Initialize Reference Module =============================================================================
+    reference_module: initialize_engines.ModuleCategory = initialize_engines.ModuleCategory(config_static.MainConfig.SCRIPT_DIRECTORY)
+    reference_module.fill_engine_fields_from_general_reference(config_static.MainConfig.ENGINES_DIRECTORY_PATH)
+    reference_module.initialize_engine(reference_general=True)
+
+    # Assigning all the engines domains to all time domains, that will be responsible for adding new domains.
+    config_static.Certificates.domains_all_times = list(domains_engine_list_full)
+
+    config_static.ENGINES_LIST = engines_list
+    config_static.REFERENCE_MODULE = reference_module
+
+    return 0
 
 
 def check_configurations() -> int:
@@ -68,31 +124,103 @@ def check_configurations() -> int:
         print_api("Both DNS and TCP servers in config ini file, nothing to run. Exiting...", color='red')
         return 1
 
-    # Check [tcp_server] boolean configurations. ===================================================================
-    if not config_static.TCPServer.engines_usage and config_static.TCPServer.server_response_mode:
-        message = "You can't set [server_response_mode = True], while setting\n" \
-                    "[engines_usage = False].\n" \
-                    "No engine modules will be loaded - so nothing to respond to.\n" \
-                    "Exiting..."
-        print_api(message, color='red')
+    # Checking if listening interfaces were set.
+    if not config_static.TCPServer.no_engines_usage_to_listen_addresses_enable:
+        # If no engines were found, check if listening interfaces were set in the main config.
+        if not config_static.ENGINES_LIST:
+            message = (
+                "\n"
+                "No engines found. Create with [create_template.py].\n"
+                "Exiting...")
+            print_api(message, color="red")
+            return 1
+    else:
+        if not config_static.TCPServer.no_engines_listening_address_list:
+            message = (
+                "\n"
+                "No listening interfaces. Set [no_engines_usage_to_listen_addresses] in the main [config.toml].\n"
+                "Exiting...")
+            print_api(message, color="red")
+            return 1
+
+    if not config_static.ENGINES_LIST and config_static.DNSServer.resolve_by_engine:
+        error_message = (
+            f"No engines were found in: [{config_static.MainConfig.ENGINES_DIRECTORY_PATH}]\n"
+            f"But the DNS routing is set to use them for routing.\n"
+            f"Please check your DNS routing configuration in the [config.toml] file or create an engine with [create_template.py].")
+        print_api(error_message, color="red")
         return 1
 
+    for engine in config_static.ENGINES_LIST:
+        if engine.no_sni.get_from_dns and engine.no_sni.serve_domain_on_address_enable:
+            message = (
+                f"Both [get_from_dns] and [serve_domain_on_address] are enabled in [no_sni] section of the engine.\n"
+                f"Only one Can be True.")
+            print_api(message, color="red")
+            return 1
+        if not engine.no_sni.get_from_dns and not engine.no_sni.serve_domain_on_address_enable:
+            message = (
+                f"Both [get_from_dns] and [serve_domain_on_address] are disabled in [no_sni] section of the engine.\n"
+                f"Only one Can be True.")
+            print_api(message, color="red")
+            return 1
+
+        if engine.no_sni.serve_domain_on_address_enable:
+            # Check if the domains in no_sni are the same as in the engine. They should not be.
+            # Same goes for the address.
+            for domain, address_ip_port in engine.no_sni.serve_domain_on_address_dict.items():
+                if domain in engine.domain_list:
+                    message = (
+                        f"[*] No SNI setting: The domain [{domain}] is in the engine domains list [{engine.domain_list}].\n"
+                        f"The point of the no_sni section is to serve specific domains on separate addresses.\n")
+                    print_api(message, color="red")
+                    return 1
+
+                if address_ip_port in engine.tcp_listening_address_list:
+                    message = (
+                        f"[*] No SNI setting: The address [{address_ip_port}] is in the engine listening interfaces list [{engine.tcp_listening_address_list}].\n"
+                        f"The point of the no_sni section is to serve specific domains on separate addresses.\n")
+                    print_api(message, color="red")
+                    return 1
+
     # Check admin right if on localhost ============================================================================
-    # If the 'config.dns['target_tcp_server_ipv4']' IP address is localhost, then we need to check if the script
+    # If any of the DNS IP target addresses is localhost loopback, then we need to check if the script
     # is executed with admin rights. There are some processes that 'psutil' can't get their command line if not
     # executed with administrative privileges.
     # Also, check Admin privileges only if 'config.tcp['get_process_name']' was set to 'True' in 'config.ini' of
     # the script.
-    if (config_static.DNSServer.target_tcp_server_ipv4 in base.THIS_DEVICE_IP_LIST and
-            config_static.ProcessName.get_process_name):
-        # If we're not running with admin rights, prompt to the user and make him decide what to do.
-        # If he wants to continue running with 'psutil' exceptions or close the script and rerun with admin rights.
-        if not is_admin:
-            message: str = \
-                ("Need to run the script with administrative rights to get the process name while TCP running "
-                 "on the same computer.\nExiting...")
-            print_api(message, color='red')
-            return 1
+    if config_static.ProcessName.get_process_name:
+        # If the DNS server was set to resolve by engines, we need to check all relevant engine settings.
+        if config_static.DNSServer.resolve_by_engine:
+            for engine in config_static.ENGINES_LIST:
+                # Check if the DNS target is localhost loopback.
+                if engine.dns_target in base.THIS_DEVICE_IP_LIST or engine.dns_target.startswith('127.'):
+                    if not is_admin:
+                        message: str = \
+                            ("Need to run the script with administrative rights to get the process name while TCP "
+                             "running on the same computer.\nExiting...")
+                        print_api(message, color='red')
+                        return 1
+                if engine.no_sni.serve_domain_on_address_enable:
+                    no_sni_target_address_list: list = engine.no_sni.serve_domain_on_address_dict.values()
+                    for no_sni_target_address in no_sni_target_address_list:
+                        if no_sni_target_address in base.THIS_DEVICE_IP_LIST or \
+                                no_sni_target_address.startswith('127.'):
+                            if not is_admin:
+                                message: str = \
+                                    ("Need to run the script with administrative rights to get the process name while TCP "
+                                     "running on the same computer.\nExiting...")
+                                print_api(message, color='red')
+                                return 1
+        if config_static.DNSServer.resolve_all_domains_to_ipv4:
+            if config_static.DNSServer.target_ipv4 in base.THIS_DEVICE_IP_LIST or \
+                    config_static.DNSServer.target_ipv4.startswith('127.'):
+                if not is_admin:
+                    message: str = \
+                        ("Need to run the script with administrative rights to get the process name while TCP "
+                         "running on the same computer.\nExiting...")
+                    print_api(message, color='red')
+                    return 1
 
     try:
         booleans.is_only_1_true_in_list(
@@ -136,6 +264,14 @@ def check_configurations() -> int:
                 print_api(message, color='red')
                 return 1
 
+    if not config_static.DNSServer.resolve_by_engine and not config_static.DNSServer.resolve_regular_pass_thru and not \
+            config_static.DNSServer.resolve_all_domains_to_ipv4_enable:
+        message: str = (
+            "No DNS server resolving settings were set.\n"
+            "Please check your DNS server settings in the [config.toml] file.")
+        print_api(message, color='red')
+        return 1
+
     # This is checked directly in the SocketWrapper.
     # if (config_static.Certificates.install_ca_certificate_to_root_store and not is_admin) or \
     #         (config_static.Certificates.uninstall_unused_ca_certificates_with_mitm_ca_name and not is_admin):
@@ -144,11 +280,27 @@ def check_configurations() -> int:
     #     print_api(message, color='red')
     #     return 1
 
-
     return 0
 
 
 def manipulations_after_import():
+    for key, value in config_static.DNSServer.resolve_all_domains_to_ipv4.items():
+        config_static.DNSServer.resolve_all_domains_to_ipv4_enable = key
+        config_static.DNSServer.target_ipv4 = value
+        break
+
+    for key, value in config_static.TCPServer.no_engines_usage_to_listen_addresses.items():
+        # If the key is False, it means that the user doesn't want to use the no_engines_listening_address_list.
+        # So, we'll assign an empty list to it.
+        if not key:
+            config_static.TCPServer.no_engines_usage_to_listen_addresses_enable = False
+            config_static.TCPServer.no_engines_listening_address_list = list()
+        # If the key is True, it means that the user wants to use the no_engines_listening_address_list.
+        else:
+            config_static.TCPServer.no_engines_usage_to_listen_addresses_enable = key
+            config_static.TCPServer.no_engines_listening_address_list = value
+        break
+
     # Convert extensions to skip to a list of extension IDs.
     skip_extensions: list = list()
     if config_static.SkipExtensions.tls_web_client_authentication:
@@ -166,7 +318,7 @@ def manipulations_after_import():
         config_static.Certificates.custom_server_certificate_path, config_static.MainConfig.SCRIPT_DIRECTORY)
 
     config_static.LogRec.recordings_path = (
-            config_static.LogRec.logs_path + os.sep + config_static.LogRec.recordings_directory_name)
+        config_static.LogRec.logs_path + os.sep + config_static.LogRec.recordings_directory_name)
 
     # At this point the user that sets the config can set it to null or empty string ''. We will make sure
     # that the path is None if it's empty.

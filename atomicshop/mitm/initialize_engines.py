@@ -1,5 +1,4 @@
 import os
-import sys
 from pathlib import Path
 
 from ..file_io import tomls
@@ -8,11 +7,23 @@ from .engines.__reference_general import parser___reference_general, responder__
     recorder___reference_general
 
 
+class NoSNI:
+    def __init__(self):
+        self.get_from_dns: bool = False
+        self.serve_domain_on_address_enable: bool = False
+        self.serve_domain_on_address_dict: dict = dict()
+
+
 class ModuleCategory:
     def __init__(self, script_directory: str):
-        self.domain_list: list = list()
         self.engine_name: str = str()
         self.script_directory: str = script_directory
+
+        self.domain_list: list = list()
+        self.dns_target: str = str()
+        self.tcp_listening_address_list: list = list()
+        self.mtls: dict = dict()
+        self.no_sni: NoSNI = NoSNI()
 
         self.parser_file_path: str = str()
         self.responder_file_path: str = str()
@@ -21,12 +32,6 @@ class ModuleCategory:
         self.parser_class_object: str = str()
         self.responder_class_object: str = str()
         self.recorder_class_object: str = str()
-
-        # The instance of the recorder class that will be initiated once in the script start
-        self.responder_instance = None
-
-        self.mtls: dict = dict()
-        self.no_sni: dict = dict()
 
     def fill_engine_fields_from_general_reference(self, engines_fullpath: str):
         # Reference module variables.
@@ -45,9 +50,24 @@ class ModuleCategory:
         self.engine_name = Path(engine_directory_path).name
 
         # Getting the parameters from engine config file
-        self.domain_list = configuration_data['domains']
-        self.mtls = configuration_data['mtls']
-        self.no_sni = configuration_data['no_sni']
+        self.domain_list = configuration_data['engine']['domains']
+        self.dns_target = configuration_data['engine']['dns_target']
+        self.tcp_listening_address_list = configuration_data['engine']['tcp_listening_address_list']
+
+        if 'mtls' in configuration_data:
+            self.mtls = configuration_data['mtls']
+
+        self.no_sni.get_from_dns = bool(configuration_data['no_sni']['get_from_dns'])
+
+        for enable_bool, address_list in configuration_data['no_sni']['serve_domain_on_address'].items():
+            if enable_bool in ['0', '1']:
+                self.no_sni.serve_domain_on_address_enable = bool(int(enable_bool))
+            else:
+                raise ValueError(f"Error: no_sni -> serve_domain_on_address -> key must be 0 or 1.")
+
+            for address in address_list:
+                for domain, address_ip_port in address.items():
+                    self.no_sni.serve_domain_on_address_dict = {domain: address_ip_port}
 
         # If there's module configuration file, but no domains in it, there's no point to continue.
         # Since, each engine is based on domains.
@@ -69,60 +89,36 @@ class ModuleCategory:
         for subdomain, file_name in self.mtls.items():
             self.mtls[subdomain] = f'{engine_directory_path}{os.sep}{file_name}'
 
-    def initialize_engine(self, logs_path: str, logger=None, reference_general: bool = False, **kwargs):
-        # Initiating logger for each engine by its name
-        # loggingw.create_logger(
-        #     logger_name=self.engine_name,
-        #     directory_path=logs_path,
-        #     add_stream=True,
-        #     add_timedfile_with_internal_queue=True,
-        #     formatter_streamhandler='DEFAULT',
-        #     formatter_filehandler='DEFAULT',
-        #     backupCount=config_static.LogRec.store_logs_for_x_days
-        # )
-
+    def initialize_engine(self, reference_general: bool = False):
         if not reference_general:
             self.parser_class_object = import_first_class_name_from_file_path(
-                self.script_directory, self.parser_file_path, logger=logger, stdout=False)
+                self.script_directory, self.parser_file_path)
             self.responder_class_object = import_first_class_name_from_file_path(
-                self.script_directory, self.responder_file_path, logger=logger, stdout=False)
+                self.script_directory, self.responder_file_path)
             self.recorder_class_object = import_first_class_name_from_file_path(
-                self.script_directory, self.recorder_file_path, logger=logger, stdout=False)
+                self.script_directory, self.recorder_file_path)
         else:
             self.parser_class_object = parser___reference_general.ParserGeneral
             self.responder_class_object = responder___reference_general.ResponderGeneral
             self.recorder_class_object = recorder___reference_general.RecorderGeneral
 
-        try:
-            # Since we're using responder to aggregate requests to build responses based on several
-            # requests, we need to initiate responder's class only once in the beginning and assign
-            # this instance to a variable that will be called later per domain.
-            self.responder_instance = self.responder_class_object()
-        except Exception as exception_object:
-            logger.error_exception(f"Exception while initializing responder: {exception_object}")
-            sys.exit()
 
-
-# Assigning external class object by message domain received from client. If the domain is not in the list,
-# the reference general module will be assigned.
 def assign_class_by_domain(
-        engines_usage: bool,
         engines_list: list,
         message_domain_name: str,
-        reference_module,
-        logger=None
+        reference_module
 ):
-    # Defining return variables:
-    function_parser = None
-    function_responder = None
-    function_recorder = None
-    mtls_data: dict = dict()
+    """
+    Assigning external class object by message domain received from client. If the domain is not in the list,
+    the reference general module will be assigned.
+    """
 
     # In case SNI came empty in the request from client, then there's no point in iterating through engine domains.
+    module = None
     if message_domain_name:
-        # If the engines_usage is set to True in the config file, then we'll iterate through the list of engines
+        # If engine/s exit, the engines_list will not be empty, then we'll iterate through the list of engines
         # to find the domain in the list of domains of the engine.
-        if engines_usage:
+        if engines_list:
             # Checking if current domain is in engines' domain list to activate domain specific engine
             for function_module in engines_list:
                 # The list: matches_list = ["domain1.com", "domain2.com", "domain3.com"]
@@ -134,18 +130,8 @@ def assign_class_by_domain(
                 # in the list of strings: if any(a_string in x for x in matches_list):
                 # In this case list is the same and string: a_string = domain
                 if any(x in message_domain_name for x in function_module.domain_list):
-                    # Assigning modules by current engine of the domain
-                    function_parser = function_module.parser_class_object
-                    function_recorder = function_module.recorder_class_object
-                    # Since the responder is being initiated only once, we're assigning only the instance
-                    function_responder = function_module.responder_instance
-                    mtls_data = function_module.mtls
-
-
-                    logger.info(f"Assigned Modules for [{message_domain_name}]: "
-                                f"{function_module.parser_class_object.__name__}, "
-                                f"{function_module.responder_class_object.__name__}, "
-                                f"{function_module.recorder_class_object.__name__}")
+                    # Assigning module by current engine of the domain
+                    module = function_module
 
                     # If the domain was found in the current list of class domains, we can stop the loop
                     break
@@ -154,12 +140,7 @@ def assign_class_by_domain(
     # It's enough to check only parser, since responder and recorder also will be empty.
     # This section is also relevant if SNI came empty in the request from the client and no domain was passed by the
     # DNS Server.
-    if not function_parser:
-        # Assigning modules by current engine of the domain
-        function_parser = reference_module.parser_class_object
-        function_recorder = reference_module.recorder_class_object
-        # Since the responder is being initiated only once, we're assigning only the instance
-        function_responder = reference_module.responder_instance
+    if not module:
+        module = reference_module
 
-    # Return all the initiated modules
-    return function_parser, function_responder, function_recorder, mtls_data
+    return module
