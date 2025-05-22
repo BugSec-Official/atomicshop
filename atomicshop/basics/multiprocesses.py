@@ -1,14 +1,17 @@
 import multiprocessing
 import multiprocessing.managers
+import os
 import queue
+import threading
 import concurrent.futures
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from collections import deque
 from typing import Callable
 
 from ..import system_resources
 
 
-def process_wrap_queue(function_reference, *args, **kwargs):
+def process_wrap_queue(function_reference: Callable, *args, **kwargs):
     """
     The function receives function reference and arguments, and executes the function in a thread.
     "_queue" means that a queue.put() is used to store the result of the function and queue.get() to output it.
@@ -154,43 +157,238 @@ class MultiProcessorRecursive:
         self.async_results: list = []
 
     def run_process(self):
-        while self.input_list:
-            new_input_list = []
-            for item in self.input_list:
-                # Check system resources before processing each item
-                system_resources.wait_for_resource_availability(
-                    cpu_percent_max=self.cpu_percent_max,
-                    memory_percent_max=self.memory_percent_max,
-                    wait_time=self.wait_time,
-                    system_monitor_manager_dict=self.system_monitor_manager_dict)
+        """
+        Start with the items currently in self.input_list, but whenever a task
+        finishes schedule the children it returns *right away*.
+        The loop ends when there are no more outstanding tasks.
+        """
+        # ----------  internal helpers  ----------
+        outstanding = 0  # tasks that have been submitted but not yet finished
+        done_event = threading.Event()  # let the main thread wait until work is over
 
-                # Process the item
-                async_result = self.pool.apply_async(self.process_function, (item,))
-                self.async_results.append(async_result)
+        def _submit(item):
+            nonlocal outstanding
+            # Wait for resources *before* submitting a new job
+            system_resources.wait_for_resource_availability(
+                cpu_percent_max=self.cpu_percent_max,
+                memory_percent_max=self.memory_percent_max,
+                wait_time=self.wait_time,
+                system_monitor_manager_dict=self.system_monitor_manager_dict
+            )
+            outstanding += 1
+            self.pool.apply_async(
+                self.process_function,
+                (item,),
+                callback=_on_finish,  # called in the main process when result is ready
+                error_callback=_on_error
+            )
 
-            # Reset input_list for next round of processing
-            self.input_list = []
+        def _on_finish(result):
+            """Pool calls this in the parent process thread when a job completes."""
+            nonlocal outstanding
+            outstanding -= 1
 
-            # Collect results as they complete
-            for async_result in self.async_results:
-                try:
-                    result = async_result.get()
-                    # Assuming process_function returns a list, extend new_input_list
-                    new_input_list.extend(result)
-                except Exception:
-                    raise
+            # The worker returned a list of new items – submit them immediately
+            if result:
+                for child in result:
+                    _submit(child)
 
-            # Update the input_list for the next iteration
-            self.input_list = new_input_list
-            # Clear the async_results for the next iteration
-            self.async_results.clear()
+            # If no work left, release the waiter
+            if outstanding == 0:
+                done_event.set()
 
-    def shutdown_pool(self):
+        def _on_error(exc):
+            """Propagate the first exception and stop everything cleanly."""
+            done_event.set()
+            raise exc  # let your code deal with it – you can customise this
+
+        # ----------  kick‑off  ----------
+        # Schedule the items we already have
+        for item in self.input_list:
+            _submit(item)
+
+        # Clear the input list; after this point everything is driven by callbacks
+        self.input_list.clear()
+
+        # Wait until all recursively spawned work is finished
+        done_event.wait()
+
+    def shutdown(self):
         """Shuts down the pool gracefully."""
         if self.pool:
             self.pool.close()  # Stop accepting new tasks
             self.pool.join()  # Wait for all tasks to complete
             self.pool = None
+
+
+class _MultiProcessorRecursiveWithProcessPoolExecutor:
+    def __init__(
+            self,
+            process_function: Callable,
+            input_list: list,
+            max_workers: int = None,
+            cpu_percent_max: int = 80,
+            memory_percent_max: int = 80,
+            wait_time: float = 5,
+            system_monitor_manager_dict: multiprocessing.managers.DictProxy = None
+    ):
+        """
+        THIS CLASS USES THE concurrent.futures.ProcessPoolExecutor to achieve parallelism.
+        For some reason I got freezes on exceptions without the exception output after the run_process() method finished
+        and the pool remained open. So, using the MultiProcessorRecursive instead.
+
+        MultiProcessor class. Used to execute functions in parallel. The result of each execution is fed back
+            to the provided function. Making it sort of recursive execution.
+        :param process_function: function, function to execute on the input list.
+        :param input_list: list, list of inputs to process.
+        :param max_workers: integer, number of workers to execute functions in parallel. Default is None, which
+            is the number of CPUs that will be counted automatically by the multiprocessing module.
+        :param cpu_percent_max: integer, maximum CPU percentage. Above that usage, we will wait before starting new
+            execution.
+        :param memory_percent_max: integer, maximum memory percentage. Above that usage, we will wait, before starting
+            new execution.
+        :param wait_time: float, time to wait if the CPU or memory usage is above the maximum percentage.
+        :param system_monitor_manager_dict: multiprocessing.managers.DictProxy, shared manager dict for
+            system monitoring. The object is the output of atomicshop.system_resource_monitor.
+            If you are already running this monitor, you can pass the manager_dict to both the system monitor and this
+            class to share the system resources data.
+            If this is used, the system resources will be checked before starting each new execution from this
+            shared dict instead of performing new checks.
+
+        Usage Examples:
+            def unpack_file(file_path):
+                # Process the file at file_path and unpack it.
+                # Return a list of new file paths that were extracted from the provided path.
+                return [new_file_path1, new_file_path2]  # Example return value
+
+            # List of file paths to process
+            file_paths = ["path1", "path2", "path3"]
+
+            # Note: unpack_file Callable is passed to init without parentheses.
+
+            1. Providing the list directly to process at once:
+                # Initialize the processor.
+                processor = MultiProcessor(
+                    process_function=unpack_file,
+                    input_list=file_paths,
+                    max_workers=4,  # Number of parallel workers
+                    cpu_percent_max=80,  # Max CPU usage percentage
+                    memory_percent_max=80,  # Max memory usage percentage
+                    wait_time=5  # Time to wait if resources are overused
+                )
+
+                # Process the list of files at once.
+                processor.run_process()
+                # Shutdown the pool processes after processing.
+                processor.shutdown_pool()
+
+            2. Processing each file in the list differently then adding to the list of the multiprocessing instance then executing.
+                # Initialize the processor once, before the loop, with empty input_list.
+                processor = MultiProcessor(
+                    process_function=unpack_file,
+                    input_list=[],
+                    max_workers=4,  # Number of parallel workers
+                    cpu_percent_max=80,  # Max CPU usage percentage
+                    memory_percent_max=80,  # Max memory usage percentage
+                    wait_time=5  # Time to wait if resources are overused
+                )
+
+                for file_path in file_paths:
+                    # <Process each file>.
+                    # Add the result to the input_list of the processor.
+                    processor.input_list.append(file_path)
+
+                # Process the list of files at once.
+                processor.run_process()
+                # Shutdown the pool processes after processing.
+                processor.shutdown_pool()
+
+            3. Processing each file in the list separately, since we're using an unpacking function that
+               will create more files, but the context for this operation is different for extraction
+               of each main file inside the list:
+
+                # Initialize the processor once, before the loop, with empty input_list.
+                processor = MultiProcessor(
+                    process_function=unpack_file,
+                    input_list=[],
+                    max_workers=4,  # Number of parallel workers
+                    cpu_percent_max=80,  # Max CPU usage percentage
+                    memory_percent_max=80,  # Max memory usage percentage
+                    wait_time=5  # Time to wait if resources are overused
+                )
+
+                for file_path in file_paths:
+                    # <Process each file>.
+                    # Add the result to the input_list of the processor.
+                    processor.input_list.append(file_path)
+                    # Process the added file path separately.
+                    processor.run_process()
+
+                # Shutdown the pool processes after processing.
+                processor.shutdown_pool()
+        """
+
+        self.process_function: Callable = process_function
+        self.input_list: list = input_list
+        self.cpu_percent_max: int = cpu_percent_max
+        self.memory_percent_max: int = memory_percent_max
+        self.wait_time: float = wait_time
+        self.system_monitor_manager_dict: multiprocessing.managers.DictProxy = system_monitor_manager_dict
+
+        if max_workers is None:
+            max_workers = os.cpu_count()
+        self.max_workers: int = max_workers
+
+        # Create the executor once and reuse it.
+        # noinspection PyTypeChecker
+        self.executor: ProcessPoolExecutor = None
+
+    def _ensure_executor(self):
+        """Create a new pool if we do not have one or if the old one was shut."""
+        if self.executor is None or getattr(self.executor, '_shutdown', False):
+            self.executor = ProcessPoolExecutor(max_workers=self.max_workers)
+
+    def run_process(self):
+        # Make sure we have a live executor
+        self._ensure_executor()
+
+        work_q = deque(self.input_list)  # breadth‑first queue
+        self.input_list.clear()
+        futures = set()
+
+        # helper to submit jobs up to the concurrency limit
+        def _fill():
+            while work_q and len(futures) < self.max_workers:
+                item = work_q.popleft()
+                system_resources.wait_for_resource_availability(
+                    cpu_percent_max=self.cpu_percent_max,
+                    memory_percent_max=self.memory_percent_max,
+                    wait_time=self.wait_time,
+                    system_monitor_manager_dict=self.system_monitor_manager_dict
+                )
+                futures.add(self.executor.submit(self.process_function, item))
+
+        _fill()  # start the first wave
+
+        while futures:
+            for fut in as_completed(futures):
+                futures.remove(fut)  # a slot just freed up
+
+                # propagate worker exceptions immediately
+                children = fut.result()
+
+                # schedule the newly discovered items
+                if children:
+                    work_q.extend(children)
+
+                _fill()  # keep the pool saturated
+                break  # leave the for‑loop so as_completed resets
+
+    def shutdown(self):
+        """Shuts down the executor gracefully."""
+        if self.executor:
+            self.executor.shutdown(wait=True)  # blocks until all tasks complete
+            self.executor = None
 
 
 class ConcurrentProcessorRecursive:

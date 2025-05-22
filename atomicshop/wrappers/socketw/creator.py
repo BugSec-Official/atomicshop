@@ -151,13 +151,19 @@ def create_server_ssl_context___load_certificate_and_key(certificate_file_path: 
 def wrap_socket_with_ssl_context_server(
         socket_object,
         ssl_context,
-        domain_from_dns_server,
+        domain_from_dns_server: str = None,
         print_kwargs: dict = None
 ):
     """
     This function is wrapped with exception wrapper.
     After you execute the function, you can get the error message if there was any with:
         error_message = wrap_socket_with_ssl_context_server.message
+
+    :param socket_object: The socket object to accept the connection on.
+    :param ssl_context: The SSL context to wrap the socket with.
+    :param domain_from_dns_server: The domain that will be printed to console on logger, needed for the decorator.
+        If not provided, the TCP data will be used.
+    :param print_kwargs: Additional arguments for the print_api function, needed for the decorator.
     """
 
     # Wrapping the server socket with SSL context. This should happen right after setting up the raw socket.

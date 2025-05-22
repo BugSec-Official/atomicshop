@@ -859,6 +859,7 @@ def find(
     # if items:
     #     collection_items = collection_items.skip(skip_items).limit(items)
 
+    # List consolidates the results into a list of dictionaries, collection_items cursor will not be available after this.
     entries: list[dict] = list(collection_items)
 
     if entries and convert_object_id_to_str and '_id' in entries[0]:

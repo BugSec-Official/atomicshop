@@ -174,3 +174,5 @@ def default_dns_gateway_main() -> int:
     elif args.dynamic:
         set_connection_dns_gateway_dynamic(
             connection_name=args.connection_name, use_default_connection=args.connection_default)
+
+    return 0

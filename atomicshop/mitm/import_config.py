@@ -151,37 +151,41 @@ def check_configurations() -> int:
         print_api(error_message, color="red")
         return 1
 
+    is_localhost: bool | None = None
     for engine in config_static.ENGINES_LIST:
-        if engine.no_sni.get_from_dns and engine.no_sni.serve_domain_on_address_enable:
-            message = (
-                f"Both [get_from_dns] and [serve_domain_on_address] are enabled in [no_sni] section of the engine.\n"
-                f"Only one Can be True.")
-            print_api(message, color="red")
-            return 1
-        if not engine.no_sni.get_from_dns and not engine.no_sni.serve_domain_on_address_enable:
-            message = (
-                f"Both [get_from_dns] and [serve_domain_on_address] are disabled in [no_sni] section of the engine.\n"
-                f"Only one Can be True.")
-            print_api(message, color="red")
-            return 1
-
-        if engine.no_sni.serve_domain_on_address_enable:
-            # Check if the domains in no_sni are the same as in the engine. They should not be.
-            # Same goes for the address.
-            for domain, address_ip_port in engine.no_sni.serve_domain_on_address_dict.items():
-                if domain in engine.domain_list:
+        for domain_port in engine.domain_list:
+            # Check if the domains has port.
+            if ':' not in domain_port:
+                message = (
+                    f"[*] Domain [{domain_port}] doesn't have a port.\n"
+                    f"Please check your engine configuration file.")
+                print_api(message, color="red")
+                return 1
+            else:
+                # Split the domain and port.
+                domain, port = domain_port.split(':')
+                # Check if the port is a number.
+                if not port.isdigit():
                     message = (
-                        f"[*] No SNI setting: The domain [{domain}] is in the engine domains list [{engine.domain_list}].\n"
-                        f"The point of the no_sni section is to serve specific domains on separate addresses.\n")
+                        f"[*] Port [{port}] is not a number.\n"
+                        f"Please check your engine configuration file.")
                     print_api(message, color="red")
                     return 1
 
-                if address_ip_port in engine.tcp_listening_address_list:
-                    message = (
-                        f"[*] No SNI setting: The address [{address_ip_port}] is in the engine listening interfaces list [{engine.tcp_listening_address_list}].\n"
-                        f"The point of the no_sni section is to serve specific domains on separate addresses.\n")
-                    print_api(message, color="red")
-                    return 1
+        # Check if 'localhost' is set in all the engines, or not.
+        # There can't be mixed engines where local host is set and not set.
+        # It can be all engines will be localhost or none of them.
+        if is_localhost is None:
+            is_localhost = engine.is_localhost
+        else:
+            if is_localhost != engine.is_localhost:
+                message = (
+                    f"[*] Mixed [localhost] setting in the engines found.\n"
+                    f"[*] Some engines are set to [localhost] and some are not.\n"
+                    f"[*] This is not allowed. All engines must be set to [localhost = 1] or All engines must be set to [localhost = 0].\n"
+                    f"Please check your engine configuration files.")
+                print_api(message, color="red")
+                return 1
 
     # Check admin right if on localhost ============================================================================
     # If any of the DNS IP target addresses is localhost loopback, then we need to check if the script

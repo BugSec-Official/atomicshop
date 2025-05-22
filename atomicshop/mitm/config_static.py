@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass
+from typing import Literal
 
 from . import import_config
 
@@ -157,7 +158,7 @@ class ProcessName:
     ssh_user: str
     ssh_pass: str
 
-    ssh_script_to_execute = 'process_from_port'
+    ssh_script_to_execute: Literal['process_from_port', 'process_from_ipv4'] = 'process_from_port'
 
 
 def load_config(config_toml_file_path: str):

@@ -30,7 +30,7 @@ class CreateModuleTemplate:
     def __init__(self):
         # === Get input variables. ===
         self.engine_name: str = parse_arguments().engine_name
-        self.domains: list = ['example.com']
+        self.domains: list = ['example.com:443', 'example.org:80']
 
         # New engine's directory.
         self.new_engine_directory: str = ENGINES_DIRECTORY_PATH + os.sep + self.engine_name
@@ -76,15 +76,10 @@ class CreateModuleTemplate:
 
         config_lines_list.append('[engine]')
         config_lines_list.append(f'domains = [{", ".join(domains_with_quotes)}]')
-        config_lines_list.append('dns_target = "127.0.0.1"')
-        config_lines_list.append('tcp_listening_address_list = ["0.0.0.0:443"]\n')
+        config_lines_list.append('localhost = 0\n')
         # config_lines_list.append(f'\n')
         config_lines_list.append('[mtls]')
         config_lines_list.append('# "subdomain.domain.com" = "file_name_in_current_dir.pem"\n')
-        # config_lines_list.append(f'\n')
-        config_lines_list.append('[no_sni]')
-        config_lines_list.append('get_from_dns = 1         # Blocking, the accept function will wait until the domain is received from DNS.')
-        config_lines_list.append('serve_domain_on_address = {0 = [{"example.com" = "127.0.0.2:443"}]}')
 
         config_file_path = self.new_engine_directory + os.sep + CONFIG_FILE_NAME
 
