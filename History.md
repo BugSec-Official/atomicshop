@@ -1,6 +1,10 @@
 <!-- HISTORY -->
 ## History
 
+* 3.0.0 - 22.05.2025
+  * Major api changes in mitm, and almost all the related networking function, including wmi.
+* 2.21.1 - 10.04.2025
+  * mitm - fixes and improvements.
 * 2.21.0 - 10.04.2025
   * mitm, wrappers/socketw - fixes and improvements.
 * 2.20.08 - 27.03.2025

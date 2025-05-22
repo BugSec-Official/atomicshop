@@ -7,23 +7,15 @@ from .engines.__reference_general import parser___reference_general, responder__
     recorder___reference_general
 
 
-class NoSNI:
-    def __init__(self):
-        self.get_from_dns: bool = False
-        self.serve_domain_on_address_enable: bool = False
-        self.serve_domain_on_address_dict: dict = dict()
-
-
 class ModuleCategory:
     def __init__(self, script_directory: str):
         self.engine_name: str = str()
         self.script_directory: str = script_directory
 
         self.domain_list: list = list()
-        self.dns_target: str = str()
-        self.tcp_listening_address_list: list = list()
+        self.domain_target_dict: dict = dict()
+        self.is_localhost: bool = bool()
         self.mtls: dict = dict()
-        self.no_sni: NoSNI = NoSNI()
 
         self.parser_file_path: str = str()
         self.responder_file_path: str = str()
@@ -51,23 +43,10 @@ class ModuleCategory:
 
         # Getting the parameters from engine config file
         self.domain_list = configuration_data['engine']['domains']
-        self.dns_target = configuration_data['engine']['dns_target']
-        self.tcp_listening_address_list = configuration_data['engine']['tcp_listening_address_list']
+        self.is_localhost = bool(configuration_data['engine']['localhost'])
 
         if 'mtls' in configuration_data:
             self.mtls = configuration_data['mtls']
-
-        self.no_sni.get_from_dns = bool(configuration_data['no_sni']['get_from_dns'])
-
-        for enable_bool, address_list in configuration_data['no_sni']['serve_domain_on_address'].items():
-            if enable_bool in ['0', '1']:
-                self.no_sni.serve_domain_on_address_enable = bool(int(enable_bool))
-            else:
-                raise ValueError(f"Error: no_sni -> serve_domain_on_address -> key must be 0 or 1.")
-
-            for address in address_list:
-                for domain, address_ip_port in address.items():
-                    self.no_sni.serve_domain_on_address_dict = {domain: address_ip_port}
 
         # If there's module configuration file, but no domains in it, there's no point to continue.
         # Since, each engine is based on domains.
@@ -85,6 +64,12 @@ class ModuleCategory:
         self.parser_file_path = f"{engine_directory_path}{os.sep}parser{file_name_suffix}.py"
         self.responder_file_path = f"{engine_directory_path}{os.sep}responder{file_name_suffix}.py"
         self.recorder_file_path = f"{engine_directory_path}{os.sep}recorder{file_name_suffix}.py"
+
+        for domain_index, domain_port_string in enumerate(self.domain_list):
+            # Splitting the domain and port
+            domain, port = domain_port_string.split(':')
+
+            self.domain_target_dict[domain] = {'ip': None, 'port': port}
 
         for subdomain, file_name in self.mtls.items():
             self.mtls[subdomain] = f'{engine_directory_path}{os.sep}{file_name}'

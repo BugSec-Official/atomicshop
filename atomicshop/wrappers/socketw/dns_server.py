@@ -5,12 +5,12 @@ import threading
 import socket
 import logging
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional
 import multiprocessing
 
 from ...print_api import print_api
 from ..loggingw import loggingw
-from ..psutilw import networks
+from ..psutilw import psutil_networks
 from ...basics import booleans, tracebacks
 from ...file_io import csvs
 
@@ -153,7 +153,6 @@ class DnsServer:
             resolve_regular_pass_thru: bool = False,
             resolve_all_domains_to_ipv4: tuple[bool, str] = (False, '127.0.0.1'),
             offline_mode: bool = False,
-            request_domain_queue: multiprocessing.Queue = None,
             buffer_size_receive: int = 8192,
             response_ttl: int = 60,
             dns_service_retries: int = 5,
@@ -183,7 +182,6 @@ class DnsServer:
         :param resolve_all_domains_to_ipv4: tuple(boolean to enable the feature, string IPv4 of the target).
             True, the DNS Server will route all domains to the specified IPv4.
         :param offline_mode: bool: If the DNS Server should work in offline mode.
-        :param request_domain_queue: multiprocessing Queue to pass all the requested domains that hit the DNS
         :param buffer_size_receive: int: Buffer size of the connection while receiving messages.
         :param response_ttl: int, Time to live of the DNS Response that will be returned. Default is 60 seconds.
         :param dns_service_retries: int, How many times the request will be sent to forwarded DNS Service on errors:
@@ -208,7 +206,6 @@ class DnsServer:
         self.resolve_regular_pass_thru: bool = resolve_regular_pass_thru
         self.resolve_all_domains_to_ipv4: tuple[bool, str] = resolve_all_domains_to_ipv4
         self.offline_mode: bool = offline_mode
-        self.request_domain_queue: multiprocessing.Queue = request_domain_queue
         self.buffer_size_receive: int = buffer_size_receive
         self.response_ttl: int = response_ttl
         self.dns_service_retries: int = dns_service_retries
@@ -229,17 +226,13 @@ class DnsServer:
         self.resolve_all_domains_to_ipv4_enable: bool
         self.resolve_all_domains_target: str
 
-        self.intercept_domain_list: list = list()
+        self.intercept_domain_dict: dict = dict()
         for engine in self.engine_list:
             # If the engine is not a reference engine.
             if engine.engine_name != '__reference_general':
                 # Get the domains from the engine.
-                self.intercept_domain_list.extend(engine.domain_list)
 
-                # If the engine has no_sni section enabled, get the domains from it.
-                if engine.no_sni.serve_domain_on_address_enable:
-                    for domain, ip_address in engine.no_sni.serve_domain_on_address_dict.items():
-                        self.intercept_domain_list.append(domain)
+                self.intercept_domain_dict.update(engine.domain_target_dict)
 
         # Settings for static DNS Responses in offline mode.
         self.offline_route_ipv4: str = '10.10.10.10'
@@ -310,7 +303,7 @@ class DnsServer:
             raise DnsConfigurationValuesError(e)
 
         ips_ports: list[str] = [f'{self.listening_interface}:{self.listening_port}']
-        port_in_use = networks.get_processes_using_port_list(ips_ports)
+        port_in_use = psutil_networks.get_processes_using_port_list(ips_ports)
         if port_in_use:
             error_messages: list = list()
             for port, process_info in port_in_use.items():
@@ -357,7 +350,7 @@ class DnsServer:
             message = "Routing engine domains to the specified IPv4 targets."
             print_api(message, logger=self.logger)
 
-            message = f"Current all engines domains: {self.intercept_domain_list}"
+            message = f"Current all engines domains: {list(self.intercept_domain_dict.keys())}"
             print_api(message, logger=self.logger, color='blue')
 
         if self.resolve_all_domains_to_ipv4_enable:
@@ -473,7 +466,7 @@ class DnsServer:
                             if self.resolve_by_engine_enable:
                                 # If current query domain (+ subdomains) CONTAIN any of the domains from modules config
                                 # files and current request contains "A" (IPv4) record.
-                                if any(x in question_domain for x in self.intercept_domain_list):
+                                if any(x in question_domain for x in self.intercept_domain_dict.keys()):
                                     # If incoming domain contains any of the 'engine_domains' then domain will
                                     # be forwarded to our TCP Server.
                                     forward_to_tcp_server = True
@@ -498,31 +491,13 @@ class DnsServer:
                         if forward_to_tcp_server:
                             if self.resolve_by_engine_enable:
                                 for engine in self.engine_list:
-                                    # Check if the incoming domain contain any of the domains in the list.
-                                    if any(x in question_domain for x in engine.domain_list):
-                                        # Get the target IP address from the engine.
-                                        resolved_target_ipv4 = engine.dns_target
-
-                                        if engine.no_sni.get_from_dns:
-                                            # If the request is forwarded to TCP server, then we'll put the domain in the domain queue.
-                                            # self.request_domain_queue.put(question_domain)
-                                            self.request_domain_queue.put(question_domain)
-
+                                    resolved_target_ipv4 = get_target_ip_from_engine(question_domain, engine.domain_target_dict)
+                                    # If the domain was found in the current engine's domain list, we can stop the loop.
+                                    if resolved_target_ipv4:
                                         break
-
-                                    if engine.no_sni.serve_domain_on_address_enable:
-                                        if question_domain in engine.no_sni.serve_domain_on_address_dict:
-                                            ip_port_address: str = engine.no_sni.serve_domain_on_address_dict[question_domain]
-                                            target_ip = ip_port_address.split(':')[0]
-                                            resolved_target_ipv4 = target_ip
-                                            break
-
-                            if self.resolve_all_domains_to_ipv4_enable:
+                            elif self.resolve_all_domains_to_ipv4_enable:
                                 # Assign the target IPv4 address to the resolved target IPv4 variable.
                                 resolved_target_ipv4 = self.resolve_all_domains_target
-
-                                # Put the domain in the domain queue.
-                                self.request_domain_queue.put(question_domain)
 
                             # Make DNS response that will refer TCP traffic to our server
                             dns_built_response = DNSRecord(
@@ -913,6 +888,27 @@ class DnsServer:
                     continue
 
 
+def get_target_ip_from_engine(
+        target_domain: str,
+        engine_domain_target_dict: dict
+) -> Optional[str]:
+    """
+    Get the target IP address from the engine.
+
+    :param target_domain: str: The domain to return the target IP address for.
+    :param engine_domain_target_dict: dict: The dictionary of domains and their target IPs.
+
+    :return: str: The target IP address.
+    """
+    # Iterate through the list of engines.
+    for domain, target_ip_port in engine_domain_target_dict.items():
+        if domain in target_domain:
+            # Get the target IP address from the engine.
+            return target_ip_port['ip']
+
+    return None
+
+
 # noinspection PyPep8Naming
 def start_dns_server_multiprocessing_worker(
         listening_address: str,
@@ -925,7 +921,6 @@ def start_dns_server_multiprocessing_worker(
         resolve_all_domains_to_ipv4: tuple[bool, str],
         offline_mode: bool,
         cache_timeout_minutes: int,
-        request_domain_queue: multiprocessing.Queue,
         logging_queue: multiprocessing.Queue,
         logger_name: str
 ):
@@ -945,7 +940,6 @@ def start_dns_server_multiprocessing_worker(
             resolve_all_domains_to_ipv4=resolve_all_domains_to_ipv4,
             offline_mode=offline_mode,
             cache_timeout_minutes=cache_timeout_minutes,
-            request_domain_queue=request_domain_queue,
             logging_queue=logging_queue,
             logger_name=logger_name
         )

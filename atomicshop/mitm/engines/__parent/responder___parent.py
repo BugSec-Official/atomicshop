@@ -110,48 +110,49 @@ class ResponderParent:
             headers: dict,
             body: bytes
     ) -> bytes:
+        # noinspection GrazieInspection
         """
-        Create genuine response from input parameters.
-        ---------------
-        The response is built from:
-        HTTP-Version HTTP-Status HTTP-Status-String\r\n
-        Headers1: Value\r\n
-        Headers2: Value\r\n
-        \r\n                        # This is meant to end the headers' section
-        Body\r\n\r\n                # In most cases Body is ended with '\r\n\r\n'
-        ---------------
-        Example for 200 response:
-        HTTP/1.1 200 OK\r\n
-        Cache-Control: max-age=86400\r\n
-        Content-Type: application/json; charset=utf-8\r\n
-        \r\n
-        {"id":1,"name":"something"}
-        ---------------
-        The final response will look like oneline string:
-        HTTP/1.1 200 OK\r\nCache-Control: max-age=86400\r\n
-        Content-Type: application/json; charset=utf-8\r\n\r\n{"id":1,"name":"something"}
-        ---------------
-        You can create response as:
+                Create genuine response from input parameters.
+                ---------------
+                The response is built from:
+                HTTP-Version HTTP-Status HTTP-Status-String\r\n
+                Headers1: Value\r\n
+                Headers2: Value\r\n
+                \r\n                        # This is meant to end the headers' section
+                Body\r\n\r\n                # In most cases Body is ended with '\r\n\r\n'
+                ---------------
+                Example for 200 response:
+                HTTP/1.1 200 OK\r\n
+                Cache-Control: max-age=86400\r\n
+                Content-Type: application/json; charset=utf-8\r\n
+                \r\n
+                {"id":1,"name":"something"}
+                ---------------
+                The final response will look like oneline string:
+                HTTP/1.1 200 OK\r\nCache-Control: max-age=86400\r\n
+                Content-Type: application/json; charset=utf-8\r\n\r\n{"id":1,"name":"something"}
+                ---------------
+                You can create response as:
 
-        ...HTTP/1.1 200 OK
-        header1: value
-        header2: value
+                ...HTTP/1.1 200 OK
+                header1: value
+                header2: value
 
-        {data: value}...
+                {data: value}...
 
-        Change 3 dots ("...") to 3 double quotes before "HTTP" and after "value}".
-        This way there will be "\n" added automatically after each line.
-        While, the HTTP Client does the parsing of the text and not raw data, most probably it will be parsed well,
-        but genuine responses from HTTP sources come with "\r\n" at the end of the line, so better use these for
-        better compatibility.
-        ---------------
+                Change 3 dots ("...") to 3 double quotes before "HTTP" and after "value}".
+                This way there will be "\n" added automatically after each line.
+                While, the HTTP Client does the parsing of the text and not raw data, most probably it will be parsed well,
+                but genuine responses from HTTP sources come with "\r\n" at the end of the line, so better use these for
+                better compatibility.
+                ---------------
 
-        :param http_version: HTTP Version of Response in HTTP Status line.
-        :param status_code: HTTP Status Code of Response in HTTP Status line.
-        :param headers: HTTP Headers of Response.
-        :param body: HTTP body data of Response, bytes.
-        :return: bytes of the response.
-        """
+                :param http_version: HTTP Version of Response in HTTP Status line.
+                :param status_code: HTTP Status Code of Response in HTTP Status line.
+                :param headers: HTTP Headers of Response.
+                :param body: HTTP body data of Response, bytes.
+                :return: bytes of the response.
+                """
 
         try:
             # Building full status string line and the "\r\n" to the end of the status line
@@ -201,6 +202,5 @@ class ResponderParent:
     def create_response(self, class_client_message: ClientMessage):
         """ This function should be overridden in the child class. """
 
-        _ = class_client_message
-        response_bytes_list: list[bytes] = list()
+        response_bytes_list: list[bytes] = [class_client_message.response_raw_bytes]
         return response_bytes_list

@@ -205,3 +205,23 @@ def get_default_dns_gateway() -> tuple[bool, list[str]]:
 
     # noinspection PyTypeChecker
     return function_result
+
+
+def change_metric_of_network_adapter(
+        adapter_guid: str,
+        metric: int
+) -> None:
+    """
+    Change the metric of a network adapter.
+    After you set new metric you need to restart the network adapter for the changes to take effect.
+
+    :param adapter_guid: str, GUID of the network adapter.
+    :param metric: int, new metric value.
+    :return: None
+    """
+
+    reg_path = fr"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\{adapter_guid}"
+
+    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, reg_path, 0, winreg.KEY_SET_VALUE) as key:
+        winreg.SetValueEx(key, "UseAutomaticMetric", 0, winreg.REG_DWORD, 0)
+        winreg.SetValueEx(key, "InterfaceMetric", 0, winreg.REG_DWORD, metric)

@@ -4,6 +4,8 @@ import socket
 
 import psutil
 
+from ... import networks
+
 
 def get_process_using_port(ip_port: str) -> Union[dict, None]:
     """
@@ -61,7 +63,7 @@ def get_default_connection_name() -> Union[dict, None]:
     """
     # Get all interfaces.
     interfaces: dict = psutil.net_if_addrs()
-    default_ip_address: str = socket.gethostbyname(socket.gethostname())
+    default_ip_address: str = networks.get_default_internet_ipv4()
 
     for interface, details in interfaces.items():
         for address in details:

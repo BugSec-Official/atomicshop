@@ -14,7 +14,13 @@ def connection_exception_decorator(function_name):
         args, kwargs = get_target_function_default_args_and_combine_with_current(function_name, *args, **kwargs)
 
         wrapper_handle_connection_exceptions.message = None
-        port = kwargs['socket_object'].getsockname()[1]
+        listen_ipv4, port = kwargs['socket_object'].getsockname()
+
+        domain_from_dns_server = kwargs['domain_from_dns_server']
+        if not domain_from_dns_server:
+            # If the domain is not passed, we will use the TCP data.
+            # This is needed for the decorator to work properly.
+            domain_from_dns_server = listen_ipv4
 
         try:
             # Since our 'kwargs' has already all the needed arguments, we don't need 'args'.
@@ -24,12 +30,12 @@ def connection_exception_decorator(function_name):
             # After that second exception will be "pass"-ed. This is an exception inside an exception handling.
             # Looks like was introduced in Python 3 in PEP 3134.
         except ConnectionAbortedError:
-            message = f"Socket Accept: {kwargs['domain_from_dns_server']}:{port}: " \
+            message = f"Socket Accept: {domain_from_dns_server}:{port}: " \
                       f"* Established connection was aborted by software on the host..."
             wrapper_handle_connection_exceptions.message = message
             print_api(message, logger_method='error', traceback_string=True, oneline=True, **kwargs['print_kwargs'])
         except ConnectionResetError:
-            message = f"Socket Accept: {kwargs['domain_from_dns_server']}:{port}: " \
+            message = f"Socket Accept: {domain_from_dns_server}:{port}: " \
                       f"* An existing connection was forcibly closed by the remote host..."
             wrapper_handle_connection_exceptions.message = message
             print_api(message, logger_method='error', traceback_string=True, oneline=True, **kwargs['print_kwargs'])
@@ -43,10 +49,11 @@ def connection_exception_decorator(function_name):
             wrapper_handle_connection_exceptions.message = message
             try:
                 message = \
-                    f"Socket Accept: {kwargs['domain_from_dns_server']}:{port}: {message}"
+                    f"Socket Accept: {domain_from_dns_server}:{port}: {message}"
                 wrapper_handle_connection_exceptions.message = message
                 print_api(message, error_type=True, logger_method='error', oneline=True, **kwargs['print_kwargs'])
-            except Exception:
+            except Exception as e:
+                _ = e
                 message = f"Socket Accept: port {port}: {message}"
                 wrapper_handle_connection_exceptions.message = message
                 print_api(message, logger_method='error', traceback_string=True, oneline=True, **kwargs['print_kwargs'])
@@ -57,10 +64,11 @@ def connection_exception_decorator(function_name):
             wrapper_handle_connection_exceptions.message = message
             try:
                 message = \
-                    f"Socket Accept: {kwargs['domain_from_dns_server']}:{port}: {message}"
+                    f"Socket Accept: {domain_from_dns_server}:{port}: {message}"
                 wrapper_handle_connection_exceptions.message = message
                 print_api(message, logger_method='error', oneline=True, **kwargs['print_kwargs'])
-            except Exception:
+            except Exception as e:
+                _ = e
                 message = f"Socket Accept: port {port}: {message}"
                 wrapper_handle_connection_exceptions.message = message
                 print_api(message, logger_method='error', traceback_string=True, oneline=True, **kwargs['print_kwargs'])
@@ -91,20 +99,21 @@ def connection_exception_decorator(function_name):
                 message = f'ssl.SSLError:{exception_object}'
                 wrapper_handle_connection_exceptions.message = message
                 message = \
-                    f"Socket Accept: {kwargs['domain_from_dns_server']}:{port}: {message}"
+                    f"Socket Accept: {domain_from_dns_server}:{port}: {message}"
                 wrapper_handle_connection_exceptions.message = message
                 print_api(message, logger_method='error', oneline=True, **kwargs['print_kwargs'])
             pass
         except FileNotFoundError:
             message = "'SSLSocket.accept()' crashed: 'FileNotFoundError'. Some problem with SSL during Handshake - " \
                       "Could be certificate, client, or server."
-            message = f"Socket Accept: {kwargs['domain_from_dns_server']}:{port}: {message}"
+            message = f"Socket Accept: {domain_from_dns_server}:{port}: {message}"
             wrapper_handle_connection_exceptions.message = message
             print_api(message, logger_method='error', traceback_string=True, oneline=True, **kwargs['print_kwargs'])
             pass
-        except Exception:
+        except Exception as e:
+            _ = e
             message = "Undocumented exception on accept."
-            message = f"Socket Accept: {kwargs['domain_from_dns_server']}:{port}: {message}"
+            message = f"Socket Accept: {domain_from_dns_server}:{port}: {message}"
             wrapper_handle_connection_exceptions.message = message
             print_api(message, logger_method='error', traceback_string=True, oneline=True, **kwargs['print_kwargs'])
             pass

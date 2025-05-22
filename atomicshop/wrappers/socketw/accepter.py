@@ -2,12 +2,21 @@ from . import exception_wrapper
 
 
 @exception_wrapper.connection_exception_decorator
-def accept_connection(socket_object, domain_from_dns_server, print_kwargs: dict = None):
+def accept_connection(
+        socket_object,
+        domain_from_dns_server: str = None,
+        print_kwargs: dict = None
+):
     """
     Accept connection from client.
     This function is wrapped with exception wrapper.
     After you execute the function, you can get the error message if there was any with:
         error_message = accept_connection.message
+
+    :param socket_object: The socket object to accept the connection on.
+    :param domain_from_dns_server: The domain that will be printed to console on logger, needed for the decorator.
+        If not provided, the TCP data will be used.
+    :param print_kwargs: Additional arguments for the print_api function, needed for the decorator.
     """
 
     client_socket = None
@@ -33,6 +42,11 @@ def accept_connection_with_error(
         domain_from_dns_server,
         print_kwargs: dict = None
 ):
+    """
+    :param socket_object: The socket object to accept the connection on.
+    :param domain_from_dns_server: The domain that will be printed to console on logger.
+    :param print_kwargs: Additional arguments for the print_api function.
+    """
     client_socket, client_address_tuple = accept_connection(
         socket_object, domain_from_dns_server, print_kwargs=print_kwargs)
     error_message = accept_connection.message

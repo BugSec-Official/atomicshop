@@ -1,7 +1,6 @@
 from datetime import datetime
 import threading
 import queue
-import copy
 import socket
 
 from ..wrappers.socketw import receiver, sender, socket_client, base
@@ -182,24 +181,27 @@ def thread_worker_main(
         network_logger.info("Thread Finished. Will continue listening on the Main thread")
 
     def create_responder_response(client_message: ClientMessage) -> list[bytes]:
-        # Since we're in response mode, we'll record the request anyway, after the responder did its job.
-        client_message.info = "In Server Response Mode"
-
-        # If it's the first cycle and the protocol is Websocket, then we'll create the HTTP Handshake
-        # response automatically.
-        if protocol == 'Websocket' and client_receive_count == 1:
-            responses: list = list()
-            responses.append(
-                websocket_parse.create_byte_http_response(client_message.request_raw_bytes))
+        if client_message.action == 'service_connect':
+            return responder.create_connect_response(client_message)
         else:
-            # Creating response for parsed message and printing
-            responses: list = responder.create_response(client_message)
+            # Since we're in response mode, we'll record the request anyway, after the responder did its job.
+            # client_message.info = "In Server Response Mode"
 
-        # Output first 100 characters of all the responses in the list.
-        for response_raw_bytes_single in responses:
-            responder.logger.info(f"{response_raw_bytes_single[0: 100]}...")
+            # If it's the first cycle and the protocol is Websocket, then we'll create the HTTP Handshake
+            # response automatically.
+            if protocol == 'Websocket' and client_receive_count == 1:
+                responses: list = list()
+                responses.append(
+                    websocket_parse.create_byte_http_response(client_message.request_raw_bytes))
+            else:
+                # Creating response for parsed message and printing
+                responses: list = responder.create_response(client_message)
 
-        return responses
+            # Output first 100 characters of all the responses in the list.
+            for response_raw_bytes_single in responses:
+                responder.logger.info(f"{response_raw_bytes_single[0: 100]}...")
+
+            return responses
 
     def create_client_socket(client_message: ClientMessage):
         # If there is a custom certificate for the client for this domain, then we'll use it.
@@ -303,53 +305,11 @@ def thread_worker_main(
 
         return client_message
 
-    def responder_thread_worker():
-        nonlocal exception_or_close_in_receiving_thread
-
-        client_message: ClientMessage = client_message_first_start()
-        try:
-            while True:
-                client_message = responder_queue.get()
-                print_api(f"Got message from queue, action: [{client_message.action}]", logger=network_logger, logger_method='info')
-
-                # If the message is not a ClientMessage object, then we'll break the loop, since it is the exit signal.
-                if not isinstance(client_message, ClientMessage):
-                    return
-
-                if client_message.action == 'service_connect':
-                    raw_responses: list[bytes] = responder.create_connect_response(client_message)
-                else:
-                    raw_responses: list[bytes] = create_responder_response(client_message)
-                print_api(f"Got responses from responder, count: [{len(raw_responses)}]", logger=network_logger, logger_method='info')
-
-                is_socket_closed: bool = False
-                for response_raw_bytes in raw_responses:
-                    client_message.reinitialize_dynamic_vars()
-                    client_message.timestamp = datetime.now()
-                    client_message.response_raw_bytes = response_raw_bytes
-
-                    record_and_statistics_write(client_message)
-
-                    error_on_send: str = sender.Sender(
-                        ssl_socket=client_socket, class_message=client_message.response_raw_bytes,
-                        logger=network_logger).send()
-
-                    # If there was problem with sending data, we'll break the main while loop.
-                    if error_on_send:
-                        client_message.errors.append(error_on_send)
-                        record_and_statistics_write(client_message)
-                        is_socket_closed = True
-
-                if is_socket_closed:
-                    exception_or_close_in_receiving_thread = True
-                    return
-        except Exception as exc:
-            handle_exceptions_on_sub_connection_thread(client_message, client_exception_queue, exc)
-
     def receive_send_start(
             receiving_socket,
             sending_socket = None,
-            exception_queue: queue.Queue = None
+            exception_queue: queue.Queue = None,
+            client_connection_message: ClientMessage = None
     ):
         nonlocal client_receive_count
         nonlocal server_receive_count
@@ -370,59 +330,87 @@ def thread_worker_main(
                 raise ValueError(f"Unknown side of the socket: {receiving_socket}")
 
             while True:
-                client_message.reinitialize_dynamic_vars()
+                # pass the socket connect to responder.
+                if side == 'Service' and client_connection_message:
+                    client_message = client_connection_message
 
-                if side == 'Client':
-                    client_receive_count += 1
-                    current_count = client_receive_count
-                else:
-                    server_receive_count += 1
-                    current_count = server_receive_count
-
-                network_logger.info(
-                    f"Initializing Receiver for {side} cycle: {str(current_count)}")
-
-                # Getting message from the client over the socket using specific class.
-                received_raw_data, is_socket_closed, error_message = receiver.Receiver(
-                    ssl_socket=receiving_socket, logger=network_logger).receive()
-
-                # Getting current time of message received, either from client or service.
-                client_message.timestamp = datetime.now()
-
-                # In case of client socket, we'll process the raw data specifically for the client.
-                if side == 'Client':
-                    process_client_raw_data(received_raw_data, error_message, client_message)
-                    client_message.action = 'client_receive'
-                # In case of service socket, we'll process the raw data specifically for the service.
-                else:
-                    process_server_raw_data(received_raw_data, error_message, client_message)
-                    client_message.action = 'service_receive'
-
-                # If there was an exception in the service thread, then receiving empty bytes doesn't mean that
-                # the socket was closed by the other side, it means that the service thread closed the socket.
-                if (received_raw_data == b'' or error_message) and exception_or_close_in_receiving_thread:
-                    print_api("Both sockets are closed, breaking the loop", logger=network_logger,
+                    bytes_to_send_list: list[bytes] = create_responder_response(client_message)
+                    print_api(f"Got responses from responder, count: [{len(bytes_to_send_list)}]", logger=network_logger,
                               logger_method='info')
-                    return
-
-                # We will record only if there was no closing signal, because if there was, it means that we initiated
-                # the close on the opposite socket.
-                record_and_statistics_write(client_message)
-
-                if is_socket_closed:
-                    exception_or_close_in_receiving_thread = True
-                    finish_thread()
-                    return
-
-                # If we're in offline mode, execute responder.
-                if config_static.MainConfig.offline:
-                    responder_queue.put(copy.deepcopy(client_message))
                 else:
-                    # if side == 'Client':
-                    #     raise NotImplementedError
                     client_message.reinitialize_dynamic_vars()
+
+                    if side == 'Client':
+                        client_receive_count += 1
+                        current_count = client_receive_count
+                    else:
+                        server_receive_count += 1
+                        current_count = server_receive_count
+
+                    network_logger.info(
+                        f"Initializing Receiver for {side} cycle: {str(current_count)}")
+
+                    # Getting message from the client over the socket using specific class.
+                    received_raw_data, is_socket_closed, error_message = receiver.Receiver(
+                        ssl_socket=receiving_socket, logger=network_logger).receive()
+
+                    # Getting current time of message received, either from client or service.
+                    client_message.timestamp = datetime.now()
+
+                    # In case of client socket, we'll process the raw data specifically for the client.
+                    if side == 'Client':
+                        process_client_raw_data(received_raw_data, error_message, client_message)
+                        client_message.action = 'client_receive'
+                    # In case of service socket, we'll process the raw data specifically for the service.
+                    else:
+                        process_server_raw_data(received_raw_data, error_message, client_message)
+                        client_message.action = 'service_receive'
+
+                    # If there was an exception in the service thread, then receiving empty bytes doesn't mean that
+                    # the socket was closed by the other side, it means that the service thread closed the socket.
+                    if (received_raw_data == b'' or error_message) and exception_or_close_in_receiving_thread:
+                        print_api("Both sockets are closed, breaking the loop", logger=network_logger,
+                                  logger_method='info')
+                        return
+
+                    # We will record only if there was no closing signal, because if there was, it means that we initiated
+                    # the close on the opposite socket.
+                    record_and_statistics_write(client_message)
+
+                    # Now send it to requester/responder.
+                    if side == 'Client':
+                        # Send to requester.
+                        bytes_to_send_list: list[bytes] = [client_message.request_raw_bytes]
+                    else:
+                        bytes_to_send_list: list[bytes] = create_responder_response(client_message)
+                        print_api(f"Got responses from responder, count: [{len(bytes_to_send_list)}]",
+                                  logger=network_logger,
+                                  logger_method='info')
+
+                    if is_socket_closed:
+                        exception_or_close_in_receiving_thread = True
+                        finish_thread()
+                        return
+
+                # If nothing was passed from the responder, and the client message is the connection message, then we'll skip to the next iteration.
+                if not bytes_to_send_list and client_connection_message:
+                    client_connection_message = None
+                    continue
+
+                is_socket_closed: bool = False
+                for bytes_to_send_single in bytes_to_send_list:
+                    client_message.reinitialize_dynamic_vars()
+                    client_message.timestamp = datetime.now()
+
+                    if side == 'Client':
+                        client_message.request_raw_bytes = bytes_to_send_single
+                    else:
+                        client_message.response_raw_bytes = bytes_to_send_single
+
+                    record_and_statistics_write(client_message)
+
                     error_on_send: str = sender.Sender(
-                        ssl_socket=sending_socket, class_message=received_raw_data,
+                        ssl_socket=sending_socket, class_message=bytes_to_send_single,
                         logger=network_logger).send()
 
                     if error_on_send:
@@ -439,9 +427,11 @@ def thread_worker_main(
                     # If the socket was closed on message receive, then we'll break the loop only after send.
                     if is_socket_closed or error_on_send:
                         exception_or_close_in_receiving_thread = True
-                        responder_queue.put('exit')
                         finish_thread()
                         return
+
+                # For next iteration to start in case this iteration was responsible to process connection message, we need to set it to None.
+                client_connection_message = None
         except Exception as exc:
             # If the sockets were already closed, then there is nothing to do here besides log.
             # if (isinstance(exc, OSError) and exc.errno == 10038 and
@@ -470,7 +460,6 @@ def thread_worker_main(
         #     record_and_statistics_write(client_message)
 
         finish_thread()
-        responder_queue.put('exit')
         exception_queue.put(exc)
 
     def handle_exceptions_on_main_connection_thread(
@@ -522,14 +511,13 @@ def thread_worker_main(
         reference_module=reference_module
     )
     parser = found_domain_module.parser_class_object
-    responder = found_domain_module.responder_class_object
-    recorder_no_init = found_domain_module.recorder_class_object
-    recorder = recorder_no_init(record_path=config_static.LogRec.recordings_path)
+    responder = found_domain_module.responder_class_object()
+    recorder = found_domain_module.recorder_class_object(record_path=config_static.LogRec.recordings_path)
 
     network_logger.info(f"Assigned Modules for [{server_name}]: "
         f"{parser.__name__}, "
-        f"{responder.__name__}, "
-        f"{recorder_no_init.__name__}")
+        f"{responder.__class__.__name__}, "
+        f"{recorder.__class__.__name__}")
 
 
     # Initializing the client message object with current thread's data.
@@ -537,8 +525,6 @@ def thread_worker_main(
     client_message_connection: ClientMessage = ClientMessage()
     # This is needed to indicate if there was an exception or socket was closed in any of the receiving thread.
     exception_or_close_in_receiving_thread: bool = False
-    # Responder queue for ClientMessage objects.
-    responder_queue: queue.Queue = queue.Queue()
     # Queue for http request URI paths.
     http_path_queue: queue.Queue = queue.Queue()
 
@@ -558,15 +544,6 @@ def thread_worker_main(
         network_logger.info(f"Thread Created - Client [{client_ip}:{source_port}] | "
                             f"Destination service: [{server_name}:{destination_port}]")
 
-        # If we're in offline mode, we'll start the responder thread.
-        if config_static.MainConfig.offline:
-            responder_thread: threading.Thread = threading.Thread(
-                target=responder_thread_worker, name=f"Thread-{thread_id}-Responder", daemon=True)
-            responder_thread.start()
-        else:
-            # noinspection PyTypeChecker
-            responder_thread = None
-
         service_client = None
         client_receive_count: int = 0
         server_receive_count: int = 0
@@ -576,58 +553,48 @@ def thread_worker_main(
         # noinspection PyTypeChecker
         connection_error: str = None
         service_socket_instance = None
-        if not config_static.MainConfig.offline:
-            # If "service_client" object is not defined, we'll define it.
-            # If it's defined, then there's still active "ssl_socket" with connection to the service domain.
-            if not service_client:
-                service_client = create_client_socket(client_message_connection)
-                service_socket_instance, connection_error = service_client.service_connection()
-                # Now we'll update the server IP with the IP of the service.
-                server_ip = service_socket_instance.getpeername()[0]
-                client_message_connection.server_ip = server_ip
-        else:
-            client_message_connection.timestamp = datetime.now()
-            client_message_connection.action = 'service_connect'
-            client_message_connection.info = 'Server Response Mode'
-            responder_queue.put(copy.deepcopy(client_message_connection))
+        client_message_connection.action = 'service_connect'
+        client_message_connection.timestamp = datetime.now()
 
-        if connection_error:
-            client_message_connection.timestamp = datetime.now()
-            client_message_connection.errors.append(connection_error)
-            client_message_connection.action = 'service_connect'
-            record_and_statistics_write(client_message_connection)
+        if config_static.MainConfig.offline:
+            client_message_connection.info = 'Offline Mode'
         else:
+            service_client = create_client_socket(client_message_connection)
+            service_socket_instance, connection_error = service_client.service_connection()
+            # Now we'll update the server IP with the IP of the service.
+            server_ip = service_socket_instance.getpeername()[0]
+            client_message_connection.server_ip = server_ip
+
+            if connection_error:
+                client_message_connection.errors.append(connection_error)
+                record_and_statistics_write(client_message_connection)
+
+        if not connection_error:
             client_exception_queue: queue.Queue = queue.Queue()
             client_thread = threading.Thread(
-                target=receive_send_start, args=(client_socket, service_socket_instance, client_exception_queue),
+                target=receive_send_start,
+                args=(client_socket, service_socket_instance, client_exception_queue, None),
                 name=f"Thread-{thread_id}-Client")
             client_thread.daemon = True
             client_thread.start()
 
-            if not config_static.MainConfig.offline:
-                service_exception_queue: queue.Queue = queue.Queue()
-                service_thread = threading.Thread(
-                    target=receive_send_start, args=(service_socket_instance, client_socket, service_exception_queue),
-                    name=f"Thread-{thread_id}-Service")
-                service_thread.daemon = True
-                service_thread.start()
+            service_exception_queue: queue.Queue = queue.Queue()
+            service_thread = threading.Thread(
+                target=receive_send_start,
+                args=(service_socket_instance, client_socket, service_exception_queue, client_message_connection),
+                name=f"Thread-{thread_id}-Service")
+            service_thread.daemon = True
+            service_thread.start()
 
             client_thread.join()
-            if config_static.MainConfig.offline:
-                responder_thread.join()
-            else:
-                service_thread.join()
+            service_thread.join()
 
             # If there was an exception in any of the threads, then we'll raise it here.
             if not client_exception_queue.empty():
                 raise client_exception_queue.get()
-            if not config_static.MainConfig.offline:
-                if not service_exception_queue.empty():
-                    raise service_exception_queue.get()
+            if not service_exception_queue.empty():
+                raise service_exception_queue.get()
 
         finish_thread()
     except Exception as e:
-        if not client_message_connection.timestamp:
-            client_message_connection.timestamp = datetime.now()
-
         handle_exceptions_on_main_connection_thread(e, client_message_connection)

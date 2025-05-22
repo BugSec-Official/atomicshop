@@ -172,6 +172,16 @@ def add_execution_permissions_for_file(image_id_or_name: str, file_path: str, pr
 
 
 def stop_remove_containers_by_image_name(image_name: str):
+    def stop_remove_container(container: Container):
+        """
+        Stop and remove a container.
+        :param container: Container, the docker container object.
+        :return:
+        """
+        if container.status == "running":
+            print_api(f"Stopping container: [{container.name}]. Short ID: [{container.short_id}]")
+            container.stop()
+        container.remove()
     """
     Remove all containers by image name.
     :param image_name: str, the name of the image.
@@ -179,8 +189,8 @@ def stop_remove_containers_by_image_name(image_name: str):
     """
     client = docker.from_env()
     all_containers = client.containers.list(all=True)
-    for container in all_containers:
-        if any(image_name in tag for tag in container.image.tags):
+    for current_container in all_containers:
+        if any(image_name in tag for tag in current_container.image.tags):
             if container.status == "running":
                 print_api(f"Stopping container: [{container.name}]. Short ID: [{container.short_id}]")
                 container.stop()
@@ -231,7 +241,7 @@ def start_container_without_stop(
     return client, container
 
 
-def run_command_in_running_container(container: Container, command: list) -> tuple[int, bytes, str]:
+def run_command_in_running_container(container: Container, command: list) -> tuple[int, str]:
     """
     Run a command in a running container.
     :param container: Container, the docker container object.
@@ -240,22 +250,8 @@ def run_command_in_running_container(container: Container, command: list) -> tup
     """
 
     # Run the command inside the already running container
-    exec_result = container.exec_run(cmd=command, stdout=True, stderr=True)
+    status_code, output_bytes = container.exec_run(cmd=command, stdout=True, stderr=True)
     # Capture logs
-    output_text = exec_result.output.decode("utf-8", errors="replace")
-    execution_result_message: str = str()
-    if output_text:
-        execution_result_message = f"Container execution result:\n{output_text}"
+    output_text = output_bytes.decode("utf-8", errors="replace")
 
-    if exec_result.exit_code != 0:
-        # logging.warning(f"Extraction command returned code {exec_result.exit_code} for '{filename}'")
-        code_message = f"Extraction command returned code {exec_result.exit_code}"
-    else:
-        code_message = "Extraction succeeded"
-
-    if execution_result_message:
-        execution_result_message += f"\n{code_message}"
-    else:
-        execution_result_message = code_message
-
-    return exec_result.exit_code, exec_result.output, execution_result_message
+    return status_code, output_text

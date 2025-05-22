@@ -6,21 +6,59 @@ import os
 
 import atomicshop   # Importing atomicshop package to get the version of the package.
 
-from .. import filesystem, dns, on_exit, print_api
+from .. import filesystem, on_exit, print_api, networks, dns
 from ..permissions import permissions
 from ..python_functions import get_current_python_version_string, check_python_version_compliance
 from ..wrappers.socketw import socket_wrapper, dns_server, base
 from ..wrappers.loggingw import loggingw
 from ..wrappers.ctyping import win_console
 
-from .initialize_engines import ModuleCategory
 from .connection_thread_worker import thread_worker_main
 from . import config_static, recs_files
 
 
+class NetworkSettings:
+    """
+    Class to store network settings.
+    """
+
+    def __init__(
+            self,
+            description: str | None = None,
+            interface_index: int | None = None,
+            is_dynamic: bool = False,
+            ipv4s: list[str] = None,
+            ipv6s: list[str] = None,
+            ipv4_subnet_masks: list[str] = None,
+            ipv6_prefixes: list[str] = None,
+            default_gateways: list[str] = None,
+            dns_gateways: list[str] = None
+    ):
+
+        self.description: str | None = description
+        self.interface_index: int | None = interface_index
+        self.is_dynamic: bool = is_dynamic
+        self.ipv4s: list[str] = ipv4s if ipv4s is not None else list()
+        self.ipv6s: list[str] = ipv6s if ipv6s is not None else list()
+        self.ipv4_subnet_masks: list[str] = ipv4_subnet_masks if ipv4_subnet_masks is not None else list()
+        self.ipv6_prefixes: list[str] = ipv6_prefixes if ipv6_prefixes is not None else list()
+        self.default_gateways: list[str] = default_gateways if default_gateways is not None else list()
+        self.dns_gateways: list[str] = dns_gateways if dns_gateways is not None else list()
+
+
+# Global variables for setting the network interface to external IPs (eg: 192.168.0.1)
+NETWORK_INTERFACE_SETTINGS: NetworkSettings = NetworkSettings()
+CURRENT_IPV4S: list[str] = list()
+CURRENT_IPV4_MASKS: list[str] = list()
+IPS_TO_ASSIGN: list[str] = list()
+MASKS_TO_ASSIGN: list[str] = list()
+
+# Global variables for setting the network interface to localhost IPs (eg: 127.0.0.1), Only DNS gateway is set.
 NETWORK_INTERFACE_IS_DYNAMIC: bool = bool()
 NETWORK_INTERFACE_IPV4_ADDRESS_LIST: list[str] = list()
 IS_SET_DNS_GATEWAY: bool = False
+
+
 # noinspection PyTypeChecker
 RECS_PROCESS_INSTANCE: multiprocessing.Process = None
 
@@ -29,9 +67,6 @@ EXCEPTIONS_CSV_LOGGER_NAME: str = 'exceptions'
 EXCEPTIONS_CSV_LOGGER_HEADER: str = 'time,exception'
 # noinspection PyTypeChecker
 MITM_ERROR_LOGGER: loggingw.ExceptionCsvLogger = None
-
-# Create request domain queue.
-DOMAIN_QUEUE: multiprocessing.Queue = multiprocessing.Queue()
 
 # Create logger's queue.
 NETWORK_LOGGER_QUEUE: multiprocessing.Queue = multiprocessing.Queue()
@@ -44,20 +79,39 @@ except win_console.NotWindowsConsoleError:
 
 
 def exit_cleanup():
-    if permissions.is_admin() and IS_SET_DNS_GATEWAY:
-        is_dns_dynamic, current_dns_gateway = dns.get_default_dns_gateway()
-        status_string = 'Dynamic' if is_dns_dynamic else 'Static'
-        print_api.print_api(f'Current DNS Gateway: {status_string}, {current_dns_gateway}')
+    if config_static.ENGINES_LIST[0].is_localhost:
+        if permissions.is_admin() and IS_SET_DNS_GATEWAY:
+            is_dns_dynamic, current_dns_gateway = dns.get_default_dns_gateway()
+            status_string = 'Dynamic' if is_dns_dynamic else 'Static'
+            print_api.print_api(f'Current DNS Gateway: {status_string}, {current_dns_gateway}')
 
-        if is_dns_dynamic != NETWORK_INTERFACE_IS_DYNAMIC or \
-                (not is_dns_dynamic and current_dns_gateway != NETWORK_INTERFACE_IPV4_ADDRESS_LIST):
-            if NETWORK_INTERFACE_IS_DYNAMIC:
-                dns.set_connection_dns_gateway_dynamic(use_default_connection=True)
-            else:
-                dns.set_connection_dns_gateway_static(
-                    dns_servers=NETWORK_INTERFACE_IPV4_ADDRESS_LIST, use_default_connection=True)
+            if is_dns_dynamic != NETWORK_INTERFACE_IS_DYNAMIC or \
+                    (not is_dns_dynamic and current_dns_gateway != NETWORK_INTERFACE_IPV4_ADDRESS_LIST):
+                if NETWORK_INTERFACE_IS_DYNAMIC:
+                    dns.set_connection_dns_gateway_dynamic(use_default_connection=True)
+                else:
+                    dns.set_connection_dns_gateway_static(
+                        dns_servers=NETWORK_INTERFACE_IPV4_ADDRESS_LIST, use_default_connection=True)
 
-            print_api.print_api("Returned default DNS gateway...", color='blue')
+                print_api.print_api("Returned default DNS gateway...", color='blue')
+    else:
+        # Get current network interface state.
+        default_network_adapter_config, default_network_adapter, default_adapter_info = networks.get_wmi_network_adapter_configuration(
+            use_default_interface=True, get_info_from_network_config=True)
+
+        if NETWORK_INTERFACE_SETTINGS.is_dynamic:
+            # If the network interface was dynamic before the script started, we will return it to dynamic.
+            networks.set_dynamic_ip_for_adapter(default_network_adapter_config)
+        else:
+            networks.set_static_ip_for_adapter(
+                default_network_adapter,
+                ips=NETWORK_INTERFACE_SETTINGS.ipv4s,
+                masks=NETWORK_INTERFACE_SETTINGS.ipv4_subnet_masks,
+                gateways=NETWORK_INTERFACE_SETTINGS.default_gateways,
+                dns_gateways=NETWORK_INTERFACE_SETTINGS.dns_gateways
+            )
+
+        print_api.print_api("Returned network adapter settings...", color='blue')
 
     # The process will not be executed if there was an exception in the beginning.
     if RECS_PROCESS_INSTANCE is not None:
@@ -137,16 +191,12 @@ def startup_output(system_logger, script_version: str):
                    f"{engine.recorder_class_object.__name__}")
         print_api.print_api(message, logger=system_logger)
         print_api.print_api(f"[*] Name: {engine.engine_name}", logger=system_logger)
-        print_api.print_api(f"[*] Domains: {engine.domain_list}", logger=system_logger)
-        print_api.print_api(f"[*] DNS Target: {engine.dns_target}", logger=system_logger)
-        print_api.print_api(f"[*] TCP Listening Interfaces: {engine.tcp_listening_address_list}", logger=system_logger)
-
-        if engine.no_sni.get_from_dns:
-            print_api.print_api(f"[*] No SNI setting: Will fetch from DNS Server", logger=system_logger)
-        if engine.no_sni.serve_domain_on_address_enable:
-            print_api.print_api(
-                f"[*] No SNI setting: The DNS Server will send the domains to interfaces [{engine.no_sni.serve_domain_on_address_dict}]",
-                logger=system_logger)
+        print_api.print_api(f"[*] Domains: {list(engine.domain_target_dict.keys())}", logger=system_logger)
+        dns_targets: list = list()
+        for domain, ip_port in engine.domain_target_dict.items():
+            dns_targets.append(ip_port['ip'])
+        print_api.print_api(f"[*] DNS Targets: {dns_targets}", logger=system_logger)
+        # print_api.print_api(f"[*] TCP Listening Interfaces: {engine.tcp_listening_address_list}", logger=system_logger)
 
     if config_static.DNSServer.enable:
         print_api.print_api("DNS Server is enabled.", logger=system_logger)
@@ -178,6 +228,68 @@ def startup_output(system_logger, script_version: str):
         print_api.print_api("TCP Server is disabled.", logger=system_logger, color="yellow")
 
 
+def get_ipv4s_for_tcp_server():
+    """
+    Function to get the IPv4 addresses for the default network adapter to set them to the adapter.
+    """
+
+    # Create a list of all the domains in all the engines.
+    domains_to_create_ips_for: list[str] = list()
+    for engine in config_static.ENGINES_LIST:
+        domains_to_create_ips_for += list(engine.domain_target_dict.keys())
+
+    engine_ips: list[str] = list()
+    # Check if we need the localhost ips (12.0.0.1) or external local ips (192.168.0.100).
+    if config_static.ENGINES_LIST[0].is_localhost:
+        create_ips: int = len(domains_to_create_ips_for)
+
+        # Generate the list of localhost ips.
+        for i in range(create_ips):
+            engine_ips.append(f"127.0.0.{i+1}")
+    else:
+        # Get current network interface state.
+        default_network_adapter_config, default_network_adapter, default_adapter_info = networks.get_wmi_network_adapter_configuration(
+            use_default_interface=True, get_info_from_network_config=True)
+
+        global NETWORK_INTERFACE_SETTINGS
+        NETWORK_INTERFACE_SETTINGS = NetworkSettings(
+            description=default_adapter_info['description'],
+            interface_index=default_adapter_info['interface_index'],
+            is_dynamic=default_adapter_info['is_dynamic'],
+            ipv4s=default_adapter_info['ipv4s'],
+            ipv6s=default_adapter_info['ipv6s'],
+            ipv4_subnet_masks=default_adapter_info['ipv4_subnet_masks'],
+            ipv6_prefixes=default_adapter_info['ipv6_prefixes'],
+            default_gateways=default_adapter_info['default_gateways'],
+            dns_gateways=default_adapter_info['dns_gateways']
+        )
+
+        # Adding IP addresses to the default network adapter.
+        current_ipv4s: list[str] = default_adapter_info['ipv4s']
+        current_ips_count: int = len(current_ipv4s)
+
+        # If the number of currently assigned IPs is smaller than the number of IPs to create,
+        # subtract the current IPs count from the number of IPs to create, to create only what is missing.
+        create_ips: int = len(domains_to_create_ips_for)
+        if current_ips_count <= create_ips:
+            create_ips -= current_ips_count
+
+        # Generate the IPs for the domains.
+        global CURRENT_IPV4S, CURRENT_IPV4_MASKS, IPS_TO_ASSIGN, MASKS_TO_ASSIGN
+        CURRENT_IPV4S, CURRENT_IPV4_MASKS, IPS_TO_ASSIGN, MASKS_TO_ASSIGN = networks.add_virtual_ips_to_default_adapter_by_current_setting(
+            number_of_ips=create_ips,
+            simulate_only=True)
+
+        engine_ips += CURRENT_IPV4S + IPS_TO_ASSIGN
+
+    # Add the ips to engines.
+    for engine in config_static.ENGINES_LIST:
+        for domain in engine.domain_target_dict.keys():
+            # If the domain is in the list of domains to create IPs for, add the IP to the engine.
+            if domain in domains_to_create_ips_for:
+                engine.domain_target_dict[domain]['ip'] = engine_ips.pop(0)
+
+
 def mitm_server(config_file_path: str, script_version: str):
     on_exit.register_exit_handler(exit_cleanup, at_exit=False, kill_signal=False)
 
@@ -191,6 +303,9 @@ def mitm_server(config_file_path: str, script_version: str):
     result = config_static.load_config(config_file_path)
     if result != 0:
         return result
+
+    # Get the IPs that will be set for the adapter and fill the engine configuration with the IPs.
+    get_ipv4s_for_tcp_server()
 
     global MITM_ERROR_LOGGER
     MITM_ERROR_LOGGER = loggingw.ExceptionCsvLogger(
@@ -253,7 +368,6 @@ def mitm_server(config_file_path: str, script_version: str):
                     config_static.DNSServer.resolve_all_domains_to_ipv4_enable, config_static.DNSServer.target_ipv4),
                 'offline_mode': config_static.MainConfig.offline,
                 'cache_timeout_minutes': config_static.DNSServer.cache_timeout_minutes,
-                'request_domain_queue': DOMAIN_QUEUE,
                 'logging_queue': NETWORK_LOGGER_QUEUE,
                 'logger_name': network_logger_name
             },
@@ -331,7 +445,6 @@ def mitm_server(config_file_path: str, script_version: str):
                 statistics_logs_directory=config_static.LogRec.logs_path,
                 forwarding_dns_service_ipv4_list___only_for_localhost=[config_static.DNSServer.forwarding_dns_service_ipv4],
                 skip_extension_id_list=config_static.SkipExtensions.SKIP_EXTENSION_ID_LIST,
-                request_domain_from_dns_server_queue=DOMAIN_QUEUE,
                 no_engine_usage_enable=config_static.TCPServer.no_engines_usage_to_listen_addresses_enable,
                 no_engines_listening_address_list=config_static.TCPServer.no_engines_listening_address_list,
                 engines_list=config_static.ENGINES_LIST
@@ -349,42 +462,57 @@ def mitm_server(config_file_path: str, script_version: str):
             network_logger_queue_listener.stop()
             return 1
 
-        # Before we start the loop. we can set the default gateway if specified.
-        set_dns_gateway = False
-        dns_gateway_server_list = list()
+        # ----------------------- Get the default network adapter configuration. --------------------------
+        # This setting is needed only for the dns gateways configurations from the main config on localhost.
+        set_local_dns_gateway: bool = False
+        # Set the default gateway if specified.
         if config_static.DNSServer.set_default_dns_gateway:
             dns_gateway_server_list = config_static.DNSServer.set_default_dns_gateway
-            set_dns_gateway = True
+            set_local_dns_gateway = True
         elif config_static.DNSServer.set_default_dns_gateway_to_localhost:
             dns_gateway_server_list = [base.LOCALHOST_IPV4]
-            set_dns_gateway = True
+            set_local_dns_gateway = True
         elif config_static.DNSServer.set_default_dns_gateway_to_default_interface_ipv4:
             dns_gateway_server_list = [base.DEFAULT_IPV4]
-            set_dns_gateway = True
+            set_local_dns_gateway = True
+        else:
+            dns_gateway_server_list = NETWORK_INTERFACE_SETTINGS.dns_gateways
 
-        if set_dns_gateway:
-            global IS_SET_DNS_GATEWAY
-            IS_SET_DNS_GATEWAY = True
+        if config_static.ENGINES_LIST[0].is_localhost:
+            if set_local_dns_gateway:
+                global IS_SET_DNS_GATEWAY
+                IS_SET_DNS_GATEWAY = True
 
-            # Get current network interface state.
-            global NETWORK_INTERFACE_IS_DYNAMIC, NETWORK_INTERFACE_IPV4_ADDRESS_LIST
-            NETWORK_INTERFACE_IS_DYNAMIC, NETWORK_INTERFACE_IPV4_ADDRESS_LIST = dns.get_default_dns_gateway()
+                # Get current network interface state.
+                global NETWORK_INTERFACE_IS_DYNAMIC, NETWORK_INTERFACE_IPV4_ADDRESS_LIST
+                NETWORK_INTERFACE_IS_DYNAMIC, NETWORK_INTERFACE_IPV4_ADDRESS_LIST = dns.get_default_dns_gateway()
 
-            # Set the DNS gateway to the specified one only if the DNS gateway is dynamic, or it is static but different
-            # from the one specified in the configuration file.
-            if (NETWORK_INTERFACE_IS_DYNAMIC or (not NETWORK_INTERFACE_IS_DYNAMIC and
-                                                 NETWORK_INTERFACE_IPV4_ADDRESS_LIST != dns_gateway_server_list)):
-                try:
-                    dns.set_connection_dns_gateway_static(
-                        dns_servers=dns_gateway_server_list,
-                        use_default_connection=True
-                    )
-                except PermissionError as e:
-                    print_api.print_api(e, error_type=True, color="red", logger=system_logger)
-                    # Wait for the message to be printed and saved to file.
-                    time.sleep(1)
-                    network_logger_queue_listener.stop()
-                    return 1
+                # Set the DNS gateway to the specified one only if the DNS gateway is dynamic, or it is static but different
+                # from the one specified in the configuration file.
+                if (NETWORK_INTERFACE_IS_DYNAMIC or (not NETWORK_INTERFACE_IS_DYNAMIC and
+                                                     NETWORK_INTERFACE_IPV4_ADDRESS_LIST != dns_gateway_server_list)):
+                    try:
+                        dns.set_connection_dns_gateway_static(
+                            dns_servers=dns_gateway_server_list,
+                            use_default_connection=True
+                        )
+                    except PermissionError as e:
+                        print_api.print_api(e, error_type=True, color="red", logger=system_logger)
+                        # Wait for the message to be printed and saved to file.
+                        time.sleep(1)
+                        network_logger_queue_listener.stop()
+                        return 1
+        else:
+            # Change the adapter settings and add the virtual IPs.
+            try:
+                networks.add_virtual_ips_to_default_adapter_by_current_setting(
+                    virtual_ipv4s_to_add=IPS_TO_ASSIGN, virtual_ipv4_masks_to_add=MASKS_TO_ASSIGN, dns_gateways=dns_gateway_server_list)
+            except PermissionError as e:
+                print_api.print_api(e, error_type=True, color="red", logger=system_logger)
+                # Wait for the message to be printed and saved to file.
+                time.sleep(1)
+                network_logger_queue_listener.stop()
+                return 1
 
         statistics_writer = socket_wrapper_instance.statistics_writer
 

@@ -23,49 +23,49 @@ class ResponderGeneral(ResponderParent):
 
         self.logger = create_custom_logger()
 
-    def create_response(self, class_client_message: ClientMessage):
-        # noinspection GrazieInspection
-        """
-        Function to create Response based on ClientMessage and its Request.
-
-        :param class_client_message: contains request and other parameters to help creating response.
-        :return: list of responses in bytes.
-        -----------------------------------
-
-        # Example of creating list of bytes using 'build_byte_response' function:
-        result_list: list[bytes] = list()
-        result_list.append(
-            self.build_byte_response(
-                http_version=class_client_message.request_raw_decoded.request_version,
-                status_code=200,
-                headers=response_headers,
-                body=b''
-            )
-        )
-
-        return result_list
-        -----------------------------------
-        # Example of extracting variables from URL PATH based on custom PATH TEMPLATE:
-        # (more examples in 'self.extract_variables_from_path_template' function description)
-        template_path: str = "/hithere/<variable1>/else/<variable2>/tested/"
-        path_variables: dict = extract_variables_from_path_template(
-            path=class_client_message.request_raw_decoded.path,
-            template_path=template_path
-        )
-        -----------------------------------
-        # Example of extracting value from URL PATH parameters after question mark:
-        parameter_value = extract_value_from_path_parameter(
-            path=class_client_message.request_raw_decoded.path,
-            parameter='test_id'
-        )
-        """
-
-        # byte_response: bytes = b''
-        # self.logger.info(f"Response: {byte_response}")
-
-        response_bytes_list: list[bytes] = list()
-        # response_bytes_list.append(byte_response)
-        return response_bytes_list
+    # def create_response(self, class_client_message: ClientMessage):
+    #     # noinspection GrazieInspection
+    #     """
+    #     Function to create Response based on ClientMessage and its Request.
+    #
+    #     :param class_client_message: contains request and other parameters to help creating response.
+    #     :return: list of responses in bytes.
+    #     -----------------------------------
+    #
+    #     # Example of creating list of bytes using 'build_byte_response' function:
+    #     result_list: list[bytes] = list()
+    #     result_list.append(
+    #         self.build_byte_response(
+    #             http_version=class_client_message.request_raw_decoded.request_version,
+    #             status_code=200,
+    #             headers=response_headers,
+    #             body=b''
+    #         )
+    #     )
+    #
+    #     return result_list
+    #     -----------------------------------
+    #     # Example of extracting variables from URL PATH based on custom PATH TEMPLATE:
+    #     # (more examples in 'self.extract_variables_from_path_template' function description)
+    #     template_path: str = "/hithere/<variable1>/else/<variable2>/tested/"
+    #     path_variables: dict = extract_variables_from_path_template(
+    #         path=class_client_message.request_raw_decoded.path,
+    #         template_path=template_path
+    #     )
+    #     -----------------------------------
+    #     # Example of extracting value from URL PATH parameters after question mark:
+    #     parameter_value = extract_value_from_path_parameter(
+    #         path=class_client_message.request_raw_decoded.path,
+    #         parameter='test_id'
+    #     )
+    #     """
+    #
+    #     # byte_response: bytes = b''
+    #     # self.logger.info(f"Response: {byte_response}")
+    #
+    #     response_bytes_list: list[bytes] = list()
+    #     # response_bytes_list.append(byte_response)
+    #     return response_bytes_list
 
     # def create_connect_response(self, class_client_message: ClientMessage):
     #     """
