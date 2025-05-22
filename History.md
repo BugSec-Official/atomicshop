@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.0.1 - 22.05.2025
+  * mitm/import_config - bugfix
 * 3.0.0 - 22.05.2025
   * Major api changes in mitm, and almost all the related networking function, including wmi.
 * 2.21.1 - 10.04.2025

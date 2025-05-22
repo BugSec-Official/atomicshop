@@ -198,24 +198,12 @@ def check_configurations() -> int:
         if config_static.DNSServer.resolve_by_engine:
             for engine in config_static.ENGINES_LIST:
                 # Check if the DNS target is localhost loopback.
-                if engine.dns_target in base.THIS_DEVICE_IP_LIST or engine.dns_target.startswith('127.'):
-                    if not is_admin:
-                        message: str = \
-                            ("Need to run the script with administrative rights to get the process name while TCP "
-                             "running on the same computer.\nExiting...")
-                        print_api(message, color='red')
-                        return 1
-                if engine.no_sni.serve_domain_on_address_enable:
-                    no_sni_target_address_list: list = engine.no_sni.serve_domain_on_address_dict.values()
-                    for no_sni_target_address in no_sni_target_address_list:
-                        if no_sni_target_address in base.THIS_DEVICE_IP_LIST or \
-                                no_sni_target_address.startswith('127.'):
-                            if not is_admin:
-                                message: str = \
-                                    ("Need to run the script with administrative rights to get the process name while TCP "
-                                     "running on the same computer.\nExiting...")
-                                print_api(message, color='red')
-                                return 1
+                if engine.is_localhost and not is_admin:
+                    message: str = \
+                        ("Need to run the script with administrative rights to get the process name while TCP "
+                         "running on the same computer.\nExiting...")
+                    print_api(message, color='red')
+                    return 1
         if config_static.DNSServer.resolve_all_domains_to_ipv4:
             if config_static.DNSServer.target_ipv4 in base.THIS_DEVICE_IP_LIST or \
                     config_static.DNSServer.target_ipv4.startswith('127.'):
