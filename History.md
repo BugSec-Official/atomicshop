@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.1.0 - 25.05.2025
+  * mitm - new features and fixes.
 * 3.0.2 - 25.05.2025
   * mitm/initialize_engines, wrappers/socketw/socket_wrapper - fixes
 * 3.0.1 - 22.05.2025

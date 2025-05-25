@@ -14,6 +14,7 @@ CONFIG_FILE_NAME: str = "engine_config.toml"
 
 REFERENCE_PARSER_FILE_NAME: str = f"parser_{REFERENCE_ENGINE_NAME}.py"
 REFERENCE_RESPONDER_FILE_NAME: str = f"responder_{REFERENCE_ENGINE_NAME}.py"
+REFERENCE_REQUESTER_FILE_NAME: str = f"requester_{REFERENCE_ENGINE_NAME}.py"
 REFERENCE_RECORDER_FILE_NAME: str = f"recorder_{REFERENCE_ENGINE_NAME}.py"
 
 SCRIPT_DIRECTORY: str = filesystem.get_file_directory(__file__)
@@ -43,10 +44,12 @@ class CreateModuleTemplate:
         reference_folder_path: str = SCRIPT_DIRECTORY + os.sep + REFERENCE_ENGINE_NAME
         self.parser_general_path: str = reference_folder_path + os.sep + REFERENCE_PARSER_FILE_NAME
         self.responder_general_path: str = reference_folder_path + os.sep + REFERENCE_RESPONDER_FILE_NAME
+        self.requester_general_path: str = reference_folder_path + os.sep + REFERENCE_REQUESTER_FILE_NAME
         self.recorder_general_path: str = reference_folder_path + os.sep + REFERENCE_RECORDER_FILE_NAME
 
         self.parser_file_name: str = f"parser.py"
         self.responder_file_name: str = f"responder.py"
+        self.requester_file_name: str = f"requester.py"
         self.recorder_file_name: str = f"recorder.py"
 
         self.create_template()
@@ -63,6 +66,7 @@ class CreateModuleTemplate:
 
         self._create_engine_module_from_reference(file_path=self.parser_general_path, module_type='parser')
         self._create_engine_module_from_reference(file_path=self.responder_general_path, module_type='responder')
+        self._create_engine_module_from_reference(file_path=self.requester_general_path, module_type='requester')
         self._create_engine_module_from_reference(file_path=self.recorder_general_path, module_type='recorder')
 
         self.create_config_file()
@@ -91,13 +95,15 @@ class CreateModuleTemplate:
     def _create_engine_module_from_reference(
             self,
             file_path: str,
-            module_type: Literal['parser', 'responder', 'recorder']
+            module_type: Literal['parser', 'responder', 'requester', 'recorder']
     ):
 
         if module_type == 'parser':
             new_module_file_name = self.parser_file_name
         elif module_type == 'responder':
             new_module_file_name = self.responder_file_name
+        elif module_type == 'requester':
+            new_module_file_name = self.requester_file_name
         elif module_type == 'recorder':
             new_module_file_name = self.recorder_file_name
         else:
