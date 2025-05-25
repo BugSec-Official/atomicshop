@@ -89,7 +89,10 @@ def import_engines_configs() -> int:
         # Initialize engine.
         current_module: initialize_engines.ModuleCategory = initialize_engines.ModuleCategory(config_static.MainConfig.SCRIPT_DIRECTORY)
         current_module.fill_engine_fields_from_config(engine_config_path.path)
-        current_module.initialize_engine()
+        result_code, error = current_module.initialize_engine()
+        if result_code != 0:
+            print_api(f"Error initializing engine from directory: {Path(engine_config_path.path).parent}\n{error}", color='red')
+            return result_code
 
         # Extending the full engine domain list with this list.
         domains_engine_list_full.extend(current_module.domain_list)
@@ -99,7 +102,10 @@ def import_engines_configs() -> int:
     # ==== Initialize Reference Module =============================================================================
     reference_module: initialize_engines.ModuleCategory = initialize_engines.ModuleCategory(config_static.MainConfig.SCRIPT_DIRECTORY)
     reference_module.fill_engine_fields_from_general_reference(config_static.MainConfig.ENGINES_DIRECTORY_PATH)
-    reference_module.initialize_engine(reference_general=True)
+    result_code, error = reference_module.initialize_engine(reference_general=True)
+    if result_code != 0:
+        print_api(f"Error initializing reference engine from file: {config_static.MainConfig.ENGINES_DIRECTORY_PATH}\n{error}", color='red')
+        return result_code
 
     # Assigning all the engines domains to all time domains, that will be responsible for adding new domains.
     config_static.Certificates.domains_all_times = list(domains_engine_list_full)

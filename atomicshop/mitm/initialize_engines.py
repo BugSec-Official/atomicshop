@@ -3,8 +3,8 @@ from pathlib import Path
 
 from ..file_io import tomls
 from ..basics.classes import import_first_class_name_from_file_path
-from .engines.__reference_general import parser___reference_general, responder___reference_general, \
-    recorder___reference_general
+from .engines.__reference_general import parser___reference_general, requester___reference_general, \
+    responder___reference_general, recorder___reference_general
 
 
 class ModuleCategory:
@@ -18,10 +18,12 @@ class ModuleCategory:
         self.mtls: dict = dict()
 
         self.parser_file_path: str = str()
+        self.requester_file_path: str = str()
         self.responder_file_path: str = str()
         self.recorder_file_path: str = str()
 
         self.parser_class_object: str = str()
+        self.requester_class_object: str = str()
         self.responder_class_object: str = str()
         self.recorder_class_object: str = str()
 
@@ -31,6 +33,7 @@ class ModuleCategory:
         reference_folder_path: str = engines_fullpath + os.sep + self.engine_name
         # Full path to file.
         self.parser_file_path = reference_folder_path + os.sep + "parser___reference_general.py"
+        self.requester_file_path = reference_folder_path + os.sep + "requester___reference_general.py"
         self.responder_file_path = reference_folder_path + os.sep + "responder___reference_general.py"
         self.recorder_file_path = reference_folder_path + os.sep + "recorder___reference_general.py"
 
@@ -62,6 +65,7 @@ class ModuleCategory:
 
         # Full path to file
         self.parser_file_path = f"{engine_directory_path}{os.sep}parser{file_name_suffix}.py"
+        self.requester_file_path = f"{engine_directory_path}{os.sep}requester{file_name_suffix}.py"
         self.responder_file_path = f"{engine_directory_path}{os.sep}responder{file_name_suffix}.py"
         self.recorder_file_path = f"{engine_directory_path}{os.sep}recorder{file_name_suffix}.py"
 
@@ -74,18 +78,26 @@ class ModuleCategory:
         for subdomain, file_name in self.mtls.items():
             self.mtls[subdomain] = f'{engine_directory_path}{os.sep}{file_name}'
 
-    def initialize_engine(self, reference_general: bool = False):
-        if not reference_general:
-            self.parser_class_object = import_first_class_name_from_file_path(
-                self.script_directory, self.parser_file_path)
-            self.responder_class_object = import_first_class_name_from_file_path(
-                self.script_directory, self.responder_file_path)
-            self.recorder_class_object = import_first_class_name_from_file_path(
-                self.script_directory, self.recorder_file_path)
-        else:
-            self.parser_class_object = parser___reference_general.ParserGeneral
-            self.responder_class_object = responder___reference_general.ResponderGeneral
-            self.recorder_class_object = recorder___reference_general.RecorderGeneral
+    def initialize_engine(self, reference_general: bool = False) -> tuple[int, str]:
+        try:
+            if not reference_general:
+                self.parser_class_object = import_first_class_name_from_file_path(
+                    self.script_directory, self.parser_file_path)
+                self.requester_class_object = import_first_class_name_from_file_path(
+                    self.script_directory, self.requester_file_path)
+                self.responder_class_object = import_first_class_name_from_file_path(
+                    self.script_directory, self.responder_file_path)
+                self.recorder_class_object = import_first_class_name_from_file_path(
+                    self.script_directory, self.recorder_file_path)
+            else:
+                self.parser_class_object = parser___reference_general.ParserGeneral
+                self.requester_class_object = requester___reference_general.RequesterGeneral
+                self.responder_class_object = responder___reference_general.ResponderGeneral
+                self.recorder_class_object = recorder___reference_general.RecorderGeneral
+        except ModuleNotFoundError as e:
+            return 1, str(e)
+
+        return 0, ''
 
 
 def assign_class_by_domain(
