@@ -516,7 +516,7 @@ class SocketWrapper:
                             domain_from_engine = domain
                             break
 
-                    self.logger.info(f"NO SNI requested domain setting: {domain_from_engine}")
+                    self.logger.info(f"Requested domain setting: {domain_from_engine}")
 
                 # Wait from any connection on "accept()".
                 # 'client_socket' is socket or ssl socket, 'client_address' is a tuple (ip_address, port).
