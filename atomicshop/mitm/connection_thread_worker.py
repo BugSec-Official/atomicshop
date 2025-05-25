@@ -180,16 +180,22 @@ def thread_worker_main(
 
         network_logger.info("Thread Finished. Will continue listening on the Main thread")
 
+    def create_requester_request(client_message: ClientMessage) -> list[bytes]:
+        requests: list = [requester.create_response(client_message)]
+
+        # Output first 100 characters of all the requests in the list.
+        for request_raw_bytes_single in requests:
+            requester.logger.info(f"{request_raw_bytes_single[0: 100]}...")
+
+        return requests
+
     def create_responder_response(client_message: ClientMessage) -> list[bytes]:
         if client_message.action == 'service_connect':
             return responder.create_connect_response(client_message)
         else:
-            # Since we're in response mode, we'll record the request anyway, after the responder did its job.
-            # client_message.info = "In Server Response Mode"
-
-            # If it's the first cycle and the protocol is Websocket, then we'll create the HTTP Handshake
+            # If we're in offline mode, and it's the first cycle and the protocol is Websocket, then we'll create the HTTP Handshake
             # response automatically.
-            if protocol == 'Websocket' and client_receive_count == 1:
+            if config_static.MainConfig.offline and protocol == 'Websocket' and client_receive_count == 1:
                 responses: list = list()
                 responses.append(
                     websocket_parse.create_byte_http_response(client_message.request_raw_bytes))
@@ -380,12 +386,14 @@ def thread_worker_main(
                     # Now send it to requester/responder.
                     if side == 'Client':
                         # Send to requester.
-                        bytes_to_send_list: list[bytes] = [client_message.request_raw_bytes]
-                    else:
+                        bytes_to_send_list: list[bytes] = create_requester_request(client_message)
+                    elif side == 'Service':
                         bytes_to_send_list: list[bytes] = create_responder_response(client_message)
                         print_api(f"Got responses from responder, count: [{len(bytes_to_send_list)}]",
                                   logger=network_logger,
                                   logger_method='info')
+                    else:
+                        raise ValueError(f"Unknown side [{side}] of the socket: {receiving_socket}")
 
                     if is_socket_closed:
                         exception_or_close_in_receiving_thread = True
@@ -511,14 +519,15 @@ def thread_worker_main(
         reference_module=reference_module
     )
     parser = found_domain_module.parser_class_object
+    requester = found_domain_module.requester_class_object()
     responder = found_domain_module.responder_class_object()
     recorder = found_domain_module.recorder_class_object(record_path=config_static.LogRec.recordings_path)
 
     network_logger.info(f"Assigned Modules for [{server_name}]: "
         f"{parser.__name__}, "
+        f"{requester.__class__.__name__}, "
         f"{responder.__class__.__name__}, "
         f"{recorder.__class__.__name__}")
-
 
     # Initializing the client message object with current thread's data.
     # This is needed only to skip error alerts after 'try'.
