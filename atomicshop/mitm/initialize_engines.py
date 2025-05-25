@@ -114,7 +114,7 @@ def assign_class_by_domain(
                 # On the other hand if you want to find if partial string is
                 # in the list of strings: if any(a_string in x for x in matches_list):
                 # In this case list is the same and string: a_string = domain
-                if any(x in message_domain_name for x in function_module.domain_list):
+                if any(x in message_domain_name for x in function_module.domain_target_dict.keys()):
                     # Assigning module by current engine of the domain
                     module = function_module
 
