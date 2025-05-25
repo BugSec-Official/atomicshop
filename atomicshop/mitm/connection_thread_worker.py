@@ -181,7 +181,7 @@ def thread_worker_main(
         network_logger.info("Thread Finished. Will continue listening on the Main thread")
 
     def create_requester_request(client_message: ClientMessage) -> list[bytes]:
-        requests: list = [requester.create_response(client_message)]
+        requests: list = [requester.create_request(client_message)]
 
         # Output first 100 characters of all the requests in the list.
         for request_raw_bytes_single in requests:

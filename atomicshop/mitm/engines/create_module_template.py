@@ -80,7 +80,7 @@ class CreateModuleTemplate:
 
         config_lines_list.append('[engine]')
         config_lines_list.append(f'domains = [{", ".join(domains_with_quotes)}]')
-        config_lines_list.append('localhost = 0\n')
+        config_lines_list.append('localhost = 1\n')
         # config_lines_list.append(f'\n')
         config_lines_list.append('[mtls]')
         config_lines_list.append('# "subdomain.domain.com" = "file_name_in_current_dir.pem"\n')
