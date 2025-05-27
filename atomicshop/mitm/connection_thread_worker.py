@@ -341,7 +341,7 @@ def thread_worker_main(
                     client_message = client_connection_message
 
                     bytes_to_send_list: list[bytes] = create_responder_response(client_message)
-                    print_api(f"Got responses from responder, count: [{len(bytes_to_send_list)}]", logger=network_logger,
+                    print_api(f"Got responses from connect responder, count: [{len(bytes_to_send_list)}]", logger=network_logger,
                               logger_method='info')
                 else:
                     client_message.reinitialize_dynamic_vars()

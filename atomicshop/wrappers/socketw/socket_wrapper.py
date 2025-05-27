@@ -539,9 +539,14 @@ class SocketWrapper:
                     process_name = get_command_instance.get_process_name(print_kwargs={'logger': self.logger})
 
                 source_ip: str = client_address[0]
-                source_hostname: str = socket.gethostbyaddr(source_ip)[0]
                 engine_name: str = get_engine_name(domain_from_engine, self.engines_list)
                 dest_port: int = listening_socket_object.getsockname()[1]
+
+                # Not always there will be a hostname resolved by the IP address, so we will leave it empty if it fails.
+                try:
+                    source_hostname: str = socket.gethostbyaddr(source_ip)[0]
+                except socket.herror:
+                    source_hostname = ''
 
                 # If 'accept()' function worked well, SSL worked well, then 'client_socket' won't be empty.
                 if client_socket:
