@@ -867,7 +867,7 @@ def find(
             entries[entry_index]['_id'] = str(entry['_id'])
 
     if key_convert_to_dict and entries:
-        entries = _convert_key_values_to_objects(keys_convert_to_dict=key_convert_to_dict, returned_data=entries)
+        entries = convert_key_values_to_objects(keys_convert_to_dict=key_convert_to_dict, returned_data=entries)
 
     if close_client:
         mongo_client.close()
@@ -1398,7 +1398,7 @@ def get_stats_db_size(
     return stats['dataSize']
 
 
-def _convert_key_values_to_objects(
+def convert_key_values_to_objects(
         keys_convert_to_dict: list[str],
         returned_data: Union[dict, list]
 ) -> Union[dict, list]:
@@ -1424,9 +1424,9 @@ def _convert_key_values_to_objects(
                     # This is needed only to know the possible exception types.
                     raise
             else:
-                _convert_key_values_to_objects(keys_convert_to_dict, value)
+                convert_key_values_to_objects(keys_convert_to_dict, value)
     elif isinstance(returned_data, list):
         for i, item in enumerate(returned_data):
-            returned_data[i] = _convert_key_values_to_objects(keys_convert_to_dict, item)
+            returned_data[i] = convert_key_values_to_objects(keys_convert_to_dict, item)
 
     return returned_data
