@@ -66,8 +66,9 @@ class GoogleLLM:
             number_of_top_links: int = 2,
             number_of_characters_per_link: int = 15000,
             temperature: float = 0,
-            max_output_tokens: int = 4096,
-            model_name: str = 'gemini-2.0-flash-thinking-exp-01-21'
+            # max_output_tokens: int = 4096,
+            # model_name: str = 'gemini-2.0-flash-thinking-exp-01-21'
+            model_name: str = 'models/gemini-2.5-pro-preview-03-25'
     ) -> str:
         """
         Function to get the answer to a question by searching Google Custom Console API and processing the content using Gemini API.
@@ -121,7 +122,8 @@ class GoogleLLM:
                           f'{combined_content}')
 
         # Ask Gemini to process the combined content
-        gemini_response = self.ask_gemini(final_question, temperature, max_output_tokens, model_name)
+        # gemini_response = self.ask_gemini(final_question, temperature, max_output_tokens, model_name)
+        gemini_response = self.ask_gemini(final_question, temperature, model_name)
         return gemini_response
 
     @staticmethod
