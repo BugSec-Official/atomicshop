@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.1.5 - 29.05.2025
+  * networks, wrappers/pywin32w/wmis/msft_netipaddress - fixes and improvements.
 * 3.1.4 - 29.05.2025
   * web_apis/google_llm - fixes and improvements.
 * 3.1.3 - 28.05.2025

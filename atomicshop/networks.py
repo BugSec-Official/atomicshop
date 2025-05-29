@@ -432,15 +432,26 @@ def add_virtual_ips_to_default_adapter_by_current_setting(
             if dns_gateways is None:
                 dns_gateways = default_adapter_info['dns_gateways']
 
+            # We will get the default IP address of the machine.
+            default_ip_address: str = socket.gethostbyname(socket.gethostname())
+            # So we can make it the first IP in the list, but first remove it from the list.
+            _ = ips.pop(ips.index(default_ip_address))
+            # At this point we will copy the list of IPs that we will set the SkipAsSource flag for.
+            ips_for_skip_as_source = ips.copy()
+            # Add it back to the beginning of the list.
+            ips.insert(0, default_ip_address)
+
             win32_networkadapterconfiguration.set_static_ips(
                 default_network_adapter_config, ips=ips, masks=masks,
                 gateways=gateways, dns_gateways=dns_gateways,
                 availability_wait_seconds=availability_wait_seconds)
 
+            # If there were already virtual IPs assigned to the adapter and already were set SkipAsSource,
+            # we need to set SkipAsSource for them once again as well as for the new IPs.
             if set_virtual_ips_skip_as_source:
                 wmi_standard_cimv2_instance, _ = wmi_helpers.get_wmi_instance(
                     namespace='root\\StandardCimv2', wmi_instance=wmi_civ2_instance, locator=locator)
-                msft_netipaddress.set_skip_as_source(ips_to_assign, enable=True, wmi_instance=wmi_standard_cimv2_instance)
+                msft_netipaddress.set_skip_as_source(ips_for_skip_as_source, enable=True, wmi_instance=wmi_standard_cimv2_instance)
         else:
             # print("[!] No new IPs to assign.")
             pass

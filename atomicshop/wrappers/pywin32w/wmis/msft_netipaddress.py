@@ -1,3 +1,5 @@
+from typing import Optional
+
 from win32com.client import CDispatch
 
 from . import wmi_helpers
@@ -74,3 +76,38 @@ def set_skip_as_source(
             obj.SkipAsSource = enable
             obj.Put_()                          # commit the change
             print(f"[+] {ip}: SkipAsSource set to {enable}")
+
+
+def is_skip_as_source(
+        ip_address: str,
+        wmi_instance: CDispatch = None
+) -> Optional[bool]:
+    """
+    Check whether *ip_address* currently has SkipAsSource set.
+
+    Returns
+    -------
+    True        – the flag is enabled
+    False       – the flag is disabled
+    None        – no MSFT_NetIPAddress object matches the IP (not present)
+
+    Notes
+    -----
+    * Works for both IPv4/IPv6.
+    * Uses the same Win32 CIM class (root\\StandardCimv2 › MSFT_NetIPAddress).
+    * You can pass an existing `wmi_instance` to avoid reconnecting in tight loops.
+    """
+    # Get a WMI connection if the caller didn’t hand us one
+    if not wmi_instance:
+        wmi_instance, _ = wmi_helpers.get_wmi_instance(namespace='root\\StandardCimv2')
+
+    query = f"SELECT SkipAsSource FROM MSFT_NetIPAddress WHERE IPAddress='{ip_address}'"
+    matches = wmi_instance.ExecQuery(query)
+
+    if not matches:                       # address not configured on this host/NIC
+        return None
+
+    # There should be only one entry per literal IP, but handle duplicates sanely
+    # Return True if *any* matching record has SkipAsSource = True,
+    # otherwise False (all are False).
+    return any(bool(obj.SkipAsSource) for obj in matches)
