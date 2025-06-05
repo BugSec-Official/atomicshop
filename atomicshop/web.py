@@ -157,6 +157,7 @@ def download(
         target_directory: str = None,
         file_name: str = None,
         headers: dict = None,
+        use_certifi_ca_repository: bool = False,
         **kwargs
 ) -> str:
     """
@@ -168,6 +169,8 @@ def download(
     :param file_name: string, file name (example: file.zip) that you want the downloaded file to be saved as.
         If not specified, the default filename from 'file_url' will be used.
     :param headers: dictionary, HTTP headers to use when downloading the file.
+    :param use_certifi_ca_repository: boolean, if True, the certifi CA store will be used for SSL context
+        instead of the system's default CA store.
     :return: string, full file path of downloaded file. If download failed, 'None' will be returned.
     """
 
@@ -196,8 +199,15 @@ def download(
     print_api.print_api(f'Downloading: {file_url}', **kwargs)
     print_api.print_api(f'To: {file_path}', **kwargs)
 
-    # Open the URL for data gathering with SSL context with default CA store of the system.
-    ssl_context = ssl.create_default_context()
+    # Open the URL for data gathering with SSL context.
+    if not use_certifi_ca_repository:
+        # Create a default SSL context using the system's CA store.
+        ssl_context = ssl.create_default_context()
+    else:
+        # Create a default SSL context using the certifi CA store.
+        # This is useful for environments where the system's CA store is not available or not trusted.
+        # 'certifi.where()' returns the path to the certifi CA bundle.
+        ssl_context = ssl.create_default_context(cafile=certifi.where())
 
     # In order to use 'urllib.request', it is not enough to 'import urllib', you need to 'import urllib.request'.
     # Build a Request object with headers if provided.
