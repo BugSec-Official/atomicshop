@@ -3,7 +3,7 @@ setlocal enabledelayedexpansion
 
 cd /d "%~dp0"
 cd "helpers"
-call install_python_as_admin.cmd 3.12
+call install_python_as_admin.cmd 3.12.10
 
 rem Read the contents of the file into a variable
 for /f "delims=" %%i in (python_path.txt) do (
