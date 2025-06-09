@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.1.7 - 09.06.2025
+  * pyproject.toml - dependencies updated.
 * 3.1.6 - 05.06.2025
   * web, wrappers/pycharmw/win - fixes and improvements.
 * 3.1.5 - 29.05.2025

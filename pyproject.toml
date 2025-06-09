@@ -68,7 +68,7 @@ dependencies = [
     "playwright-stealth",
     "protobuf",
     "psutil",
-    "py7zr",
+    "py7zr==0.22.0",
     "pyautogui",
 	"pymongo",
     "pyopenssl",
