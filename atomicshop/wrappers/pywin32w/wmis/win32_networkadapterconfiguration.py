@@ -3,6 +3,7 @@ import socket
 import time
 
 from win32com.client import CDispatch
+import pywintypes
 
 from . import wmi_helpers, win32networkadapter
 from ...psutilw import psutil_networks
@@ -137,7 +138,18 @@ def set_static_ips(
     if not masks or len(ips) != len(masks):
         raise ValueError("ipv4 and masks must be lists of equal length")
 
-    in_params = network_config.Methods_("EnableStatic").InParameters.SpawnInstance_()
+    # # refresh the instance – state may have changed after the previous call
+    # network_config = network_config.Path_.GetObject_()
+
+    try:
+        in_params = network_config.Methods_("EnableStatic").InParameters.SpawnInstance_()
+    except pywintypes.com_error as e:
+        if e.excepinfo[1] == 'SWbemMethodSet' and 'Not found' in e.excepinfo[2]:
+            raise RuntimeError(f"Probably the adapter is already set to static non-DHCP.\n"
+                               f"Failed to get [EnableStatic] method parameters: {e}\n")
+        else:
+            raise
+
     in_params.IPAddress  = ips
     in_params.SubnetMask = masks
 
