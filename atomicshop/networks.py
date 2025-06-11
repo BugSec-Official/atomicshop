@@ -273,6 +273,9 @@ def generate_unused_ipv4_addresses_from_ip(
     if not skip_ips:
         skip_ips = []
 
+    # Remove duplicate IPs from the skip_ips list, loses order.
+    skip_ips = list(set(skip_ips))
+
     # Add the IP address to the list of IPs to skip.
     if ip_address not in skip_ips:
         skip_ips = [ip_address] + skip_ips
@@ -356,6 +359,9 @@ def add_virtual_ips_to_default_adapter_by_current_setting(
     will be generated from it. Unused addresses decided by pinging them.
     Same for the subnet mask.
 
+    While generating the IPs, the function will skip the already existing IPs in the adapter, like default gateway
+    and DNS servers.
+
     :param number_of_ips: int, number of IPs to generate in addition to the IPv4s that already exist in the adapter.
         Or you add the IPs and masks to the adapter with the parameters virtual_ipv4s_to_add and virtual_ipv4_masks_to_add.
 
@@ -409,7 +415,7 @@ def add_virtual_ips_to_default_adapter_by_current_setting(
             ip_address=current_ipv4s[0],
             mask=current_ipv4_masks[0],
             number_of_ips=number_of_ips,
-            skip_ips=current_ipv4s
+            skip_ips=current_ipv4s + default_adapter_info['default_gateways'] + default_adapter_info['dns_gateways']
         )
     elif virtual_ipv4s_to_add and virtual_ipv4_masks_to_add:
         ips_to_assign = virtual_ipv4s_to_add

@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.1.8 - 11.06.2025
+  * networks, wrappers/pywin32w/wmis - fixes.
 * 3.1.7 - 09.06.2025
   * pyproject.toml - dependencies updated.
 * 3.1.6 - 05.06.2025
