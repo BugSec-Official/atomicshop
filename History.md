@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.1.9 - 12.06.2025
+  * dns, wrappers/winregw/winreg_network, wrappers/netshw - fixes and improvements.
 * 3.1.8 - 11.06.2025
   * networks, wrappers/pywin32w/wmis - fixes.
 * 3.1.7 - 09.06.2025
