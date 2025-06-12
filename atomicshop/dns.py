@@ -1,3 +1,4 @@
+import socket
 import argparse
 
 # noinspection PyPackageRequirements
@@ -6,7 +7,7 @@ import dns.resolver
 from . import print_api
 from .permissions import permissions
 from .wrappers.pywin32w.wmis import win32networkadapter
-from .wrappers.winregw import winreg_network
+from .wrappers import netshw
 
 
 # Defining Dictionary of Numeric to String DNS Query Types.
@@ -73,7 +74,16 @@ def get_default_dns_gateway() -> tuple[bool, list[str]]:
     :return: tuple(is dynamic boolean, list of DNS server IPv4s).
     """
 
-    is_dynamic, dns_servers = winreg_network.get_default_dns_gateway()
+    interfaces_with_dns_settings: list[dict] = netshw.get_netsh_ipv4()
+
+    default_interface_ipv4 = socket.gethostbyname(socket.gethostname())
+    is_dynamic, dns_servers = None, None
+    for interface in interfaces_with_dns_settings:
+        if default_interface_ipv4 in interface['ip_addresses']:
+            is_dynamic = interface['dns_mode']
+            dns_servers = interface['dns_servers']
+            break
+
     return is_dynamic, dns_servers
 
 

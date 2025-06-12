@@ -137,8 +137,13 @@ def get_network_connections_details(get_enum_info: bool = True) -> dict:
     return adapter_details
 
 
-def get_default_dns_gateway() -> tuple[bool, list[str]]:
+def _get_default_dns_gateway() -> tuple[bool, list[str]]:
     """
+    NOTICE: This stopped working from the last Windows update on 11.06.2025.
+    They moved it to 'ProfileNameServer', anyway Since Windows 8 the recommended API has been the WMI
+    NetTCPIP CIM provider (MSFT_DNSClientServerAddress) - didn't test it though.
+    Just moved to netsh wrapping for now.
+
     Get the default DNS gateway from the Windows registry.
 
     :return: tuple(is dynamic boolean, list of DNS server IPv4s).
