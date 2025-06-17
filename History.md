@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.1.10 - 17.06.2025
+  * wrappers/githubw - improvements.
 * 3.1.9 - 12.06.2025
   * dns, wrappers/winregw/winreg_network, wrappers/netshw - fixes and improvements.
 * 3.1.8 - 11.06.2025
