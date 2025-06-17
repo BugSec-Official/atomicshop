@@ -389,12 +389,12 @@ class GitHubWrapper:
         """
         return self.get_the_latest_release_json()['tag_name']
 
-    def get_latest_commit_comment(self):
+    def get_latest_commit(self) -> dict:
         """
-        This function retrieves the commit message (comment) of the latest commit on the specified branch.
+        This function retrieves the latest commit on the specified branch.
         It uses the GitHub API endpoint for commits.
 
-        :return: str, the commit message of the latest commit.
+        :return: dict, the latest commit data.
         """
 
         headers: dict = self._get_headers()
@@ -413,9 +413,22 @@ class GitHubWrapper:
 
         commits = response.json()
         if not commits:
-            return None
+            return {}
 
-        commit_message = commits[0].get("commit", {}).get("message", "")
+        latest_commit = commits[0]
+        return latest_commit
+
+    def get_latest_commit_message(self):
+        """
+        This function retrieves the commit message (comment) of the latest commit on the specified branch.
+        It uses the GitHub API endpoint for commits.
+
+        :return: str, the commit message of the latest commit.
+        """
+
+        latest_commit: dict = self.get_latest_commit()
+
+        commit_message = latest_commit.get("commit", {}).get("message", "")
         return commit_message
 
 
@@ -432,7 +445,7 @@ def parse_github_args():
     parser.add_argument(
         '-p', '--path', type=str, default=None,
         help="The path to the file/folder inside the repo that we'll do certain actions on.\n"
-             "Available actions: get_latest_commit_comment, download_path_from_branch.")
+             "Available actions: get_latest_commit_message, download_path_from_branch.")
     parser.add_argument(
         '-t', '--target_directory', type=str, default=None,
         help='The target directory to download the file/folder.'
@@ -441,8 +454,11 @@ def parse_github_args():
         '--pat', type=str, default=None,
         help='The personal access token to the repo.')
     parser.add_argument(
-        '-glcc', '--get_latest_commit_comment', action='store_true', default=False,
-        help='Sets if the latest commit comment will be printed.')
+        '-glcm', '--get_latest_commit_message', action='store_true', default=False,
+        help='Sets if the latest commit message comment will be printed.')
+    parser.add_argument(
+        '-glcj', '--get_latest_commit_json', action='store_true', default=False,
+        help='Sets if the latest commit json will be printed.')
     parser.add_argument(
         '-db', '--download_branch', action='store_true', default=False,
         help='Sets if the branch will be downloaded. In conjunction with path, only the path will be downloaded.')
@@ -456,7 +472,8 @@ def github_wrapper_main(
         path: str = None,
         target_directory: str = None,
         pat: str = None,
-        get_latest_commit_comment: bool = False,
+        get_latest_commit_json: bool = False,
+        get_latest_commit_message: bool = False,
         download_branch: bool = False
 ):
     """
@@ -467,7 +484,8 @@ def github_wrapper_main(
     :param path: str, the path to the file/folder for which the commit message should be retrieved.
     :param target_directory: str, the target directory to download the file/folder.
     :param pat: str, the personal access token to the repo.
-    :param get_latest_commit_comment: bool, sets if the latest commit comment will be printed.
+    :param get_latest_commit_json: bool, sets if the latest commit json will be printed.
+    :param get_latest_commit_message: bool, sets if the latest commit message comment will be printed.
     :param download_branch: bool, sets if the branch will be downloaded. In conjunction with path, only the path will be
         downloaded.
     :return:
@@ -475,9 +493,14 @@ def github_wrapper_main(
 
     git_wrapper = GitHubWrapper(repo_url=repo_url, branch=branch, path=path, pat=pat)
 
-    if get_latest_commit_comment:
-        commit_comment = git_wrapper.get_latest_commit_comment()
+    if get_latest_commit_message:
+        commit_comment = git_wrapper.get_latest_commit_message()
         print_api(commit_comment)
+        return 0
+
+    if get_latest_commit_json:
+        latest_commit_json = git_wrapper.get_latest_commit()
+        print_api(latest_commit_json)
         return 0
 
     if download_branch:
@@ -496,6 +519,7 @@ def github_wrapper_main_with_args():
         path=args.path,
         target_directory=args.target_directory,
         pat=args.pat,
-        get_latest_commit_comment=args.get_latest_commit_comment,
+        get_latest_commit_json=args.get_latest_commit_json,
+        get_latest_commit_message=args.get_latest_commit_message,
         download_branch=args.download_branch
     )
