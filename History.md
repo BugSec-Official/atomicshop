@@ -1,6 +1,10 @@
 <!-- HISTORY -->
 ## History
 
+* 3.1.12 - 19.06.2025
+  * git corrections
+* 3.1.11 - 19.06.2025
+  * dependencies update.
 * 3.1.10 - 17.06.2025
   * wrappers/githubw - improvements.
 * 3.1.9 - 12.06.2025

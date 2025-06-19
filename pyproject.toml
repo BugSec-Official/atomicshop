@@ -65,7 +65,7 @@ dependencies = [
     "paramiko",
     "pefile",
     "playwright",
-    "playwright-stealth",
+    "playwright-stealth==1.0.6",
     "protobuf",
     "psutil",
     "py7zr==0.22.0",
