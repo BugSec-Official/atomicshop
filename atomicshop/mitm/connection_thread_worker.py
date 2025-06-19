@@ -353,15 +353,27 @@ def thread_worker_main(
                         server_receive_count += 1
                         current_count = server_receive_count
 
+                    # Getting current time of message received, either from client or service.
+                    client_message.timestamp = datetime.now()
+
+                    # # No need to receive on service socket if we're in offline mode, because there is no service to connect to.
+                    # if config_static.MainConfig.offline and side == 'Service':
+                    #     print_api("Offline Mode, skipping receiving on service socket.", logger=network_logger,
+                    #               logger_method='info')
+                    # else:
+
+                    # TODO
+                    # if config_static.MainConfig.offline:
+                    #     if side == 'Client':
+                    #         # If we're in offline mode, then we'll use the offline queue to put the data for the service socket.
+                    #         offline_client_service_queue.put()
+
                     network_logger.info(
                         f"Initializing Receiver for {side} cycle: {str(current_count)}")
 
                     # Getting message from the client over the socket using specific class.
                     received_raw_data, is_socket_closed, error_message = receiver.Receiver(
                         ssl_socket=receiving_socket, logger=network_logger).receive()
-
-                    # Getting current time of message received, either from client or service.
-                    client_message.timestamp = datetime.now()
 
                     # In case of client socket, we'll process the raw data specifically for the client.
                     if side == 'Client':
@@ -383,6 +395,11 @@ def thread_worker_main(
                     # the close on the opposite socket.
                     record_and_statistics_write(client_message)
 
+                    if is_socket_closed:
+                        exception_or_close_in_receiving_thread = True
+                        finish_thread()
+                        return
+
                     # Now send it to requester/responder.
                     if side == 'Client':
                         # Send to requester.
@@ -395,10 +412,6 @@ def thread_worker_main(
                     else:
                         raise ValueError(f"Unknown side [{side}] of the socket: {receiving_socket}")
 
-                    if is_socket_closed:
-                        exception_or_close_in_receiving_thread = True
-                        finish_thread()
-                        return
 
                 # If nothing was passed from the responder, and the client message is the connection message, then we'll skip to the next iteration.
                 if not bytes_to_send_list and client_connection_message:
@@ -510,6 +523,9 @@ def thread_worker_main(
     # # This is Server UnMasked Frame Parser.
     # websocket_unmasked_frame_parser = websocket_parse.WebsocketFrameParser()
     websocket_frame_parser = websocket_parse.WebsocketFrameParser()
+
+    # Offline queue between client and service threads.
+    offline_client_service_queue: queue.Queue = queue.Queue()
 
     # Loading parser by domain, if there is no parser for current domain - general reference parser is loaded.
     # These should be outside any loop and initialized only once entering the thread.
