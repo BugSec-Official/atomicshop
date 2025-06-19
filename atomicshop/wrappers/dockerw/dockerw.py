@@ -1,3 +1,5 @@
+import threading
+
 import docker
 from docker.models.containers import Container
 from docker import DockerClient
@@ -177,14 +179,31 @@ def stop_remove_containers_by_image_name(image_name: str):
     :param image_name: str, the name of the image.
     :return:
     """
+
+    def stop_remove_containers(container_instance: Container):
+        """
+        Stop and remove a container instance.
+        :param container_instance: Container, the docker container object.
+        """
+        if container_instance.status == "running":
+            print_api(f"Stopping container: [{container_instance.name}]. Short ID: [{container_instance.short_id}]")
+            container_instance.stop()
+        print_api(f"Removing container: [{container_instance.name}]. Short ID: [{container_instance.short_id}]")
+        container_instance.remove()
+        print_api(f"Container removed: [{container_instance.name}]. Short ID: [{container_instance.short_id}]", color='green')
+
+
     client = docker.from_env()
     all_containers = client.containers.list(all=True)
+
+    containers_to_remove: list[Container] = []
     for container in all_containers:
         if any(image_name in tag for tag in container.image.tags):
-            if container.status == "running":
-                print_api(f"Stopping container: [{container.name}]. Short ID: [{container.short_id}]")
-                container.stop()
-            container.remove()
+            containers_to_remove.append(container)
+
+    for removing_container in containers_to_remove:
+        threading.Thread(target=stop_remove_containers, args=(removing_container,), daemon=True).start()
+
     client.close()
 
 
