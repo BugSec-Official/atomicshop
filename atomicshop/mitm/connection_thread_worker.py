@@ -362,12 +362,6 @@ def thread_worker_main(
                     #               logger_method='info')
                     # else:
 
-                    # TODO
-                    # if config_static.MainConfig.offline:
-                    #     if side == 'Client':
-                    #         # If we're in offline mode, then we'll use the offline queue to put the data for the service socket.
-                    #         offline_client_service_queue.put()
-
                     network_logger.info(
                         f"Initializing Receiver for {side} cycle: {str(current_count)}")
 
@@ -404,6 +398,14 @@ def thread_worker_main(
                     if side == 'Client':
                         # Send to requester.
                         bytes_to_send_list: list[bytes] = create_requester_request(client_message)
+
+                        # If we're in offline mode, then we'll put the request to the responder right away.
+                        if config_static.MainConfig.offline:
+                            print_api("Offline Mode, sending to responder directly.", logger=network_logger,
+                                      logger_method='info')
+                            process_client_raw_data(bytes_to_send_list[0], error_message, client_message)
+                            client_message.action = 'client_responder'
+                            bytes_to_send_list = create_responder_response(client_message)
                     elif side == 'Service':
                         bytes_to_send_list: list[bytes] = create_responder_response(client_message)
                         print_api(f"Got responses from responder, count: [{len(bytes_to_send_list)}]",
@@ -430,9 +432,16 @@ def thread_worker_main(
 
                     record_and_statistics_write(client_message)
 
-                    error_on_send: str = sender.Sender(
-                        ssl_socket=sending_socket, class_message=bytes_to_send_single,
-                        logger=network_logger).send()
+                    # If we're in offline mode, it means we're in the client thread, and we'll send the
+                    # bytes back to the client socket.
+                    if config_static.MainConfig.offline:
+                        error_on_send: str = sender.Sender(
+                            ssl_socket=receiving_socket, class_message=bytes_to_send_single,
+                            logger=network_logger).send()
+                    else:
+                        error_on_send: str = sender.Sender(
+                            ssl_socket=sending_socket, class_message=bytes_to_send_single,
+                            logger=network_logger).send()
 
                     if error_on_send:
                         client_message.reinitialize_dynamic_vars()
@@ -599,20 +608,25 @@ def thread_worker_main(
             client_thread = threading.Thread(
                 target=receive_send_start,
                 args=(client_socket, service_socket_instance, client_exception_queue, None),
-                name=f"Thread-{thread_id}-Client")
-            client_thread.daemon = True
+                name=f"Thread-{thread_id}-Client",
+                daemon=True)
             client_thread.start()
 
             service_exception_queue: queue.Queue = queue.Queue()
-            service_thread = threading.Thread(
-                target=receive_send_start,
-                args=(service_socket_instance, client_socket, service_exception_queue, client_message_connection),
-                name=f"Thread-{thread_id}-Service")
-            service_thread.daemon = True
-            service_thread.start()
+            if not config_static.MainConfig.offline:
+                service_thread = threading.Thread(
+                    target=receive_send_start,
+                    args=(service_socket_instance, client_socket, service_exception_queue, client_message_connection),
+                    name=f"Thread-{thread_id}-Service",
+                    daemon=True)
+                service_thread.start()
 
             client_thread.join()
-            service_thread.join()
+            # If we're in offline mode, then there is no service thread.
+            if not config_static.MainConfig.offline:
+                # If we're not in offline mode, then we'll wait for the service thread to finish.
+                # noinspection PyUnboundLocalVariable
+                service_thread.join()
 
             # If there was an exception in any of the threads, then we'll raise it here.
             if not client_exception_queue.empty():

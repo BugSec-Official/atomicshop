@@ -190,7 +190,7 @@ def stop_remove_containers_by_image_name(image_name: str):
             container_instance.stop()
         print_api(f"Removing container: [{container_instance.name}]. Short ID: [{container_instance.short_id}]")
         container_instance.remove()
-        print_api(f"Container removed: [{container_instance.name}]. Short ID: [{container_instance.short_id}]", color='green')
+        print_api(f"Container removed: [{container_instance.name}]. Short ID: [{container_instance.short_id}]", color='blue')
 
 
     client = docker.from_env()
