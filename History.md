@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.2.3 - 25.06.2025
+  * mitm, wrappers/pywin32w/wmis/wmi_helpers - fixes and improvements.
 * 3.2.2 - 25.06.2025
   * wrappers/socketw/dns_server - fixes.
 * 3.2.1 - 25.06.2025
