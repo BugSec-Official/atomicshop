@@ -902,7 +902,11 @@ def get_target_ip_from_engine(
     """
     # Iterate through the list of engines.
     for domain, target_ip_port in engine_domain_target_dict.items():
-        if domain in target_domain:
+        # If the domain is exactly the same as the target domain,
+        if domain == target_domain:
+            # Get the target IP address from the engine.
+            return target_ip_port['ip']
+        elif domain in target_domain:
             # Get the target IP address from the engine.
             return target_ip_port['ip']
 
