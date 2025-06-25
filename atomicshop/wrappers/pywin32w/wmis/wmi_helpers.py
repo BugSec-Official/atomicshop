@@ -143,7 +143,7 @@ def call_method(
     """
 
     # Assign the single value to a tuple if it is not already a tuple or dict and not an EmptyValue.
-    if not isinstance(value, EmptyValue) and not (isinstance(value, tuple) and isinstance(value, dict)):
+    if not isinstance(value, (EmptyValue, tuple, dict)):
         value = (value,)
 
     # Get the method instance out of the WMI object.

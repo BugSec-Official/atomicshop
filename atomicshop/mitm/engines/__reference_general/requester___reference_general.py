@@ -2,6 +2,7 @@
 from atomicshop.mitm.engines.__parent.requester___parent import RequesterParent
 from atomicshop.mitm.shared_functions import create_custom_logger
 from atomicshop.mitm.message import ClientMessage
+from atomicshop.mitm import config_static
 
 """
 import time

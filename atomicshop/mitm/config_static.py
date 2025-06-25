@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from . import import_config
-
+from .message import ClientMessage
 
 # CONFIG = None
 LIST_OF_BOOLEANS: list = [
@@ -173,14 +173,19 @@ def load_config(config_toml_file_path: str):
     return result
 
 
-# def get_listening_addresses() -> list[str]:
-#     """
-#     Get the list of listening addresses from the TCPServer configuration.
-#     If no_engines_usage_to_listen_addresses_enable is True, return the no_engines_listening_address_list.
-#     Otherwise, return an empty list.
-#     """
-#
-#     return ENGINES_LIST
+def get_listening_addresses(client_message: ClientMessage) -> dict:
+    """
+    Get the list of listening addresses from the TCPServer configuration.
+    If no_engines_usage_to_listen_addresses_enable is True, return the no_engines_listening_address_list.
+    Otherwise, return an empty list.
+    """
+
+    for engine in ENGINES_LIST:
+        if engine.engine_name == client_message.engine_name:
+            return {
+                'domain_target_dict': engine.domain_target_dict,
+                'port_target_dict': engine.port_target_dict
+            }
 
 
 # ============ Server Tester Specific ===============

@@ -82,7 +82,7 @@ class CreateModuleTemplate:
         config_lines_list.append(f'domains = [{", ".join(domains_with_quotes)}]')
         config_lines_list.append('localhost = 1\n')
         config_lines_list.append('[on_port_connect]')
-        config_lines_list.append('#5000 = "31.31.31.31"')
+        config_lines_list.append('#5000 = "31.31.31.31:443"')
         config_lines_list.append('#5000 = "C:\\test\\address.txt"\n')
         config_lines_list.append('[mtls]')
         config_lines_list.append('# "subdomain.domain.com" = "file_name_in_current_dir.pem"\n')
