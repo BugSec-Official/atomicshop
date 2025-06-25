@@ -4,14 +4,13 @@ import queue
 import socket
 
 from ..wrappers.socketw import receiver, sender, socket_client, base
-from .. import websocket_parse
+from .. import websocket_parse, ip_addresses
 from ..http_parse import HTTPRequestParse, HTTPResponseParse
 from ..basics import threads, tracebacks
 from ..print_api import print_api
 
 from .message import ClientMessage
-from .initialize_engines import assign_class_by_domain
-from . import config_static
+from . import config_static, initialize_engines
 
 
 def thread_worker_main(
@@ -218,30 +217,45 @@ def thread_worker_main(
                 custom_client_pem_certificate_path = pem_file_path
                 break
 
-        # If we're on localhost, then use external services list in order to resolve the domain:
-        # config['tcp']['forwarding_dns_service_ipv4_list___only_for_localhost']
-        if client_message.client_ip in base.THIS_DEVICE_IP_LIST:
+        # Check if the destination service is an ip address or a domain name.
+        if ip_addresses.is_ip_address(client_message.server_name, ip_type='ipv4'):
+            # If it's an ip address, connect to the ip address directly.
             service_client_instance = socket_client.SocketClient(
                 service_name=client_message.server_name,
+                connection_ip=client_message.server_name,
                 service_port=client_message.destination_port,
                 tls=is_tls,
-                dns_servers_list=[config_static.DNSServer.forwarding_dns_service_ipv4],
                 logger=network_logger,
                 custom_pem_client_certificate_file_path=custom_client_pem_certificate_path,
                 enable_sslkeylogfile_env_to_client_ssl_context=(
                     config_static.Certificates.enable_sslkeylogfile_env_to_client_ssl_context)
             )
-        # If we're not on localhost, then connect to domain directly.
+        # If it's a domain name, then we'll use the DNS to resolve it.
         else:
-            service_client_instance = socket_client.SocketClient(
-                service_name=client_message.server_name,
-                service_port=client_message.destination_port,
-                tls=is_tls,
-                logger=network_logger,
-                custom_pem_client_certificate_file_path=custom_client_pem_certificate_path,
-                enable_sslkeylogfile_env_to_client_ssl_context=(
-                    config_static.Certificates.enable_sslkeylogfile_env_to_client_ssl_context)
-            )
+            # If we're on localhost, then use external services list in order to resolve the domain:
+            # config['tcp']['forwarding_dns_service_ipv4_list___only_for_localhost']
+            if client_message.client_ip in base.THIS_DEVICE_IP_LIST:
+                service_client_instance = socket_client.SocketClient(
+                    service_name=client_message.server_name,
+                    service_port=client_message.destination_port,
+                    tls=is_tls,
+                    dns_servers_list=[config_static.DNSServer.forwarding_dns_service_ipv4],
+                    logger=network_logger,
+                    custom_pem_client_certificate_file_path=custom_client_pem_certificate_path,
+                    enable_sslkeylogfile_env_to_client_ssl_context=(
+                        config_static.Certificates.enable_sslkeylogfile_env_to_client_ssl_context)
+                )
+            # If we're not on localhost, then connect to domain directly.
+            else:
+                service_client_instance = socket_client.SocketClient(
+                    service_name=client_message.server_name,
+                    service_port=client_message.destination_port,
+                    tls=is_tls,
+                    logger=network_logger,
+                    custom_pem_client_certificate_file_path=custom_client_pem_certificate_path,
+                    enable_sslkeylogfile_env_to_client_ssl_context=(
+                        config_static.Certificates.enable_sslkeylogfile_env_to_client_ssl_context)
+                )
 
         return service_client_instance
 
@@ -336,6 +350,7 @@ def thread_worker_main(
                 raise ValueError(f"Unknown side of the socket: {receiving_socket}")
 
             while True:
+                is_socket_closed: bool = False
                 # pass the socket connect to responder.
                 if side == 'Service' and client_connection_message:
                     client_message = client_connection_message
@@ -343,6 +358,8 @@ def thread_worker_main(
                     bytes_to_send_list: list[bytes] = create_responder_response(client_message)
                     print_api(f"Got responses from connect responder, count: [{len(bytes_to_send_list)}]", logger=network_logger,
                               logger_method='info')
+
+                    received_raw_data = None
                 else:
                     client_message.reinitialize_dynamic_vars()
 
@@ -389,10 +406,10 @@ def thread_worker_main(
                     # the close on the opposite socket.
                     record_and_statistics_write(client_message)
 
-                    if is_socket_closed:
-                        exception_or_close_in_receiving_thread = True
-                        finish_thread()
-                        return
+                    # if is_socket_closed:
+                    #     exception_or_close_in_receiving_thread = True
+                    #     finish_thread()
+                    #     return
 
                     # Now send it to requester/responder.
                     if side == 'Client':
@@ -404,7 +421,6 @@ def thread_worker_main(
                             print_api("Offline Mode, sending to responder directly.", logger=network_logger,
                                       logger_method='info')
                             process_client_raw_data(bytes_to_send_list[0], error_message, client_message)
-                            client_message.action = 'client_responder'
                             bytes_to_send_list = create_responder_response(client_message)
                     elif side == 'Service':
                         bytes_to_send_list: list[bytes] = create_responder_response(client_message)
@@ -420,7 +436,8 @@ def thread_worker_main(
                     client_connection_message = None
                     continue
 
-                is_socket_closed: bool = False
+                # is_socket_closed: bool = False
+                error_on_send: str = str()
                 for bytes_to_send_single in bytes_to_send_list:
                     client_message.reinitialize_dynamic_vars()
                     client_message.timestamp = datetime.now()
@@ -430,7 +447,17 @@ def thread_worker_main(
                     else:
                         client_message.response_raw_bytes = bytes_to_send_single
 
-                    record_and_statistics_write(client_message)
+                    # This records the requester or responder output, only if it is not the same as the original
+                    # message.
+                    if bytes_to_send_single != received_raw_data:
+                        if side == 'Client':
+                            client_message.action = 'client_requester'
+
+                            if config_static.MainConfig.offline:
+                                client_message.action = 'client_responder_offline'
+                        elif side == 'Service':
+                            client_message.action = 'service_responder'
+                        record_and_statistics_write(client_message)
 
                     # If we're in offline mode, it means we're in the client thread, and we'll send the
                     # bytes back to the client socket.
@@ -454,11 +481,11 @@ def thread_worker_main(
 
                         record_and_statistics_write(client_message)
 
-                    # If the socket was closed on message receive, then we'll break the loop only after send.
-                    if is_socket_closed or error_on_send:
-                        exception_or_close_in_receiving_thread = True
-                        finish_thread()
-                        return
+                # If the socket was closed on message receive, then we'll break the loop only after send.
+                if is_socket_closed or error_on_send:
+                    exception_or_close_in_receiving_thread = True
+                    finish_thread()
+                    return
 
                 # For next iteration to start in case this iteration was responsible to process connection message, we need to set it to None.
                 client_connection_message = None
@@ -533,12 +560,9 @@ def thread_worker_main(
     # websocket_unmasked_frame_parser = websocket_parse.WebsocketFrameParser()
     websocket_frame_parser = websocket_parse.WebsocketFrameParser()
 
-    # Offline queue between client and service threads.
-    offline_client_service_queue: queue.Queue = queue.Queue()
-
     # Loading parser by domain, if there is no parser for current domain - general reference parser is loaded.
     # These should be outside any loop and initialized only once entering the thread.
-    found_domain_module = assign_class_by_domain(
+    found_domain_module = initialize_engines.assign_class_by_domain(
         engines_list=engines_list,
         message_domain_name=server_name,
         reference_module=reference_module
@@ -565,8 +589,15 @@ def thread_worker_main(
     try:
         engine_name: str = recorder.engine_name
         client_ip, source_port = client_socket.getpeername()
-        client_name = socket.gethostbyaddr(client_ip)[0]
-        destination_port = client_socket.getsockname()[1]
+        client_name: str = socket.gethostbyaddr(client_ip)[0]
+        destination_port: int = client_socket.getsockname()[1]
+        destination_port_str: str = str(destination_port)
+
+        # If the destination port is in the on_port_connect dictionary, then we'll get the port from there.
+        if destination_port_str in found_domain_module.on_port_connect:
+            on_port_connect_value = found_domain_module.on_port_connect[destination_port_str]
+            _, destination_port_str = initialize_engines.get_ipv4_from_engine_on_connect_port(on_port_connect_value)
+            destination_port: int = int(destination_port_str)
 
         if config_static.MainConfig.offline:
             # If in offline mode, then we'll get the TCP server's input address.

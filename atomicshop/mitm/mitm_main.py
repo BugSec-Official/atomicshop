@@ -196,6 +196,11 @@ def startup_output(system_logger, script_version: str):
         for domain, ip_port in engine.domain_target_dict.items():
             dns_targets.append(ip_port['ip'])
         print_api.print_api(f"[*] DNS Targets: {dns_targets}", logger=system_logger)
+
+        if engine.on_port_connect:
+            print_api.print_api(f"[*] Connect Ports to IPs: {list(engine.on_port_connect.values())}", logger=system_logger)
+            print_api.print_api(f"[*] Connect Ports to IPs Targets: {list(engine.port_target_dict.values())}", logger=system_logger)
+
         # print_api.print_api(f"[*] TCP Listening Interfaces: {engine.tcp_listening_address_list}", logger=system_logger)
 
     if config_static.DNSServer.enable:
@@ -235,13 +240,15 @@ def get_ipv4s_for_tcp_server():
 
     # Create a list of all the domains in all the engines.
     domains_to_create_ips_for: list[str] = list()
+    ports_to_create_ips_for: list[str] = list()
     for engine in config_static.ENGINES_LIST:
         domains_to_create_ips_for += list(engine.domain_target_dict.keys())
+        ports_to_create_ips_for += list(engine.on_port_connect.keys())
 
     engine_ips: list[str] = list()
     # Check if we need the localhost ips (12.0.0.1) or external local ips (192.168.0.100).
     if config_static.ENGINES_LIST[0].is_localhost:
-        create_ips: int = len(domains_to_create_ips_for)
+        create_ips: int = len(domains_to_create_ips_for) + len(ports_to_create_ips_for)
 
         # Generate the list of localhost ips.
         for i in range(create_ips):
@@ -288,7 +295,10 @@ def get_ipv4s_for_tcp_server():
             # If the domain is in the list of domains to create IPs for, add the IP to the engine.
             if domain in domains_to_create_ips_for:
                 engine.domain_target_dict[domain]['ip'] = engine_ips.pop(0)
-
+        for port in engine.on_port_connect.keys():
+            # If the port is in the list of ports to create IPs for, add the IP to the engine.
+            if port in ports_to_create_ips_for:
+                engine.port_target_dict[port]['ip'] = engine_ips.pop(0)
 
 def mitm_server(config_file_path: str, script_version: str):
     on_exit.register_exit_handler(exit_cleanup, at_exit=False, kill_signal=False)

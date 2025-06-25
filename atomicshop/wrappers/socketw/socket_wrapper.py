@@ -1,3 +1,4 @@
+import os.path
 import threading
 import select
 from typing import Literal, Union
@@ -427,8 +428,11 @@ class SocketWrapper:
         # If engines were passed, we will use the listening addresses from the engines.
         if not self.no_engine_usage_enable:
             for engine in self.engines_list:
+                # Combine the domain and port dicts.
+                connection_dict: dict = {**engine.domain_target_dict, **engine.port_target_dict}
+
                 # Start all the regular listening interfaces.
-                for domain, ip_port_dict in engine.domain_target_dict.items():
+                for domain_or_port, ip_port_dict in connection_dict.items():
                     ip_address: str = ip_port_dict['ip']
                     port = int(ip_port_dict['port'])
                     socket_by_port = self.create_socket_ipv4_tcp(ip_address, port)
@@ -511,10 +515,28 @@ class SocketWrapper:
 
                 domain_from_engine = None
                 for engine in self.engines_list:
+                    # Get the domain to connect on this process in case on no SNI provided.
                     for domain, ip_port_dict in engine.domain_target_dict.items():
                         if ip_port_dict['ip'] == listening_ip:
                             domain_from_engine = domain
                             break
+                    # If there was no domain found, try to find the IP address for port.
+                    if not domain_from_engine:
+                        for port, file_or_ip in engine.port_target_dict.items():
+                            if file_or_ip['ip'] == listening_ip:
+                                # Get the value from the 'on_port_connect' dictionary.
+                                address_or_file_path: str = engine.on_port_connect[str(listening_port)]
+                                ip_port_address_from_config: tuple = initialize_engines.get_ipv4_from_engine_on_connect_port(
+                                    address_or_file_path)
+                                if not ip_port_address_from_config:
+                                    raise ValueError(
+                                        f"Invalid IP address or file path in 'on_port_connect' for port "
+                                        f"{listening_port}: {address_or_file_path}"
+                                    )
+
+                                domain_from_engine = ip_port_address_from_config[0]
+
+                                break
 
                     self.logger.info(f"Requested domain setting: {domain_from_engine}")
 
@@ -597,6 +619,9 @@ class SocketWrapper:
                                 client_socket,
                                 print_kwargs={'logger': self.logger}
                             )
+
+                        # Get the real tls version after connection is wrapped.
+                        tls_version = ssl_client_socket.version()
 
                         # If the 'domain_from_dns_server' is empty, it means that the 'engine_name' is not set.
                         # In this case we will set the 'engine_name' to from the SNI.
@@ -697,8 +722,18 @@ def get_engine_name(domain: str, engine_list: list):
     :return: string, engine name.
     """
 
+    engine_name: str = ''
     for engine in engine_list:
+        # Get engine name by domain.
         if domain in engine.domain_target_dict:
-            return engine.engine_name
+            engine_name = engine.engine_name
 
-    return ''
+        # If didn't find by domain, try to find by port.
+        if engine_name == '':
+            for port, ip_port_to_connect_value in engine.on_port_connect.items():
+                ipv4_to_connect, _ = initialize_engines.get_ipv4_from_engine_on_connect_port(ip_port_to_connect_value)
+                if ipv4_to_connect == domain:
+                    engine_name = engine.engine_name
+                    break
+
+    return engine_name
