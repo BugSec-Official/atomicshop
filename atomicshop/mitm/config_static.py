@@ -173,6 +173,16 @@ def load_config(config_toml_file_path: str):
     return result
 
 
+# def get_listening_addresses() -> list[str]:
+#     """
+#     Get the list of listening addresses from the TCPServer configuration.
+#     If no_engines_usage_to_listen_addresses_enable is True, return the no_engines_listening_address_list.
+#     Otherwise, return an empty list.
+#     """
+#
+#     return ENGINES_LIST
+
+
 # ============ Server Tester Specific ===============
 CONFIG_INI_TESTER_FILE_NAME: str = 'config_tester.ini'
 
