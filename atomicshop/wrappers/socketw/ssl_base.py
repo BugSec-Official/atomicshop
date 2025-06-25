@@ -34,12 +34,9 @@ def is_tls(client_socket) -> Optional[Tuple[str, str]]:
 
     first_bytes = receiver.peek_first_bytes(client_socket, bytes_amount=3)
 
-    # Ensure we got enough data.
-    if len(first_bytes) < 3:
-        return None
-
-    # Extract the content type and version
-    content_type, version_major, version_minor = first_bytes
+    # Sometimes only one byte is available, so we need to handle that case.
+    # convert to a tuple of ints, add three Nones, and keep only the first 3 items.
+    content_type, version_major, version_minor = (tuple(first_bytes) + (None, None, None))[:3]
 
     # Map TLS content types to their string representation.
     content_type_map = {
@@ -52,19 +49,19 @@ def is_tls(client_socket) -> Optional[Tuple[str, str]]:
 
     # Map TLS version bytes to their string representation.
     version_map = {
-        (0x03, 0x00): "SSL 3.0",
-        (0x03, 0x01): "TLS 1.0",
-        (0x03, 0x02): "TLS 1.1",
-        (0x03, 0x03): "TLS 1.2/1.3"
+        (0x03, 0x00): "SSLv3.0",
+        (0x03, 0x01): "TLSv1.0",
+        (0x03, 0x02): "TLSv1.1",
+        (0x03, 0x03): "TLSv1.2/1.3"
         # Remember, you can't definitively differentiate 1.2 and 1.3 just from these bytes
     }
 
     # Get the tuple of the type and version as strings.
-    tls_content_and_version_tuple: tuple = \
+    tls_content_and_version_tuple: tuple[str, str] = \
         content_type_map.get(content_type), version_map.get((version_major, version_minor))
 
     # If both parts of the tuple are not None, return the protocol type.
-    if tls_content_and_version_tuple[0] and tls_content_and_version_tuple[1]:
+    if tls_content_and_version_tuple[0]:
         return tls_content_and_version_tuple
     else:
         return None

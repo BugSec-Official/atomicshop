@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.2.0 - 25.06.2025
+  * mitm, wrappers/socketw - new features and fixes.
 * 3.1.14 - 23.06.2025
   * mitm/connection_thread_worker, wrappers/dockerw/dockerw - fixes and improvements.
 * 3.1.13 - 19.06.2025

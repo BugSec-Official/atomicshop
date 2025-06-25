@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+from .. import ip_addresses
 from ..file_io import tomls
 from ..basics.classes import import_first_class_name_from_file_path
 from .engines.__reference_general import parser___reference_general, requester___reference_general, \
@@ -14,7 +15,10 @@ class ModuleCategory:
 
         self.domain_list: list = list()
         self.domain_target_dict: dict = dict()
+        self.port_target_dict: dict = dict()
+
         self.is_localhost: bool = bool()
+        self.on_port_connect: dict = dict()
         self.mtls: dict = dict()
 
         self.parser_file_path: str = str()
@@ -48,6 +52,9 @@ class ModuleCategory:
         self.domain_list = configuration_data['engine']['domains']
         self.is_localhost = bool(configuration_data['engine']['localhost'])
 
+        if 'on_port_connect' in configuration_data:
+            self.on_port_connect = configuration_data['on_port_connect']
+
         if 'mtls' in configuration_data:
             self.mtls = configuration_data['mtls']
 
@@ -75,6 +82,9 @@ class ModuleCategory:
 
             self.domain_target_dict[domain] = {'ip': None, 'port': port}
 
+        for port, value in self.on_port_connect.items():
+            self.port_target_dict[port] = {'ip': None, 'port': int(port)}
+
         for subdomain, file_name in self.mtls.items():
             self.mtls[subdomain] = f'{engine_directory_path}{os.sep}{file_name}'
 
@@ -98,6 +108,47 @@ class ModuleCategory:
             return 1, str(e)
 
         return 0, ''
+
+
+def get_ipv4_from_engine_on_connect_port(
+        address_or_file_path: str
+) -> tuple[str, str] | None:
+    """
+    Function to get the IPv4 address from the engine on connect port.
+
+    :param address_or_file_path: string, "ip_address:port" or file path that was set in the engine on_port_connect.
+    :return: string, IPv4 address that was parsed from the 'ip_port_address'.
+
+    """
+
+    def get_ip_port_from_address(ip_port_address: str) -> tuple[str, str] | None:
+        """
+        Function to get the IP address and port from the address string.
+        If the address is a file path, it will return an empty string.
+        """
+        if ':' in ip_port_address:
+            ipv4_to_connect, port_to_connect = ip_port_address.split(':')
+            if ip_addresses.is_ip_address(ipv4_to_connect, ip_type='ipv4'):
+                return ipv4_to_connect, port_to_connect
+            else:
+                return None
+        else:
+            return None
+
+    # Try to get it as IP address.
+    ip_port_address_from_config = get_ip_port_from_address(address_or_file_path)
+
+    # If it is not an IP address, try to read it as a text file.
+    if not ip_port_address_from_config:
+        if os.path.isfile(address_or_file_path):
+            with open(address_or_file_path, 'r', encoding='utf-8') as file:
+                first_line = file.readline().strip()
+
+            ip_port_address_from_config = get_ip_port_from_address(first_line)
+        else:
+            return None
+
+    return ip_port_address_from_config
 
 
 def assign_class_by_domain(
@@ -132,6 +183,22 @@ def assign_class_by_domain(
 
                     # If the domain was found in the current list of class domains, we can stop the loop
                     break
+
+                # If the module wasn't found by the domain, check it by the port.
+                if not module:
+                    # Get the list of all the ip addresses in the on_port_connect dict.
+                    list_of_ip_addresses_per_port: list[str] = []
+                    for port, value in function_module.on_port_connect.items():
+                        ipv4_to_connect, _ = get_ipv4_from_engine_on_connect_port(value)
+                        list_of_ip_addresses_per_port.append(ipv4_to_connect)
+
+                    # Checking if the message domain name is in the list of ip addresses per port.
+                    if any(x in message_domain_name for x in list_of_ip_addresses_per_port):
+                        # Assigning module by current engine of the port
+                        module = function_module
+
+                        # If the port was found in the current list of class ports, we can stop the loop
+                        break
 
     # If none of the domains were found in the engine domains list, then we'll assign reference module.
     # It's enough to check only parser, since responder and recorder also will be empty.
