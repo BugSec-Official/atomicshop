@@ -159,6 +159,7 @@ def check_configurations() -> int:
 
     is_localhost: bool | None = None
     for engine in config_static.ENGINES_LIST:
+        port_list: list[str] = []
         for domain_port in engine.domain_list:
             # Check if the domains has port.
             if ':' not in domain_port:
@@ -170,6 +171,7 @@ def check_configurations() -> int:
             else:
                 # Split the domain and port.
                 domain, port = domain_port.split(':')
+                port_list.append(port)
                 # Check if the port is a number.
                 if not port.isdigit():
                     message = (
@@ -177,6 +179,24 @@ def check_configurations() -> int:
                         f"Please check your engine configuration file.")
                     print_api(message, color="red")
                     return 1
+
+        # Check if the ports in on_port_connect are unique.
+        if engine.on_port_connect:
+            ports_on_connect: list[str] = list(engine.on_port_connect.keys())
+            # Check if any of the ports in the on_port_connect are not in the domain list.
+            ports_in_domain_list: list[str] = []
+            for port in ports_on_connect:
+                if port in port_list:
+                    ports_in_domain_list.append(port)
+
+            if ports_in_domain_list:
+                message = (
+                    f"[*] Ports in [on_port_connect] config in engine_config.toml: {ports_in_domain_list}\n"
+                    f"are also in the [domains] field.\n"
+                    f"This is not supported.")
+                print_api(message, color="red")
+                return 1
+
 
         # Check if 'localhost' is set in all the engines, or not.
         # There can't be mixed engines where local host is set and not set.
