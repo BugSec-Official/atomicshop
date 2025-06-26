@@ -179,8 +179,11 @@ def thread_worker_main(
 
         network_logger.info("Thread Finished. Will continue listening on the Main thread")
 
-    def create_requester_request(client_message: ClientMessage) -> list[bytes]:
-        requests: list = [requester.create_request(client_message)]
+    def create_requester_request(
+            client_message: ClientMessage,
+            sending_socket: socket.socket
+    ) -> list[bytes]:
+        requests: list = [requester.create_request(client_message, sending_socket=sending_socket)]
 
         # Output first 100 characters of all the requests in the list.
         for request_raw_bytes_single in requests:
@@ -414,7 +417,8 @@ def thread_worker_main(
                     # Now send it to requester/responder.
                     if side == 'Client':
                         # Send to requester.
-                        bytes_to_send_list: list[bytes] = create_requester_request(client_message)
+                        bytes_to_send_list: list[bytes] = create_requester_request(
+                            client_message, sending_socket=sending_socket)
 
                         # If we're in offline mode, then we'll put the request to the responder right away.
                         if config_static.MainConfig.offline:

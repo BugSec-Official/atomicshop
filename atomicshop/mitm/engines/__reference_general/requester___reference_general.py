@@ -24,7 +24,7 @@ class RequesterGeneral(RequesterParent):
 
         self.logger = create_custom_logger()
 
-    # def create_request(self, class_client_message: ClientMessage):
+    # def create_request(self, class_client_message: ClientMessage, **kwargs) -> bytes:
     #     # noinspection GrazieInspection
     #     """
     #     For more examples check the responder.
