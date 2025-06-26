@@ -85,6 +85,10 @@ class ModuleCategory:
         for port, value in self.on_port_connect.items():
             self.port_target_dict[port] = {'ip': None, 'port': int(port)}
 
+            # If it is not an IP address (e.g. <IP:PORT>) it will be treated as file path.
+            if ':' not in value:
+                self.on_port_connect[port] = f'{engine_directory_path}{os.sep}{value}'
+
         for subdomain, file_name in self.mtls.items():
             self.mtls[subdomain] = f'{engine_directory_path}{os.sep}{file_name}'
 
