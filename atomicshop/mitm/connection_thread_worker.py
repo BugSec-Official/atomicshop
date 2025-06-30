@@ -183,13 +183,12 @@ def thread_worker_main(
             client_message: ClientMessage,
             sending_socket: socket.socket
     ) -> list[bytes]:
-        requests: list = [requester.create_request(client_message, sending_socket=sending_socket)]
+        request_custom_raw: bytes = requester.create_request(client_message, sending_socket=sending_socket)
 
-        # Output first 100 characters of all the requests in the list.
-        for request_raw_bytes_single in requests:
-            requester.logger.info(f"{request_raw_bytes_single[0: 100]}...")
+        # Output first 100 characters of the request.
+        requester.logger.info(f"{request_custom_raw[0: 100]}...")
 
-        return requests
+        return [request_custom_raw]
 
     def create_responder_response(client_message: ClientMessage) -> list[bytes]:
         if client_message.action == 'service_connect':
