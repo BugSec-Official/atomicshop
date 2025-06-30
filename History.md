@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.2.5 - 30.06.2025
+  * mitm/connection_thread_worker - fixes.
 * 3.2.4 - 26.06.2025
   * mitm - fixes and improvements.
 * 3.2.3 - 25.06.2025
