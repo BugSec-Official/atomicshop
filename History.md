@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.2.7 - 03.07.2025
+  * basics/tracebacks, mitm/recs_files - fixes.
 * 3.2.6 - 03.07.2025
   * mitm, wrappers/socketw/dns_server - fixes.
 * 3.2.5 - 30.06.2025

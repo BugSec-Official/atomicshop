@@ -89,6 +89,11 @@ def recs_archiver(
 
         finalize_output_queue.put(None)
 
+        print_api.print_api(
+            'Finished recs archiver process.', color='blue',
+            logger=rec_packer_logger_with_queue_handler
+        )
+
         return archived_files
     except Exception as e:
         print_api.print_api(
