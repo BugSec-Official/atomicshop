@@ -100,14 +100,13 @@ def save_message_worker(
         logger
 ):
     """Worker function to process messages from the queue and write them to the file."""
-    file_created: bool = False
-
     original_file_path_object: Path = Path(record_file_path_no_date)
     original_file_stem: str = original_file_path_object.stem
     original_file_extension: str = original_file_path_object.suffix
     original_file_directory: str = str(original_file_path_object.parent)
 
     original_datetime_string: str = get_datetime_string()
+    previous_date_string: str = get_date_string()
 
     record_file_path: str = f'{original_file_directory}{os.sep}{original_datetime_string}_{original_file_stem}{original_file_extension}'
 
@@ -119,9 +118,12 @@ def save_message_worker(
         if record_message_dict is None:
             break
 
-        current_datetime_string: str = get_datetime_string()
+        current_date_string: str = get_date_string()
+
         # If current datetime string is different from the original datetime string, we will create a new file path.
-        if current_datetime_string != original_datetime_string:
+        if current_date_string != previous_date_string:
+            previous_date_string = current_date_string
+            current_datetime_string: str = get_datetime_string()
             record_file_path = f'{original_file_directory}{os.sep}{current_datetime_string}_{original_file_stem}_partof_{original_datetime_string}{original_file_extension}'
 
         try:
@@ -145,3 +147,10 @@ def get_datetime_string():
     # Formatting the date and time and converting it to string object
     day_time_format: str = now.strftime(recs_files.REC_FILE_DATE_TIME_FORMAT)
     return day_time_format
+
+def get_date_string():
+    # current date and time in object
+    now = datetime.now()
+    # Formatting the date and time and converting it to string object
+    date_format: str = now.strftime(recs_files.REC_FILE_DATE_FORMAT)
+    return date_format
