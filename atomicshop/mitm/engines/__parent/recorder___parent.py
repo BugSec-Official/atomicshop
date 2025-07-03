@@ -119,12 +119,9 @@ def save_message_worker(
         if record_message_dict is None:
             break
 
-        # If the file not created yet, create it and change the creation flag.
-        if not file_created and not os.path.exists(record_file_path):
-            file_created = True
-        # If the file was created, and it doesn't exist, change the path recording file path to notify about it.
-        elif file_created and not os.path.exists(record_file_path):
-            current_datetime_string: str = get_datetime_string()
+        current_datetime_string: str = get_datetime_string()
+        # If current datetime string is different from the original datetime string, we will create a new file path.
+        if current_datetime_string != original_datetime_string:
             record_file_path = f'{original_file_directory}{os.sep}{current_datetime_string}_{original_file_stem}_partof_{original_datetime_string}{original_file_extension}'
 
         try:
