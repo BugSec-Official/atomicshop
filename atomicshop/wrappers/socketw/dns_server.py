@@ -948,6 +948,7 @@ def start_dns_server_multiprocessing_worker(
             logger_name=logger_name
         )
     except (DnsPortInUseError, DnsConfigurationValuesError) as e:
+        _ = e
         # Wait for the message to be printed and saved to file.
         time.sleep(1)
         return 1
