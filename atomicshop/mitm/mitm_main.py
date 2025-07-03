@@ -3,6 +3,7 @@ import multiprocessing
 import time
 import datetime
 import os
+import logging
 
 import atomicshop   # Importing atomicshop package to get the version of the package.
 
@@ -71,6 +72,9 @@ MITM_ERROR_LOGGER: loggingw.ExceptionCsvLogger = None
 # Create logger's queue.
 NETWORK_LOGGER_QUEUE: multiprocessing.Queue = multiprocessing.Queue()
 
+# Create finalization queue for the rec archiving process.
+FINALIZE_RECS_ARCHIVE_QUEUE: multiprocessing.Queue = multiprocessing.Queue()
+
 
 try:
     win_console.disable_quick_edit()
@@ -115,7 +119,7 @@ def exit_cleanup():
 
     # The process will not be executed if there was an exception in the beginning.
     if RECS_PROCESS_INSTANCE is not None:
-        print_api.print_api(RECS_PROCESS_INSTANCE.is_alive())
+        print_api.print_api(f'Recs archive process alive: {RECS_PROCESS_INSTANCE.is_alive()}')
         RECS_PROCESS_INSTANCE.terminate()
         RECS_PROCESS_INSTANCE.join()
 
@@ -324,12 +328,6 @@ def mitm_server(config_file_path: str, script_version: str):
     # Create folders.
     filesystem.create_directory(config_static.LogRec.logs_path)
 
-    if config_static.LogRec.enable_request_response_recordings_in_logs:
-        filesystem.create_directory(config_static.LogRec.recordings_path)
-        # Compress recordings of the previous days if there are any.
-        global RECS_PROCESS_INSTANCE
-        RECS_PROCESS_INSTANCE = recs_files.recs_archiver_in_process(config_static.LogRec.recordings_path)
-
     if config_static.Certificates.sni_get_server_certificate_from_server_socket:
         filesystem.create_directory(
             config_static.Certificates.sni_server_certificate_from_server_socket_download_directory)
@@ -347,14 +345,35 @@ def mitm_server(config_file_path: str, script_version: str):
         formatter_filehandler='DEFAULT',
         backupCount=config_static.LogRec.store_logs_for_x_days)
 
-    network_logger_with_queue_handler = loggingw.create_logger(
+    network_logger_with_queue_handler: logging.Logger = loggingw.create_logger(
         logger_name=network_logger_name,
         add_queue_handler=True,
         log_queue=NETWORK_LOGGER_QUEUE)
 
     # Initiate Listener logger, which is a child of network logger, so he uses the same settings and handlers
-    listener_logger = loggingw.get_logger_with_level(f'{network_logger_name}.listener')
-    system_logger = loggingw.get_logger_with_level(f'{network_logger_name}.system')
+    listener_logger: logging.Logger = loggingw.get_logger_with_level(f'{network_logger_name}.listener')
+    system_logger: logging.Logger = loggingw.get_logger_with_level(f'{network_logger_name}.system')
+
+    if config_static.LogRec.enable_request_response_recordings_in_logs:
+        filesystem.create_directory(config_static.LogRec.recordings_path)
+        # Compress recordings of the previous days if there are any.
+        global RECS_PROCESS_INSTANCE
+        RECS_PROCESS_INSTANCE = recs_files.recs_archiver_in_process(
+            config_static.LogRec.recordings_path,
+            logging_queue=NETWORK_LOGGER_QUEUE,
+            logger_name=network_logger_name,
+            finalize_output_queue=FINALIZE_RECS_ARCHIVE_QUEUE
+        )
+
+        archiver_result = FINALIZE_RECS_ARCHIVE_QUEUE.get()
+        if isinstance(archiver_result, Exception):
+            print_api.print_api(
+                f"Error while archiving recordings: {archiver_result}",
+                error_type=True, color="red", logger=system_logger, logger_method='critical')
+            # Wait for the message to be printed and saved to file.
+            time.sleep(1)
+            network_logger_queue_listener.stop()
+            return 1
 
     # Logging Startup information.
     startup_output(system_logger, script_version)
@@ -528,7 +547,9 @@ def mitm_server(config_file_path: str, script_version: str):
 
         socket_wrapper_instance.start_listening_sockets(
             reference_function_name=thread_worker_main,
-            reference_function_args=(network_logger_with_queue_handler, statistics_writer, config_static.ENGINES_LIST, config_static.REFERENCE_MODULE)
+            reference_function_args=(
+                network_logger_with_queue_handler, statistics_writer, config_static.ENGINES_LIST,
+                config_static.REFERENCE_MODULE)
         )
 
         # socket_thread = threading.Thread(
@@ -544,8 +565,7 @@ def mitm_server(config_file_path: str, script_version: str):
         # socket_thread.start()
 
         # Compress recordings each day in a separate process.
-        recs_archiver_thread = threading.Thread(target=_loop_at_midnight_recs_archive)
-        recs_archiver_thread.daemon = True
+        recs_archiver_thread = threading.Thread(target=_loop_at_midnight_recs_archive, args=(network_logger_name,), daemon=True)
         recs_archiver_thread.start()
 
     if config_static.DNSServer.enable or config_static.TCPServer.enable:
@@ -554,7 +574,7 @@ def mitm_server(config_file_path: str, script_version: str):
             time.sleep(1)
 
 
-def _loop_at_midnight_recs_archive():
+def _loop_at_midnight_recs_archive(network_logger_name):
     previous_date = datetime.datetime.now().strftime('%d')
     while True:
         # Get current time.
@@ -563,7 +583,17 @@ def _loop_at_midnight_recs_archive():
         if current_date != previous_date:
             if config_static.LogRec.enable_request_response_recordings_in_logs:
                 global RECS_PROCESS_INSTANCE
-                RECS_PROCESS_INSTANCE = recs_files.recs_archiver_in_process(config_static.LogRec.recordings_path)
+                RECS_PROCESS_INSTANCE = recs_files.recs_archiver_in_process(
+                    config_static.LogRec.recordings_path,
+                    logging_queue=NETWORK_LOGGER_QUEUE,
+                    logger_name=network_logger_name,
+                    finalize_output_queue=FINALIZE_RECS_ARCHIVE_QUEUE
+                )
+
+                archiver_result = FINALIZE_RECS_ARCHIVE_QUEUE.get()
+                if isinstance(archiver_result, Exception):
+                    MITM_ERROR_LOGGER.write(archiver_result)
+
             # Update the previous date.
             previous_date = current_date
         # Sleep for 1 minute.
