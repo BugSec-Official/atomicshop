@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.2.9 - 03.07.2025
+  * mitm/engines/__parent/recorder___parent - fixes.
 * 3.2.8 - 03.07.2025
   * mitm/engines/__parent/recorder___parent - fixes.
 * 3.2.7 - 03.07.2025
