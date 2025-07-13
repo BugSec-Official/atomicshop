@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.2.10 - 13.07.2025
+  * pyproject.toml - added pywintrace from git.
 * 3.2.9 - 03.07.2025
   * mitm/engines/__parent/recorder___parent - fixes.
 * 3.2.8 - 03.07.2025
