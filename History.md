@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.2.12 - 15.07.2025
+  * wrappers/dockerw/install_docker, wrappers/factw/install/pre_install_and_install_before_restart - fixes.
 * 3.2.11 - 15.07.2025
   * basics/strings, mitm/connection_thread_worker - fixes and improvements.
 * 3.2.10 - 13.07.2025

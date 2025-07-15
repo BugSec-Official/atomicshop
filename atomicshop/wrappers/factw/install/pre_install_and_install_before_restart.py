@@ -17,7 +17,7 @@ def install_before_restart(
         fact_source_archive_path: str = None,
         use_built_in_fact_installer: bool = True,
         print_kwargs: dict = None
-):
+) -> int:
     """
     This function will install the FACT_core before the restart of the computer.
     :param installation_directory: string, the directory to install the FACT_core to.
@@ -35,12 +35,12 @@ def install_before_restart(
         If False, only the regular prerequisites will be installed, while the user will need to install DOCKER
         and Node.js separately.
     :param print_kwargs: dict, the print kwargs for the print_api function.
-    :return:
+    :return: int, 0 if the installation was successful, 1 if there was an error.
     """
 
     # if not permissions.is_admin():
     #     print_api("This script requires root privileges...", color='red')
-    #     sys.exit(1)
+    #     return 1
 
     # # Install docker in rootless mode.
     # with ubuntu_permissions.temporary_regular_permissions():
@@ -89,7 +89,9 @@ def install_before_restart(
         # the user permissions to the docker group before restart.
         if not install_docker.add_current_user_to_docker_group():
             print_api("Docker is installed, but the current user was not added to the docker group.", color='red')
-            sys.exit(1)
+            return 1
+
+        result: int = 0
     else:
         message = ("You will need to install DOCKER and NODEJS separately.\n"
                    "This was done to enable Rootless docker install and install other version of NodeJS.")
@@ -108,8 +110,10 @@ def install_before_restart(
         #     use_docker_installer=True, rootless=True, add_current_user_to_docker_group_bool=False)
 
         # Install docker in regular mode.
-        install_docker.install_docker_ubuntu(
+        result: int = install_docker.install_docker_ubuntu(
             use_docker_installer=True, rootless=False, add_current_user_to_docker_group_bool=True)
 
     print_api("FACT_core installation before restart is finished.", color='green')
     print_api("Please restart the computer to continue the installation.", color='red')
+
+    return result
