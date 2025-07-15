@@ -90,8 +90,6 @@ def install_before_restart(
         if not install_docker.add_current_user_to_docker_group():
             print_api("Docker is installed, but the current user was not added to the docker group.", color='red')
             return 1
-
-        result: int = 0
     else:
         message = ("You will need to install DOCKER and NODEJS separately.\n"
                    "This was done to enable Rootless docker install and install other version of NodeJS.")
@@ -112,8 +110,11 @@ def install_before_restart(
         # Install docker in regular mode.
         result: int = install_docker.install_docker_ubuntu(
             use_docker_installer=True, rootless=False, add_current_user_to_docker_group_bool=True)
+        if result != 0:
+            print_api("Docker installation failed. Please install Docker manually.", color='red')
+            return result
 
     print_api("FACT_core installation before restart is finished.", color='green')
     print_api("Please restart the computer to continue the installation.", color='red')
 
-    return result
+    return 0

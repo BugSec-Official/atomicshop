@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.2.13 - 15.07.2025
+  * wrappers/factw/install/pre_install_and_install_before_restart - fixes.
 * 3.2.12 - 15.07.2025
   * wrappers/dockerw/install_docker, wrappers/factw/install/pre_install_and_install_before_restart - fixes.
 * 3.2.11 - 15.07.2025
