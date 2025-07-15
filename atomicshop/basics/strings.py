@@ -571,3 +571,72 @@ def replace_string_in_file_main_argparse():
         new_string=args.new_string,
         find_only=args.find_only
     )
+
+
+def _replace_string_in_variable():
+    """
+    Replace string in a string variable, but do it by a meta variable inside the string.
+    This is just an example, using the 'Template' class from the 'string' module is a better way to do it.
+    """
+
+    from string import Template
+    import os
+    import tempfile
+    import subprocess
+
+    get_docker_url: str = "https://get.docker.com"
+    docker_proxy_image_name: str = "rpardini/docker-registry-proxy:0.6.5"
+    preparation_output_dir: str = str(Path(__file__).parent / "offline-bundle")
+
+    class BashTemplate(Template):
+        # Anything that is not '$', which is a default delimiter in Template class, but also used in bash scripts.
+        # The below symbol can be printed from keyboard by holding 'Alt' and typing '0167' on the numeric keypad.
+        delimiter = '§'
+
+    bash_tmpl = BashTemplate(r"""#!/usr/bin/env bash
+#
+set -Eeuo pipefail
+
+die()       { echo "ERROR: $*" >&2; exit 1; }
+need_root() { [[ $EUID -eq 0 ]] || die "Run as root (use sudo)"; }
+need_cmd() {
+  local cmd=$1
+  local pkg=${2:-$1}               # default package == command
+  if ! command -v "$cmd" &>/dev/null; then
+    echo "[*] $cmd not found – installing $pkg ..."
+    apt-get update -qq
+    DEBIAN_FRONTEND=noninteractive \
+      apt-get install -y --no-install-recommends "$pkg" || \
+      die "Unable to install required package: $pkg"
+  fi
+}
+
+need_root
+need_cmd curl                 # binary and pkg are both “curl”
+need_cmd gpg                  # → apt-get install gpg
+
+DRY_LOG=$(curl -fsSL "§url" | bash -s -- --dry-run)
+IMAGE="§proxyimage"
+ARCHIVE="$OUTDIR/registry-proxy-image.tar.gz"
+zip -r "§output_zip" "$OUTDIR"
+        """)
+
+    # Substitute the variables in the bash script template.
+    bash_script = bash_tmpl.substitute(
+        url=get_docker_url, proxyimage=docker_proxy_image_name, output_zip=preparation_output_dir)
+
+    # Write it to a secure temporary file.
+    with tempfile.NamedTemporaryFile('w', delete=False, suffix='.sh') as f:
+        f.write(bash_script)
+        temp_path = f.name
+    os.chmod(temp_path, 0o755)  # make it executable
+
+    # Decide where the bundle should land (optional argument to the script).
+    cmd = ["sudo", temp_path, preparation_output_dir]  # use sudo because the script demands root
+
+    # Run it and stream output live.
+    try:
+        subprocess.run(cmd, check=True)
+    finally:
+        # 5. Clean up the temp file unless you want to inspect it.
+        os.remove(temp_path)

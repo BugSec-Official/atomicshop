@@ -88,9 +88,9 @@ To get a local copy up and running follow these simple steps.
    ```
 
    The latest version on PyPI is 0.2, so you will need to install from GitHub.
-   Alternatively, you can use a cmd file in the addon folder after 'atomicshop' installation:
+   Alternatively, you can use a command anywhere in CMD after 'atomicshop' installation:
    ```sh
-   "\Lib\site-packages\atomicshop\addons\a_setup_scripts\install_pywintrace_0.3.cmd"
+   pywintrace install
    ```
 
 4. If you get an exception while installing the 'psycopg2' package on ubuntu, install this binary:

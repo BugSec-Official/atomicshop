@@ -629,13 +629,14 @@ def thread_worker_main(
         else:
             service_client = create_client_socket(client_message_connection)
             service_socket_instance, connection_error = service_client.service_connection()
-            # Now we'll update the server IP with the IP of the service.
-            server_ip = service_socket_instance.getpeername()[0]
-            client_message_connection.server_ip = server_ip
 
             if connection_error:
                 client_message_connection.errors.append(connection_error)
                 record_and_statistics_write(client_message_connection)
+            else:
+                # Now we'll update the server IP with the IP of the service.
+                server_ip = service_socket_instance.getpeername()[0]
+                client_message_connection.server_ip = server_ip
 
         if not connection_error:
             client_exception_queue: queue.Queue = queue.Queue()
