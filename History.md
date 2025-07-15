@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.2.11 - 15.07.2025
+  * basics/strings, mitm/connection_thread_worker - fixes and improvements.
 * 3.2.10 - 13.07.2025
   * pyproject.toml - added pywintrace from git.
 * 3.2.9 - 03.07.2025

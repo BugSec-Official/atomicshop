@@ -33,6 +33,9 @@ version = {attr = "atomicshop.__version__"}
 "atomicshop.mains" = ["**"]
 "atomicshop.installs" = ["**"]
 
+[project.entry-points."console_scripts"]
+pywintrace = "atomicshop.a_installs.pywintrace:main"
+
 [project]
 # Name of the package.
 name = "atomicshop"
@@ -76,7 +79,6 @@ dependencies = [
     "python-docx",
     "python-magic",
     "pywin32; platform_system == 'Windows'",
-    "pywintrace @ https://github.com/fireeye/pywintrace/releases/download/v0.3.0/pywintrace-0.3.0-py3-none-any.whl",
     "reportlab",
     "setuptools",
     "SoundCard",
@@ -85,6 +87,7 @@ dependencies = [
     "tldextract",
     "websockets"
 ]
+
 classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
