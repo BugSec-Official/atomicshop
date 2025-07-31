@@ -10,20 +10,25 @@ from ..basics import threads, tracebacks
 from ..print_api import print_api
 
 from .message import ClientMessage
-from . import config_static, initialize_engines
+from . import initialize_engines
+from ..wrappers.loggingw import loggingw
+# This is needed only for the data typing.
+from . import config_static as cf
 
 
 def thread_worker_main(
+        # These parameters come from the SocketWrapper.
         client_socket,
         process_commandline: str,
         is_tls: bool,
         tls_type: str,
         tls_version: str,
         domain_from_dns,
-        network_logger,
         statistics_writer,
         engines_list,
-        reference_module
+
+        # These parameters come from the main mitm module.
+        config_static: cf
 ):
     def output_statistics_csv_row(client_message: ClientMessage):
         # If there is no '.code' attribute in HTTPResponse, this means that this is not an HTTP message, so there is no
@@ -543,6 +548,8 @@ def thread_worker_main(
     # ================================================================================================================
     # This is the start of the thread_worker_main function
 
+    network_logger = loggingw.get_logger_with_level(config_static.MainConfig.LOGGER_NAME)
+
     # Only protocols that are encrypted with TLS have the server name attribute.
     if is_tls:
         # Get current destination domain
@@ -568,7 +575,7 @@ def thread_worker_main(
     found_domain_module = initialize_engines.assign_class_by_domain(
         engines_list=engines_list,
         message_domain_name=server_name,
-        reference_module=reference_module
+        reference_module=config_static.REFERENCE_MODULE
     )
     parser = found_domain_module.parser_class_object
     requester = found_domain_module.requester_class_object()

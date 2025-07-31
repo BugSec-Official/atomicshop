@@ -35,17 +35,22 @@ def assign_bool(dict_instance: dict, section: str, key: str):
 
 
 def import_config_files(
-        config_file_path: str
+        config_file_path: str,
+        print_kwargs: dict = None
 ):
     """
     Import the configuration file 'config.toml' and write all the values to 'config_static' dataclasses module.
 
     :param config_file_path:
+    :param print_kwargs: dict, additional arguments to pass to the print function.
     :return:
     """
 
     config_toml: dict = config_init.get_config(
-        script_directory=str(Path(config_file_path).parent), config_file_name=Path(config_file_path).name)
+        script_directory=str(Path(config_file_path).parent),
+        config_file_name=Path(config_file_path).name,
+        print_kwargs=print_kwargs or {}
+    )
 
     # Assign boolean values to the toml dict module.
     for boolean_tuple in config_static.LIST_OF_BOOLEANS:
@@ -61,7 +66,7 @@ def import_config_files(
 
     manipulations_after_import()
 
-    result = import_engines_configs()
+    result = import_engines_configs(print_kwargs=print_kwargs or {})
     if result != 0:
         return result
 
@@ -69,7 +74,7 @@ def import_config_files(
     return result
 
 
-def import_engines_configs() -> int:
+def import_engines_configs(print_kwargs: dict) -> int:
     """
     Import the engines configuration files and write all the values to 'config_static' dataclasses module.
 
@@ -88,8 +93,8 @@ def import_engines_configs() -> int:
     for engine_config_path in engine_config_path_list:
         # Initialize engine.
         current_module: initialize_engines.ModuleCategory = initialize_engines.ModuleCategory(config_static.MainConfig.SCRIPT_DIRECTORY)
-        current_module.fill_engine_fields_from_config(engine_config_path.path)
-        result_code, error = current_module.initialize_engine()
+        current_module.fill_engine_fields_from_config(engine_config_path.path, print_kwargs=print_kwargs or {})
+        result_code, error = current_module.initialize_engine(print_kwargs=print_kwargs or {})
         if result_code != 0:
             print_api(f"Error initializing engine from directory: {Path(engine_config_path.path).parent}\n{error}", color='red')
             return result_code
@@ -344,6 +349,7 @@ def manipulations_after_import():
         config_static.Certificates.custom_private_key_path = filesystem.check_absolute_path___add_full(
             config_static.Certificates.custom_private_key_path, config_static.MainConfig.SCRIPT_DIRECTORY)
     else:
+        # noinspection PyTypeChecker
         config_static.Certificates.custom_private_key_path = None
 
     config_static.Certificates.sni_server_certificates_cache_directory = filesystem.check_absolute_path___add_full(

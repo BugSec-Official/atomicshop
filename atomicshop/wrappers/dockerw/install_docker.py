@@ -66,7 +66,7 @@ def install_docker_ubuntu(
         use_docker_installer: bool = True,
         rootless: bool = False,
         add_current_user_to_docker_group_bool: bool = False
-):
+) -> int:
     """
     The function will install docker on ubuntu.
     Note: If you want to install docker in rootless mode, you need to run the script without sudo.
@@ -81,15 +81,17 @@ def install_docker_ubuntu(
         this is not needed.
 
     Usage in main.py (run with sudo):
+        import sys
         from atomicshop.wrappers.dockerw import install_docker
 
 
         def main():
-            install_docker.install_docker_ubuntu()
+            execution_result: int = install_docker.install_docker_ubuntu()
+            return execution_result
 
 
         if __name__ == '__main__':
-            main()
+            sys.exit(main())
     """
 
     if rootless and permissions.is_admin():
@@ -203,8 +205,8 @@ def install_docker_ubuntu(
 
     if 'Hello from Docker!' in '\n'.join(result):
         print_api('Docker installed successfully.', color='green')
-        return True
+        return 0
     else:
         print_api('Docker installation failed.', color='red')
         print_api('Please check the logs above for more information.', color='red')
-        return False
+        return 1

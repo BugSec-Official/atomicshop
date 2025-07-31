@@ -8,15 +8,24 @@ from ..print_api import print_api
 from ..permissions import ubuntu_permissions
 
 
-def install_packages(package_list: list[str]):
+def install_packages(
+        package_list: list[str],
+        timeout_seconds: int = 0,
+):
     """
     Function installs a package using apt-get.
     :param package_list: list of strings, package names to install.
+    :param timeout_seconds: int, if the 'apt-get' command is busy at the moment, the function will wait for
+        'timeout_seconds' seconds before raising an error.
+        '-1' means wait indefinitely.
     :return:
     """
 
     # Construct the command with the package list
-    command = ["sudo", "apt-get", "install", "-y"] + package_list
+    command = ["sudo", "apt", "install", "-y"] + package_list
+
+    if timeout_seconds != 0:
+        command.extend(["-o", f"DPkg::Lock::Timeout={str(timeout_seconds)}"])
 
     subprocess.check_call(command)
 

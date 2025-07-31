@@ -1,6 +1,6 @@
 import datetime
+import multiprocessing
 
-from ...file_io import csvs
 from ..loggingw import loggingw
 
 
@@ -10,22 +10,41 @@ STATISTICS_HEADER: str = (
     'response_size_bytes,file_path,process_cmd,action,error')
 
 
-class StatisticsCSVWriter:
+class StatisticsCSVWriter(loggingw.CsvLogger):
     """
     Class to write statistics to CSV file.
     This can be initiated at the main, and then passed to the thread worker function.
     """
     def __init__(
             self,
-            statistics_directory_path: str
+            logger_name: str = LOGGER_NAME,
+            directory_path: str = None,
+            log_queue: multiprocessing.Queue = None,
+            add_queue_handler_start_listener_multiprocessing: bool = False,
+            add_queue_handler_no_listener_multiprocessing: bool = False
     ):
-        self.csv_logger = loggingw.create_logger(
-            logger_name=LOGGER_NAME,
-            directory_path=statistics_directory_path,
-            add_timedfile_with_internal_queue=True,
-            formatter_filehandler='MESSAGE',
-            file_type='csv',
-            header=STATISTICS_HEADER
+        """
+        Initialize the StatisticsCSVWriter with the directory path for the statistics CSV file.
+        :param directory_path: str, the directory path where the statistics CSV file will be created.
+        :param log_queue: multiprocessing.Queue, the queue to use for logging in multiprocessing.
+        :param add_queue_handler_start_listener_multiprocessing: bool, whether to add a queue handler that will use
+            the 'logger_queue' and start the queue listener with the same 'logger_queue' for multiprocessing.
+        :param add_queue_handler_no_listener_multiprocessing: bool, whether to add a queue handler that will use
+            the 'logger_queue' but will not start the queue listener for multiprocessing. This is useful when you
+            already started the queue listener and want to add more handlers to the logger without
+            starting a new listener.
+
+        If you don't set any of 'add_queue_handler_start_listener_multiprocessing' or
+        'add_queue_handler_no_listener_multiprocessing', the logger will be created without a queue handler.
+        """
+
+        super().__init__(
+            logger_name=logger_name,
+            directory_path=directory_path,
+            log_queue=log_queue,
+            add_queue_handler_start_listener_multiprocessing=add_queue_handler_start_listener_multiprocessing,
+            add_queue_handler_no_listener_multiprocessing=add_queue_handler_no_listener_multiprocessing,
+            custom_header=STATISTICS_HEADER
         )
 
     def write_row(
@@ -60,7 +79,7 @@ class StatisticsCSVWriter:
         else:
             tls_info = f'{tls_type}|{tls_version}'
 
-        escaped_line_string: str = csvs.escape_csv_line_to_string([
+        row_of_cols: list = [
             timestamp,
             thread_id,
             engine,
@@ -81,9 +100,9 @@ class StatisticsCSVWriter:
             process_cmd,
             action,
             error
-        ])
+        ]
 
-        self.csv_logger.info(escaped_line_string)
+        super().write(row_of_cols)
 
     def write_accept_error(
             self,

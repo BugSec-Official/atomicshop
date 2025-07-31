@@ -1,9 +1,8 @@
-import os.path
+import multiprocessing
 import threading
 import select
 from typing import Literal, Union
 from pathlib import Path
-import logging
 import socket
 
 from ...mitm import initialize_engines
@@ -12,7 +11,7 @@ from ..certauthw import certauthw
 from ..loggingw import loggingw
 from ...script_as_string_processor import ScriptAsStringProcessor
 from ...permissions import permissions
-from ... import queues, filesystem, certificates
+from ... import filesystem, certificates
 from ...basics import booleans
 from ...print_api import print_api
 
@@ -27,12 +26,17 @@ class SocketWrapperConfigurationValuesError(Exception):
     pass
 
 
-SNI_QUEUE = queues.NonBlockQueue()
+# from ... import queues
+# SNI_QUEUE = queues.NonBlockQueue()
+LOGS_DIRECTORY_NAME: str = 'logs'
 
 
 class SocketWrapper:
     def __init__(
             self,
+            ip_address: str,
+            port: int,
+            engine: initialize_engines.ModuleCategory = None,
             forwarding_dns_service_ipv4_list___only_for_localhost: list = None,
             ca_certificate_name: str = None,
             ca_certificate_filepath: str = None,
@@ -65,9 +69,13 @@ class SocketWrapper:
                 ],
                 None
             ] = None,
-            logger: logging.Logger = None,
-            exceptions_logger: loggingw.ExceptionCsvLogger = None,
-            statistics_logs_directory: str = None,
+            logs_directory: str = None,
+            logger_name: str = 'SocketWrapper',
+            logger_queue: multiprocessing.Queue = None,
+            statistics_logger_name: str = 'statistics',
+            statistics_logger_queue: multiprocessing.Queue = None,
+            exceptions_logger_name: str = 'SocketWrapperExceptions',
+            exceptions_logger_queue: multiprocessing.Queue = None,
             no_engine_usage_enable: bool = False,
             no_engines_listening_address_list: list[str] = None,
             engines_list: list[initialize_engines.ModuleCategory] = None
@@ -145,21 +153,24 @@ class SocketWrapper:
         :param ssh_user: string, SSH username that will be used to connect to remote host.
         :param ssh_pass: string, SSH password that will be used to connect to remote host.
         :param ssh_script_to_execute: string, script that will be executed to get the process name on ssh remote host.
-        :param logger: logging.Logger object, logger object that will be used to log messages.
-            If not provided, logger will be created with default settings saving logs to the
-            'statistics_logs_directory'.
-        :param exceptions_logger: loggingw.ExceptionCsvLogger object, logger object that will be used to log exceptions.
-            If not provided, logger will be created with default settings and will save exceptions to the
-            'statistics_logs_directory'.
-        :param statistics_logs_directory: string, path to directory where daily statistics.csv files will be stored.
-            After you initialize the SocketWrapper object, you can get the statistics_writer object from it and use it
-            to write statistics to the file in a worker thread.
+        :param logs_directory: string, path to directory where daily statistics.csv files and all the other logger
+            files will be stored. After you initialize the SocketWrapper object, you can get the statistics_writer
+            object from it and use it to write statistics to the file in a worker thread.
 
             socket_wrapper_instance = SocketWrapper(...)
             statistics_writer = socket_wrapper_instance.statistics_writer
 
             statistics_writer: statistics_csv.StatisticsCSVWriter object, there is a logger object that
                 will be used to write the statistics file.
+        :param logger_name: string, name of the logger that will be used to log messages.
+        :param logger_queue: multiprocessing.Queue, queue that will be used to log messages in multiprocessing.
+            You need to start the logger listener in the main process to handle the queue.
+        :param statistics_logger_name: string, name of the logger that will be used to log statistics.
+        :param statistics_logger_queue: multiprocessing.Queue, queue that will be used to log statistics in
+            multiprocessing. You need to start the logger listener in the main process to handle the queue.
+        :param exceptions_logger_name: string, name of the logger that will be used to log exceptions.
+        :param exceptions_logger_queue: multiprocessing.Queue, queue that will be used to log exceptions in
+            multiprocessing. You need to start the logger listener in the main process to handle the queue.
         :param no_engine_usage_enable: boolean, if True, 'engines_list' will be used to listen on the addresses,
             but the "no_engines_listening_address_list" parameter will be used instead.
         :param no_engines_listening_address_list: list, of ips+ports that will be listened on.
@@ -178,6 +189,9 @@ class SocketWrapper:
             #"domain" = "example.com"
         """
 
+        self.ip_address: str = ip_address
+        self.port: int = port
+        self.engine: initialize_engines.ModuleCategory = engine
         self.ca_certificate_name: str = ca_certificate_name
         self.ca_certificate_filepath: str = ca_certificate_filepath
         self.ca_certificate_crt_filepath: str = ca_certificate_crt_filepath
@@ -205,13 +219,11 @@ class SocketWrapper:
         self.ssh_user: str = ssh_user
         self.ssh_pass: str = ssh_pass
         self.ssh_script_to_execute = ssh_script_to_execute
-        self.logger = logger
-        self.statistics_logs_directory: str = statistics_logs_directory
         self.forwarding_dns_service_ipv4_list___only_for_localhost = (
             forwarding_dns_service_ipv4_list___only_for_localhost)
-        self.no_engine_usage_enable: bool = no_engine_usage_enable
-        self.no_engines_listening_address_list: list[str] = no_engines_listening_address_list
-        self.engines_list: list[initialize_engines.ModuleCategory] = engines_list
+        # self.no_engine_usage_enable: bool = no_engine_usage_enable
+        # self.no_engines_listening_address_list: list[str] = no_engines_listening_address_list
+        # self.engines_list: list[initialize_engines.ModuleCategory] = engines_list
 
         self.socket_object = None
 
@@ -236,26 +248,53 @@ class SocketWrapper:
             self.ssh_script_processor = \
                 ScriptAsStringProcessor().read_script_to_string(self.ssh_script_to_execute)
 
-        self.statistics_writer = statistics_csv.StatisticsCSVWriter(
-            statistics_directory_path=self.statistics_logs_directory)
+        # If logs directory was not set, we will use the working directory.
+        if not logs_directory:
+            logs_directory = str(Path.cwd() / LOGS_DIRECTORY_NAME)
+        self.logs_directory: str = logs_directory
 
-        if not self.logger:
-            self.logger = loggingw.create_logger(
-                logger_name='SocketWrapper',
-                directory_path=self.statistics_logs_directory,
+        if not logger_name:
+            logger_name = 'SocketWrapper'
+        self.logger_name: str = logger_name
+        self.logger_name_listener: str = f"{logger_name}.listener"
+
+        if loggingw.is_logger_exists(self.logger_name_listener):
+            self.logger = loggingw.get_logger_with_level(self.logger_name_listener)
+        elif not logger_queue:
+            _ = loggingw.create_logger(
+                logger_name=logger_name,
+                directory_path=self.logs_directory,
                 add_stream=True,
                 add_timedfile_with_internal_queue=True,
                 formatter_streamhandler='DEFAULT',
                 formatter_filehandler='DEFAULT'
             )
 
-        if not exceptions_logger:
-            self.exceptions_logger = loggingw.ExceptionCsvLogger(
-                logger_name='SocketWrapperExceptions',
-                directory_path=self.statistics_logs_directory
-            )
+            self.logger = loggingw.get_logger_with_level(self.logger_name_listener)
         else:
-            self.exceptions_logger = exceptions_logger
+            _ = loggingw.create_logger(
+                logger_name=logger_name,
+                add_queue_handler=True,
+                log_queue=logger_queue
+            )
+            self.logger = loggingw.get_logger_with_level(self.logger_name_listener)
+
+        self.statistics_writer = statistics_csv.StatisticsCSVWriter(
+            logger_name=statistics_logger_name,
+            directory_path=self.logs_directory,
+            log_queue=statistics_logger_queue,
+            add_queue_handler_no_listener_multiprocessing=True
+        )
+
+        if not exceptions_logger_name:
+            exceptions_logger_name = 'SocketWrapperExceptions'
+
+        self.exceptions_logger = loggingw.ExceptionCsvLogger(
+            logger_name=exceptions_logger_name,
+            directory_path=self.logs_directory,
+            log_queue=exceptions_logger_queue,
+            add_queue_handler_no_listener_multiprocessing=True
+        )
 
         self.test_config()
 
@@ -274,12 +313,12 @@ class SocketWrapper:
                 "You can't set both [sni_use_default_callback_function = True] and [sni_custom_callback_function]."
             raise SocketWrapperConfigurationValuesError(message)
 
-        if self.no_engine_usage_enable and not self.no_engines_listening_address_list:
-            message = "You set [no_engine_usage_enable = True], but you didn't set [no_engines_listening_address_list]."
-            raise SocketWrapperConfigurationValuesError(message)
-        elif not self.no_engine_usage_enable and not self.engines_list:
-            message = "You set [no_engine_usage_enable = False], but you didn't set [engines_list]."
-            raise SocketWrapperConfigurationValuesError(message)
+        # if self.no_engine_usage_enable and not self.no_engines_listening_address_list:
+        #     message = "You set [no_engine_usage_enable = True], but you didn't set [no_engines_listening_address_list]."
+        #     raise SocketWrapperConfigurationValuesError(message)
+        # elif not self.no_engine_usage_enable and not self.engines_list:
+        #     message = "You set [no_engine_usage_enable = False], but you didn't set [engines_list]."
+        #     raise SocketWrapperConfigurationValuesError(message)
 
         try:
             booleans.is_only_1_true_in_list(
@@ -329,15 +368,7 @@ class SocketWrapper:
                     return 1
 
         # Checking if listening address is in use.
-        listening_check_list: list = list()
-        if self.engines_list:
-            for engine in self.engines_list:
-                for _, ip_port_dict in engine.domain_target_dict.items():
-                    address: str = f"{ip_port_dict['ip']}:{ip_port_dict['port']}"
-                    if address not in listening_check_list:
-                        listening_check_list.append(address)
-        else:
-            listening_check_list = self.no_engines_listening_address_list
+        listening_check_list = [f"{self.ip_address}:{self.port}"]
         port_in_use = psutil_networks.get_processes_using_port_list(listening_check_list)
         if port_in_use:
             error_messages: list = list()
@@ -415,64 +446,40 @@ class SocketWrapper:
 
         return self.socket_object
 
-    def start_listening_sockets(
+    def start_listening_socket(
             self,
-            reference_function_name,
-            reference_function_args=(),
-            pass_function_reference_to_thread: bool = True
+            callable_function: callable,
+            callable_args: tuple = ()
     ):
         """
-        Start listening sockets with parameters.
+        Start listening on a single socket with given IP address and port.
+        This function is used to start listening on a single socket, for example, when you want to listen on a specific
+        IP address and port.
+
+        :param callable_function: callable, function that you want to execute when client
+            socket received by 'accept()' and connection has been made.
+        :param callable_args: tuple, that will be passed to 'callable_function' when it will be called.
+        :return: None
         """
 
-        # If engines were passed, we will use the listening addresses from the engines.
-        if not self.no_engine_usage_enable:
-            for engine in self.engines_list:
-                # Combine the domain and port dicts.
-                connection_dict: dict = {**engine.domain_target_dict, **engine.port_target_dict}
-
-                # Start all the regular listening interfaces.
-                for domain_or_port, ip_port_dict in connection_dict.items():
-                    ip_address: str = ip_port_dict['ip']
-                    port = int(ip_port_dict['port'])
-                    socket_by_port = self.create_socket_ipv4_tcp(ip_address, port)
-                    threading.Thread(
-                        target=self.listening_socket_loop,
-                        args=(socket_by_port, engine, reference_function_name,
-                              reference_function_args, pass_function_reference_to_thread),
-                        name=f"acceptor-{engine.engine_name}-{ip_address}:{port}",
-                        daemon=True
-                    ).start()
+        if self.engine:
+            acceptor_name: str = f"acceptor-{self.engine.engine_name}-{self.ip_address}:{self.port}"
         else:
-            # If no engines were passed, we will use the listening addresses from the configuration.
-            for address in self.no_engines_listening_address_list:
-                ip_address, port_str = address.split(':')
-                port = int(port_str)
-                socket_by_port = self.create_socket_ipv4_tcp(ip_address, port)
-                threading.Thread(
-                    target=self.listening_socket_loop,
-                    args=(socket_by_port, None, reference_function_name,
-                          reference_function_args, pass_function_reference_to_thread),
-                    name=f"acceptor-{ip_address}:{port}",
-                    daemon=True
-                ).start()
+            acceptor_name: str = f"acceptor-{self.ip_address}:{self.port}"
 
-        # # Creating a socket for each port in the list set in configuration file
-        # for address in self.listening_address_list:
-        #     ip_address, port_str = address.split(':')
-        #     port = int(port_str)
-        #     socket_by_port = self.create_socket_ipv4_tcp(
-        #         ip_address, port)
-        #
-        #     self.listening_sockets.append(socket_by_port)
+        socket_by_port = self.create_socket_ipv4_tcp(self.ip_address, self.port)
+        threading.Thread(
+            target=self.listening_socket_loop,
+            args=(socket_by_port, callable_function, callable_args),
+            name=acceptor_name,
+            daemon=True
+        ).start()
 
     def listening_socket_loop(
             self,
             listening_socket_object: socket.socket,
-            engine: initialize_engines.ModuleCategory,
-            reference_function_name,
-            reference_function_args=(),
-            pass_function_reference_to_thread: bool = True
+            callable_function: callable,
+            callable_args=()
     ):
         """
         Loop to wait for new connections, accept them and send to new threads.
@@ -480,23 +487,19 @@ class SocketWrapper:
         will be killed or closed.
 
         :param listening_socket_object: listening socket that was created with bind.
-        :param engine: ModuleCategory.
-        :param reference_function_name: callable, function reference that you want to execute when client
+        :param callable_function: callable, function that you want to execute when client
             socket received by 'accept()' and connection has been made.
-        :param reference_function_args: tuple, that will be passed to 'function_reference' when it will be called.
-            Your function should be able to accept these arguments before the 'reference_function_args' tuple:
+        :param callable_args: tuple, that will be passed to 'function_reference' when it will be called.
+            Your function should be able to accept these arguments before the 'callable_args' tuple:
             (client_socket, process_name, is_tls, domain_from_dns_server).
-            Meaning that 'reference_function_args' will be added to the end of the arguments tuple like so:
+            Meaning that 'callable_args' will be added to the end of the arguments tuple like so:
             (client_socket, process_name, is_tls, tls_type, tls_version, domain_from_dns_server,
-            *reference_function_args).
+            *callable_args).
 
             client_socket: socket, client socket that was accepted.
             process_name: string, process name that was gathered from the socket.
             is_tls: boolean, if the socket is SSL/TLS.
             domain_from_dns_server: string, domain that was requested from DNS server.
-        :param pass_function_reference_to_thread: boolean, that sets if 'function_reference' will be
-            executed as is, or passed to thread. 'function_reference' can include passing to a thread,
-            but you don't have to use it, since SocketWrapper can do it for you.
         :return:
         """
 
@@ -514,31 +517,30 @@ class SocketWrapper:
                 listening_ip, listening_port = listening_socket_object.getsockname()
 
                 domain_from_engine = None
-                for engine in self.engines_list:
-                    # Get the domain to connect on this process in case on no SNI provided.
-                    for domain, ip_port_dict in engine.domain_target_dict.items():
-                        if ip_port_dict['ip'] == listening_ip:
-                            domain_from_engine = domain
+                # Get the domain to connect on this process in case on no SNI provided.
+                for domain, ip_port_dict in self.engine.domain_target_dict.items():
+                    if ip_port_dict['ip'] == listening_ip:
+                        domain_from_engine = domain
+                        break
+                # If there was no domain found, try to find the IP address for port.
+                if not domain_from_engine:
+                    for port, file_or_ip in self.engine.port_target_dict.items():
+                        if file_or_ip['ip'] == listening_ip:
+                            # Get the value from the 'on_port_connect' dictionary.
+                            address_or_file_path: str = self.engine.on_port_connect[str(listening_port)]
+                            ip_port_address_from_config: tuple = initialize_engines.get_ipv4_from_engine_on_connect_port(
+                                address_or_file_path)
+                            if not ip_port_address_from_config:
+                                raise ValueError(
+                                    f"Invalid IP address or file path in 'on_port_connect' for port "
+                                    f"{listening_port}: {address_or_file_path}"
+                                )
+
+                            domain_from_engine = ip_port_address_from_config[0]
+
                             break
-                    # If there was no domain found, try to find the IP address for port.
-                    if not domain_from_engine:
-                        for port, file_or_ip in engine.port_target_dict.items():
-                            if file_or_ip['ip'] == listening_ip:
-                                # Get the value from the 'on_port_connect' dictionary.
-                                address_or_file_path: str = engine.on_port_connect[str(listening_port)]
-                                ip_port_address_from_config: tuple = initialize_engines.get_ipv4_from_engine_on_connect_port(
-                                    address_or_file_path)
-                                if not ip_port_address_from_config:
-                                    raise ValueError(
-                                        f"Invalid IP address or file path in 'on_port_connect' for port "
-                                        f"{listening_port}: {address_or_file_path}"
-                                    )
 
-                                domain_from_engine = ip_port_address_from_config[0]
-
-                                break
-
-                    self.logger.info(f"Requested domain setting: {domain_from_engine}")
+                self.logger.info(f"Requested domain setting: {domain_from_engine}")
 
                 # Wait from any connection on "accept()".
                 # 'client_socket' is socket or ssl socket, 'client_address' is a tuple (ip_address, port).
@@ -561,7 +563,7 @@ class SocketWrapper:
                     process_name = get_command_instance.get_process_name(print_kwargs={'logger': self.logger})
 
                 source_ip: str = client_address[0]
-                engine_name: str = get_engine_name(domain_from_engine, self.engines_list)
+                engine_name: str = get_engine_name(domain_from_engine, [self.engine])
                 dest_port: int = listening_socket_object.getsockname()[1]
 
                 # Not always there will be a hostname resolved by the IP address, so we will leave it empty if it fails.
@@ -620,16 +622,6 @@ class SocketWrapper:
                                 print_kwargs={'logger': self.logger}
                             )
 
-                        # Get the real tls version after connection is wrapped.
-                        tls_version = ssl_client_socket.version()
-
-                        # If the 'domain_from_dns_server' is empty, it means that the 'engine_name' is not set.
-                        # In this case we will set the 'engine_name' to from the SNI.
-                        if engine_name == '':
-                            sni_hostname: str = ssl_client_socket.server_hostname
-                            if sni_hostname:
-                                engine_name = get_engine_name(sni_hostname, self.engines_list)
-
                         if accept_error_message:
                             # Write statistics after wrap is there was an error.
                             self.statistics_writer.write_accept_error(
@@ -643,6 +635,16 @@ class SocketWrapper:
 
                             continue
 
+                        # Get the real tls version after connection is wrapped.
+                        tls_version = ssl_client_socket.version()
+
+                        # If the 'domain_from_dns_server' is empty, it means that the 'engine_name' is not set.
+                        # In this case we will set the 'engine_name' to from the SNI.
+                        if engine_name == '':
+                            sni_hostname: str = ssl_client_socket.server_hostname
+                            if sni_hostname:
+                                engine_name = get_engine_name(sni_hostname, [self.engine])
+
                     # Create new arguments tuple that will be passed, since client socket and process_name
                     # are gathered from SocketWrapper.
                     if ssl_client_socket:
@@ -652,21 +654,24 @@ class SocketWrapper:
                         # noinspection PyUnusedLocal
                         client_socket = None
                         client_socket = ssl_client_socket
-                    thread_args = \
-                        ((client_socket, process_name, is_tls, tls_type, tls_version, domain_from_engine) +
-                         reference_function_args)
-                    # If 'pass_function_reference_to_thread' was set to 'False', execute the callable passed function
-                    # as is.
-                    if not pass_function_reference_to_thread:
-                        before_socket_thread_worker(
-                            callable_function=reference_function_name, thread_args=thread_args,
-                            exceptions_logger=self.exceptions_logger)
-                    # If 'pass_function_reference_to_thread' was set to 'True', execute the callable function reference
-                    # in a new thread.
-                    else:
-                        self._send_accepted_socket_to_thread(
-                            before_socket_thread_worker,
-                            reference_args=(reference_function_name, thread_args, self.exceptions_logger))
+                    thread_args = (
+                        (client_socket, process_name, is_tls, tls_type, tls_version, domain_from_engine, self.statistics_writer, [self.engine]) +
+                         callable_args)
+
+                    # Creating thread for each socket
+                    thread_current = threading.Thread(
+                        target=before_socket_thread_worker,
+                        args=(callable_function, thread_args, self.exceptions_logger),
+                        daemon=True
+                    )
+                    thread_current.start()
+                    # Append to list of threads, so they can be "joined" later
+                    self.threads_list.append(thread_current)
+
+                    # 'thread_callable_args[1][0]' is the client socket.
+                    client_address = base.get_source_address_from_socket(client_socket)
+
+                    self.logger.info(f"Accepted connection, thread created {client_address}. Continue listening...")
                 # Else, if no client_socket was opened during, accept, then print the error.
                 else:
                     # Write statistics after accept.
@@ -681,35 +686,22 @@ class SocketWrapper:
             except Exception as e:
                 self.exceptions_logger.write(e)
 
-    def _send_accepted_socket_to_thread(self, thread_function_name, reference_args=()):
-        # Creating thread for each socket
-        thread_current = threading.Thread(target=thread_function_name, args=(*reference_args,))
-        thread_current.daemon = True
-        thread_current.start()
-        # Append to list of threads, so they can be "joined" later
-        self.threads_list.append(thread_current)
-
-        # 'reference_args[1][0]' is the client socket.
-        client_address = base.get_source_address_from_socket(reference_args[1][0])
-
-        self.logger.info(f"Accepted connection, thread created {client_address}. Continue listening...")
-
 
 def before_socket_thread_worker(
         callable_function: callable,
-        thread_args: tuple,
+        callable_args: tuple,
         exceptions_logger: loggingw.ExceptionCsvLogger = None
 ):
     """
     Function that will be executed before the thread is started.
     :param callable_function: callable, function that will be executed in the thread.
-    :param thread_args: tuple, arguments that will be passed to the function.
+    :param callable_args: tuple, arguments that will be passed to the function.
     :param exceptions_logger: loggingw.ExceptionCsvLogger, logger object that will be used to log exceptions.
     :return:
     """
 
     try:
-        callable_function(*thread_args)
+        callable_function(*callable_args)
     except Exception as e:
         exceptions_logger.write(e)
 

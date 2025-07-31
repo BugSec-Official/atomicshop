@@ -327,9 +327,14 @@ class DnsServer:
             self.dns_questions_to_answers_cache = dict()
             self.logger.info("*** DNS cache cleared")
 
-    def start(self):
+    def start(
+            self,
+            is_ready_multiprocessing: multiprocessing.Event = None
+    ):
         """
         Main DNS Server function to start it.
+
+        :param is_ready_multiprocessing: multiprocessing.Event: Event to signal that the DNS Server is ready.
 
         :return: None.
         """
@@ -383,30 +388,42 @@ class DnsServer:
             # receiving connections.
             main_socket_object.bind((self.listening_interface, self.listening_port))
 
+            if is_ready_multiprocessing:
+                # If the DNS Server is running in a separate process, signal that the DNS Server is ready.
+                is_ready_multiprocessing.set()
+
             while True:
+                forward_to_tcp_server = False  # reset every request
+
                 # Needed this logging line when DNS was separate process.
                 # self.logger.info("Waiting to receive new requests...")
 
-                # noinspection PyBroadException
                 try:
                     client_data, client_address = main_socket_object.recvfrom(self.buffer_size_receive)
                     client_data: bytes
                     client_address: tuple
                 except ConnectionResetError:
+                    client_address = (str(), int())
                     traceback_string = tracebacks.get_as_string(one_line=True)
                     # This error happens when the client closes the connection before the server.
                     # This is not an error for a DNS Server, but we'll log it anyway only with the full DNS logger.
                     message = (f"Error: to receive DNS request, An existing connection was forcibly closed | "
                                f"{traceback_string}")
+                    # print_api(message, logger=self.logger, logger_method='critical', traceback_string=True)
                     self.dns_statistics_csv_writer.write_error(
                         dns_type='request', client_address=client_address, error_message=message)
-                    pass
                     continue
-                except Exception:
-                    message = "Unknown Exception: to receive DNS request"
-                    print_api(
-                        message, logger=self.logger, logger_method='critical', traceback_string=True)
-                    pass
+                except KeyboardInterrupt:
+                    # message = "KeyboardInterrupt: Stopping DNS Server..."
+                    # print_api(message, logger=self.logger, logger_method='info')
+                    # self.logger.info(message)
+                    # Stop the server
+                    break
+                except Exception as e:
+                    message = f"Unknown Exception to receive DNS request: {str(e)}"
+                    print_api(message, logger=self.logger, logger_method='critical', traceback_string=True)
+                    self.dns_statistics_csv_writer.write_error(
+                        dns_type='request', client_address=client_address, error_message=message)
                     continue
 
                 # noinspection PyBroadException
@@ -926,7 +943,8 @@ def start_dns_server_multiprocessing_worker(
         offline_mode: bool,
         cache_timeout_minutes: int,
         logging_queue: multiprocessing.Queue,
-        logger_name: str
+        logger_name: str,
+        is_ready_multiprocessing: multiprocessing.Event=None
 ):
     # Setting the current thread name to the current process name.
     current_process_name = multiprocessing.current_process().name
@@ -953,4 +971,4 @@ def start_dns_server_multiprocessing_worker(
         time.sleep(1)
         return 1
 
-    dns_server_instance.start()
+    dns_server_instance.start(is_ready_multiprocessing=is_ready_multiprocessing)

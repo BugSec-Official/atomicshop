@@ -41,9 +41,13 @@ class ModuleCategory:
         self.responder_file_path = reference_folder_path + os.sep + "responder___reference_general.py"
         self.recorder_file_path = reference_folder_path + os.sep + "recorder___reference_general.py"
 
-    def fill_engine_fields_from_config(self, engine_config_file_path: str):
+    def fill_engine_fields_from_config(
+            self,
+            engine_config_file_path: str,
+            print_kwargs: dict = None
+    ):
         # Read the configuration file of the engine.
-        configuration_data = tomls.read_toml_file(engine_config_file_path)
+        configuration_data = tomls.read_toml_file(engine_config_file_path, **(print_kwargs or {}))
 
         engine_directory_path: str = str(Path(engine_config_file_path).parent)
         self.engine_name = Path(engine_directory_path).name
@@ -92,17 +96,21 @@ class ModuleCategory:
         for subdomain, file_name in self.mtls.items():
             self.mtls[subdomain] = f'{engine_directory_path}{os.sep}{file_name}'
 
-    def initialize_engine(self, reference_general: bool = False) -> tuple[int, str]:
+    def initialize_engine(
+            self,
+            reference_general: bool = False,
+            print_kwargs: dict = None
+    ) -> tuple[int, str]:
         try:
             if not reference_general:
                 self.parser_class_object = import_first_class_name_from_file_path(
-                    self.script_directory, self.parser_file_path)
+                    self.script_directory, self.parser_file_path, **(print_kwargs or {}))
                 self.requester_class_object = import_first_class_name_from_file_path(
-                    self.script_directory, self.requester_file_path)
+                    self.script_directory, self.requester_file_path, **(print_kwargs or {}))
                 self.responder_class_object = import_first_class_name_from_file_path(
-                    self.script_directory, self.responder_file_path)
+                    self.script_directory, self.responder_file_path, **(print_kwargs or {}))
                 self.recorder_class_object = import_first_class_name_from_file_path(
-                    self.script_directory, self.recorder_file_path)
+                    self.script_directory, self.recorder_file_path, **(print_kwargs or {}))
             else:
                 self.parser_class_object = parser___reference_general.ParserGeneral
                 self.requester_class_object = requester___reference_general.RequesterGeneral

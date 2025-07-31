@@ -161,7 +161,10 @@ class ProcessName:
     ssh_script_to_execute: Literal['process_from_port', 'process_from_ipv4'] = 'process_from_port'
 
 
-def load_config(config_toml_file_path: str):
+def load_config(
+        config_toml_file_path: str,
+        print_kwargs: dict = None
+):
     # global CONFIG
 
     script_path = os.path.dirname(config_toml_file_path)
@@ -169,11 +172,11 @@ def load_config(config_toml_file_path: str):
     MainConfig.update()
 
     # Load the configuration file.
-    result = import_config.import_config_files(config_toml_file_path)
+    result = import_config.import_config_files(config_toml_file_path, print_kwargs=print_kwargs or {})
     return result
 
 
-def get_listening_addresses(client_message: ClientMessage) -> dict:
+def get_listening_addresses(client_message: ClientMessage) -> dict | None:
     """
     Get the list of listening addresses from the TCPServer configuration.
     If no_engines_usage_to_listen_addresses_enable is True, return the no_engines_listening_address_list.

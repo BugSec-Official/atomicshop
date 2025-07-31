@@ -8,11 +8,15 @@ import contextlib
 import threading
 import queue
 import multiprocessing
+import time
 
 from . import loggers, handlers, filters
 from ...file_io import csvs
 from ...basics import tracebacks, ansi_escape_codes
 from ... import print_api
+
+
+QUEUE_LISTENER_PROCESS_NAME_PREFIX: str = "QueueListener-"
 
 
 class LoggingwLoggerAlreadyExistsError(Exception):
@@ -23,6 +27,7 @@ class LoggingwLoggerAlreadyExistsError(Exception):
 def create_logger(
         logger_name: str = None,
         get_queue_listener: bool = False,
+        start_queue_listener_multiprocess_add_queue_handler: bool = False,
 
         add_stream: bool = False,
         add_timedfile: bool = False,
@@ -64,6 +69,8 @@ def create_logger(
     :param logger_name: Name of the logger.
     :param get_queue_listener: bool, If set to True, QueueListener will be started with all the handlers
         like 'add_timedfile' and 'add_stream', using the 'log_queue'.
+    :param start_queue_listener_multiprocess_add_queue_handler: bool, If set to True, the QueueListener will be
+        started in a separate multiprocessing process, without you handling this manually.
 
     Only one of the following parameters can be set at a time: 'logger_name', 'get_queue_listener'.
 
@@ -205,9 +212,12 @@ def create_logger(
     from atomicshop.wrappers.loggingw import loggingw
 
 
-    def worker1(log_queue: multiprocessing.Queue):
+    def worker1(
+        log_queue: multiprocessing.Queue,
+        logger_name: str
+    ):
         error_logger = loggingw.create_logger(
-            logger_name='network',
+            logger_name=logger_name,
             add_queue_handler=True,
             log_queue=log_queue
         )
@@ -215,9 +225,12 @@ def create_logger(
         error_logger.info("Worker1 log message for 'network' logger.")
 
 
-    def worker2(log_queue: multiprocessing.Queue):
+    def worker2(
+        log_queue: multiprocessing.Queue,
+        logger_name: str
+    ):
         error_logger = loggingw.create_logger(
-            logger_name='network',
+            logger_name=logger_name,
             add_queue_handler=True,
             log_queue=log_queue
         )
@@ -238,8 +251,8 @@ def create_logger(
             formatter_filehandler='DEFAULT'
         )
 
-        process1 = multiprocessing.Process(target=worker1, args=(log_queue,))
-        process2 = multiprocessing.Process(target=worker2, args=(log_queue,))
+        process1 = multiprocessing.Process(target=worker1, args=(log_queue, 'network'))
+        process2 = multiprocessing.Process(target=worker2, args=(log_queue, 'network'))
 
         process1.start()
         process2.start()
@@ -247,7 +260,151 @@ def create_logger(
         process1.join()
         process2.join()
 
+        # If we exit the function, we need to stop the listener
         queue_listener.stop()
+
+        return 0
+
+
+    if __name__ == "__main__":
+        sys.exit(main())
+
+    --------------------------------------------------
+
+    Example if you need to start a QueueListener in multiprocessing, which is less garbage code and python's
+    garbage collector handles the listener closing without the need to call 'stop()' method:
+
+    import sys
+    import multiprocessing
+    from atomicshop.wrappers.loggingw import loggingw
+
+
+    def worker1(
+        log_queue: multiprocessing.Queue,
+        logger_name: str
+    ):
+        error_logger = loggingw.create_logger(
+            logger_name=logger_name,
+            add_queue_handler=True,
+            log_queue=log_queue
+        )
+
+        error_logger.info("Worker1 log message for 'network' logger.")
+
+
+    def worker2(
+        log_queue: multiprocessing.Queue,
+        logger_name: str
+    ):
+        error_logger = loggingw.create_logger(
+            logger_name=logger_name,
+            add_queue_handler=True,
+            log_queue=log_queue
+        )
+
+        error_logger.info("Worker2 log message for 'network' logger.")
+
+
+    def main():
+        log_queue = multiprocessing.Queue()
+        logger_name: str = 'network'
+
+        loggingw.start_queue_listener_in_multiprocessing(
+            logger_name=logger_name,
+            add_stream=True,
+            add_timedfile=True,
+            log_queue=log_queue,
+            file_type='txt',
+            formatter_streamhandler='DEFAULT',
+            formatter_filehandler='DEFAULT'
+        )
+
+        # If you want you can get the QueueListener processes.
+        # listener_processes = loggingw.get_listener_processes(logger_name=logger_name)[0]
+        # Or if you started several listeners, you can get all of them:
+        # listener_processes_list: list = loggingw.get_listener_processes()
+
+        process1 = multiprocessing.Process(target=worker1, args=(log_queue, logger_name))
+        process2 = multiprocessing.Process(target=worker2, args=(log_queue, logger_name))
+
+        process1.start()
+        process2.start()
+
+        process1.join()
+        process2.join()
+
+        return 0
+
+
+    if __name__ == "__main__":
+        sys.exit(main())
+
+    ---------------------------------------------------
+
+    Or you can use the 'create_logger' function with 'start_queue_listener_multiprocess=True' parameter,
+    which will start the QueueListener in a separate multiprocessing process automatically if you want to use the
+    queue handler logger also in the main process:
+
+    import sys
+    import multiprocessing
+    from atomicshop.wrappers.loggingw import loggingw
+
+
+    def worker1(
+        log_queue: multiprocessing.Queue,
+        logger_name: str
+    ):
+        error_logger = loggingw.create_logger(
+            logger_name=logger_name,
+            add_queue_handler=True,
+            log_queue=log_queue
+        )
+
+        error_logger.info("Worker1 log message for 'network' logger.")
+
+
+    def worker2(
+        log_queue: multiprocessing.Queue,
+        logger_name: str
+    ):
+        error_logger = loggingw.create_logger(
+            logger_name=logger_name,
+            add_queue_handler=True,
+            log_queue=log_queue
+        )
+
+        error_logger.info("Worker2 log message for 'network' logger.")
+
+
+    def main():
+        log_queue = multiprocessing.Queue()
+
+        main_logger: Logger = loggingw.create_logger(
+            logger_name='network',
+            start_queue_listener_multiprocess_add_queue_handler=True,
+            add_stream=True,
+            add_timedfile=True,
+            log_queue=log_queue,
+            file_type='txt',
+            formatter_streamhandler='DEFAULT',
+            formatter_filehandler='DEFAULT'
+        )
+
+        main_logger.info("Main process log message for 'network' logger.")
+
+        # If you want you can get the QueueListener processes.
+        # listener_processes = loggingw.get_listener_processes(logger_name=logger_name)[0]
+        # Or if you started several listeners, you can get all of them:
+        # listener_processes_list: list = loggingw.get_listener_processes()
+
+        process1 = multiprocessing.Process(target=worker1, args=(log_queue, 'network'))
+        process2 = multiprocessing.Process(target=worker2, args=(log_queue, 'network'))
+
+        process1.start()
+        process2.start()
+
+        process1.join()
+        process2.join()
 
         return 0
 
@@ -256,7 +413,46 @@ def create_logger(
         sys.exit(main())
     """
 
-    if logger_name and get_queue_listener:
+    if start_queue_listener_multiprocess_add_queue_handler and (get_queue_listener or add_queue_handler):
+        raise ValueError("You don't need to set 'get_queue_listener' or 'add_queue_handler' "
+                         "when setting 'start_queue_listener_multiprocess_add_queue_handler'.")
+
+    if start_queue_listener_multiprocess_add_queue_handler:
+        logger_instance: Logger = _create_logger_with_queue_handler(
+            logger_name=logger_name,
+            log_queue=log_queue
+        )
+
+        # Start the QueueListener in a separate multiprocessing process.
+        start_queue_listener_in_multiprocessing(
+            logger_name=logger_name,
+            add_stream=add_stream,
+            add_timedfile=add_timedfile,
+            add_timedfile_with_internal_queue=add_timedfile_with_internal_queue,
+            log_queue=log_queue,
+            file_path=file_path,
+            directory_path=directory_path,
+            file_type=file_type,
+            logging_level=logging_level,
+            formatter_streamhandler=formatter_streamhandler,
+            formatter_filehandler=formatter_filehandler,
+            formatter_streamhandler_use_nanoseconds=formatter_streamhandler_use_nanoseconds,
+            formatter_filehandler_use_nanoseconds=formatter_filehandler_use_nanoseconds,
+            filehandler_rotate_at_rollover_time=filehandler_rotate_at_rollover_time,
+            filehandler_rotation_date_format=filehandler_rotation_date_format,
+            filehandler_rotation_callback_namer_function=filehandler_rotation_callback_namer_function,
+            filehandler_rotation_use_default_namer_function=filehandler_rotation_use_default_namer_function,
+            when=when,
+            interval=interval,
+            backupCount=backupCount,
+            delay=delay,
+            encoding=encoding,
+            header=header
+        )
+
+        return logger_instance
+
+    if logger_name and get_queue_listener and not start_queue_listener_multiprocess_add_queue_handler:
         raise ValueError("You can't set both 'logger_name' and 'get_queue_listener'.")
     if not logger_name and not get_queue_listener:
         raise ValueError("You need to provide 'logger_name' or 'get_queue_listener'.")
@@ -366,6 +562,23 @@ def create_logger(
         return queue_listener
 
 
+def _create_logger_with_queue_handler(
+            logger_name: str,
+            log_queue: Union[queue.Queue, multiprocessing.Queue]
+    ) -> Logger:
+    """
+    The function to create a logger with QueueHandler so the QueueListener can be started later in multiprocessing.
+    """
+
+    logger_instance: Logger = create_logger(
+        logger_name=logger_name,
+        add_queue_handler=True,
+        log_queue=log_queue
+    )
+
+    return logger_instance
+
+
 def get_logger_with_level(
         logger_name: str,
         logging_level="DEBUG"
@@ -404,6 +617,135 @@ def disable_default_logger():
 
     # Disabling the default logger in Python
     logging.disable(logging.CRITICAL)
+
+
+def start_queue_listener_in_multiprocessing(
+        logger_name: str = None,
+
+        add_stream: bool = False,
+        add_timedfile: bool = False,
+        add_timedfile_with_internal_queue: bool = False,
+
+        log_queue: Union[queue.Queue, multiprocessing.Queue] = None,
+        file_path: str = None,
+        directory_path: str = None,
+        file_type: Literal[
+            'txt',
+            'csv',
+            'json'] = 'txt',
+        logging_level="DEBUG",
+        formatter_streamhandler: Union[
+            Literal['MESSAGE', 'DEFAULT'],
+            str,
+            None] = None,
+        formatter_filehandler: Union[
+            Literal['MESSAGE', 'DEFAULT'],
+            str,
+            None] = None,
+        formatter_streamhandler_use_nanoseconds: bool = True,
+        formatter_filehandler_use_nanoseconds: bool = True,
+        filehandler_rotate_at_rollover_time: bool = True,
+        filehandler_rotation_date_format: str = None,
+        filehandler_rotation_callback_namer_function: callable = None,
+        filehandler_rotation_use_default_namer_function: bool = True,
+        when: str = "midnight",
+        interval: int = 1,
+        backupCount: int = 0,
+        delay: bool = False,
+        encoding=None,
+        header: str = None
+) -> multiprocessing.Process:
+    """
+    Function to start a QueueListener in multiprocessing.
+    PARAMETERS are same as in 'create_logger' function.
+
+    logger_name: Name of the logger. Will be used only to name the QueueListener process.
+    """
+
+    if not file_path and directory_path and logger_name:
+        file_path = f"{directory_path}{os.sep}{logger_name}.{file_type}"
+
+    worker_kwargs = dict(
+        get_queue_listener=True,
+
+        add_stream=add_stream,
+        add_timedfile=add_timedfile,
+        add_timedfile_with_internal_queue=add_timedfile_with_internal_queue,
+
+        log_queue=log_queue,
+        file_path=file_path,
+        file_type=file_type,
+        logging_level=logging_level,
+        formatter_streamhandler=formatter_streamhandler,
+        formatter_filehandler=formatter_filehandler,
+        formatter_streamhandler_use_nanoseconds=formatter_streamhandler_use_nanoseconds,
+        formatter_filehandler_use_nanoseconds=formatter_filehandler_use_nanoseconds,
+        filehandler_rotate_at_rollover_time=filehandler_rotate_at_rollover_time,
+        filehandler_rotation_date_format=filehandler_rotation_date_format,
+        filehandler_rotation_callback_namer_function=filehandler_rotation_callback_namer_function,
+        filehandler_rotation_use_default_namer_function=filehandler_rotation_use_default_namer_function,
+        when=when,
+        interval=interval,
+        backupCount=backupCount,
+        delay=delay,
+        encoding=encoding,
+        header=header,
+    )
+
+    is_ready: multiprocessing.Event = multiprocessing.Event()
+
+    # Create a new process to run the QueueListener.
+    queue_listener_process = multiprocessing.Process(
+        target=_queue_listener_multiprocessing_worker,
+        name=f"{QUEUE_LISTENER_PROCESS_NAME_PREFIX}{logger_name}",
+        args=(is_ready,),
+        kwargs=worker_kwargs,
+        daemon=True
+    )
+    queue_listener_process.start()
+
+    # Wait until the QueueListener is loaded and ready.
+    is_ready.wait()
+
+    return queue_listener_process
+
+
+def _queue_listener_multiprocessing_worker(
+        is_ready: multiprocessing.Event,
+        **kwargs
+):
+    network_logger_queue_listener = create_logger(**kwargs)
+    is_ready.set()  # Signal that the logger is loaded and ready.
+
+    try:
+        while True:
+            time.sleep(1)  # keep the process alive
+    except KeyboardInterrupt:
+        pass
+    finally:
+        network_logger_queue_listener.stop()
+
+
+def get_listener_processes(
+        logger_name: str = None
+) -> list:
+    """
+    Function to get the list of QueueListener processes.
+    :param logger_name: Name of the logger to filter the listener processes.
+        If None, all listener processes will be returned.
+        If provided logger_name, only the listener processes for that logger will be returned.
+    :return: List of QueueListener multiprocessing processes.
+    """
+
+    listener_processes: list = []
+    for process in multiprocessing.active_children():
+        # If logger_name is provided, filter the processes by logger_name.
+        if logger_name and process.name == f"{QUEUE_LISTENER_PROCESS_NAME_PREFIX}{logger_name}":
+            listener_processes.append(process)
+        if not logger_name and process.name.startswith(QUEUE_LISTENER_PROCESS_NAME_PREFIX):
+            listener_processes.append(process)
+
+    return listener_processes
 
 
 def get_datetime_format_string_from_logger_file_handlers(logger: logging.Logger) -> list:
@@ -552,12 +894,15 @@ def temporary_change_logger_stream_record_color(logger: logging.Logger, color: s
         found_stream_handler.removeFilter(color_filter)
 
 
-class ExceptionCsvLogger:
+class CsvLogger:
     def __init__(
             self,
             logger_name: str,
             directory_path: str = None,
-            custom_header: str = None
+            custom_header: str = None,
+            log_queue: Union[queue.Queue, multiprocessing.Queue] = None,
+            add_queue_handler_start_listener_multiprocessing: bool = False,
+            add_queue_handler_no_listener_multiprocessing: bool = False
     ):
         """
         Initialize the ExceptionCsvLogger object.
@@ -571,12 +916,26 @@ class ExceptionCsvLogger:
                 "custom1,custom2,custom3".
             These will be added to the default header as:
                 "timestamp,custom1,custom2,custom3,exception".
+        :param log_queue: Queue to use for the logger, needed for the queue handler/listener.
+
+        :param add_queue_handler_start_listener_multiprocessing: bool, whether to add a queue handler that will use
+            the 'log_queue' and start the queue listener with the same 'log_queue' for multiprocessing.
+        :param add_queue_handler_no_listener_multiprocessing: bool, whether to add a queue handler that will use
+            the 'log_queue' but will not start the queue listener for multiprocessing. This is useful when you
+            already started the queue listener and want to add more handlers to the logger without
+            starting a new listener.
+
+        If you don't set any of 'add_queue_handler_start_listener_multiprocessing' or
+        'add_queue_handler_no_listener_multiprocessing', the logger will be created without a queue handler.
         """
 
-        if custom_header:
-            self.header = f"timestamp,{custom_header},exception"
-        else:
-            self.header = "timestamp,exception"
+        if add_queue_handler_no_listener_multiprocessing and add_queue_handler_start_listener_multiprocessing:
+            raise ValueError(
+                "You can't set both 'add_queue_handler_start_listener_multiprocessing' and "
+                "'add_queue_handler_no_listener_multiprocessing' to True."
+            )
+
+        self.header = custom_header
 
         if is_logger_exists(logger_name):
             self.logger = get_logger_with_level(logger_name)
@@ -584,13 +943,95 @@ class ExceptionCsvLogger:
             if directory_path is None:
                 raise ValueError("You need to provide 'directory_path' if the logger doesn't exist.")
 
-            self.logger = create_logger(
-                logger_name=logger_name,
-                directory_path=directory_path,
-                file_type="csv",
-                add_timedfile=True,
-                formatter_filehandler='MESSAGE',
-                header=self.header)
+            if add_queue_handler_start_listener_multiprocessing:
+                if not log_queue:
+                    raise ValueError(
+                        "You need to provide 'logger_queue' if 'add_queue_handler_start_listener_multiprocess' is set to True.")
+
+                # Create a logger with a queue handler that starts a listener for multiprocessing.
+                self.logger = create_logger(
+                    logger_name=logger_name,
+                    start_queue_listener_multiprocess_add_queue_handler=True,
+                    log_queue=log_queue,
+                    directory_path=directory_path,
+                    add_timedfile=True,
+                    formatter_filehandler='MESSAGE',
+                    file_type='csv',
+                    header=self.header
+                )
+            elif add_queue_handler_no_listener_multiprocessing:
+                if not log_queue:
+                    raise ValueError(
+                        "You need to provide 'logger_queue' if 'add_queue_handler_no_listener_multiprocess' is set to True.")
+
+                # Create a logger with a queue handler that does not start a listener for multiprocessing.
+                self.logger = create_logger(
+                    logger_name=logger_name,
+                    add_queue_handler=True,
+                    log_queue=log_queue
+                )
+            elif not add_queue_handler_start_listener_multiprocessing and not add_queue_handler_no_listener_multiprocessing:
+                self.logger = create_logger(
+                    logger_name=logger_name,
+                    directory_path=directory_path,
+                    file_type="csv",
+                    add_timedfile=True,
+                    formatter_filehandler='MESSAGE',
+                    header=self.header)
+
+    def write(
+            self,
+            row_of_cols: list
+    ):
+        """
+        Write a row of columns to the log file.
+
+        :param row_of_cols: List of columns to write to the csv log file.
+        """
+
+        output_csv_line: str = csvs.escape_csv_line_to_string(row_of_cols)
+
+        # If the number of cells in the 'output_csv_line' doesn't match the number of cells in the 'header',
+        # raise an exception.
+        if (csvs.get_number_of_cells_in_string_line(output_csv_line) !=
+                csvs.get_number_of_cells_in_string_line(self.header)):
+            raise ValueError(
+                "Number of cells in the 'output_csv_line' doesn't match the number of cells in the 'header'.")
+
+        self.logger.info(output_csv_line)
+
+    def get_logger(self):
+        return self.logger
+
+
+class ExceptionCsvLogger(CsvLogger):
+    def __init__(
+            self,
+            logger_name: str,
+            directory_path: str = None,
+            custom_header: str = None,
+            log_queue: Union[queue.Queue, multiprocessing.Queue] = None,
+            add_queue_handler_start_listener_multiprocessing: bool = False,
+            add_queue_handler_no_listener_multiprocessing: bool = False
+    ):
+        """
+        Initialize the ExceptionCsvLogger object.
+        """
+
+        if custom_header:
+            custom_header = f"timestamp,{custom_header},exception"
+        else:
+            custom_header = "timestamp,exception"
+
+        super().__init__(
+            logger_name=logger_name,
+            directory_path=directory_path,
+            custom_header=custom_header,
+            log_queue=log_queue,
+            add_queue_handler_start_listener_multiprocessing=add_queue_handler_start_listener_multiprocessing,
+            add_queue_handler_no_listener_multiprocessing=add_queue_handler_no_listener_multiprocessing
+        )
+
 
     def write(
             self,
@@ -616,21 +1057,11 @@ class ExceptionCsvLogger:
             message = tracebacks.get_as_string()
 
         if custom_csv_string:
-            output_csv_line: str = csvs.escape_csv_line_to_string([datetime.datetime.now(), custom_csv_string, message])
+            row_of_cols: list = [datetime.datetime.now(), custom_csv_string, message]
         else:
-            output_csv_line: str = csvs.escape_csv_line_to_string([datetime.datetime.now(), message])
+            row_of_cols: list = [datetime.datetime.now(), message]
 
-        # If the number of cells in the 'output_csv_line' doesn't match the number of cells in the 'header',
-        # raise an exception.
-        if (csvs.get_number_of_cells_in_string_line(output_csv_line) !=
-                csvs.get_number_of_cells_in_string_line(self.header)):
-            raise ValueError(
-                "Number of cells in the 'output_csv_line' doesn't match the number of cells in the 'header'.")
-
-        self.logger.info(output_csv_line)
+        super().write(row_of_cols)
 
         if stdout:
             print_api.print_api('', error_type=True, color="red", traceback_string=True)
-
-    def get_logger(self):
-        return self.logger
