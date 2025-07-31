@@ -160,6 +160,13 @@ class SocketClient:
                     f"Domain {self.service_name} doesn't exist - Couldn't resolve with {self.dns_servers_list}.")
                 print_api.print_api(error_string, logger=self.logger, logger_method='error')
                 return None, error_string
+            except dns.resolver.LifetimeTimeout as e:
+                exception_type: str = type(e).__name__
+                error_string = (
+                    f"Socket Client Connect: {exception_type}: "
+                    f"Timeout while resolving domain {self.service_name} with {self.dns_servers_list}.")
+                print_api.print_api(error_string, logger=self.logger, logger_method='error')
+                return None, error_string
 
         # If DNS was resolved correctly or DNS servers weren't specified - we can try connecting.
         # If 'connection_ip' was manually specified or resolved with 'dnspython' - the connection

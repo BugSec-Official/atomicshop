@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.3.0-3.3.1 - 31.07.2025
+  * basics/multiprocesses, config_init, mitm, wrappers/loggingw/loggingw, wrappers/socketw - fixes and improvements.
 * 3.2.13 - 15.07.2025
   * wrappers/factw/install/pre_install_and_install_before_restart - fixes.
 * 3.2.12 - 15.07.2025

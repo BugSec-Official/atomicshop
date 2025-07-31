@@ -212,3 +212,24 @@ class ResponderGeneral(ResponderParent):
     #
     #     result_response_list: list[bytes] = [byte_response]
     #     return result_response_list
+    #
+    # ==================================================================================================================
+    # TEST RESPONSE.
+    # def create_response(self, class_client_message: ClientMessage):
+    #     resp_body_text: bytes = b"<html><body>TEST OK!</body></html>\n"
+    #     resp_status_code: int = 200
+    #     resp_headers: dict = {
+    #         # Tell the browser it’s plain text (could be “text/html” if you wrap it in HTML).
+    #         "Content-Type": "text/html; charset=utf-8"}
+    #
+    #     # Build the raw bytes to send.
+    #     byte_response = self.build_byte_response(
+    #         http_version="HTTP/1.1",
+    #         status_code=resp_status_code,
+    #         headers=resp_headers,
+    #         body=resp_body_text
+    #
+    #     )
+    #
+    #     result_response_list: list[bytes] = [byte_response]
+    #     return result_response_list

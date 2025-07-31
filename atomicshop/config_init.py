@@ -8,7 +8,11 @@ CONFIG_FILE_NAME = 'config.toml'
 CONFIG: dict = dict()
 
 
-def get_config(script_directory: str = None, config_file_name: str = CONFIG_FILE_NAME) -> dict:
+def get_config(
+        script_directory: str = None,
+        config_file_name: str = CONFIG_FILE_NAME,
+        print_kwargs: dict = None
+) -> dict:
     """
     Get the config file content.
 
@@ -16,6 +20,7 @@ def get_config(script_directory: str = None, config_file_name: str = CONFIG_FILE
         get the working directory instead.
     :param config_file_name: string, name of the config file. Default is 'config.toml' as specified in the constant:
         'CONFIG_FILE_NAME'.
+    :param print_kwargs: dict, additional arguments to pass to the print function. Default is None.
     :return: dict.
     """
 
@@ -25,7 +30,7 @@ def get_config(script_directory: str = None, config_file_name: str = CONFIG_FILE
     if not script_directory:
         script_directory = filesystem.get_working_directory()
 
-    CONFIG = tomls.read_toml_file(f'{script_directory}{os.sep}{config_file_name}')
+    CONFIG = tomls.read_toml_file(f'{script_directory}{os.sep}{config_file_name}', **(print_kwargs or {}))
     return CONFIG
 
 

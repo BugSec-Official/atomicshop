@@ -7,8 +7,75 @@ import concurrent.futures
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from collections import deque
 from typing import Callable
+import time
 
 from ..import system_resources
+
+
+def kill_processes(
+        processes: list
+):
+    """Terminate all children with SIGTERM (or SIGKILL if you like)."""
+    # Ask OS to terminate all processes in the list.
+    for p in processes:
+        if p.is_alive():
+            p.terminate()
+    time.sleep(1)  # give processes a chance to exit cleanly
+    # Force kill all processes in the list.
+    for p in processes:
+        if p.is_alive():
+            p.kill()
+    for p in processes:          # wait for everything to disappear
+        p.join()
+
+
+def is_process_crashed(
+        processes: list[multiprocessing.Process]
+) -> tuple[int, str] | tuple[None, None]:
+    """
+    Check if any of the processes in the list is not alive.
+    :param processes: list, list of multiprocessing.Process objects.
+    :return: tuple(int, string) or None.
+        tuple(0 if any finished cleanly, process name).
+        tuple(1 (or exit code integer) if any process crashed, process_name).
+        None if all processes are still alive.
+
+    ==============================================
+
+    Usage example:
+    processes = [multiprocessing.Process(target=some_function) for _ in range(5)]
+
+    for p in processes:
+        p.start()
+
+    # Check if any process has crashed
+    try:
+        while True:
+            # Poll every second; you can use a shorter sleep if you prefer.
+            result, process_name = is_process_crashed(processes)
+            # If result is None, all processes are still alive.
+            if result is not None:
+                # If result is 0 or 1, we can exit the loop.
+                print(f"Process [{process_name}] finished with exit code {result}.")
+                break
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("Ctrl-C caught – terminating children…")
+        kill_all(processes)
+        sys.exit(0)
+    """
+
+    for p in processes:
+        if p.exitcode is not None:  # the process is *dead*
+            kill_processes(processes)  # stop the rest
+            if p.exitcode == 0:
+                # print(f"{p.name} exited cleanly; shutting down.")
+                return 0, p.name
+            else:
+                # print(f"{p.name} crashed (exitcode {p.exitcode}). Shutting everything down.")
+                return p.exitcode, p.name
+
+    return None, None  # all processes are still alive
 
 
 def process_wrap_queue(function_reference: Callable, *args, **kwargs):
