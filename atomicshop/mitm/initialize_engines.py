@@ -45,7 +45,7 @@ class ModuleCategory:
             self,
             engine_config_file_path: str,
             print_kwargs: dict = None
-    ):
+    ) -> tuple[int, str]:
         # Read the configuration file of the engine.
         configuration_data = tomls.read_toml_file(engine_config_file_path, **(print_kwargs or {}))
 
@@ -82,7 +82,11 @@ class ModuleCategory:
 
         for domain_index, domain_port_string in enumerate(self.domain_list):
             # Splitting the domain and port
-            domain, port = domain_port_string.split(':')
+            if ':' in domain_port_string:
+                domain, port = domain_port_string.split(':')
+            else:
+                error_string: str = f"No [domain:port] pair found in: {domain_port_string}"
+                return 1, error_string
 
             self.domain_target_dict[domain] = {'ip': None, 'port': port}
 
@@ -95,6 +99,8 @@ class ModuleCategory:
 
         for subdomain, file_name in self.mtls.items():
             self.mtls[subdomain] = f'{engine_directory_path}{os.sep}{file_name}'
+
+        return 0, ''
 
     def initialize_engine(
             self,

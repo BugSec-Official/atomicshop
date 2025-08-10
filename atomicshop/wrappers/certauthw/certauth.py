@@ -198,6 +198,7 @@ class CertificateAuthority(object):
 
         cert.set_issuer(cert.get_subject())
         cert.set_pubkey(key)
+
         cert.add_extensions([
             crypto.X509Extension(b"basicConstraints",
                                  True,

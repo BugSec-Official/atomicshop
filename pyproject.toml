@@ -47,7 +47,8 @@ authors = [
 ]
 # Short description.
 description = "Atomic functions and classes to make developer life easier"
-license = {file = "LICENSE.txt"}
+license = "MIT"
+license-files = ["LICENSE.txt"]
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -68,7 +69,7 @@ dependencies = [
     "paramiko",
     "pefile",
     "playwright",
-    "playwright-stealth==1.0.6",
+#    "playwright-stealth==1.0.6",
     "protobuf",
     "psutil",
     "py7zr==0.22.0",
@@ -90,7 +91,6 @@ dependencies = [
 
 classifiers = [
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Topic :: Software Development :: Libraries :: Python Modules"
 ]

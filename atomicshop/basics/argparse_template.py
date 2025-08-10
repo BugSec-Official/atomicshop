@@ -36,6 +36,8 @@ class ArgparseWrapper:
         # formatter_class=RawTextHelpFormatter: shows raw text and not the default argparse text parsing.
         self.parser = argparse.ArgumentParser(description=self.description_full,
                                               usage=self.usage_variable,
+                                              # usage=argparse.SUPPRESS         # Remove usage line from the beginning.
+                                              # add_help=False,                 # Remove help line from the end.
                                               formatter_class=RawTextHelpFormatter)
 
     def add_arguments(self) -> None:

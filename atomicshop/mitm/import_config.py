@@ -93,7 +93,10 @@ def import_engines_configs(print_kwargs: dict) -> int:
     for engine_config_path in engine_config_path_list:
         # Initialize engine.
         current_module: initialize_engines.ModuleCategory = initialize_engines.ModuleCategory(config_static.MainConfig.SCRIPT_DIRECTORY)
-        current_module.fill_engine_fields_from_config(engine_config_path.path, print_kwargs=print_kwargs or {})
+        result_code, error = current_module.fill_engine_fields_from_config(engine_config_path.path, print_kwargs=print_kwargs or {})
+        if result_code != 0:
+            print_api(f"Error reading engine config file: {engine_config_path.path}\n{error}", color='red')
+            return result_code
         result_code, error = current_module.initialize_engine(print_kwargs=print_kwargs or {})
         if result_code != 0:
             print_api(f"Error initializing engine from directory: {Path(engine_config_path.path).parent}\n{error}", color='red')

@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.3.2 - 10.08.2025
+  * basics/argparse_template, certificates, filesystem, mitm, wrappers/certauthw/certauth, wrappers/cryptographyw, wrappers/playwrightw/engine, wrappers/pyopensslw, wrappers/socketw, project.toml - fixes and improvements.
 * 3.3.0-3.3.1 - 31.07.2025
   * basics/multiprocesses, config_init, mitm, wrappers/loggingw/loggingw, wrappers/socketw - fixes and improvements.
 * 3.2.13 - 15.07.2025

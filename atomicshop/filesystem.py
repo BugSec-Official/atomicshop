@@ -288,7 +288,11 @@ def remove_file(file_path: str, **kwargs) -> bool:
         return False
 
 
-def remove_directory(directory_path: str, force_readonly: bool = False, print_kwargs: dict = None) -> bool:
+def remove_directory(
+        directory_path: str,
+        force_readonly: bool = False,
+        print_kwargs: dict = None
+) -> bool:
     """
     Remove directory if it exists.
 

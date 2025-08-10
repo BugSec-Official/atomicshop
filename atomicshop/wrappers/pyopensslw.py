@@ -1,4 +1,4 @@
-import random
+from secrets import randbits
 from OpenSSL import crypto
 
 from .. import certificates
@@ -121,7 +121,14 @@ def generate_server_certificate_empty(
     """
 
     cert = crypto.X509()
-    cert.set_serial_number(random.randint(0, 2 ** 64 - 1))
+
+    # RFC 5280: serial must be positive and non-zero
+    # 1 … 2⁶⁴-1
+    cert.set_serial_number(randbits(64))
+    current_serial = cert.get_serial_number()
+    if current_serial <= 0:
+        raise RuntimeError(f"Refusing to create a certificate with non-positive serial: {str(current_serial)}")
+
     cert.get_subject().CN = certname
 
     cert.set_version(2)

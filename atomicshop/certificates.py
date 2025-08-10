@@ -68,7 +68,8 @@ def is_certificate_in_store(
         by_cert_issuer: bool = True,
         by_cert_thumbprint: bool = True,
         issuer_name: str = None,
-        store_location: str = "ROOT"
+        store_location: str = "ROOT",
+        print_kwargs: dict = None
 ) -> tuple[bool, list]:
     """
     The function will check if the CA certificate is installed in the Windows certificate Trusted Root store.
@@ -89,6 +90,7 @@ def is_certificate_in_store(
         certificates with the same issuer name.
     :param issuer_name: string, issuer name to search for. You can search by certificate or by issuer name.
     :param store_location: string, store location to search in. Default is "ROOT".
+    :param print_kwargs: dict, print_api kwargs.
     :return: tuple(bool - True if certificate is installed and False if not, list of certificates found)
     """
 
@@ -102,7 +104,7 @@ def is_certificate_in_store(
 
     if certificate:
         # Make sure the certificate is x509.Certificate object.
-        certificate_x509 = cryptographyw.convert_object_to_x509(certificate)
+        certificate_x509 = cryptographyw.convert_object_to_x509(certificate, print_kwargs=print_kwargs)
         # Get the certificate thumbprint.
         provided_thumbprint = cryptographyw.get_sha1_thumbprint_from_x509(certificate_x509)
         provided_issuer_common_name: str = cryptographyw.get_issuer_common_name_from_x509(certificate_x509)
@@ -117,7 +119,12 @@ def is_certificate_in_store(
     result_found_list: list = []
     found: bool = False
     for cert, encoding, trust in ssl.enum_certificates(store_location):
+        # Some certificates in the store can have zero or negative serial number.
+        # We will skip them, since they're deprecated by the cryptography library.
         store_certificate = cryptographyw.convert_object_to_x509(cert)
+        if not store_certificate:
+            continue
+
         store_issuer_common_name: str = cryptographyw.get_issuer_common_name_from_x509(store_certificate)
         store_thumbprint = cryptographyw.get_sha1_thumbprint_from_x509(store_certificate)
 
