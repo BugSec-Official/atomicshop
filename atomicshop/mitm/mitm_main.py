@@ -320,7 +320,7 @@ def mitm_server(config_file_path: str, script_version: str):
         return 1
 
     # Import the configuration file.
-    result = config_static.load_config(config_file_path)
+    result = config_static.load_config(config_file_path, print_kwargs=dict(stdout=False))
     if result != 0:
         return result
 
@@ -392,47 +392,10 @@ def mitm_server(config_file_path: str, script_version: str):
     # Logging Startup information.
     startup_output(system_logger, script_version)
 
-    print_api.print_api("Press [Ctrl]+[C] to stop.", color='blue')
-
     multiprocess_list: list[multiprocessing.Process] = list()
     # noinspection PyTypeHints
     is_ready_multiprocessing_event_list: list[multiprocessing.Event] = list()
 
-    # === Initialize DNS module ====================================================================================
-    if config_static.DNSServer.enable:
-        is_dns_process_ready: multiprocessing.Event = multiprocessing.Event()
-        is_ready_multiprocessing_event_list.append(is_dns_process_ready)
-
-        dns_server_kwargs: dict = dict(
-            listening_address=config_static.DNSServer.listening_address,
-            log_directory_path=config_static.LogRec.logs_path,
-            backupCount_log_files_x_days=config_static.LogRec.store_logs_for_x_days,
-            forwarding_dns_service_ipv4=config_static.DNSServer.forwarding_dns_service_ipv4,
-            forwarding_dns_service_port=config_static.DNSServer.forwarding_dns_service_port,
-            resolve_by_engine=(
-                config_static.DNSServer.resolve_by_engine, config_static.ENGINES_LIST),
-            resolve_regular_pass_thru=config_static.DNSServer.resolve_regular_pass_thru,
-            resolve_all_domains_to_ipv4=(
-                config_static.DNSServer.resolve_all_domains_to_ipv4_enable, config_static.DNSServer.target_ipv4),
-            offline_mode=config_static.MainConfig.offline,
-            cache_timeout_minutes=config_static.DNSServer.cache_timeout_minutes,
-            logging_queue=NETWORK_LOGGER_QUEUE,
-            logger_name=network_logger_name,
-            is_ready_multiprocessing=is_dns_process_ready
-        )
-
-        dns_process = multiprocessing.Process(
-            target=dns_server.start_dns_server_multiprocessing_worker,
-            kwargs=dns_server_kwargs,
-            name="dns_server",
-            daemon=True
-        )
-        dns_process.start()
-
-        multiprocess_list.append(dns_process)
-
-
-    # === EOF Initialize DNS module ================================================================================
     # === Initialize TCP Server ====================================================================================
     if config_static.TCPServer.enable:
         # Get the default network adapter configuration and set the one from config.
@@ -525,9 +488,11 @@ def mitm_server(config_file_path: str, script_version: str):
                 exceptions_logger_name=EXCEPTIONS_CSV_LOGGER_NAME,
                 exceptions_logger_queue=EXCEPTIONS_CSV_LOGGER_QUEUE,
                 forwarding_dns_service_ipv4_list___only_for_localhost=[config_static.DNSServer.forwarding_dns_service_ipv4],
-                skip_extension_id_list=config_static.SkipExtensions.SKIP_EXTENSION_ID_LIST
+                skip_extension_id_list=config_static.SkipExtensions.SKIP_EXTENSION_ID_LIST,
+                print_kwargs=dict(stdout=False)
             )
 
+            # noinspection PyTypeHints
             is_tcp_process_ready: multiprocessing.Event = multiprocessing.Event()
             is_ready_multiprocessing_event_list.append(is_tcp_process_ready)
 
@@ -551,16 +516,52 @@ def mitm_server(config_file_path: str, script_version: str):
         recs_archiver_thread.start()
 
         # Check that all the multiprocesses are ready.
-        for event in is_ready_multiprocessing_event_list:
-            if not event.wait(timeout=30):
-                print_api.print_api("One of the processes didn't start in time.", error_type=True, color="red",
-                                    logger=system_logger)
-                # Wait for the message to be printed and saved to file.
-                time.sleep(1)
-                return 1
+        if not _wait_for_events(is_ready_multiprocessing_event_list, timeout=30, system_logger=system_logger):
+            return 1
+    # === EOF Initialize TCP Server ====================================================================================
+
+    # === Initialize DNS module ========================================================================================
+    if config_static.DNSServer.enable:
+        # noinspection PyTypeHints
+        is_dns_process_ready: multiprocessing.Event = multiprocessing.Event()
+
+        dns_server_kwargs: dict = dict(
+            listening_address=config_static.DNSServer.listening_address,
+            log_directory_path=config_static.LogRec.logs_path,
+            backupCount_log_files_x_days=config_static.LogRec.store_logs_for_x_days,
+            forwarding_dns_service_ipv4=config_static.DNSServer.forwarding_dns_service_ipv4,
+            forwarding_dns_service_port=config_static.DNSServer.forwarding_dns_service_port,
+            resolve_by_engine=(
+                config_static.DNSServer.resolve_by_engine, config_static.ENGINES_LIST),
+            resolve_regular_pass_thru=config_static.DNSServer.resolve_regular_pass_thru,
+            resolve_all_domains_to_ipv4=(
+                config_static.DNSServer.resolve_all_domains_to_ipv4_enable, config_static.DNSServer.target_ipv4),
+            offline_mode=config_static.MainConfig.offline,
+            cache_timeout_minutes=config_static.DNSServer.cache_timeout_minutes,
+            logging_queue=NETWORK_LOGGER_QUEUE,
+            logger_name=network_logger_name,
+            is_ready_multiprocessing=is_dns_process_ready
+        )
+
+        dns_process = multiprocessing.Process(
+            target=dns_server.start_dns_server_multiprocessing_worker,
+            kwargs=dns_server_kwargs,
+            name="dns_server",
+            daemon=True
+        )
+        dns_process.start()
+
+        multiprocess_list.append(dns_process)
+
+        # Check that the multiprocess is ready.
+        if not _wait_for_events([is_dns_process_ready], timeout=30, system_logger=system_logger):
+            return 1
+    # === EOF Initialize DNS module ====================================================================================
 
     if config_static.DNSServer.enable or config_static.TCPServer.enable:
         print_api.print_api("The Server is Ready for Operation!", color="green", logger=system_logger)
+        print_api.print_api("Press [Ctrl]+[C] to stop.", color='blue', logger=system_logger)
+
         # Get al the queue listener processes (basically this is not necessary, since they're 'daemons', but this is a good practice).
         multiprocess_list.extend(loggingw.get_listener_processes())
 
@@ -578,6 +579,7 @@ def mitm_server(config_file_path: str, script_version: str):
             time.sleep(1)
 
 
+# noinspection PyTypeHints
 def _create_tcp_server_process(
         socket_wrapper_kwargs: dict,
         config_file_path: str,
@@ -627,6 +629,32 @@ def _create_tcp_server_process(
             time.sleep(1)  # Keep the process alive, since the listening socket is in an infinite loop.
     except KeyboardInterrupt:
         sys.exit(0)
+
+
+# noinspection PyTypeHints
+def _wait_for_events(
+        events: list[multiprocessing.Event],
+        timeout: int = 30,
+        system_logger: logging.Logger = None
+) -> bool:
+    """
+    Wait for all events in the list to be set.
+
+    :param events: List of multiprocessing.Event objects.
+    :param timeout: Maximum time to wait for all events to be set.
+    :return: True if all events are set, False if timeout occurs.
+    """
+
+    # Check that all the multiprocesses are ready.
+    for event in events:
+        if not event.wait(timeout=timeout):
+            print_api.print_api("One of the processes didn't start in time.", error_type=True, color="red",
+                                logger=system_logger)
+            # Wait for the message to be printed and saved to file.
+            time.sleep(1)
+            return False
+
+    return True
 
 
 def _add_virtual_ips_set_default_dns_gateway(system_logger: logging.Logger) -> int:

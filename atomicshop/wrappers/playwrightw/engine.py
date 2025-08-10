@@ -8,7 +8,7 @@ from tempfile import gettempdir
 # noinspection PyPackageRequirements
 from playwright.sync_api import sync_playwright, Error
 # Stealth options for playwright. External.
-from playwright_stealth import stealth_sync
+# from playwright_stealth import stealth_sync
 
 from ...keyboard_press import send_alt_tab
 from ... import filesystem, print_api
@@ -150,7 +150,7 @@ class PlaywrightEngine:
             self.page = self.browser.new_page()
 
         # Making playwright stealthier with less footprint of automation.
-        stealth_sync(self.page)
+        # stealth_sync(self.page)
 
     def close_browser(self) -> None:
         self.page.close()

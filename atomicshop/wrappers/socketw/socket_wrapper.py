@@ -1,9 +1,11 @@
 import multiprocessing
 import threading
 import select
-from typing import Literal, Union
+from typing import Literal, Union, Callable, Any
 from pathlib import Path
 import socket
+import shutil
+import os
 
 from ...mitm import initialize_engines
 from ..psutilw import psutil_networks
@@ -47,7 +49,7 @@ class SocketWrapper:
             default_server_certificate_name: str = None,
             default_certificate_domain_list: list = None,
             default_server_certificate_directory: str = None,
-            sni_custom_callback_function: callable = None,
+            sni_custom_callback_function: Callable[..., Any] = None,
             sni_use_default_callback_function: bool = False,
             sni_use_default_callback_function_extended: bool = False,
             sni_add_new_domains_to_default_server_certificate: bool = False,
@@ -76,9 +78,7 @@ class SocketWrapper:
             statistics_logger_queue: multiprocessing.Queue = None,
             exceptions_logger_name: str = 'SocketWrapperExceptions',
             exceptions_logger_queue: multiprocessing.Queue = None,
-            no_engine_usage_enable: bool = False,
-            no_engines_listening_address_list: list[str] = None,
-            engines_list: list[initialize_engines.ModuleCategory] = None
+            print_kwargs: dict = None,
     ):
         """
         Socket Wrapper class that will be used to create sockets, listen on them, accept connections and send them to
@@ -171,22 +171,7 @@ class SocketWrapper:
         :param exceptions_logger_name: string, name of the logger that will be used to log exceptions.
         :param exceptions_logger_queue: multiprocessing.Queue, queue that will be used to log exceptions in
             multiprocessing. You need to start the logger listener in the main process to handle the queue.
-        :param no_engine_usage_enable: boolean, if True, 'engines_list' will be used to listen on the addresses,
-            but the "no_engines_listening_address_list" parameter will be used instead.
-        :param no_engines_listening_address_list: list, of ips+ports that will be listened on.
-            Example: ['0.0.0.0:443', '0.0.0.0:80']
-        :param engines_list: list, of engines that will be used to process the requests. Structure of engine_config.toml:
-            [engine]
-            "domains" = ["example.com"]
-
-            [mtls]
-            # "subdomain.domain.com" = "file_name_in_current_dir.pem"
-
-            [no_sni]
-            #get_from_dns = 1         # Blocking, the accept function will wait until the domain is received from DNS.
-            #get_from_engine = 0
-            #try_to_get_from_dns_on_empty_get_from_engine = 0    # Non-blocking, on empty DNS server queue, accept() will connect to the domain from below.
-            #"domain" = "example.com"
+        :param print_kwargs: dict, additional arguments to pass to the print function.
         """
 
         self.ip_address: str = ip_address
@@ -202,7 +187,7 @@ class SocketWrapper:
         self.default_server_certificate_name: str = default_server_certificate_name
         self.default_certificate_domain_list: list = default_certificate_domain_list
         self.default_server_certificate_directory: str = default_server_certificate_directory
-        self.sni_custom_callback_function: callable = sni_custom_callback_function
+        self.sni_custom_callback_function: Callable[..., Any] = sni_custom_callback_function
         self.sni_use_default_callback_function: bool = sni_use_default_callback_function
         self.sni_use_default_callback_function_extended: bool = sni_use_default_callback_function_extended
         self.sni_add_new_domains_to_default_server_certificate: bool = sni_add_new_domains_to_default_server_certificate
@@ -221,9 +206,7 @@ class SocketWrapper:
         self.ssh_script_to_execute = ssh_script_to_execute
         self.forwarding_dns_service_ipv4_list___only_for_localhost = (
             forwarding_dns_service_ipv4_list___only_for_localhost)
-        # self.no_engine_usage_enable: bool = no_engine_usage_enable
-        # self.no_engines_listening_address_list: list[str] = no_engines_listening_address_list
-        # self.engines_list: list[initialize_engines.ModuleCategory] = engines_list
+        self.print_kwargs: dict = print_kwargs
 
         self.socket_object = None
 
@@ -313,13 +296,6 @@ class SocketWrapper:
                 "You can't set both [sni_use_default_callback_function = True] and [sni_custom_callback_function]."
             raise SocketWrapperConfigurationValuesError(message)
 
-        # if self.no_engine_usage_enable and not self.no_engines_listening_address_list:
-        #     message = "You set [no_engine_usage_enable = True], but you didn't set [no_engines_listening_address_list]."
-        #     raise SocketWrapperConfigurationValuesError(message)
-        # elif not self.no_engine_usage_enable and not self.engines_list:
-        #     message = "You set [no_engine_usage_enable = False], but you didn't set [engines_list]."
-        #     raise SocketWrapperConfigurationValuesError(message)
-
         try:
             booleans.is_only_1_true_in_list(
                 booleans_list_of_tuples=[
@@ -392,6 +368,13 @@ class SocketWrapper:
                 pem_file_path=self.ca_certificate_filepath,
                 crt_file_path=self.ca_certificate_crt_filepath)
 
+            # If someone removed the CA certificate file manually, and now it was created, we also need to
+            # clear the cached certificates.
+            shutil.rmtree(self.sni_server_certificates_cache_directory)
+            os.makedirs(self.sni_server_certificates_cache_directory, exist_ok=True)
+            print_api("Removed cached server certificates.", logger=self.logger)
+
+
         if self.install_ca_certificate_to_root_store:
             if not self.ca_certificate_filepath:
                 message = "You set [install_ca_certificate_to_root_store = True],\n" \
@@ -411,7 +394,8 @@ class SocketWrapper:
                 # If there is only one certificate with the same name, check if it is the same certificate.
                 elif is_installed_by_name and len(certificate_list_by_name) == 1:
                     is_installed_by_file, certificate_list_by_file = certificates.is_certificate_in_store(
-                        certificate=self.ca_certificate_filepath, by_cert_thumbprint=True, by_cert_issuer=True)
+                        certificate=self.ca_certificate_filepath, by_cert_thumbprint=True, by_cert_issuer=True,
+                        print_kwargs=self.print_kwargs)
                     # If the certificate is not the same, delete it.
                     if not is_installed_by_file:
                         if not permissions.is_admin():
@@ -427,7 +411,9 @@ class SocketWrapper:
             if self.install_ca_certificate_to_root_store:
                 # Install CA certificate to the root store if it is not installed.
                 is_installed_by_file, certificate_list_by_file = certificates.is_certificate_in_store(
-                    certificate=self.ca_certificate_filepath, by_cert_thumbprint=True, by_cert_issuer=True)
+                    certificate=self.ca_certificate_filepath, by_cert_thumbprint=True, by_cert_issuer=True,
+                    print_kwargs=self.print_kwargs
+                )
                 if not is_installed_by_file:
                     if not permissions.is_admin():
                         raise SocketWrapperConfigurationValuesError(
@@ -448,7 +434,7 @@ class SocketWrapper:
 
     def start_listening_socket(
             self,
-            callable_function: callable,
+            callable_function: Callable[..., Any],
             callable_args: tuple = ()
     ):
         """
@@ -478,7 +464,7 @@ class SocketWrapper:
     def listening_socket_loop(
             self,
             listening_socket_object: socket.socket,
-            callable_function: callable,
+            callable_function: Callable[..., Any],
             callable_args=()
     ):
         """
@@ -688,7 +674,7 @@ class SocketWrapper:
 
 
 def before_socket_thread_worker(
-        callable_function: callable,
+        callable_function: Callable[..., Any],
         callable_args: tuple,
         exceptions_logger: loggingw.ExceptionCsvLogger = None
 ):

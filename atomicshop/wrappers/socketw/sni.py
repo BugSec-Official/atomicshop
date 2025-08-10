@@ -1,5 +1,6 @@
 import ssl
 from dataclasses import dataclass
+from typing import Callable, Any
 
 from ..loggingw import loggingw
 from ...domains import get_domain_without_first_subdomain_if_no_subdomain_return_as_is
@@ -31,7 +32,7 @@ class SNISetup:
             default_server_certificate_name: str,
             default_server_certificate_directory: str,
             default_certificate_domain_list: list,
-            sni_custom_callback_function: callable,
+            sni_custom_callback_function: Callable[..., Any],
             sni_use_default_callback_function: bool,
             sni_use_default_callback_function_extended: bool,
             sni_add_new_domains_to_default_server_certificate: bool,
@@ -54,7 +55,7 @@ class SNISetup:
         self.default_server_certificate_name = default_server_certificate_name
         self.default_server_certificate_directory = default_server_certificate_directory
         self.default_certificate_domain_list = default_certificate_domain_list
-        self.sni_custom_callback_function: callable = sni_custom_callback_function
+        self.sni_custom_callback_function: Callable[..., Any] = sni_custom_callback_function
         self.sni_use_default_callback_function: bool = sni_use_default_callback_function
         self.sni_use_default_callback_function_extended: bool = sni_use_default_callback_function_extended
         self.sni_add_new_domains_to_default_server_certificate = sni_add_new_domains_to_default_server_certificate
@@ -259,20 +260,23 @@ class SNIHandler:
                 # If DNS server is enabled we'll get the domain from dns server.
                 if self.domain_from_dns_server:
                     self.sni_received_parameters.destination_name = self.domain_from_dns_server
-                    message = \
-                        f"SNI Handler: No SNI was passed, using domain from DNS Server: {self.domain_from_dns_server}"
+                    message = (
+                        f"SNI Passed: False\n"
+                        f"SNI Handler: No SNI was passed, using domain from DNS Server: {self.domain_from_dns_server}")
                     print_api(message, color="yellow", **(print_kwargs or {}))
                 # If DNS server is disabled, the domain from dns server will be empty.
                 else:
-                    message = f"SNI Handler: No SNI was passed, No domain passed from DNS Server. " \
-                              f"Service name will be 'None'."
+                    message = (
+                        f"SNI Passed: False\n"
+                        f"SNI Handler: No SNI was passed, No domain passed from DNS Server. Service name will be 'None'.")
                     print_api(message, color="yellow", **(print_kwargs or {}))
 
             # Setting "server_hostname" as a domain.
             self.sni_received_parameters.ssl_socket.server_hostname = self.sni_received_parameters.destination_name
-            message = \
-                f"SNI Handler: port {self.sni_received_parameters.ssl_socket.getsockname()[1]}: " \
-                f"Incoming connection for [{self.sni_received_parameters.ssl_socket.server_hostname}]"
+            message = (
+                f"SNI Passed: True\n"
+                f"SNI Handler: port {self.sni_received_parameters.ssl_socket.getsockname()[1]}: "
+                f"Incoming connection for [{self.sni_received_parameters.ssl_socket.server_hostname}]")
             print_api(message, **(print_kwargs or {}))
         except Exception as exception_object:
             message = f"SNI Handler: Undocumented exception general settings section: {exception_object}"

@@ -1,5 +1,6 @@
 from typing import Union
 import os
+import warnings
 
 from ..print_api import print_api
 from ..file_io import file_io
@@ -9,6 +10,7 @@ from cryptography.x509 import Certificate
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives import hashes
+from cryptography.utils import CryptographyDeprecationWarning
 
 
 """
@@ -22,7 +24,10 @@ OID_TO_BUILDER_CLASS_EXTENSION_NAME: dict = {
 }
 
 
-def convert_object_to_x509(certificate):
+def convert_object_to_x509(
+        certificate: Union[str, bytes, Certificate],
+        print_kwargs: dict = None
+) -> x509.Certificate | None:
     """Convert certificate to x509 object.
 
     :param certificate: any object that can be converted to x509 object.
@@ -32,7 +37,8 @@ def convert_object_to_x509(certificate):
             string that is PEM certificate will be converted to bytes, then x509.Certificate
             bytes of PEM or DER will be converted to x509.Certificate.
             x509.Certificate will be returned as is.
-    :return: certificate in x509 object of 'cryptography' module.
+    :param print_kwargs: dict, additional arguments to pass to the print function.
+    :return: certificate in x509 object of 'cryptography' module. Or None if the certificate is not valid.
     """
 
     # Check if 'certificate' is a string and a path.
@@ -40,7 +46,7 @@ def convert_object_to_x509(certificate):
         if not os.path.isfile(certificate):
             raise FileNotFoundError(f'File not found: {certificate}')
         # Import the certificate from the path.
-        certificate = file_io.read_file(certificate, file_mode='rb')
+        certificate = file_io.read_file(certificate, file_mode='rb', **(print_kwargs or {}))
 
     # Check if 'certificate' is a bytes object and PEM format.
     # We're checking if it starts with '-----BEGIN ' since the pem certificate can include PRIVATE KEY and will be
@@ -82,14 +88,27 @@ def convert_pem_to_x509_object(certificate: Union[str, bytes]) -> x509.Certifica
     return x509.load_pem_x509_certificate(certificate)
 
 
-def convert_der_to_x509_object(certificate: bytes) -> x509.Certificate:
+def convert_der_to_x509_object(certificate: bytes) -> x509.Certificate | None:
     """Convert DER certificate from socket to x509 object.
 
     :param certificate: bytes, certificate to convert.
     :return: certificate in x509 object of 'cryptography' module.
     """
 
-    return x509.load_der_x509_certificate(certificate)
+    # Some certificates in the store can have zero or negative serial number.
+    # We will skip them, since they're deprecated by the cryptography library.
+
+    try:
+        with warnings.catch_warnings():
+            # Turn the deprecation warning into an exception we can trap.
+            warnings.filterwarnings("error", category=CryptographyDeprecationWarning)
+            converted_certificate = x509.load_der_x509_certificate(certificate)
+    except (CryptographyDeprecationWarning, ValueError):
+        return None  # serial was 0/negative → skip
+    if converted_certificate.serial_number <= 0:  # belt-and-braces
+        return None
+
+    return converted_certificate
 
 
 def convert_x509_object_to_pem_bytes(certificate) -> bytes:
