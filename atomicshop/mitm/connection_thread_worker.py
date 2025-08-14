@@ -233,9 +233,7 @@ def thread_worker_main(
                 service_port=client_message.destination_port,
                 tls=is_tls,
                 logger=network_logger,
-                custom_pem_client_certificate_file_path=custom_client_pem_certificate_path,
-                enable_sslkeylogfile_env_to_client_ssl_context=(
-                    config_static.Certificates.enable_sslkeylogfile_env_to_client_ssl_context)
+                custom_pem_client_certificate_file_path=custom_client_pem_certificate_path
             )
         # If it's a domain name, then we'll use the DNS to resolve it.
         else:
@@ -248,9 +246,7 @@ def thread_worker_main(
                     tls=is_tls,
                     dns_servers_list=[config_static.DNSServer.forwarding_dns_service_ipv4],
                     logger=network_logger,
-                    custom_pem_client_certificate_file_path=custom_client_pem_certificate_path,
-                    enable_sslkeylogfile_env_to_client_ssl_context=(
-                        config_static.Certificates.enable_sslkeylogfile_env_to_client_ssl_context)
+                    custom_pem_client_certificate_file_path=custom_client_pem_certificate_path
                 )
             # If we're not on localhost, then connect to domain directly.
             else:
@@ -259,9 +255,7 @@ def thread_worker_main(
                     service_port=client_message.destination_port,
                     tls=is_tls,
                     logger=network_logger,
-                    custom_pem_client_certificate_file_path=custom_client_pem_certificate_path,
-                    enable_sslkeylogfile_env_to_client_ssl_context=(
-                        config_static.Certificates.enable_sslkeylogfile_env_to_client_ssl_context)
+                    custom_pem_client_certificate_file_path=custom_client_pem_certificate_path
                 )
 
         return service_client_instance

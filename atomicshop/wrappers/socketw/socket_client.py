@@ -30,8 +30,7 @@ class SocketClient:
             connection_ip=None,
             dns_servers_list: list[str] = None,
             logger: logging.Logger = None,
-            custom_pem_client_certificate_file_path: str = None,
-            enable_sslkeylogfile_env_to_client_ssl_context: bool = False
+            custom_pem_client_certificate_file_path: str = None
     ):
         """
         If you have a certificate for domain, but not for the IPv4 address, the SSL Socket context can be created for
@@ -51,13 +50,6 @@ class SocketClient:
         :param logger: (Optional) Logger object. If not provided, the default logger will be used.
         :param custom_pem_client_certificate_file_path: (Optional) If specified, the SSL Socket will be created with
             custom client certificate. The path to the file with the certificate should be provided.
-        :param enable_sslkeylogfile_env_to_client_ssl_context: boolean, enables the SSLKEYLOGFILE environment variable
-            to the SSL context. Default is False.
-            if True, SSLKEYLOGFILE will be added to SSL context with:
-            ssl_context.keylog_filename = os.environ.get('SSLKEYLOGFILE')
-            This is useful for debugging SSL/TLS connections with WireShark.
-            Since WireShark also uses this environment variable to read the key log file and apply to the SSL/TLS
-            connections, so you can see the decrypted traffic.
 
         If both 'connection_ip' and 'dns_servers_list' specified, ValueException with raise.
         """
@@ -67,7 +59,6 @@ class SocketClient:
         self.connection_ip = connection_ip
         self.dns_servers_list = dns_servers_list
         self.custom_pem_client_certificate_file_path: str = custom_pem_client_certificate_file_path
-        self.enable_sslkeylogfile_env_to_client_ssl_context: bool = enable_sslkeylogfile_env_to_client_ssl_context
 
         if logger:
             # Create child logger for the provided logger with the module's name.
@@ -101,7 +92,6 @@ class SocketClient:
             socket_object = creator.create_socket_ipv4_tcp()
             return creator.wrap_socket_with_ssl_context_client___default_certs___ignore_verification(
                 socket_object, self.service_name, self.custom_pem_client_certificate_file_path,
-                enable_sslkeylogfile_env_to_client_ssl_context=self.enable_sslkeylogfile_env_to_client_ssl_context
             )
 
     def service_connection(
