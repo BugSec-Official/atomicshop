@@ -1,6 +1,7 @@
 <!-- HISTORY -->
 ## History
-
+* 3.3.3 - 16.08.2025
+  * Removed config enable_sslkeylogfile_env_to_client_ssl_context now we write to \productname_server\logs\sslkeylog.txt
 * 3.3.2 - 10.08.2025
   * basics/argparse_template, certificates, filesystem, mitm, wrappers/certauthw/certauth, wrappers/cryptographyw, wrappers/playwrightw/engine, wrappers/pyopensslw, wrappers/socketw, project.toml - fixes and improvements.
 * 3.3.0-3.3.1 - 31.07.2025
