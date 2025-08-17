@@ -57,10 +57,9 @@ def create_ssl_context_for_client(
     ssl_context: ssl.SSLContext = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     ssl_key_logfile =f'{config_static.LogRec.logs_path}{os.sep}{"sslkeylog"}.txt'
     try:
-        # This will create the file if it doesn't exist, and truncate it if it does
-        open(ssl_key_logfile, "w").close()
+        # This will create the file if it doesn't exist
+        open(ssl_key_logfile, "a").close()
         ssl_context.keylog_filename = ssl_key_logfile
-        print_api(f"Empty file '{ssl_key_logfile}' created.")
     except Exception as e:
         print_api(f"Failed to create file: {e}")
 
