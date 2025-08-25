@@ -2,6 +2,7 @@ import socket
 import time
 from typing import Union
 import os
+import psutil
 
 from icmplib import ping
 from icmplib.models import Host
@@ -10,6 +11,7 @@ from win32com.client import CDispatch
 from .wrappers.pywin32w.wmis import win32networkadapter, win32_networkadapterconfiguration, wmi_helpers, msft_netipaddress
 from .wrappers.ctyping import setup_device
 from .wrappers.winregw import winreg_network
+from .wrappers.psutilw import psutil_networks
 
 
 MICROSOFT_LOOPBACK_DEVICE_NAME: str = 'Microsoft KM-TEST Loopback Adapter'
@@ -42,13 +44,68 @@ def get_default_internet_ipv4_by_connect(target: str = "8.8.8.8") -> str:
         return s.getsockname()[0]  # local address of that route
 
 
-def get_default_internet_interface_name() -> str:
+def get_hostname() -> str:
     """
     Get the default network interface name that is being used for internet.
     :return: string, default network interface name.
     """
 
     return socket.gethostname()
+
+
+def get_default_internet_interface_name() -> str | None:
+    """
+    Get the default network interface name that is being used for internet.
+    :return: string, default network interface name.
+    """
+
+    interface_dict: dict = psutil_networks.get_default_connection_name()
+    if not interface_dict:
+        result = None
+    else:
+        # Get the first interface name from the dictionary.
+        result = next(iter(interface_dict.keys()), None)
+
+    return result
+
+
+def get_interface_ips(
+        interface_name: str = None,
+        ipv4: bool = True,
+        ipv6: bool = True,
+        localhost: bool = True,
+        default_interface: bool = False
+):
+    if not ipv4 and not ipv6:
+        raise ValueError("At least one of ipv4 or ipv6 must be True.")
+    if default_interface and interface_name:
+        raise ValueError("You can't specify both default_interface and interface_name.")
+
+    if default_interface:
+        # Get the default interface name.
+        interface_name = get_default_internet_interface_name()
+
+    physical_ip_types: list[str] = []
+    if ipv4:
+        physical_ip_types.append("AF_INET")  # IPv4
+    if ipv6:
+        physical_ip_types.append("AF_INET6")  # IPv6
+
+    interfaces: dict = psutil.net_if_addrs()
+
+    ips = []
+    for name, addresses in interfaces.items():
+        if interface_name and interface_name != name:
+                continue
+
+        for address in addresses:
+            if address.family.name in physical_ip_types:
+                if not localhost and (address.address.startswith("127.") or address.address.startswith("::1")):
+                    # Skip localhost addresses if localhost is True.
+                    continue
+
+                ips.append(address.address)
+    return ips
 
 
 def get_microsoft_loopback_device_network_configuration(
@@ -351,6 +408,8 @@ def add_virtual_ips_to_default_adapter_by_current_setting(
         availability_wait_seconds: int = 15,
         simulate_only: bool = False,
         locator: CDispatch = None,
+        wait_until_applied: bool = True,
+        wait_until_applied_seconds: int = 15
 ) -> tuple[list[str], list[str], list[str], list[str]]:
     """
     Add virtual IP addresses to the default network adapter.
@@ -380,6 +439,14 @@ def add_virtual_ips_to_default_adapter_by_current_setting(
     :param availability_wait_seconds: int, seconds to wait for the adapter to be available after setting the IP address.
     :param simulate_only: bool, if True, the function will only prepare the ip addresses and return them without changing anything.
     :param locator: CDispatch, WMI locator object. If not specified, it will be created.
+
+    :param wait_until_applied: bool, if True, the function will wait until the IP addresses are applied.
+        By default, while WMI command is executed, there is no indication if the addresses were finished applying or not.
+        If you have 15+ addresses, it can take a while to apply them.
+    :param wait_until_applied_seconds: int, seconds to wait for the IP addresses to be applied.
+        This is different from availability_wait_seconds, which is the time to wait for the adapter to be available
+        after setting the IP addresses. This is the time to wait for the IP addresses to be
+        applied after setting them. If the IP addresses are not applied in this time, a TimeoutError will be raised.
 
     :return: tuple of lists, (current_ipv4s, current_ipv4_masks, ips_to_assign, masks_to_assign)
     """
@@ -461,5 +528,15 @@ def add_virtual_ips_to_default_adapter_by_current_setting(
         else:
             # print("[!] No new IPs to assign.")
             pass
+
+        if wait_until_applied:
+            # Wait until the IP addresses are applied.
+            for _ in range(wait_until_applied_seconds):
+                current_ips = get_interface_ips(ipv4=True, ipv6=False, localhost=False, default_interface=True)
+                if set(current_ips) == set(ips):
+                    break
+                time.sleep(1)
+            else:
+                raise TimeoutError("Timeout while waiting for the IP addresses to be applied.")
 
     return current_ipv4s, current_ipv4_masks, ips_to_assign, masks_to_assign

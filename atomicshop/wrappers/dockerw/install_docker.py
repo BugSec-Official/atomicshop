@@ -1,11 +1,20 @@
 import sys
+import os
 import subprocess
 import getpass
+import tempfile
+import textwrap
+from pathlib import Path
 
 from ... import process, filesystem
 from ...permissions import permissions, ubuntu_permissions
 from ...print_api import print_api
 from .. import ubuntu_terminal
+
+
+PREPARATION_OUTPUT_DIR: str = str(Path(__file__).parent / "offline-bundle")
+PREPARATION_OUTPUT_ZIP: str = f"{PREPARATION_OUTPUT_DIR}.zip"
+GET_DOCKER_URL: str = "https://get.docker.com"
 
 
 def is_docker_installed():
@@ -109,6 +118,7 @@ def install_docker_ubuntu(
         # The script will also install docker-compose and docker-buildx.
         # process.execute_script('curl -fsSL https://get.docker.com -o get-docker.sh && sh get-docker.sh', shell=True)
         process.execute_script('curl -fsSL https://get.docker.com | sh', shell=True)
+        # subprocess.run("curl -fsSL https://get.docker.com | sh", shell=True, check=True)
         # process.execute_script('curl -fsSL https://get.docker.com -o get-docker.sh', shell=True)
         # process.execute_script('sh get-docker.sh', shell=True)
         # filesystem.remove_file('get-docker.sh')
@@ -210,3 +220,230 @@ def install_docker_ubuntu(
         print_api('Docker installation failed.', color='red')
         print_api('Please check the logs above for more information.', color='red')
         return 1
+
+
+def prepare_offline_installation_bundle():
+    # The Bash script in a single triple-quoted string - this is to easier copy-paste it if needed to run directly.
+    bash_script = textwrap.dedent(r"""#!/usr/bin/env bash
+#
+# Build an offline-install bundle for Docker Engine on Ubuntu 24.04 LTS.
+# The package list is auto-discovered from `get.docker.com --dry-run`.
+#
+#   sudo ./prepare_docker_offline.sh  [/path/to/output_dir]
+#
+set -Eeuo pipefail
+
+################################################################################
+# CLI PARAMETERS
+#   $1  → OUTDIR           (already supported: where to build the bundle)
+#   $2  → GET_DOCKER_URL   (defaults to https://get.docker.com)
+#   $3  → OUTPUT_ZIP       (defaults to "$OUTDIR.zip")
+################################################################################
+OUTDIR="${1:-"$PWD/offline-bundle"}"
+GET_DOCKER_URL="${2:-https://get.docker.com}"
+OUTPUT_ZIP="${3:-$OUTDIR.zip}"
+
+die()       { echo "ERROR: $*" >&2; exit 1; }
+need_root() { [[ $EUID -eq 0 ]] || die "Run as root (use sudo)"; }
+need_cmd() {
+  local cmd=$1
+  local pkg=${2:-$1}               # default package == command
+  if ! command -v "$cmd" &>/dev/null; then
+    echo "[*] $cmd not found – installing $pkg ..."
+    apt-get update -qq
+    DEBIAN_FRONTEND=noninteractive \
+      apt-get install -y --no-install-recommends "$pkg" || \
+      die "Unable to install required package: $pkg"
+  fi
+}
+
+need_root
+need_cmd curl
+
+echo "[*] Discovering package list via get.docker.com --dry-run ..."
+DRY_LOG=$(curl -fsSL "$GET_DOCKER_URL" | bash -s -- --dry-run)
+
+echo "[*] Determining package list via --dry-run ..."
+PKGS=$(printf '%s\n' "$DRY_LOG" | sed -n 's/.* install \(.*\) >\/dev\/null.*/\1/p')
+
+if ! grep -q '\S' <<< "$PKGS"; then
+  echo "No packages detected in dry-run output – aborting." >&2
+  exit 1
+fi
+
+echo "[*] Install Docker before preparing the offline bundle."
+curl -fsSL "$GET_DOCKER_URL" | sh
+
+mkdir -p "$OUTDIR"/packages
+echo "[*] Output directory: $OUTDIR"
+
+echo "Packages to install:"
+echo "$PKGS"
+
+echo "[*] Downloading packages and all dependencies …"
+apt-get update -qq
+apt-get clean
+mkdir -p /var/cache/apt/archives/partial
+apt-get -y --download-only --reinstall install $PKGS
+cp -v /var/cache/apt/archives/*.deb "$OUTDIR/packages/"
+echo "[*] $(ls "$OUTDIR/packages" | wc -l) .deb files written to packages/"
+
+echo "[*] Building local Packages.gz index …"
+pushd "$OUTDIR/packages" >/dev/null
+for deb in *.deb; do
+  dpkg-deb -f "$deb" Package
+done | awk '{printf "%s\tmisc\toptional\n",$1}' > override
+apt-ftparchive packages . override | tee Packages | gzip -9c > Packages.gz
+popd >/dev/null
+
+
+echo ">> Checking for Docker ..."
+command -v docker >/dev/null 2>&1 || { echo "Docker not found."; exit 1; }
+
+# Pack final bundle
+echo "[*] Creating a zip archive ..."
+parent_dir=$(dirname  "$OUTDIR")
+base_name=$(basename "$OUTDIR")
+
+# Create new shell, cd into the directory, and zip the contents. So that the zip file will not contain the full path.
+(
+  cd "$parent_dir"
+  zip -rq "$OUTPUT_ZIP" "$base_name"
+)
+
+rm -rf "$OUTDIR"
+echo "Docker offline bundle created at $OUTPUT_ZIP"
+echo
+echo "Copy the zip file and the offline installation python script to the target machine and execute."
+    """)
+
+    # Write it to a secure temporary file.
+    with tempfile.NamedTemporaryFile('w', delete=False, suffix='.sh') as f:
+        f.write(bash_script)
+        temp_path = f.name
+    os.chmod(temp_path, 0o755)  # make it executable
+
+    cmd = [
+        "sudo", "bash", temp_path,
+        PREPARATION_OUTPUT_DIR,
+        GET_DOCKER_URL,
+        PREPARATION_OUTPUT_ZIP,
+    ]
+
+    # Run it and stream output live.
+    try:
+        subprocess.run(cmd, check=True)
+    finally:
+        # 5. Clean up the temp file unless you want to inspect it.
+        os.remove(temp_path)
+
+
+def install_offline_installation_bundle():
+    bash_script = textwrap.dedent(r"""#!/usr/bin/env bash
+# Offline installer for the Docker bundle produced by prepare_docker_offline.sh
+set -euo pipefail
+
+die()       { echo "ERROR: $*" >&2; exit 1; }
+need_root() { [[ $EUID -eq 0 ]] || die "Run as root (use sudo)"; }
+
+need_root
+
+# ------------------------------------------------------------------------------
+# Paths
+# ------------------------------------------------------------------------------
+BUNDLE_ZIP="${1:-"$PWD/offline-bundle.zip"}"
+
+BUNDLE_DIR="${BUNDLE_ZIP%.zip}"  # remove .zip suffix
+REPO_DIR="$BUNDLE_DIR/packages"                        # contains *.deb + Packages
+OFFLINE_LIST="/etc/apt/sources.list.d/docker-offline.list"
+
+# Extract zip archive if it exists
+if [[ -f "$BUNDLE_ZIP" ]]; then
+  echo "[*] Extracting offline bundle from $BUNDLE_ZIP ..."
+  mkdir -p "$BUNDLE_DIR"
+  unzip -q "$BUNDLE_ZIP" -d "."
+else
+  die "Bundle zip file '$BUNDLE_ZIP' not found. Provide a valid path."
+fi
+
+TEMP_PARTS="$(mktemp -d)"                              # empty dir ⇒ no extra lists
+
+# ------------------------------------------------------------------------------
+# Helper to clean up even if the script aborts
+# ------------------------------------------------------------------------------
+cleanup() {
+  sudo rm -f "$OFFLINE_LIST"
+  sudo rm -rf "$TEMP_PARTS"
+}
+trap cleanup EXIT
+
+# ------------------------------------------------------------------------------
+# 1. Add the local repository (trusted) as the *only* source we will use
+# ------------------------------------------------------------------------------
+echo "[*] Adding temporary APT source for the offline bundle …"
+echo "deb [trusted=yes] file:$REPO_DIR ./" | sudo tee "$OFFLINE_LIST" >/dev/null
+
+# Ensure plain index exists (APT always understands the un-compressed form)
+if [[ ! -f "$REPO_DIR/Packages" && -f "$REPO_DIR/Packages.gz" ]]; then
+    gunzip -c "$REPO_DIR/Packages.gz" > "$REPO_DIR/Packages"
+fi
+
+# ------------------------------------------------------------------------------
+# 2. Update metadata – but ONLY from our offline list
+# ------------------------------------------------------------------------------
+echo "[*] Updating APT metadata – offline only …"
+sudo apt-get -o Dir::Etc::sourcelist="$OFFLINE_LIST" \
+             -o Dir::Etc::sourceparts="$TEMP_PARTS" \
+             -o APT::Get::List-Cleanup="0" \
+             update -qq
+
+# ------------------------------------------------------------------------------
+# 3. Figure out which packages are inside the bundle
+# ------------------------------------------------------------------------------
+PKGS=$(awk '/^Package: /{print $2}' "$REPO_DIR/Packages")
+
+echo "[*] Installing:"
+printf '    • %s\n' $PKGS
+
+# ------------------------------------------------------------------------------
+# 4. Install them, again restricting APT to the offline repo only
+# ------------------------------------------------------------------------------
+sudo apt-get -y \
+     -o Dir::Etc::sourcelist="$OFFLINE_LIST" \
+     -o Dir::Etc::sourceparts="$TEMP_PARTS" \
+     install $PKGS
+
+echo "[✓] Docker installed completely offline!"
+
+usage() {
+  echo "Usage: $0 <image-archive.tar.gz>"
+  exit 1
+}
+
+echo ">> Checking for Docker ..."
+command -v docker >/dev/null 2>&1 || {
+  echo "Docker is not installed; install Docker and try again."
+  exit 1
+}
+
+echo "Removing extracted files..."
+rm -rf "$BUNDLE_DIR"
+    """)
+
+    # Write it to a secure temporary file.
+    with tempfile.NamedTemporaryFile('w', delete=False, suffix='.sh') as f:
+        f.write(bash_script)
+        temp_path = f.name
+    os.chmod(temp_path, 0o755)  # make it executable
+
+    cmd = [
+        "sudo", "bash", temp_path,
+        PREPARATION_OUTPUT_ZIP,  # $1  BUNDLE_ZIP
+    ]
+
+    # 4. Run it and stream output live.
+    try:
+        subprocess.run(cmd, check=True)
+    finally:
+        # 5. Clean up the temp file unless you want to inspect it.
+        os.remove(temp_path)

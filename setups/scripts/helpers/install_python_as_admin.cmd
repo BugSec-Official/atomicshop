@@ -1,4 +1,4 @@
-REM Verion 1.0.0
+REM Version 1.0.0
 @echo off
 setlocal
 
@@ -9,42 +9,48 @@ if "%~1"=="" (
     exit /b 1
 )
 
+rem ===== Parse requested version =====
 set "PYTHON_VERSION=%~1"
-set "PYTHON_MAJOR_MINOR=%PYTHON_VERSION:~0,4%"
-set "TARGET_DIR=C:\Python%PYTHON_VERSION:.=%"
+for /f "tokens=1-3 delims=." %%A in ("%PYTHON_VERSION%") do (
+    set "PV_MAJOR=%%A"
+    set "PV_MINOR=%%B"
+    set "PV_PATCH=%%C"
+)
 
-REM add installation target dir to environment PATH.
-REM set PATH=%PATH%;%TARGET_DIR%;%TARGET_DIR%\Scripts
-REM echo Updated PATH
-REM echo %PATH%
+set "PYTHON_MAJOR_MINOR=%PV_MAJOR%.%PV_MINOR%"
+echo Requested Python version: %PYTHON_MAJOR_MINOR%
 
-REM This approach is better than 
-REM echo %TARGET_DIR% > python_path.txt
-REM Since additional space is not added to the text and no line skip.
-(
-    echo|set /p="%TARGET_DIR%"
-) > python_path.txt
+rem ===== Decide target architecture (defaults to amd64) =====
+set "ARCH=amd64"
+if /I "%PROCESSOR_ARCHITECTURE%"=="x86" set "ARCH=x86"
+if /I "%PROCESSOR_ARCHITEW6432%"=="x86" set "ARCH=amd64"
 
-rem Debug: Show variables
-echo PYTHON_VERSION: %PYTHON_VERSION%
-echo PYTHON_MAJOR_MINOR: %PYTHON_MAJOR_MINOR%
-echo TARGET_DIR: %TARGET_DIR%
+echo ARCHITECTURE: %ARCH%
 
+
+rem ===== Work out LATEST_VERSION =====
+if not "%PV_PATCH%"=="" (
+    rem An exact patch was provided, e.g. 3.12.10
+    set "LATEST_VERSION=%PV_MAJOR%.%PV_MINOR%.%PV_PATCH%"
+
+    echo Provided version: %LATEST_VERSION%
+    GOTO Finalize
+) else (
+    GOTO FindLatestVersion
+)
+
+:FindLatestVersion
 rem Find the latest patch version
 echo Finding the latest patch version for Python %PYTHON_MAJOR_MINOR%...
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+for /f "usebackq delims=" %%I in (`^
+    powershell -NoProfile -ExecutionPolicy Bypass -Command ^
     "$url = 'https://www.python.org/ftp/python/';" ^
     "$page = Invoke-WebRequest -Uri $url;" ^
     "$versions = $page.Links | Where-Object { $_.href -match '^\d+\.\d+\.\d+/$' } | ForEach-Object { $_.href.TrimEnd('/') };" ^
-    "$latest_version = ($versions | Where-Object { $_ -like '3.12.*' }) | Sort-Object { [version]$_ } -Descending | Select-Object -First 1;" ^
-    "Write-Output $latest_version" > latest_version.txt
-
-rem Debug: Show the content of latest_version.txt
-type latest_version.txt
-
-set /p LATEST_VERSION=<latest_version.txt
-del latest_version.txt
+    "$latest_version = ($versions | Where-Object { $_ -like '%PYTHON_MAJOR_MINOR%.*' }) | Sort-Object { [version]$_ } -Descending | Select-Object -First 1;" ^
+    "Write-Output $latest_version"^
+    `) do set "LATEST_VERSION=%%I"
 
 rem Debug: Show the latest version
 echo LATEST_VERSION: %LATEST_VERSION%
@@ -54,24 +60,32 @@ if "%LATEST_VERSION%"=="" (
     exit /b 1
 )
 
+:Finalize
+set "TARGET_DIR=C:\Python%LATEST_VERSION:.=%"
+echo TARGET INSTALLATION DIR: %TARGET_DIR%
+
 rem Download the latest Python installer for the determined version
 echo Fetching the latest installer for Python %LATEST_VERSION%...
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+for /f "usebackq delims=" %%I in (`^
+    powershell -NoProfile -ExecutionPolicy Bypass -Command ^
     "$url = 'https://www.python.org/ftp/python/%LATEST_VERSION%';" ^
     "$page = Invoke-WebRequest -Uri $url;" ^
-    "$installer = ($page.Links | Where-Object { $_.href -match 'python-%LATEST_VERSION%.*\.exe$' } | Select-Object -First 1).href;" ^
+    "$installer = ($page.Links | Where-Object { $_.href -match 'python-%LATEST_VERSION%.*%ARCH%.*\.exe$' } | Select-Object -First 1).href;" ^
     "$installer_url = $url + '/' + $installer;" ^
-    "Write-Output $installer_url" > installer_url.txt
-
-rem Debug: Show the content of installer_url.txt
-type installer_url.txt
-
-set /p INSTALLER_URL=<installer_url.txt
-del installer_url.txt
+    "Write-Output $installer_url"^
+    `) do set "INSTALLER_URL=%%I"
 
 rem Debug: Show the installer URL
 echo INSTALLER_URL: %INSTALLER_URL%
+
+if "%INSTALLER_URL%"=="%INSTALLER_URL:.exe=%" (
+    echo No ".exe" found in INSTALLER_URL.
+    echo Try using the installer again by providing the lower exact version, eg. 3.12.10.
+    exit /b 1
+) else (
+    echo ".exe" found in INSTALLER_URL
+)
 
 if "%INSTALLER_URL%"=="" (
     echo Failed to retrieve the installer URL for Python %LATEST_VERSION%.

@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.3.3 - 25.08.2025
+  * mitm/mitm_main, networks, wrappers/dockerw/install_docker, wrappers/pycharmw/ubuntu, wrappers/socketw/sni - fixes and improvements.
 * 3.3.2 - 10.08.2025
   * basics/argparse_template, certificates, filesystem, mitm, wrappers/certauthw/certauth, wrappers/cryptographyw, wrappers/playwrightw/engine, wrappers/pyopensslw, wrappers/socketw, project.toml - fixes and improvements.
 * 3.3.0-3.3.1 - 31.07.2025

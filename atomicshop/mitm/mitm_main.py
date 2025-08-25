@@ -402,7 +402,7 @@ def mitm_server(config_file_path: str, script_version: str):
         # We set the virtual IPs in the network adapter here, so the server multiprocessing processes can listen on them.
         setting_result: int = _add_virtual_ips_set_default_dns_gateway(system_logger)
         if setting_result != 0:
-            print_api.print_api("Failed to set the default DNS gateway.", error_type=True, color="red",
+            print_api.print_api("Failed to set the default DNS gateway OR Virtual IPs.", error_type=True, color="red",
                                 logger=system_logger)
             # Wait for the message to be printed and saved to file.
             time.sleep(1)
@@ -618,8 +618,21 @@ def _create_tcp_server_process(
         # network_logger_queue_listener.stop()
         sys.exit(1)
 
-    socket_wrapper_instance.start_listening_socket(
-        callable_function=thread_worker_main, callable_args=(config_static,))
+    try:
+        socket_wrapper_instance.start_listening_socket(
+            callable_function=thread_worker_main, callable_args=(config_static,))
+    except OSError as e:
+        if e.winerror == 10022:  # Invalid argument error on Windows.
+            message = (
+                str(f"{e}\n"
+                    f"Check that the IP address and port are correct: {socket_wrapper_kwargs['ip_address']}:{socket_wrapper_kwargs['port']}\n"))
+            print_api.print_api(message, error_type=True, color="red", logger=system_logger, logger_method='critical')
+            # Wait for the message to be printed and saved to file.
+            time.sleep(1)
+            # network_logger_queue_listener.stop()
+            sys.exit(1)
+        else:
+            raise e
 
     # Notify that the TCP server is ready.
     is_tcp_process_ready.set()
@@ -710,7 +723,7 @@ def _add_virtual_ips_set_default_dns_gateway(system_logger: logging.Logger) -> i
             networks.add_virtual_ips_to_default_adapter_by_current_setting(
                 virtual_ipv4s_to_add=IPS_TO_ASSIGN, virtual_ipv4_masks_to_add=MASKS_TO_ASSIGN,
                 dns_gateways=dns_gateway_server_list)
-        except PermissionError as e:
+        except (PermissionError, TimeoutError) as e:
             print_api.print_api(e, error_type=True, color="red", logger=system_logger)
             # Wait for the message to be printed and saved to file.
             time.sleep(1)
