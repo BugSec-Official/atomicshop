@@ -260,21 +260,22 @@ class SNIHandler:
                 # If DNS server is enabled we'll get the domain from dns server.
                 if self.domain_from_dns_server:
                     self.sni_received_parameters.destination_name = self.domain_from_dns_server
-                    message = (
-                        f"SNI Passed: False\n"
-                        f"SNI Handler: No SNI was passed, using domain from DNS Server: {self.domain_from_dns_server}")
+                    print_api("SNI Passed: False", color="yellow", **(print_kwargs or {}))
+
+                    message = f"SNI Handler: No SNI was passed, using domain from DNS Server: {self.domain_from_dns_server}"
                     print_api(message, color="yellow", **(print_kwargs or {}))
                 # If DNS server is disabled, the domain from dns server will be empty.
                 else:
+                    print_api("SNI Passed: False", color="yellow", **(print_kwargs or {}))
+
                     message = (
-                        f"SNI Passed: False\n"
                         f"SNI Handler: No SNI was passed, No domain passed from DNS Server. Service name will be 'None'.")
                     print_api(message, color="yellow", **(print_kwargs or {}))
 
             # Setting "server_hostname" as a domain.
             self.sni_received_parameters.ssl_socket.server_hostname = self.sni_received_parameters.destination_name
+            print_api("SNI Passed: True", color="yellow", **(print_kwargs or {}))
             message = (
-                f"SNI Passed: True\n"
                 f"SNI Handler: port {self.sni_received_parameters.ssl_socket.getsockname()[1]}: "
                 f"Incoming connection for [{self.sni_received_parameters.ssl_socket.server_hostname}]")
             print_api(message, **(print_kwargs or {}))
