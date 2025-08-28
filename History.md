@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.3.4 - 28.08.2025
+  * wrappers/githubw, wrappers/socketw/sni - fixes and improvements.
 * 3.3.3 - 25.08.2025
   * mitm/mitm_main, networks, wrappers/dockerw/install_docker, wrappers/pycharmw/ubuntu, wrappers/socketw/sni - fixes and improvements.
 * 3.3.2 - 10.08.2025

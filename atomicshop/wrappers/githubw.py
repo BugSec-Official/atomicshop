@@ -78,7 +78,7 @@ class GitHubWrapper:
         Usage to download the latest release where the file name is 'test_file.zip':
             git_wrapper = GitHubWrapper(user_name='user_name', repo_name='repo_name')
             git_wrapper.download_and_extract_latest_release(
-                target_directory='target_directory', string_pattern='test_*.zip')
+                target_directory='target_directory', asset_pattern='test_*.zip')
         ================================================================================================================
         Usage to get the latest release json:
             git_wrapper = GitHubWrapper(user_name='user_name', repo_name='repo_name')
@@ -116,6 +116,10 @@ class GitHubWrapper:
         self.commits_url: str = str()
         self.contents_url: str = str()
 
+        self.releases_url: str = str()
+        self.releases_per_page: int = 100
+        self.releases_starting_page: int = 1
+
         if self.user_name and self.repo_name and not self.repo_url:
             self.build_links_from_user_and_repo()
 
@@ -143,6 +147,7 @@ class GitHubWrapper:
         self.api_url = f'https://api.{self.domain}/repos/{self.user_name}/{self.repo_name}'
 
         self.latest_release_json_url: str = f'{self.api_url}/releases/latest'
+        self.releases_url: str = f'{self.api_url}/releases'
         self.commits_url: str = f'{self.api_url}/commits'
         self.contents_url: str = f'{self.api_url}/contents'
         self.branch_download_link = f'{self.api_url}/{self.branch_type_directory}/{self.branch}'
@@ -272,21 +277,133 @@ class GitHubWrapper:
 
             download_directory(self.path, current_target_directory, headers)
 
+    def get_releases_json(
+            self,
+            asset_pattern: str = None,
+            latest: bool = False,
+            per_page: int = None,
+            starting_page: int = None,
+            all_assets: bool = False,
+    ):
+        """
+        This function will get the releases json.
+        :param asset_pattern: str, the string pattern to search in the asset names of releases. Wildcards can be used.
+            If there is a match, the release will be added to the result list.
+        :param latest: bool, if True, will get only the latest release.
+            If 'asset_pattern' is provided, 'latest' will find the latest release matching the pattern.
+            Of course if you want to get it from all releases, you must set 'all_assets' to True.
+        :param per_page: int, the number of releases per page. Default is 100.
+        :param starting_page: int, the starting page number. Default is 1.
+        :param all_assets: bool, if True, will get all releases matching the pattern across all pages
+            OR all assets if no pattern is provided.
+        :return:
+        """
+
+        # If 'latest' is True and no 'asset_pattern' is provided, we only need to get 1 release from page 1.
+        # No need to get more assets than the first one.
+        if latest and not asset_pattern:
+            per_page = 1
+            starting_page = 1
+            all_assets = False
+        # In all other cases, get the releases according to the provided parameters or defaults.
+        else:
+            if not per_page:
+                per_page = self.releases_per_page
+
+            if not starting_page:
+                starting_page = self.releases_starting_page
+
+        headers: dict = self._get_headers()
+
+        params: dict = {
+            'per_page': per_page,
+            'page': starting_page
+        }
+
+        all_releases = []
+        while True:
+            response = requests.get(self.releases_url, headers=headers, params=params)
+            releases = response.json()
+            # If no releases found on current page, there will be none on the next as well, break the loop.
+            if not releases:
+                break
+
+            # If 'asset_pattern' is provided, filter releases to only those that have matching assets.
+            if asset_pattern:
+                for release in releases:
+                    assets = release.get('assets', [])
+                    matching_assets = [asset for asset in assets if fnmatch.fnmatch(asset.get('name', ''), asset_pattern)]
+                    if matching_assets:
+                        all_releases.append(release)
+
+                        if latest:
+                            return all_releases
+            else:
+                all_releases.extend(releases)
+
+            if not all_assets:
+                break
+
+            params['page'] += 1
+
+        return all_releases
+
+    def get_latest_release_json(
+            self,
+            asset_pattern: str = None
+    ) -> dict:
+        """
+        This function will get the latest releases json.
+        :param asset_pattern: str, the string pattern to search in the asset names of releases. Wildcards can be used.
+            If there is a match, the release will be added to the result list.
+        :return: dict, the latest release json.
+        """
+
+        if asset_pattern:
+            releases = self.get_releases_json(
+                asset_pattern=asset_pattern,
+                latest=True,
+                all_assets=True
+            )
+        else:
+            releases = self.get_releases_json(latest=True)
+
+        if not releases:
+            return {}
+        else:
+            return releases[0]
+
+    def get_latest_release_version(
+            self,
+            asset_pattern: str = None
+    ) -> str:
+        """
+        This function will get the latest release version number.
+
+        :param asset_pattern: str, the string pattern to search in the asset names of releases. Wildcards can be used.
+            If there is a match, the release will be added to the result list.
+        :return: str, the latest release version number.
+        """
+
+        latest_release_json: dict = self.get_latest_release_json(asset_pattern=asset_pattern)
+        latest_release_version: str = latest_release_json['tag_name']
+        return latest_release_version
+
     def get_latest_release_url(
             self,
-            string_pattern: str,
-            exclude_string: str = None,
+            asset_pattern: str,
+            exclude_pattern: str = None,
             **kwargs):
         """
         This function will return the latest release url.
-        :param string_pattern: str, the string pattern to search in the latest release. Wildcards can be used.
-        :param exclude_string: str, the string to exclude from the search. No wildcards can be used.
+        :param asset_pattern: str, the string pattern to search in the latest release. Wildcards can be used.
+        :param exclude_pattern: str, the string to exclude from the search. No wildcards can be used.
         :param kwargs: dict, the print arguments for the 'print_api' function.
         :return: str, the latest release url.
         """
 
         # Get the 'assets' key of the latest release json.
-        github_latest_releases_list = self.get_the_latest_release_json()['assets']
+        github_latest_releases_list = self.get_latest_release_json()['assets']
 
         # Get only download urls of the latest releases.
         download_urls: list = list()
@@ -294,13 +411,13 @@ class GitHubWrapper:
             download_urls.append(single_dict['browser_download_url'])
 
         # Exclude urls against 'exclude_string'.
-        if exclude_string:
+        if exclude_pattern:
             for download_url in download_urls:
-                if exclude_string in download_url:
+                if exclude_pattern in download_url:
                     download_urls.remove(download_url)
 
-        # Find urls against 'string_pattern'.
-        found_urls: list = fnmatch.filter(download_urls, string_pattern)
+        # Find urls against 'asset_pattern'.
+        found_urls: list = fnmatch.filter(download_urls, asset_pattern)
 
         # If more than 1 url answer the criteria, we can't download it. The user must be more specific in his input
         # strings.
@@ -317,15 +434,15 @@ class GitHubWrapper:
     def download_latest_release(
             self,
             target_directory: str,
-            string_pattern: str,
+            asset_pattern: str,
             exclude_string: str = None,
             **kwargs):
         """
         This function will download the latest release from the GitHub repository.
         :param target_directory: str, the target directory to download the file.
-        :param string_pattern: str, the string pattern to search in the latest release. Wildcards can be used.
+        :param asset_pattern: str, the string pattern to search in the latest release. Wildcards can be used.
         :param exclude_string: str, the string to exclude from the search. No wildcards can be used.
-            The 'excluded_string' will be filtered before the 'string_pattern' entries.
+            The 'excluded_string' will be filtered before the 'asset_pattern' entries.
         :param kwargs: dict, the print arguments for the 'print_api' function.
         :return:
         """
@@ -333,7 +450,7 @@ class GitHubWrapper:
         headers: dict = self._get_headers()
 
         # Get the latest release url.
-        found_url = self.get_latest_release_url(string_pattern=string_pattern, exclude_string=exclude_string, **kwargs)
+        found_url = self.get_latest_release_url(asset_pattern=asset_pattern, exclude_string=exclude_string, **kwargs)
 
         downloaded_file_path = web.download(
             file_url=found_url, target_directory=target_directory, headers=headers, **kwargs)
@@ -342,7 +459,7 @@ class GitHubWrapper:
     def download_and_extract_latest_release(
             self,
             target_directory: str,
-            string_pattern: str,
+            asset_pattern: str,
             exclude_string: str = None,
             archive_remove_first_directory: bool = False,
             **kwargs):
@@ -350,7 +467,7 @@ class GitHubWrapper:
         This function will download the latest release from the GitHub repository, extract the file and remove the file,
         leaving only the extracted folder.
         :param target_directory: str, the target directory to download and extract the file.
-        :param string_pattern: str, the string pattern to search in the latest release. Wildcards can be used.
+        :param asset_pattern: str, the string pattern to search in the latest release. Wildcards can be used.
         :param exclude_string: str, the string to exclude from the search. No wildcards can be used.
         :param archive_remove_first_directory: bool, sets if archive extract function will extract the archive
             without first directory in the archive. Check reference in the
@@ -362,7 +479,7 @@ class GitHubWrapper:
         headers: dict = self._get_headers()
 
         # Get the latest release url.
-        found_url = self.get_latest_release_url(string_pattern=string_pattern, exclude_string=exclude_string, **kwargs)
+        found_url = self.get_latest_release_url(asset_pattern=asset_pattern, exclude_string=exclude_string, **kwargs)
 
         web.download_and_extract_file(
             file_url=found_url,
@@ -370,24 +487,6 @@ class GitHubWrapper:
             archive_remove_first_directory=archive_remove_first_directory,
             headers=headers,
             **kwargs)
-
-    def get_the_latest_release_json(self):
-        """
-        This function will get the latest releases json.
-        :return:
-        """
-
-        headers: dict = self._get_headers()
-
-        response = requests.get(self.latest_release_json_url, headers=headers)
-        return response.json()
-
-    def get_the_latest_release_version_number(self):
-        """
-        This function will get the latest release version number.
-        :return:
-        """
-        return self.get_the_latest_release_json()['tag_name']
 
     def get_latest_commit(self) -> dict:
         """
