@@ -274,7 +274,7 @@ class SNIHandler:
 
             # Setting "server_hostname" as a domain.
             self.sni_received_parameters.ssl_socket.server_hostname = self.sni_received_parameters.destination_name
-            print_api("SNI Passed: True", color="yellow", **(print_kwargs or {}))
+            print_api("SNI Passed: True", **(print_kwargs or {}))
             message = (
                 f"SNI Handler: port {self.sni_received_parameters.ssl_socket.getsockname()[1]}: "
                 f"Incoming connection for [{self.sni_received_parameters.ssl_socket.server_hostname}]")
