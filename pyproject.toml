@@ -55,6 +55,7 @@ dependencies = [
     "wheel",
     "beautifulsoup4",
     "cryptography",
+    "dkinst",
     "dnslib",
     "dnspython",
     "docker",
