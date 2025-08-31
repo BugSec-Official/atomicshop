@@ -3,6 +3,7 @@ import time
 from typing import Union
 import os
 import psutil
+import ctypes
 
 from icmplib import ping
 from icmplib.models import Host
@@ -20,9 +21,12 @@ MICROSOFT_LOOPBACK_DEVICE_HARDWARE_ID = "*MSLOOP"
 GUID_DEVCLASS_NET: str = '{4d36e972-e325-11ce-bfc1-08002be10318}'
 
 
-def is_ip_alive(ip_address: str, timeout: int = 1) -> bool:
+def is_ip_in_use_ping(ip_address: str, timeout: int = 1) -> bool:
     """
-    Returns True if icmplib.models.Host.is_alive returns True.
+    Returns True if the IP address is pingable, False otherwise.
+    :param ip_address: string, IP address to check.
+    :param timeout: int, timeout in seconds. Default is 1 second.
+    :return: bool, True if the IP address is pingable, False otherwise.
     """
 
     host_object: Host = ping(ip_address, count=1, timeout=timeout)
@@ -30,15 +34,72 @@ def is_ip_alive(ip_address: str, timeout: int = 1) -> bool:
     return host_object.is_alive
 
 
-def get_default_internet_ipv4() -> str:
+def is_ip_in_use_arp(
+        ipv4: str,
+        gateway_ip: str = None
+) -> tuple[
+        Union[str, None],
+        Union[bool, None]
+]:
     """
+    Windows only.
+    Check if an IPv4 address is in use on the local network using ARP.
+    :param ipv4: string, IPv4 address to check.
+    :param gateway_ip: string, IPv4 address of the default gateway.
+        How it works: If you provide the gateway_ip, the function will get yje MAC of the gateway,
+        then it will get the MAC of the target IP address. If the MACs are the same, it means that the target IP's
+        ARP reply is an ARP proxy reply from the gateway.
+    :return: tuple (mac_address: str | None, via_gateway: bool | None)
+        If the IP address is in use, mac_address will be the MAC address of the device using the IP address,
+        else None. If gateway_ip is provided, via_gateway will be True if the MAC address is the same as the gateway's MAC address,
+        False if it's different, and None if gateway_ip is not provided.
+    """
+
+    iphlpapi = ctypes.windll.iphlpapi
+    ws2_32 = ctypes.windll.ws2_32
+
+    def _send_arp(ip: str) -> str | None:
+        """Return MAC string like 'aa:bb:cc:dd:ee:ff' if IP is claimed on the LAN, else None."""
+        # inet_addr returns DWORD in network byte order
+        dest_ip = ws2_32.inet_addr(ip.encode('ascii'))
+        if dest_ip == 0xFFFFFFFF:  # INVALID
+            raise ValueError(f"Bad IPv4 address: {ip}")
+
+        mac_buf = ctypes.c_uint64(0)  # storage for up to 8 bytes
+        mac_len = ctypes.c_ulong(ctypes.sizeof(mac_buf))  # in/out len
+        # SrcIP=0 lets Windows pick the right interface
+        rc = iphlpapi.SendARP(dest_ip, 0, ctypes.byref(mac_buf), ctypes.byref(mac_len))
+        if rc != 0:  # Non-zero means no ARP reply / not on-link / other error
+            return None
+
+        # Extract the first 6 bytes from little-endian integer
+        mac_int = mac_buf.value
+        mac_bytes = mac_int.to_bytes(8, 'little')[:6]
+        return ':'.join(f'{b:02x}' for b in mac_bytes)
+
+    mac = _send_arp(ipv4)
+    if mac is None:
+        return None, None
+    via_gateway = None
+    if gateway_ip:
+        gw_mac = _send_arp(gateway_ip)
+        via_gateway = (gw_mac is not None and gw_mac.lower() == mac.lower())
+    return mac, via_gateway
+
+
+def __get_default_internet_ipv4() -> str:
+    """
+    FOR REFERENCE ONLY, DO NOT USE.
+    DOESN'T WORK UNDER ALL CIRCUMSTANCES, CAN'T PINPOINT THE REASON.
+
     Get the default IPv4 address of the interface that is being used for internet.
     :return: string, default IPv4 address.
     """
 
     return socket.gethostbyname(socket.gethostname())
 
-def get_default_internet_ipv4_by_connect(target: str = "8.8.8.8") -> str:
+
+def get_default_internet_ipv4(target: str = "8.8.8.8") -> str:
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
         s.connect((target, 80))  # no packet sent; OS just chooses a route
         return s.getsockname()[0]  # local address of that route
@@ -296,9 +357,9 @@ def generate_unused_ipv4_addresses_by_vlan(
     for i in range(number_of_ips):
         # Create the IP address.
         while True:
-            ip_address = f"{vlan}.{counter}"
+            ip_address: str = f"{vlan}.{counter}"
             counter += 1
-            is_ip_in_use: bool = is_ip_alive(ip_address)
+            is_ip_in_use, _ = is_ip_in_use_arp(ip_address)
             if not is_ip_in_use and not ip_address in skip_ips:
                 # print("[+] Found IP to assign: ", ip_address)
                 generated_ips.append(ip_address)
@@ -506,7 +567,7 @@ def add_virtual_ips_to_default_adapter_by_current_setting(
                 dns_gateways = default_adapter_info['dns_gateways']
 
             # We will get the default IP address of the machine.
-            default_ip_address: str = socket.gethostbyname(socket.gethostname())
+            default_ip_address: str = get_default_internet_ipv4()
             # So we can make it the first IP in the list, but first remove it from the list.
             _ = ips.pop(ips.index(default_ip_address))
             # At this point we will copy the list of IPs that we will set the SkipAsSource flag for.
