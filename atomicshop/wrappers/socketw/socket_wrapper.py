@@ -370,7 +370,12 @@ class SocketWrapper:
 
             # If someone removed the CA certificate file manually, and now it was created, we also need to
             # clear the cached certificates.
-            shutil.rmtree(self.sni_server_certificates_cache_directory)
+            try:
+                shutil.rmtree(self.sni_server_certificates_cache_directory)
+            # If the directory doesn't exist it will throw an exception, which is OK.
+            except FileNotFoundError:
+                pass
+
             os.makedirs(self.sni_server_certificates_cache_directory, exist_ok=True)
             print_api("Removed cached server certificates.", logger=self.logger)
 
