@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 3.3.9 - 04.09.2025
+  * networks - improvements.
+  * wrappers/socketw/dns_server - error handling improvements.
 * 3.3.8 - 04.09.2025
   * wrappers/socketw/socket_wrapper - bug fix.
 * 3.3.7 - 04.09.2025
