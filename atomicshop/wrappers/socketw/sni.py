@@ -177,7 +177,7 @@ class SNIHandler:
             certificator_instance: certificator.Certificator,
             domain_from_dns_server: str,
             default_certificate_domain_list: list,
-            exceptions_logger: loggingw.ExceptionCsvLogger,
+            exceptions_logger: loggingw.ExceptionCsvLogger
     ):
         self.sni_use_default_callback_function_extended = sni_use_default_callback_function_extended
         self.sni_add_new_domains_to_default_server_certificate = sni_add_new_domains_to_default_server_certificate
