@@ -47,7 +47,8 @@ class SNISetup:
             tls: bool,
             domain_from_dns_server: str = None,
             skip_extension_id_list: list = None,
-            exceptions_logger: loggingw.ExceptionCsvLogger = None
+            exceptions_logger: loggingw.ExceptionCsvLogger = None,
+            logs_path: str = None,
     ):
         self.ca_certificate_name = ca_certificate_name
         self.ca_certificate_filepath = ca_certificate_filepath
@@ -73,6 +74,7 @@ class SNISetup:
         self.skip_extension_id_list = skip_extension_id_list
         self.tls = tls
         self.exceptions_logger = exceptions_logger
+        self.logs_path = logs_path
 
         self.certificator_instance = None
 
@@ -160,7 +162,8 @@ class SNISetup:
                 certificator_instance=self.certificator_instance,
                 domain_from_dns_server=self.domain_from_dns_server,
                 default_certificate_domain_list=self.default_certificate_domain_list,
-                exceptions_logger=self.exceptions_logger
+                exceptions_logger=self.exceptions_logger,
+                logs_path=self.logs_path
             )
             ssl_context.set_servername_callback(
                 sni_handler_instance.setup_sni_callback(print_kwargs=print_kwargs))
@@ -179,7 +182,8 @@ class SNIHandler:
             certificator_instance: certificator.Certificator,
             domain_from_dns_server: str,
             default_certificate_domain_list: list,
-            exceptions_logger: loggingw.ExceptionCsvLogger
+            exceptions_logger: loggingw.ExceptionCsvLogger,
+            logs_path: str,
     ):
         self.sni_use_default_callback_function_extended = sni_use_default_callback_function_extended
         self.sni_add_new_domains_to_default_server_certificate = sni_add_new_domains_to_default_server_certificate
@@ -188,6 +192,7 @@ class SNIHandler:
         self.domain_from_dns_server: str = domain_from_dns_server
         self.default_certificate_domain_list = default_certificate_domain_list
         self.exceptions_logger = exceptions_logger
+        self.logs_path = logs_path
 
         # noinspection PyTypeChecker
         self.sni_received_parameters: SNIReceivedParameters = None
@@ -245,7 +250,7 @@ class SNIHandler:
         # non-existent in certificates cache folder.
         if self.sni_create_server_certificate_for_each_domain:
             self.certificator_instance.create_use_sni_server_certificate_ca_signed(
-                sni_received_parameters=self.sni_received_parameters, print_kwargs=print_kwargs)
+                sni_received_parameters=self.sni_received_parameters, print_kwargs=print_kwargs, logs_path=self.logs_path)
 
     def set_socket_server_hostname(
             self,

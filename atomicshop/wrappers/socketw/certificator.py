@@ -135,7 +135,8 @@ class Certificator:
     def create_use_sni_server_certificate_ca_signed(
             self,
             sni_received_parameters,
-            print_kwargs: dict = None
+            print_kwargs: dict = None,
+            logs_path: str = None
     ):
         # === Connect to the domain and get the certificate. ===========================================================
         certificate_from_socket_x509 = None
@@ -155,7 +156,8 @@ class Certificator:
                     service_port=base.get_destination_address_from_socket(sni_received_parameters.ssl_socket)[1],
                     tls=self.tls,
                     dns_servers_list=self.forwarding_dns_service_ipv4_list___only_for_localhost,
-                    logger=print_kwargs.get('logger') if print_kwargs else None
+                    logger=print_kwargs.get('logger') if print_kwargs else None,
+                    logs_path = logs_path
                 )
             # If we're not on localhost, then connect to domain directly.
             else:
@@ -163,7 +165,8 @@ class Certificator:
                     service_name=sni_received_parameters.destination_name,
                     service_port=base.get_destination_address_from_socket(sni_received_parameters.ssl_socket)[1],
                     tls=self.tls,
-                    logger=print_kwargs.get('logger') if print_kwargs else None
+                    logger=print_kwargs.get('logger') if print_kwargs else None,
+                    logs_path=logs_path
                 )
 
             # If certificate from socket exists, then we don't need to get it from the socket and write to file.
