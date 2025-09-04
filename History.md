@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.3.8 - 04.09.2025
+  * wrappers/socketw/socket_wrapper - bug fix.
 * 3.3.7 - 04.09.2025
   * mitm/engines/create_module_template - bug fix.
 * 3.3.6 - 31.08.2025
