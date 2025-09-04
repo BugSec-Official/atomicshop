@@ -1,8 +1,8 @@
 <!-- HISTORY -->
 ## History
 
-* 3.3.7 - 03.09.2025
-  * Enable_sslkeylogfile_env_to_client_ssl_context is True. Now we write under /logs/sslkeylog.txt.
+* 3.3.7 - 04.09.2025
+  * mitm/engines/create_module_template - bug fix.
 * 3.3.6 - 31.08.2025
   * networks - fixes and improvements.
 * 3.3.5 - 30.08.2025
