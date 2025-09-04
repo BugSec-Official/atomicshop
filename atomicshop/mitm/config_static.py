@@ -124,7 +124,6 @@ class LogRec:
 
 @dataclass
 class Certificates:
-    enable_sslkeylogfile_env_to_client_ssl_context: bool
     install_ca_certificate_to_root_store: bool
     uninstall_unused_ca_certificates_with_mitm_ca_name: bool
 
@@ -141,6 +140,8 @@ class Certificates:
     sni_server_certificate_from_server_socket_download_directory: str
 
     domains_all_times: list[str]
+    enable_sslkeylogfile_env_to_client_ssl_context: bool = True
+    sslkeylog_file_path: str = None
 
 
 @dataclass

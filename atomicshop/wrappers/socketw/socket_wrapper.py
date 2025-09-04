@@ -599,8 +599,7 @@ class SocketWrapper:
                             forwarding_dns_service_ipv4_list___only_for_localhost=(
                                 self.forwarding_dns_service_ipv4_list___only_for_localhost),
                             tls=is_tls,
-                            exceptions_logger=self.exceptions_logger,
-                            logs_path=self.logs_directory
+                            exceptions_logger=self.exceptions_logger
                         )
 
                         ssl_client_socket, accept_error_message = \

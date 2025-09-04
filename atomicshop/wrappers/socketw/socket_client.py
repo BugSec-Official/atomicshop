@@ -32,7 +32,7 @@ class SocketClient:
             logger: logging.Logger = None,
             custom_pem_client_certificate_file_path: str = None,
             enable_sslkeylogfile_env_to_client_ssl_context: bool = False,
-            logs_path:str = None
+            sslkeylog_file_path:str = None
     ):
         """
         If you have a certificate for domain, but not for the IPv4 address, the SSL Socket context can be created for
@@ -69,7 +69,7 @@ class SocketClient:
         self.dns_servers_list = dns_servers_list
         self.custom_pem_client_certificate_file_path: str = custom_pem_client_certificate_file_path
         self.enable_sslkeylogfile_env_to_client_ssl_context: bool = enable_sslkeylogfile_env_to_client_ssl_context
-        self.logs_path: str = logs_path
+        self.sslkeylog_file_path: str = sslkeylog_file_path
 
         if logger:
             # Create child logger for the provided logger with the module's name.
@@ -104,7 +104,7 @@ class SocketClient:
             return creator.wrap_socket_with_ssl_context_client___default_certs___ignore_verification(
                 socket_object, self.service_name, self.custom_pem_client_certificate_file_path,
                 enable_sslkeylogfile_env_to_client_ssl_context=self.enable_sslkeylogfile_env_to_client_ssl_context,
-                logs_path=self.logs_path
+                sslkeylog_file_path=self.sslkeylog_file_path
             )
 
     def service_connection(

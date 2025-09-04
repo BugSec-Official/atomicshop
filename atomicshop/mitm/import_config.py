@@ -361,5 +361,4 @@ def manipulations_after_import():
         filesystem.check_absolute_path___add_full(
             config_static.Certificates.sni_server_certificate_from_server_socket_download_directory,
             config_static.MainConfig.SCRIPT_DIRECTORY)
-    #In case it is not defined in the config.toml
-    config_static.Certificates.enable_sslkeylogfile_env_to_client_ssl_context = 1
+    config_static.Certificates.sslkeylog_file_path = f"{config_static.LogRec.logs_path}{os.sep}sslkeylog.txt"
