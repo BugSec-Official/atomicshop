@@ -2,8 +2,12 @@ import os
 import argparse
 from typing import Literal
 
-from ... import filesystem
+from ... import filesystem, consoles
 from ...basics import strings
+from rich.console import Console
+
+
+console = Console()
 
 
 GENERAL_CLASS_NAME: str = "General"
@@ -71,6 +75,8 @@ class CreateModuleTemplate:
 
         self.create_config_file()
 
+        consoles.wait_any_key()
+
     def create_config_file(self):
         # Defining variables.
         config_lines_list: list = list()
@@ -93,7 +99,7 @@ class CreateModuleTemplate:
         with open(config_file_path, 'w') as output_file:
             output_file.write('\n'.join(config_lines_list))
 
-        print(f"Config File Created: {config_file_path}")
+        console.print(f"Config File Created: {config_file_path}", style="bright_blue")
 
     def _create_engine_module_from_reference(
             self,
@@ -113,7 +119,7 @@ class CreateModuleTemplate:
             raise ValueError(f"Module type is not recognized: {module_type}")
 
         # Reading the module file to string.
-        with open(file_path, 'r') as input_file:
+        with open(file_path, 'r', encoding='utf-8') as input_file:
             file_content_string = input_file.read()
 
         new_module_full_path: str = str()
@@ -126,4 +132,4 @@ class CreateModuleTemplate:
                 output_file.write(new_content_string)
 
         print(f"Converted: {file_path}")
-        print(f"To: {new_module_full_path}")
+        console.print(f"To: {new_module_full_path}", style="green")
