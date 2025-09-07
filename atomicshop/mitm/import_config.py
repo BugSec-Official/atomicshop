@@ -361,3 +361,6 @@ def manipulations_after_import():
         filesystem.check_absolute_path___add_full(
             config_static.Certificates.sni_server_certificate_from_server_socket_download_directory,
             config_static.MainConfig.SCRIPT_DIRECTORY)
+    config_static.Certificates.sslkeylog_file_path = (f"{config_static.LogRec.logs_path}{os.sep}"
+                                                      f"{config_static.Certificates.sslkeylog_file_name}")
+

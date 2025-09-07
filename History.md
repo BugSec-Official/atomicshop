@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.3.11 - 06.09.2025
+  * Enable_sslkeylogfile_env_to_client_ssl_context is True. Now we write under /logs/sslkeylog.txt.
 * 3.3.9-3.3.10 - 04.09.2025
   * networks - improvements.
   * wrappers/socketw/dns_server - error handling improvements.

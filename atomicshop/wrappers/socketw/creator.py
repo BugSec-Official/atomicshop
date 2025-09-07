@@ -43,7 +43,8 @@ def create_ssl_context_for_server() -> ssl.SSLContext:
 
 
 def create_ssl_context_for_client(
-        enable_sslkeylogfile_env_to_client_ssl_context: bool = False
+        enable_sslkeylogfile_env_to_client_ssl_context: bool = False,
+        sslkeylog_file_path: str = None
 ) -> ssl.SSLContext:
     """
     This function creates the SSL context for the client.
@@ -62,10 +63,9 @@ def create_ssl_context_for_client(
     ssl_context: ssl.SSLContext = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
 
     if enable_sslkeylogfile_env_to_client_ssl_context:
-        ssl_key_logfile = os.environ.get('SSLKEYLOGFILE')
-        if ssl_key_logfile:
-            ssl_context.keylog_filename = ssl_key_logfile
-
+        # This will create the file if it doesn't exist
+        open(sslkeylog_file_path, "a").close()
+        ssl_context.keylog_filename = sslkeylog_file_path
     return ssl_context
 
 
@@ -243,7 +243,8 @@ def wrap_socket_with_ssl_context_client___default_certs___ignore_verification(
         socket_object,
         server_hostname: str = None,
         custom_pem_client_certificate_file_path: str = None,
-        enable_sslkeylogfile_env_to_client_ssl_context: bool = False
+        enable_sslkeylogfile_env_to_client_ssl_context: bool = False,
+        sslkeylog_file_path: str = None
 ):
     """
     This function is a preset for wrapping the socket with SSL context for the client.
@@ -257,7 +258,8 @@ def wrap_socket_with_ssl_context_client___default_certs___ignore_verification(
         to the SSL context. Default is False.
     """
     ssl_context: ssl.SSLContext = create_ssl_context_for_client(
-        enable_sslkeylogfile_env_to_client_ssl_context=enable_sslkeylogfile_env_to_client_ssl_context)
+        enable_sslkeylogfile_env_to_client_ssl_context=enable_sslkeylogfile_env_to_client_ssl_context
+        ,sslkeylog_file_path=sslkeylog_file_path)
     set_client_ssl_context_ca_default_certs(ssl_context)
     set_client_ssl_context_certificate_verification_ignore(ssl_context)
 

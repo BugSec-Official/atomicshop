@@ -73,7 +73,6 @@ class SNISetup:
         self.skip_extension_id_list = skip_extension_id_list
         self.tls = tls
         self.exceptions_logger = exceptions_logger
-
         self.certificator_instance = None
 
     def wrap_socket_with_ssl_context_server_sni_extended(
@@ -160,8 +159,7 @@ class SNISetup:
                 certificator_instance=self.certificator_instance,
                 domain_from_dns_server=self.domain_from_dns_server,
                 default_certificate_domain_list=self.default_certificate_domain_list,
-                exceptions_logger=self.exceptions_logger
-            )
+                exceptions_logger=self.exceptions_logger            )
             ssl_context.set_servername_callback(
                 sni_handler_instance.setup_sni_callback(print_kwargs=print_kwargs))
 
