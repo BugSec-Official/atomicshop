@@ -13,6 +13,7 @@ from ..loggingw import loggingw
 from ..psutilw import psutil_networks
 from ...basics import booleans, tracebacks
 from ...file_io import csvs
+from ... import networks
 
 # noinspection PyPackageRequirements
 import dnslib
@@ -301,6 +302,17 @@ class DnsServer:
             # Wait for the message to be printed and saved to file.
             time.sleep(1)
             raise DnsConfigurationValuesError(e)
+
+        # If the listening interface is not localhost, check if the interface can be bound to.
+        if not self.listening_interface.startswith('127.'):
+            host_ips: list[str] = networks.get_host_ips(ipv6=False)
+            if self.listening_interface not in host_ips:
+                message = (f"Listening interface [{self.listening_interface}] is not assigned to any of the host "
+                           f"network interfaces. Current host IPv4 addresses: {host_ips}")
+                print_api(f'DnsConfigurationValuesError: {str(message)}', error_type=True, color="red", logger=self.logger)
+                # Wait for the message to be printed and saved to file.
+                time.sleep(1)
+                raise DnsConfigurationValuesError(message)
 
         ips_ports: list[str] = [f'{self.listening_interface}:{self.listening_port}']
         port_in_use = psutil_networks.get_processes_using_port_list(ips_ports)

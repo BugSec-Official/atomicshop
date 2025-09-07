@@ -1,8 +1,11 @@
 <!-- HISTORY -->
 ## History
 
+* 3.3.9-3.3.10 - 04.09.2025
+  * networks - improvements.
+  * wrappers/socketw/dns_server - error handling improvements.
 * 3.3.8 - 04.09.2025
-  * Enable_sslkeylogfile_env_to_client_ssl_context is True. Now we write under /logs/sslkeylog.txt.
+  * wrappers/socketw/socket_wrapper - bug fix.
 * 3.3.7 - 04.09.2025
   * mitm/engines/create_module_template - bug fix.
 * 3.3.6 - 31.08.2025

@@ -169,6 +169,59 @@ def get_interface_ips(
     return ips
 
 
+def get_host_ips(
+        localhost: bool = True,
+        ipv4: bool = True,
+        ipv6: bool = True
+) -> list[str]:
+    """
+    Yield (ifname, family, ip) for all UP interfaces that have bindable addresses.
+
+    Args:
+        localhost: include 127.0.0.0/8 and ::1 if True.
+        ipv4: include IPv4 addresses if True.
+        ipv6: include IPv6 addresses if True.
+    """
+    stats = psutil.net_if_stats()
+
+    ip_list: list[str] = []
+    for ifname, addrs in psutil.net_if_addrs().items():
+        st = stats.get(ifname)
+        if not st or not st.isup:
+            continue  # interface is down or unknown
+
+        for a in addrs:
+            fam = a.family
+            if fam not in (socket.AF_INET, socket.AF_INET6):
+                continue
+
+            # Family filters
+            if fam == socket.AF_INET and not ipv4:
+                continue
+            if fam == socket.AF_INET6 and not ipv6:
+                continue
+
+            ip = a.address
+
+            # Skip placeholders/wildcards
+            if fam == socket.AF_INET and ip == "0.0.0.0":
+                continue
+            if fam == socket.AF_INET6 and ip in ("::",):
+                continue
+
+            # Optionally skip loopback
+            if not localhost:
+                if fam == socket.AF_INET and ip.startswith("127."):
+                    continue
+                if fam == socket.AF_INET6 and (ip == "::1" or ip.startswith("::1%")):
+                    continue
+
+            # yield ifname, fam, ip
+            ip_list.append(ip)
+
+    return ip_list
+
+
 def get_microsoft_loopback_device_network_configuration(
         wmi_instance: CDispatch = None,
         timeout: int = 1,
