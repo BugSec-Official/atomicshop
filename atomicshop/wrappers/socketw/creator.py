@@ -63,12 +63,9 @@ def create_ssl_context_for_client(
     ssl_context: ssl.SSLContext = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
 
     if enable_sslkeylogfile_env_to_client_ssl_context:
-        try:
-            # This will create the file if it doesn't exist
-            open(sslkeylog_file_path, "a").close()
-            ssl_context.keylog_filename = sslkeylog_file_path
-        except Exception as e:
-            print_api(f"Failed to create file: {e}")
+        # This will create the file if it doesn't exist
+        open(sslkeylog_file_path, "a").close()
+        ssl_context.keylog_filename = sslkeylog_file_path
     return ssl_context
 
 

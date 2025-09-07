@@ -142,6 +142,7 @@ class Certificates:
     domains_all_times: list[str]
     enable_sslkeylogfile_env_to_client_ssl_context: bool = True
     sslkeylog_file_path: str = None
+    sslkeylog_file_name: str = "sslkeylog.txt"
 
 
 @dataclass
