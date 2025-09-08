@@ -346,10 +346,11 @@ def analyze(main_file_path: str):
 
 
 def deviation_calculator_by_moving_average(
-        statistics_file_directory: str,
-        by_type: Literal['host', 'url'],
-        moving_average_window_days: int,
-        top_bottom_deviation_percentage: float,
+        statistics_file_directory: str = None,
+        statistics_content: dict = None,
+        by_type: Literal['host', 'url'] = 'url',
+        moving_average_window_days: int = 5,
+        top_bottom_deviation_percentage: float = 0.25,
         get_deviation_for_last_day_only: bool = False,
         summary: bool = False,
         output_file_path: str = None,
@@ -360,9 +361,13 @@ def deviation_calculator_by_moving_average(
     """
     This function is the main function for the moving average calculator.
 
-    :param statistics_file_directory: string, the directory where 'statistics.csv' file resides.
+    :param statistics_file_directory: string, can be either providing the directory where 'statistics.csv' file resides
+        or None. If None, the 'statistics_content' must be provided.
+        The directory where 'statistics.csv' file resides.
         Also, all the rotated files like: statistics_2021-01-01.csv, statistics_2021-01-02.csv, etc.
         These will be analyzed in the order of the date in the file name.
+    :param statistics_content: dict, if specified, this will be used instead of reading the files from the directory.
+        The dict should be a result of the 'atomicshop.mitm.statistic_analyzer_helper.moving_average_helper.get_all_files_content'.
     :param by_type: string, 'host' or 'url'. The type of the deviation calculation.
         'host' will calculate the deviation by the host name. Example: maps.google.com, yahoo.com, etc.
         'url' will calculate the deviation by the URL. Example: maps.google.com/maps, yahoo.com/news, etc.
@@ -414,14 +419,6 @@ def deviation_calculator_by_moving_average(
         sys.exit(main())
     """
 
-    if output_file_type not in ['json', 'csv']:
-        raise ValueError(f'output_file_type must be "json" or "csv", not [{output_file_type}]')
-
-    if by_type not in ['host', 'url']:
-        raise ValueError(f'by_type must be "host" or "url", not [{by_type}]')
-
-    statistics_file_path: str = f'{statistics_file_directory}{os.sep}{STATISTICS_FILE_NAME}'
-
     def convert_data_value_to_string(value_key: str, list_index: int) -> None:
         deviation_list[list_index]['data'][value_key] = json.dumps(deviation_list[list_index]['data'][value_key])
 
@@ -429,8 +426,25 @@ def deviation_calculator_by_moving_average(
         if value_key in deviation_list[list_index]:
             deviation_list[list_index][value_key] = json.dumps(deviation_list[list_index][value_key])
 
+    if not statistics_file_directory and not statistics_content:
+        raise ValueError('Either [statistics_file_directory] or [statistics_content] must be provided.')
+    if statistics_file_directory and statistics_content:
+        raise ValueError('Either [statistics_file_directory] or [statistics_content] must be provided, not both.')
+
+    if output_file_type not in ['json', 'csv']:
+        raise ValueError(f'output_file_type must be "json" or "csv", not [{output_file_type}]')
+
+    if by_type not in ['host', 'url']:
+        raise ValueError(f'by_type must be "host" or "url", not [{by_type}]')
+
+    if statistics_file_directory:
+        statistics_file_path: str | None = f'{statistics_file_directory}{os.sep}{STATISTICS_FILE_NAME}'
+    else:
+        statistics_file_path: str | None = None
+
     deviation_list = moving_average_helper.calculate_moving_average(
         statistics_file_path,
+        statistics_content,
         by_type,
         moving_average_window_days,
         top_bottom_deviation_percentage,
