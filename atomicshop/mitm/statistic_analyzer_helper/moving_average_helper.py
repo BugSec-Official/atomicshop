@@ -9,10 +9,11 @@ from ... import urls, filesystem
 
 
 def calculate_moving_average(
-        file_path: str,
-        by_type: Literal['host', 'url'],
-        moving_average_window_days,
-        top_bottom_deviation_percentage: float,
+        file_path: str = None,
+        statistics_content: dict = None,
+        by_type: Literal['host', 'url'] = 'url',
+        moving_average_window_days: int = 5,
+        top_bottom_deviation_percentage: float = 0.25,
         get_deviation_for_last_day_only: bool = False,
         skip_total_count_less_than: int = None,
         print_kwargs: dict = None
@@ -21,10 +22,64 @@ def calculate_moving_average(
     This function calculates the moving average of the daily statistics.
 
     :param file_path: string, the path to the 'statistics.csv' file.
+    :param statistics_content: dict, the statistics content dictionary. If provided, 'file_path' will be ignored.
+        The dictionary should be in the format returned by 'get_all_files_content' function.
     :param by_type: string, the type to calculate the moving average by. Can be 'host' or 'url'.
     :param moving_average_window_days: integer, the window size for the moving average.
     :param top_bottom_deviation_percentage: float, the percentage of deviation from the moving average to the top or
         bottom.
+    :param get_deviation_for_last_day_only: bool, check the 'get_all_files_content' function.
+    :param skip_total_count_less_than: integer, if the total count is less than this number, skip the deviation.
+    :param print_kwargs: dict, the print_api arguments.
+    """
+
+    if not file_path and not statistics_content:
+        raise ValueError('Either file_path or statistics_content must be provided.')
+    if file_path and statistics_content:
+        raise ValueError('Only one of file_path or statistics_content must be provided.')
+
+    if not statistics_content:
+        statistics_content: dict = get_all_files_content(
+            file_path=file_path, moving_average_window_days=moving_average_window_days,
+            get_deviation_for_last_day_only=get_deviation_for_last_day_only, print_kwargs=print_kwargs)
+
+    for date_string, day_dict in statistics_content.items():
+        day_dict['content_no_useless'] = get_content_without_useless(day_dict['content'])
+
+        # Get the data dictionary from the statistics content.
+        day_dict['statistics_daily'] = compute_statistics_from_content(
+            day_dict['content_no_useless'], by_type)
+
+    moving_average_dict: dict = compute_moving_averages_from_average_statistics(
+        statistics_content,
+        moving_average_window_days
+    )
+
+    # Add the moving average to the statistics content.
+    for day, day_dict in statistics_content.items():
+        try:
+            day_dict['moving_average'] = moving_average_dict[day]
+        except KeyError:
+            day_dict['moving_average'] = {}
+
+    # Find deviation from the moving average to the bottom or top by specified percentage.
+    deviation_list: list = find_deviation_from_moving_average(
+        statistics_content, top_bottom_deviation_percentage, skip_total_count_less_than)
+
+    return deviation_list
+
+
+def get_all_files_content(
+        file_path: str,
+        moving_average_window_days: int,
+        get_deviation_for_last_day_only: bool = False,
+        print_kwargs: dict = None
+) -> dict:
+    """
+    Get the dictionary that will contain all the details of the file, like date, header and content, to prepare for the MA analysis.
+
+    :param file_path: string, the path to the 'statistics.csv' file.
+    :param moving_average_window_days: integer, the window size for the moving average.
     :param get_deviation_for_last_day_only: bool, if True, only the last day will be analyzed.
         Example: With 'moving_average_window_days=5', the last 6 days will be analyzed.
         5 days for moving average and the last day for deviation.
@@ -38,8 +93,8 @@ def calculate_moving_average(
         Files 01 to 05 will be used for moving average and the file 06 for deviation.
         Meaning the average calculated for 2021-01-06 will be compared to the values moving average of 2021-01-01
         to 2021-01-05.
-    :param skip_total_count_less_than: integer, if the total count is less than this number, skip the deviation.
     :param print_kwargs: dict, the print_api arguments.
+    :return:
     """
 
     date_format: str = consts.DEFAULT_ROTATING_SUFFIXES_FROM_WHEN['midnight']
@@ -67,29 +122,7 @@ def calculate_moving_average(
         statistics_content[date_string]['content'] = log_file_content
         statistics_content[date_string]['header'] = log_file_header
 
-        statistics_content[date_string]['content_no_useless'] = get_content_without_useless(log_file_content)
-
-        # Get the data dictionary from the statistics content.
-        statistics_content[date_string]['statistics_daily'] = compute_statistics_from_content(
-            statistics_content[date_string]['content_no_useless'], by_type)
-
-    moving_average_dict: dict = compute_moving_averages_from_average_statistics(
-        statistics_content,
-        moving_average_window_days
-    )
-
-    # Add the moving average to the statistics content.
-    for day, day_dict in statistics_content.items():
-        try:
-            day_dict['moving_average'] = moving_average_dict[day]
-        except KeyError:
-            day_dict['moving_average'] = {}
-
-    # Find deviation from the moving average to the bottom or top by specified percentage.
-    deviation_list: list = find_deviation_from_moving_average(
-        statistics_content, top_bottom_deviation_percentage, skip_total_count_less_than)
-
-    return deviation_list
+    return statistics_content
 
 
 def get_content_without_useless(content: list) -> list:
