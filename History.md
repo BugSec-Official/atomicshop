@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.3.13 - 09.09.2025
+  * wrappers/mongodbw, wrappers/ubuntu_terminal - fixes and improvements.
 * 3.3.12 - 08.09.2025
   * mitm - improvements in statistic_analyzer.
 * 3.3.11 - 06.09.2025

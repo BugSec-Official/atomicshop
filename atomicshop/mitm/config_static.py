@@ -140,9 +140,10 @@ class Certificates:
     sni_server_certificate_from_server_socket_download_directory: str
 
     domains_all_times: list[str]
-    enable_sslkeylogfile_env_to_client_ssl_context: bool = True
-    sslkeylog_file_path: str = None
+    sslkeylog_file_path: str
+
     sslkeylog_file_name: str = "sslkeylog.txt"
+    enable_sslkeylogfile_env_to_client_ssl_context: bool = True
 
 
 @dataclass

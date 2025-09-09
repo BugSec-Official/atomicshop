@@ -4,8 +4,13 @@ import subprocess
 import shutil
 import time
 
+from rich.console import Console
+
 from ..print_api import print_api
 from ..permissions import ubuntu_permissions
+
+
+console = Console()
 
 
 def install_packages(
@@ -216,8 +221,7 @@ def start_enable_service_check_availability(
         enable_service_bool: bool = True,
         check_service_running: bool = True,
         user_mode: bool = False,
-        sudo: bool = True,
-        print_kwargs: dict = None
+        sudo: bool = True
 ):
     """
     Function starts and enables a service and checks its availability.
@@ -231,7 +235,6 @@ def start_enable_service_check_availability(
     :param check_service_running: bool, if True, the function will check if the service is running.
     :param user_mode: bool, if True, the service will be started and enabled in user mode.
     :param sudo: bool, if True, the command will be executed with sudo.
-    :param print_kwargs: dict, the print arguments.
     :return:
     """
 
@@ -245,18 +248,18 @@ def start_enable_service_check_availability(
         enable_service(service_name, user_mode=user_mode,sudo=sudo)
 
     if check_service_running:
-        print_api(
-            f"Waiting {str(wait_time_seconds)} seconds for the program to start before availability check...",
-            **(print_kwargs or {}))
-        time.sleep(wait_time_seconds)
+        print(f"Waiting up to {str(wait_time_seconds)} seconds for the program to start.")
+        count: int = 0
+        while not is_service_running(service_name, user_mode=user_mode) and count < wait_time_seconds:
+            count += 1
+            time.sleep(1)
 
         if not is_service_running(service_name, user_mode=user_mode):
-            print_api(
-                f"[{service_name}] service failed to start.", color='red', error_type=True, **(print_kwargs or {}))
+            console.print(f"[{service_name}] service failed to start.", style='red', markup=False)
             if exit_on_error:
                 sys.exit(1)
         else:
-            print_api(f"[{service_name}] service is running.", color='green', **(print_kwargs or {}))
+            console.print(f"[{service_name}] service is running.", style='green', markup=False)
 
 
 def add_path_to_bashrc(as_regular_user: bool = False):
