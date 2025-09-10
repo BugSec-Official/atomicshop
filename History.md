@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.3.14 - 10.09.2025
+  * web, pyproject.toml - fixes, dependencies update.
 * 3.3.13 - 09.09.2025
   * wrappers/mongodbw, wrappers/ubuntu_terminal - fixes and improvements.
 * 3.3.12 - 08.09.2025

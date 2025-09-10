@@ -157,11 +157,14 @@ def download(
         target_directory: str = None,
         file_name: str = None,
         headers: dict = None,
-        use_certifi_ca_repository: bool = False,
+        # use_certifi_ca_repository: bool = False,
         **kwargs
-) -> str:
+) -> str | None:
     """
     The function receives url and target filesystem directory to download the file.
+
+    Note: Install 'pip-system-certs' package if you want to use system's CA store for SSL context
+    in an environment where 'certifi' package is installed.
 
     :param file_url: full URL to download the file.
     :param target_directory: The directory on the filesystem to save the file to.
@@ -200,14 +203,15 @@ def download(
     print_api.print_api(f'To: {file_path}', **kwargs)
 
     # Open the URL for data gathering with SSL context.
-    if not use_certifi_ca_repository:
-        # Create a default SSL context using the system's CA store.
-        ssl_context = ssl.create_default_context()
-    else:
-        # Create a default SSL context using the certifi CA store.
-        # This is useful for environments where the system's CA store is not available or not trusted.
-        # 'certifi.where()' returns the path to the certifi CA bundle.
-        ssl_context = ssl.create_default_context(cafile=certifi.where())
+    # if not use_certifi_ca_repository:
+    #     # Create a default SSL context using the system's CA store.
+    #     ssl_context = ssl.create_default_context()
+    # else:
+
+    # Create a default SSL context using the certifi CA store.
+    # This is useful for environments where the system's CA store is not available or not trusted.
+    # 'certifi.where()' returns the path to the certifi CA bundle.
+    ssl_context = ssl.create_default_context(cafile=certifi.where())
 
     # In order to use 'urllib.request', it is not enough to 'import urllib', you need to 'import urllib.request'.
     # Build a Request object with headers if provided.
