@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.3.15 - 11.09.2025
+  * process, web, wrappers/loggingw/reading - fixes.
 * 3.3.14 - 10.09.2025
   * web, pyproject.toml - fixes, dependencies update.
 * 3.3.13 - 09.09.2025

@@ -245,7 +245,7 @@ def wrap_socket_with_ssl_context_client___default_certs___ignore_verification(
         custom_pem_client_certificate_file_path: str = None,
         enable_sslkeylogfile_env_to_client_ssl_context: bool = False,
         sslkeylog_file_path: str = None
-):
+) -> ssl.SSLSocket:
     """
     This function is a preset for wrapping the socket with SSL context for the client.
     It sets the CA default certificates, and ignores the server's certificate verification.
@@ -256,6 +256,9 @@ def wrap_socket_with_ssl_context_client___default_certs___ignore_verification(
         Default is None.
     :param enable_sslkeylogfile_env_to_client_ssl_context: boolean, enables the SSLKEYLOGFILE environment variable
         to the SSL context. Default is False.
+    :param sslkeylog_file_path: string, full file path for the SSL key log file. Default is None.
+
+    :return: ssl.SSLSocket object
     """
     ssl_context: ssl.SSLContext = create_ssl_context_for_client(
         enable_sslkeylogfile_env_to_client_ssl_context=enable_sslkeylogfile_env_to_client_ssl_context

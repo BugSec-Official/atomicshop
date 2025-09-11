@@ -2,10 +2,24 @@ import os
 from typing import Literal, Union
 from pathlib import Path
 import datetime
+import re
 
 from ... import filesystem, datetimes
 from ...basics import booleans, list_of_classes
 from ...file_io import csvs
+
+
+def is_string_ends_with_ymd(s: str) -> bool:
+    date_tail_re = re.compile(r'(\d{4}-\d{2}-\d{2})$')
+
+    m = date_tail_re.search(s)
+    if not m:
+        return False
+    try:
+        datetime.datetime.strptime(m.group(1), "%Y-%m-%d")
+        return True
+    except ValueError:
+        return False
 
 
 def get_logs_paths(
@@ -64,6 +78,10 @@ def get_logs_paths(
     # For some reason if the file name will be '.zip', then the file stem will be '.zip' and the extension will be ''.
     log_file_name: str = Path(log_file_path).stem
     log_file_extension: str = Path(log_file_path).suffix
+
+    if is_string_ends_with_ymd(log_file_name):
+        raise ValueError(
+            f'The log file name cannot end with a date in the format YYYY-MM-DD: {log_file_name}')
 
     if not log_file_extension and '.' in log_file_name:
         log_file_name, log_file_extension = log_file_name.rsplit('.')

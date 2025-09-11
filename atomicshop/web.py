@@ -4,6 +4,11 @@ import ssl
 # noinspection PyPackageRequirements
 import certifi
 
+try:
+    from importlib.metadata import version, PackageNotFoundError  # Python 3.8+
+except ImportError:  # Python <3.8
+    from importlib_metadata import version, PackageNotFoundError  # backport
+
 from .archiver import zips
 from .urls import url_parser
 from .file_io import file_io
@@ -14,8 +19,6 @@ from . import filesystem, print_api
 # https://www.useragents.me/
 # https://user-agents.net/
 USER_AGENTS = {
-    'Windows_Chrome_Latest':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
     'Chrome_111.0.0_Windows_10-11_x64':
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36',
     'Chrome 132.0.0, Windows 10/11':
@@ -183,6 +186,19 @@ def download(
                 f'Downloaded bytes: {aggregated_bytes_int} / {file_size_bytes_int}', print_end=print_end, **kwargs)
         else:
             print_api.print_api(f'Downloaded bytes: {aggregated_bytes_int}', print_end=print_end, **kwargs)
+
+    def has_pip_system_certs() -> bool:
+        try:
+            version("pip-system-certs")  # distribution/project name on PyPI
+            return True
+        except PackageNotFoundError:
+            return False
+
+    if not has_pip_system_certs():
+        print_api.print_api(
+            'Warning: "pip-system-certs" package is not installed. '
+            'If "certifi" package is installed, the system\'s CA store will not be used for SSL context. '
+            'Install "pip-system-certs" package if you want to use the system\'s CA store.', color='yellow', **kwargs)
 
     # Size of the buffer to read each time from url.
     buffer_size: int = 4096

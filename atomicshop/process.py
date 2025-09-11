@@ -316,14 +316,21 @@ def kill_process_by_filename_pattern(pattern: str):
         processes.kill_process_by_pid(running_processes[0]['pid'])
 
 
-def run_powershell_command(command):
+def run_powershell_command(
+        command: str
+):
     try:
         result = subprocess.run(["powershell", "-Command", command], capture_output=True, text=True, check=True)
-        print_api(result.stdout)
+        if result.stdout:
+            print_api(result.stdout)
+        if result.stderr:  # PS can write warnings to stderr even on success
+            print_api(result.stderr, color='yellow')
         return result.stdout
     except subprocess.CalledProcessError as e:
-        print_api(f"An error occurred: {e}", color='red', error_type=True)
-        return e
+        # e.stderr and e.stdout are populated because capture_output=True
+        msg = (e.stderr or e.stdout or f"PowerShell exited with code {e.returncode}")
+        print_api(msg, color='red', error_type=True)
+        return msg
 
 
 """
