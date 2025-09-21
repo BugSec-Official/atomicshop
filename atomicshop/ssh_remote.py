@@ -129,32 +129,9 @@ class SSHRemote:
         # with description of
         # Server 'address_goes_here' not found in known_hosts
         self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        try:
-            # Executing SSH connection to client.
-            self.ssh_client.connect(self.ip_address, username=self.username, password=self.password, timeout=60)
-        # When port 22 is unreachable on the client.
-        except paramiko.ssh_exception.NoValidConnectionsError as e:
-            error = str(e)
-            # Logging the error also. Since the process name isn't critical, we'll continue script execution.
-            print_api(error, logger=self.logger, logger_method='error', traceback_string=True)
-            pass
-        except paramiko.ssh_exception.SSHException as e:
-            error = str(e)
-            # Logging the error also. Since the process name isn't critical, we'll continue script execution.
-            print_api(error, logger=self.logger, logger_method='error', traceback_string=True)
-            pass
-        except ConnectionResetError:
-            # Returning the error.
-            error = "An existing connection was forcibly closed by the remote host."
-            # Logging the error also. Since the process name isn't critical, we'll continue script execution.
-            print_api(error, logger=self.logger, logger_method='error', traceback_string=True)
-            pass
-        except TimeoutError:
-            # Returning the error.
-            error = "Connection timed out."
-            # Logging the error also. Since the process name isn't critical, we'll continue script execution.
-            print_api(error, logger=self.logger, logger_method='error', traceback_string=True)
-            pass
+
+        # Executing SSH connection to client.
+        self.ssh_client.connect(self.ip_address, username=self.username, password=self.password, timeout=60)
 
         return error
 

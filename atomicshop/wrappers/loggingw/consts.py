@@ -14,7 +14,7 @@ DEFAULT_ROTATING_SUFFIXES_FROM_WHEN: dict = {
 }
 
 
-DEFAULT_STREAM_FORMATTER: str = "%(levelname)s | %(threadName)s | %(name)s | %(message)s"
+DEFAULT_STREAM_FORMATTER: str = "%(asctime)s | %(levelname)s | %(threadName)s | %(name)s | %(message)s"
 DEFAULT_MESSAGE_FORMATTER: str = "%(message)s"
 
 FORMAT_ELEMENT_TO_HEADER: dict = {

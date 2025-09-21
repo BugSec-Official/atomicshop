@@ -2,7 +2,7 @@ import logging
 import os
 from logging import Logger
 from logging.handlers import QueueListener
-from typing import Literal, Union
+from typing import Literal, Union, Callable
 import datetime
 import contextlib
 import threading
@@ -54,7 +54,7 @@ def create_logger(
         formatter_filehandler_use_nanoseconds: bool = True,
         filehandler_rotate_at_rollover_time: bool = True,
         filehandler_rotation_date_format: str = None,
-        filehandler_rotation_callback_namer_function: callable = None,
+        filehandler_rotation_callback_namer_function: Callable = None,
         filehandler_rotation_use_default_namer_function: bool = True,
         when: str = "midnight",
         interval: int = 1,
@@ -646,7 +646,7 @@ def start_queue_listener_in_multiprocessing(
         formatter_filehandler_use_nanoseconds: bool = True,
         filehandler_rotate_at_rollover_time: bool = True,
         filehandler_rotation_date_format: str = None,
-        filehandler_rotation_callback_namer_function: callable = None,
+        filehandler_rotation_callback_namer_function: Callable = None,
         filehandler_rotation_use_default_namer_function: bool = True,
         when: str = "midnight",
         interval: int = 1,
