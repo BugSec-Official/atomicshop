@@ -75,18 +75,25 @@ def connection_exception_decorator(function_name):
                 pass
             pass
         except ssl.SSLError as exception_object:
-            # Getting the exact reason of "ssl.SSLError"
-            if exception_object.reason == "HTTP_REQUEST":
-                message = f"Socket Accept: HTTP Request on SSL Socket: " \
-                          f"{base.get_source_destination(kwargs['socket_object'])}"
-                wrapper_handle_connection_exceptions.message = message
-                print_api(message, logger_method='error', traceback_string=True, oneline=True, **kwargs['print_kwargs'])
-            elif exception_object.reason == "TSV1_ALERT_UNKNOWN_CA":
-                message = f"Socket Accept: Check CA certificate on the client " \
-                          f"{base.get_source_destination(kwargs['socket_object'])}"
-                wrapper_handle_connection_exceptions.message = message
-                print_api(message, logger_method='error', traceback_string=True, oneline=True, **kwargs['print_kwargs'])
-            else:
+            excepted: bool = False
+            if getattr(exception_object, "reason", None):
+                # Getting the exact reason of "ssl.SSLError"
+                if exception_object.reason == "HTTP_REQUEST":
+                    message = f"Socket Accept: HTTP Request on SSL Socket: " \
+                              f"{base.get_source_destination(kwargs['socket_object'])}"
+                    wrapper_handle_connection_exceptions.message = message
+                    print_api(message, logger_method='error', traceback_string=True, oneline=True, **kwargs['print_kwargs'])
+
+                    excepted = True
+                elif exception_object.reason == "TSV1_ALERT_UNKNOWN_CA":
+                    message = f"Socket Accept: Check CA certificate on the client " \
+                              f"{base.get_source_destination(kwargs['socket_object'])}"
+                    wrapper_handle_connection_exceptions.message = message
+                    print_api(message, logger_method='error', traceback_string=True, oneline=True, **kwargs['print_kwargs'])
+
+                    excepted = True
+
+            if not excepted:
                 # Not all requests have the server name passed through Client Hello.
                 # If it is not passed an error of undefined variable will be raised.
                 # So, we'll check if the variable as a string is in the "locals()" variable pool.
@@ -102,21 +109,19 @@ def connection_exception_decorator(function_name):
                     f"Socket Accept: {domain_from_dns_server}:{port}: {message}"
                 wrapper_handle_connection_exceptions.message = message
                 print_api(message, logger_method='error', oneline=True, **kwargs['print_kwargs'])
-            pass
+
         except FileNotFoundError:
             message = "'SSLSocket.accept()' crashed: 'FileNotFoundError'. Some problem with SSL during Handshake - " \
                       "Could be certificate, client, or server."
             message = f"Socket Accept: {domain_from_dns_server}:{port}: {message}"
             wrapper_handle_connection_exceptions.message = message
             print_api(message, logger_method='error', traceback_string=True, oneline=True, **kwargs['print_kwargs'])
-            pass
         except Exception as e:
             _ = e
             message = "Undocumented exception on accept."
             message = f"Socket Accept: {domain_from_dns_server}:{port}: {message}"
             wrapper_handle_connection_exceptions.message = message
             print_api(message, logger_method='error', traceback_string=True, oneline=True, **kwargs['print_kwargs'])
-            pass
 
     wrapper_handle_connection_exceptions.message = None
     return wrapper_handle_connection_exceptions

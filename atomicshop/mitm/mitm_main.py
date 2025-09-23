@@ -20,6 +20,14 @@ from .connection_thread_worker import thread_worker_main
 from . import config_static, recs_files
 
 
+# If you have 'pip-system-certs' package installed, this section overrides this behavior, since it injects
+# the ssl default behavior, which we don't need when using ssl and sockets.
+import ssl, importlib
+if getattr(ssl.SSLContext.wrap_socket, "__module__", "").startswith("pip._vendor.truststore"):
+    # Truststore injection is active; restore stdlib ssl
+    importlib.reload(ssl)
+
+
 class NetworkSettings:
     """
     Class to store network settings.
@@ -162,7 +170,7 @@ def startup_output(system_logger, script_version: str):
             f"Default server certificate usage enabled, if no SNI available: "
             f"{config_static.MainConfig.default_server_certificate_filepath}")
 
-    if config_static.Certificates.sni_server_certificates_cache_directory:
+    if config_static.Certificates.sni_create_server_certificate_for_each_domain:
         system_logger.info(
             f"SNI function certificates creation enabled. Certificates cache: "
             f"{config_static.Certificates.sni_server_certificates_cache_directory}")

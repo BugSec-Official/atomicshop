@@ -378,7 +378,8 @@ class SocketWrapper:
 
             os.makedirs(self.sni_server_certificates_cache_directory, exist_ok=True)
             print_api("Removed cached server certificates.", logger=self.logger)
-
+        else:
+            os.makedirs(self.sni_server_certificates_cache_directory, exist_ok=True)
 
         if self.install_ca_certificate_to_root_store:
             if not self.ca_certificate_filepath:
@@ -611,6 +612,12 @@ class SocketWrapper:
                             sni_handler.wrap_socket_with_ssl_context_server_sni_extended(
                                 client_socket,
                                 print_kwargs={'logger': self.logger}
+                            )
+
+                        if ssl_client_socket:
+                            # Handshake is done at this point, so version/cipher are available
+                            self.logger.info(
+                                f"TLS version={ssl_client_socket.version()} cipher={ssl_client_socket.cipher()}"
                             )
 
                         if accept_error_message:

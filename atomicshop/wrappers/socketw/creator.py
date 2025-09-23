@@ -25,20 +25,36 @@ def add_reusable_address_option(socket_instance):
     socket_instance.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
 
-def create_ssl_context_for_server() -> ssl.SSLContext:
+def create_ssl_context_for_server(allow_legacy=False) -> ssl.SSLContext:
     # Creating context with SSL certificate and the private key before the socket
     # https://docs.python.org/3/library/ssl.html
     # Creating context for SSL wrapper, specifying "PROTOCOL_TLS_SERVER" will pick the best TLS version protocol for
     # the server.
 
-    ssl_context: ssl.SSLContext = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    # ssl_context: ssl.SSLContext = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
 
     # # Enforce the use of TLS 1.2 only (disable TLS 1.0, TLS 1.1, and TLS 1.3)
     # ssl_context.options |= ssl.OP_NO_TLSv1           # Disable TLS 1.0
     # ssl_context.options |= ssl.OP_NO_TLSv1_1         # Disable TLS 1.1
     # ssl_context.options |= ssl.OP_NO_TLSv1_3         # Disable TLS 1.3
 
-    # return ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    # Correct factory for servers
+    ssl_context: ssl.SSLContext = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+
+    # Modern default; relax only if you must
+    ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
+
+    # Don't verify client certificates.
+    ssl_context.verify_mode = ssl.CERT_NONE
+    ssl_context.check_hostname = False
+
+    # If you must support old clients that only offer TLS_RSA_* suites under OpenSSL 3:
+    if allow_legacy:
+        # This enables RSA key exchange and other legacy bits at security level 1
+        ssl_context.set_ciphers('DEFAULT:@SECLEVEL=1')
+        # If you truly have TLS 1.0/1.1 clients, uncomment the next line (not recommended):
+        ssl_context.minimum_version = ssl.TLSVersion.TLSv1
+
     return ssl_context
 
 
@@ -138,9 +154,44 @@ def load_certificate_and_key_into_server_ssl_context(
             print_api(message, error_type=True, logger_method="critical", **print_kwargs)
 
 
-def create_server_ssl_context___load_certificate_and_key(certificate_file_path: str, key_file_path) -> ssl.SSLContext:
+def copy_server_ctx_settings(src: ssl.SSLContext, dst: ssl.SSLContext) -> None:
+    # Versions & options
+    try: dst.minimum_version = src.minimum_version
+    except Exception: pass
+    try: dst.maximum_version = src.maximum_version
+    except Exception: pass
+    try: dst.options = src.options
+    except Exception: pass
+
+    # Verification knobs (server usually CERT_NONE unless you do mTLS)
+    try: dst.verify_mode = src.verify_mode
+    except Exception: pass
+    try: dst.check_hostname = src.check_hostname
+    except Exception: pass
+
+    # Cipher policy – replicate current enabled list
+    try:
+        cipher_names = ':'.join(c['name'] for c in src.get_ciphers())
+        if cipher_names:
+            dst.set_ciphers(cipher_names)
+    except Exception:
+        pass
+
+    # (ALPN/curves/etc. don’t have public getters; set them the same way you set them on src, if applicable)
+
+
+def create_server_ssl_context___load_certificate_and_key(
+        certificate_file_path: str,
+        key_file_path: str | None,
+        inherit_from: ssl.SSLContext | None = None
+) -> ssl.SSLContext:
     # Create and set ssl context for server.
-    ssl_context: ssl.SSLContext = create_ssl_context_for_server()
+    ssl_context: ssl.SSLContext = create_ssl_context_for_server(True)
+
+    # If you replaced contexts during SNI, copy policy from the old one
+    if inherit_from is not None:
+        copy_server_ctx_settings(inherit_from, ssl_context)
+
     # Load certificate into context.
     load_certificate_and_key_into_server_ssl_context(ssl_context, certificate_file_path, key_file_path)
     # Return ssl context only.

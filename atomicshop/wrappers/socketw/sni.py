@@ -82,7 +82,7 @@ class SNISetup:
     ):
 
         # Create SSL Socket to wrap the raw socket with.
-        ssl_context: ssl.SSLContext = creator.create_ssl_context_for_server()
+        ssl_context: ssl.SSLContext = creator.create_ssl_context_for_server(True)
 
         self.certificator_instance = certificator.Certificator(
             ca_certificate_name=self.ca_certificate_name,
@@ -149,7 +149,8 @@ class SNISetup:
         # The function is actually called at "accept()" method of the "ssl.SSLSocket"
         # This needs to be set only once on the listening socket
         if self.sni_custom_callback_function:
-            ssl_context.sni_callback = self.sni_custom_callback_function
+            # ssl_context.sni_callback = self.sni_custom_callback_function
+            ssl_context.set_servername_callback(self.sni_custom_callback_function)
 
         if self.sni_use_default_callback_function:
             sni_handler_instance = SNIHandler(
@@ -320,8 +321,13 @@ class SNIHandler:
                 # Since new default certificate was created we need to create new SSLContext and add the certificate.
                 # You need to build new context and exchange the context that being inherited from the main socket,
                 # or else the context will receive previous certificate each time.
-                self.sni_received_parameters.ssl_socket.context = \
-                    creator.create_server_ssl_context___load_certificate_and_key(default_server_certificate_path, None)
+                self.sni_received_parameters.ssl_socket.context = (
+                    creator.create_server_ssl_context___load_certificate_and_key(
+                        default_server_certificate_path,
+                        None,
+                        inherit_from=self.sni_received_parameters.ssl_socket.context
+                    )
+                )
             else:
                 message = f"Couldn't create / overwrite Default Server Certificate: {default_server_certificate_path}"
                 raise SNIDefaultCertificateCreationError(message)

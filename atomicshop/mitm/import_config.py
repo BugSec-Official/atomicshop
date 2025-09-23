@@ -116,7 +116,15 @@ def import_engines_configs(print_kwargs: dict) -> int:
         return result_code
 
     # Assigning all the engines domains to all time domains, that will be responsible for adding new domains.
-    config_static.Certificates.domains_all_times = list(domains_engine_list_full)
+    domains_all_times_with_ports: list[str] = list(domains_engine_list_full)
+
+    domains_all_times: list[str] = list()
+    for domain_and_port in domains_all_times_with_ports:
+        domain: str = domain_and_port.split(':')[0]
+        if domain not in domains_engine_list_full:
+            domains_all_times.append(domain)
+
+    config_static.Certificates.domains_all_times = domains_all_times
 
     config_static.ENGINES_LIST = engines_list
     config_static.REFERENCE_MODULE = reference_module
