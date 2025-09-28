@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.3.18 - 28.09.2025
+  * mitm/statistic_analyzer, mitm/statistic_analyzer_helper/moving_average_helpe - fixes and improvements.
 * 3.3.17 - 21.09.2025
   * mitm, wrappers/socketw - fixes and improvements.
 * 3.3.16 - 21.09.2025

@@ -352,6 +352,7 @@ def deviation_calculator_by_moving_average(
         moving_average_window_days: int = 5,
         top_bottom_deviation_percentage: float = 0.25,
         get_deviation_for_last_day_only: bool = False,
+        get_deviation_for_date: str = None,
         summary: bool = False,
         output_file_path: str = None,
         output_file_type: Literal['json', 'csv'] = 'json',
@@ -386,6 +387,8 @@ def deviation_calculator_by_moving_average(
         Files 01 to 05 will be used for moving average and the file 06 for deviation.
         Meaning the average calculated for 2021-01-06 will be compared to the values moving average of 2021-01-01
         to 2021-01-05.
+    :param get_deviation_for_date: string, if specified, only the specified date will be analyzed.
+        The date must be in the format of 'YYYY-MM-DD'. Example: '2021-01-06'.
     :param summary: bool, if True, Only the summary will be generated without all the numbers that were used
         to calculate the averages and the moving average data.
     :param output_file_path: string, if None, no file will be written.
@@ -437,6 +440,9 @@ def deviation_calculator_by_moving_average(
     if by_type not in ['host', 'url']:
         raise ValueError(f'by_type must be "host" or "url", not [{by_type}]')
 
+    if get_deviation_for_last_day_only and get_deviation_for_date:
+        raise ValueError('Either [get_deviation_for_last_day_only] or [get_deviation_for_date] can be provided, not both.')
+
     if statistics_file_directory:
         statistics_file_path: str | None = f'{statistics_file_directory}{os.sep}{STATISTICS_FILE_NAME}'
     else:
@@ -449,6 +455,7 @@ def deviation_calculator_by_moving_average(
         moving_average_window_days,
         top_bottom_deviation_percentage,
         get_deviation_for_last_day_only,
+        get_deviation_for_date,
         skip_total_count_less_than
     )
 

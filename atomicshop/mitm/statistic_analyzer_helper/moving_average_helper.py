@@ -1,6 +1,7 @@
 import statistics
 from pathlib import Path
 from typing import Literal
+import datetime
 
 from ...print_api import print_api
 from ...wrappers.loggingw import reading, consts
@@ -15,6 +16,7 @@ def calculate_moving_average(
         moving_average_window_days: int = 5,
         top_bottom_deviation_percentage: float = 0.25,
         get_deviation_for_last_day_only: bool = False,
+        get_deviation_for_date: str = None,
         skip_total_count_less_than: int = None,
         print_kwargs: dict = None
 ) -> list:
@@ -29,6 +31,7 @@ def calculate_moving_average(
     :param top_bottom_deviation_percentage: float, the percentage of deviation from the moving average to the top or
         bottom.
     :param get_deviation_for_last_day_only: bool, check the 'get_all_files_content' function.
+    :param get_deviation_for_date: str, check the 'get_all_files_content' function.
     :param skip_total_count_less_than: integer, if the total count is less than this number, skip the deviation.
     :param print_kwargs: dict, the print_api arguments.
     """
@@ -38,10 +41,15 @@ def calculate_moving_average(
     if file_path and statistics_content:
         raise ValueError('Only one of file_path or statistics_content must be provided.')
 
+    if get_deviation_for_last_day_only and get_deviation_for_date:
+        raise ValueError('Only one of get_deviation_for_last_day_only or get_deviation_for_date can be set.')
+
     if not statistics_content:
         statistics_content: dict = get_all_files_content(
             file_path=file_path, moving_average_window_days=moving_average_window_days,
-            get_deviation_for_last_day_only=get_deviation_for_last_day_only, print_kwargs=print_kwargs)
+            get_deviation_for_last_day_only=get_deviation_for_last_day_only,
+            get_deviation_for_date=get_deviation_for_date,
+            print_kwargs=print_kwargs)
 
     for date_string, day_dict in statistics_content.items():
         day_dict['content_no_useless'] = get_content_without_useless(day_dict['content'])
@@ -73,6 +81,7 @@ def get_all_files_content(
         file_path: str,
         moving_average_window_days: int,
         get_deviation_for_last_day_only: bool = False,
+        get_deviation_for_date: str = None,
         print_kwargs: dict = None
 ) -> dict:
     """
@@ -83,7 +92,7 @@ def get_all_files_content(
     :param get_deviation_for_last_day_only: bool, if True, only the last day will be analyzed.
         Example: With 'moving_average_window_days=5', the last 6 days will be analyzed.
         5 days for moving average and the last day for deviation.
-        File names example:
+        File names example the last day is 2021-01-06:
             statistics_2021-01-01.csv
             statistics_2021-01-02.csv
             statistics_2021-01-03.csv
@@ -93,11 +102,23 @@ def get_all_files_content(
         Files 01 to 05 will be used for moving average and the file 06 for deviation.
         Meaning the average calculated for 2021-01-06 will be compared to the values moving average of 2021-01-01
         to 2021-01-05.
+    :param get_deviation_for_date: str, if set, the last day is considered the date that you set here.
+        The format should be the same as in the file names, e.g. 'YYYY-MM-DD'.
     :param print_kwargs: dict, the print_api arguments.
     :return:
     """
 
+    if get_deviation_for_last_day_only and get_deviation_for_date:
+        raise ValueError('Only one of get_deviation_for_last_day_only or get_deviation_for_date can be set.')
+
     date_format: str = consts.DEFAULT_ROTATING_SUFFIXES_FROM_WHEN['midnight']
+
+    def is_valid_date(date_str: str) -> bool:
+        try:
+            datetime.datetime.strptime(date_str, date_format)
+            return True
+        except ValueError:
+            return False
 
     # Get all the file paths and their midnight rotations.
     logs_paths: list[filesystem.AtomicPath] = reading.get_logs_paths(
@@ -108,6 +129,24 @@ def get_all_files_content(
     if get_deviation_for_last_day_only:
         days_back_to_analyze: int = moving_average_window_days + 1
         logs_paths = logs_paths[-days_back_to_analyze:]
+
+    if get_deviation_for_date:
+        # Check if the date format is correct.
+        if not is_valid_date(get_deviation_for_date):
+            raise ValueError(f'Date [{get_deviation_for_date}] is not in the correct format: {date_format}')
+
+        # Find the index of the date in the logs_paths list.
+        date_index: int | None = None
+        for index, log_atomic_path in enumerate(logs_paths):
+            if log_atomic_path.datetime_string == get_deviation_for_date:
+                date_index = index
+                break
+
+        if date_index is None:
+            raise ValueError(f'Date {get_deviation_for_date} not found in the log files.')
+
+        start_index: int = max(0, date_index - moving_average_window_days)
+        logs_paths = logs_paths[start_index:date_index + 1]
 
     statistics_content: dict = {}
     # Read each file to its day.
@@ -260,7 +299,7 @@ def compute_moving_averages_from_average_statistics(
 
         # Create list of the last 'moving_average_window_days' days, including the current day.
         last_x_window_days_content_list = (
-            list(average_statistics_dict.values()))[current_day-moving_average_window_days:current_day]
+            list(average_statistics_dict.values()))[current_day - moving_average_window_days:current_day]
 
         # Compute the moving averages.
         moving_average[day] = compute_average_for_current_day_from_past_x_days(
@@ -443,7 +482,8 @@ def find_deviation_from_moving_average(
         if day_index == 0:
             previous_day_moving_average_dict = {}
         else:
-            previous_day_moving_average_dict = list(statistics_content.values())[day_index-1].get('moving_average', {})
+            previous_day_moving_average_dict = list(statistics_content.values())[day_index - 1].get('moving_average',
+                                                                                                    {})
 
         # If there is no moving average for previous day continue to the next day.
         if not previous_day_moving_average_dict:
