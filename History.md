@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.3.19 - 28.09.2025
+  * mitm/connection_thread_worker, wrappers/socketw/creator - fixes and improvements.
 * 3.3.18 - 28.09.2025
   * mitm/statistic_analyzer, mitm/statistic_analyzer_helper/moving_average_helpe - fixes and improvements.
 * 3.3.17 - 21.09.2025

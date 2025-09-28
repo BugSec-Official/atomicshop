@@ -73,15 +73,23 @@ def create_ssl_context_for_client(
         This is useful for debugging SSL/TLS connections with WireShark.
         Since WireShark also uses this environment variable to read the key log file and apply to the SSL/TLS
         connections, so you can see the decrypted traffic.
+    :param sslkeylog_file_path: string, full file path for the SSL key log file. Default is None.
 
     :return: ssl.SSLContext
     """
     ssl_context: ssl.SSLContext = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
 
     if enable_sslkeylogfile_env_to_client_ssl_context:
+        if sslkeylog_file_path is None:
+            sslkeylog_file_path = os.environ.get('SSLKEYLOGFILE')
+
         # This will create the file if it doesn't exist
         open(sslkeylog_file_path, "a").close()
         ssl_context.keylog_filename = sslkeylog_file_path
+
+    current_ciphers = 'AES256-GCM-SHA384:' + ssl._DEFAULT_CIPHERS
+    ssl_context.set_ciphers(current_ciphers)
+
     return ssl_context
 
 

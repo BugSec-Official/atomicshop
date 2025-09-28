@@ -603,6 +603,7 @@ def thread_worker_main(
         engine_name: str = recorder.engine_name
         client_ip, source_port = client_socket.getpeername()
         client_name: str = socket.gethostbyaddr(client_ip)[0]
+        client_name = client_name.lower()
         destination_port: int = client_socket.getsockname()[1]
         destination_port_str: str = str(destination_port)
 
