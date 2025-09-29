@@ -392,12 +392,12 @@ class GitHubWrapper:
     def get_latest_release_url(
             self,
             asset_pattern: str,
-            exclude_pattern: str = None,
+            exclude_string: str = None,
             **kwargs):
         """
         This function will return the latest release url.
         :param asset_pattern: str, the string pattern to search in the latest release. Wildcards can be used.
-        :param exclude_pattern: str, the string to exclude from the search. No wildcards can be used.
+        :param exclude_string: str, the string to exclude from the search. No wildcards can be used.
         :param kwargs: dict, the print arguments for the 'print_api' function.
         :return: str, the latest release url.
         """
@@ -411,9 +411,9 @@ class GitHubWrapper:
             download_urls.append(single_dict['browser_download_url'])
 
         # Exclude urls against 'exclude_string'.
-        if exclude_pattern:
+        if exclude_string:
             for download_url in download_urls:
-                if exclude_pattern in download_url:
+                if exclude_string in download_url:
                     download_urls.remove(download_url)
 
         # Find urls against 'asset_pattern'.

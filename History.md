@@ -1,6 +1,10 @@
 <!-- HISTORY -->
 ## History
 
+* 3.3.21 - 29.09.2025
+  * wrappers/githubw - fixes.
+* 3.3.20 - 29.09.2025
+  * pip-system-certs - removed from pyproject.toml
 * 3.3.19 - 28.09.2025
   * mitm/connection_thread_worker, wrappers/socketw/creator - fixes and improvements.
 * 3.3.18 - 28.09.2025
