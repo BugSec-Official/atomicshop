@@ -1,13 +1,10 @@
 import os
 import urllib.request
 import ssl
+from typing import Any
 # noinspection PyPackageRequirements
 import certifi
 
-try:
-    from importlib.metadata import version, PackageNotFoundError  # Python 3.8+
-except ImportError:  # Python <3.8
-    from importlib_metadata import version, PackageNotFoundError  # backport
 
 from .archiver import zips
 from .urls import url_parser
@@ -102,7 +99,7 @@ def get_page_content(
         playwright_pdf_format: str = 'A4',
         playwright_html_txt_convert_to_bytes: bool = True,
         print_kwargs: dict = None
-) -> any:
+) -> Any:
     """
     Function returns the page content from the given URL.
 
@@ -187,19 +184,6 @@ def download(
         else:
             print_api.print_api(f'Downloaded bytes: {aggregated_bytes_int}', print_end=print_end, **kwargs)
 
-    def has_pip_system_certs() -> bool:
-        try:
-            version("pip-system-certs")  # distribution/project name on PyPI
-            return True
-        except PackageNotFoundError:
-            return False
-
-    if not has_pip_system_certs():
-        print_api.print_api(
-            'Warning: "pip-system-certs" package is not installed. '
-            'If "certifi" package is installed, the system\'s CA store will not be used for SSL context. '
-            'Install "pip-system-certs" package if you want to use the system\'s CA store.', color='yellow', **kwargs)
-
     # Size of the buffer to read each time from url.
     buffer_size: int = 4096
 
@@ -238,7 +222,7 @@ def download(
     if not is_status_ok(status_code=file_to_download.status, **kwargs):
         return None
 
-    file_size_bytes_int: int = None
+    file_size_bytes_int: int | None = None
     # Get file size. For some reason doesn't show for GitHub branch downloads.
     if file_to_download.headers['Content-Length']:
         file_size_bytes_int = int(file_to_download.headers['Content-Length'])

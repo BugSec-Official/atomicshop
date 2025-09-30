@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.3.22 - 30.09.2025
+  * web - fixes.
 * 3.3.21 - 29.09.2025
   * wrappers/githubw - fixes.
 * 3.3.20 - 29.09.2025

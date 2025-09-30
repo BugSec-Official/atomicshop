@@ -115,7 +115,7 @@ def update_system_packages():
     Function updates the system packages.
     :return:
     """
-    subprocess.check_call(['sudo', 'apt-get', 'update'])
+    subprocess.check_call(['sudo', 'apt', 'update'])
 
 
 def upgrade_system_packages(apt_update: bool = True):
@@ -129,7 +129,7 @@ def upgrade_system_packages(apt_update: bool = True):
     if apt_update:
         update_system_packages()
 
-    subprocess.check_call(['sudo', 'apt-get', 'upgrade', '-y'])
+    subprocess.check_call(['sudo', 'apt', 'upgrade', '-y'])
 
 
 def is_service_running(service_name: str, user_mode: bool = False, return_false_on_error: bool = False) -> bool:
@@ -216,26 +216,25 @@ def start_service(service_name: str, sudo: bool = False, user_mode: bool = False
 def start_enable_service_check_availability(
         service_name: str,
         wait_time_seconds: float = 30,
-        exit_on_error: bool = True,
         start_service_bool: bool = True,
         enable_service_bool: bool = True,
         check_service_running: bool = True,
         user_mode: bool = False,
         sudo: bool = True
-):
+) -> int:
     """
     Function starts and enables a service and checks its availability.
 
     :param service_name: str, the service name.
     :param wait_time_seconds: float, the time to wait after starting the service before checking the service
         availability.
-    :param exit_on_error: bool, if True, the function will exit the program if the service is not available.
     :param start_service_bool: bool, if True, the service will be started.
     :param enable_service_bool: bool, if True, the service will be enabled.
     :param check_service_running: bool, if True, the function will check if the service is running.
     :param user_mode: bool, if True, the service will be started and enabled in user mode.
     :param sudo: bool, if True, the command will be executed with sudo.
-    :return:
+
+    :return: int, 0 if the service is running, 1 if the service is not running.
     """
 
     if not start_service_bool and not enable_service_bool:
@@ -256,10 +255,11 @@ def start_enable_service_check_availability(
 
         if not is_service_running(service_name, user_mode=user_mode):
             console.print(f"[{service_name}] service failed to start.", style='red', markup=False)
-            if exit_on_error:
-                sys.exit(1)
+            return 1
         else:
             console.print(f"[{service_name}] service is running.", style='green', markup=False)
+
+    return 0
 
 
 def add_path_to_bashrc(as_regular_user: bool = False):
