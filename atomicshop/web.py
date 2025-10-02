@@ -1,10 +1,12 @@
 import os
 import urllib.request
+import urllib.error
 import ssl
 from typing import Any
+import http.client
+
 # noinspection PyPackageRequirements
 import certifi
-
 
 from .archiver import zips
 from .urls import url_parser
@@ -211,12 +213,34 @@ def download(
     # Create a default SSL context using the certifi CA store.
     # This is useful for environments where the system's CA store is not available or not trusted.
     # 'certifi.where()' returns the path to the certifi CA bundle.
-    ssl_context = ssl.create_default_context(cafile=certifi.where())
+    ssl_context: ssl.SSLContext = ssl.create_default_context(cafile=certifi.where())
 
     # In order to use 'urllib.request', it is not enough to 'import urllib', you need to 'import urllib.request'.
     # Build a Request object with headers if provided.
     req = urllib.request.Request(file_url, headers=headers or {})
-    file_to_download = urllib.request.urlopen(req, context=ssl_context)
+
+    def do_urlopen(ssl_context_internal: ssl.SSLContext) -> http.client.HTTPResponse | None:
+        try:
+            response: http.client.HTTPResponse = urllib.request.urlopen(req, context=ssl_context_internal)
+            return response
+        except urllib.error.URLError as e:
+            if getattr(e, 'reason', None) and isinstance(e.reason, ssl.SSLCertVerificationError):
+                if getattr(e.reason, 'reason', None) and e.reason.reason == 'CERTIFICATE_VERIFY_FAILED':
+                    if getattr(e.reason, 'verify_message', None) and e.reason.verify_message == 'unable to get local issuer certificate':
+                        return None
+
+            raise e
+
+    # Try to open the URL with the created SSL context with certifi.
+    file_to_download = do_urlopen(ssl_context_internal=ssl_context)
+    if not file_to_download:
+        # If failed, try to open the URL with the system's default SSL context.
+        ssl_context = ssl.create_default_context()
+        file_to_download = do_urlopen(ssl_context_internal=ssl_context)
+        if not file_to_download:
+            print_api.print_api(
+                'ERROR: URL open failed with both certifi and system\'s default SSL context.', error_type=True, **kwargs)
+            return None
 
     # Check status of url.
     if not is_status_ok(status_code=file_to_download.status, **kwargs):
