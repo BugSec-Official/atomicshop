@@ -21,7 +21,7 @@ class GitHubWrapper:
             user_name: str = None,
             repo_name: str = None,
             repo_url: str = None,
-            branch: str = 'master',
+            branch: str = 'main',
             path: str = None,
             pat: str = None,
             branch_file_extension: Literal[

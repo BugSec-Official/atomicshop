@@ -1,5 +1,7 @@
 import multiprocessing
 import threading
+import time
+
 import select
 from typing import Literal, Union, Callable, Any
 from pathlib import Path
@@ -14,7 +16,7 @@ from ..loggingw import loggingw
 from ...script_as_string_processor import ScriptAsStringProcessor
 from ...permissions import permissions
 from ... import filesystem, certificates
-from ...basics import booleans
+from ...basics import booleans, tracebacks
 from ...print_api import print_api
 
 from . import base, creator, get_process, accepter, statistics_csv, ssl_base, sni
@@ -498,6 +500,13 @@ class SocketWrapper:
         listening_sockets: list = [listening_socket_object]
 
         while True:
+            engine_name: str = ''
+            source_ip: str = ''
+            source_hostname: str = ''
+            dest_port: int = 0
+            process_name: str = ''
+            domain_from_engine: str = ''
+
             try:
                 # Using "select.select" which is currently the only API function that works on all
                 # operating system types: Windows / Linux / BSD.
@@ -508,7 +517,6 @@ class SocketWrapper:
 
                 listening_ip, listening_port = listening_socket_object.getsockname()
 
-                domain_from_engine = None
                 # Get the domain to connect on this process in case on no SNI provided.
                 for domain, ip_port_dict in self.engine.domain_target_dict.items():
                     if ip_port_dict['ip'] == listening_ip:
@@ -534,16 +542,20 @@ class SocketWrapper:
 
                 self.logger.info(f"Requested domain setting: {domain_from_engine}")
 
+                engine_name = get_engine_name(domain_from_engine, [self.engine])
+
                 # Wait from any connection on "accept()".
                 # 'client_socket' is socket or ssl socket, 'client_address' is a tuple (ip_address, port).
                 client_socket, client_address, accept_error_message = accepter.accept_connection_with_error(
                     listening_socket_object, domain_from_dns_server=domain_from_engine,
                     print_kwargs={'logger': self.logger})
 
+                source_ip: str = client_address[0]
+                dest_port: int = listening_socket_object.getsockname()[1]
+
                 # This is the earliest stage to ask for process name.
                 # SSH Remote / LOCALHOST script execution to identify process section.
                 # If 'get_process_name' was set to True, then this will be executed.
-                process_name = None
                 if self.get_process_name:
                     # Get the process name from the socket.
                     get_command_instance = get_process.GetCommandLine(
@@ -554,21 +566,20 @@ class SocketWrapper:
                         logger=self.logger)
                     process_name = get_command_instance.get_process_name(print_kwargs={'logger': self.logger})
 
-                source_ip: str = client_address[0]
-                engine_name: str = get_engine_name(domain_from_engine, [self.engine])
-                dest_port: int = listening_socket_object.getsockname()[1]
-
                 # Not always there will be a hostname resolved by the IP address, so we will leave it empty if it fails.
                 try:
-                    source_hostname: str = socket.gethostbyaddr(source_ip)[0]
+                    source_hostname = socket.gethostbyaddr(source_ip)[0]
                 except socket.herror:
-                    source_hostname = ''
+                    pass
 
                 # If 'accept()' function worked well, SSL worked well, then 'client_socket' won't be empty.
                 if client_socket:
                     # Get the protocol type from the socket.
                     is_tls: bool = False
+
+                    time.sleep(1)  # Wait a second to gather some data.
                     tls_properties = ssl_base.is_tls(client_socket)
+
                     if tls_properties:
                         is_tls = True
                         tls_type, tls_version = tls_properties
@@ -681,8 +692,22 @@ class SocketWrapper:
                         dest_port=str(dest_port),
                         host=domain_from_engine,
                         process_name=process_name)
+            except ConnectionResetError as e:
+                exception_string: str = tracebacks.get_as_string()
+                full_string: str = f"{str(e)} | {exception_string}"
+                self.statistics_writer.write_accept_error(
+                    engine=engine_name,
+                    source_host=source_hostname,
+                    source_ip=source_ip,
+                    error_message=full_string,
+                    dest_port=str(dest_port),
+                    host=domain_from_engine,
+                    process_name=process_name)
             except Exception as e:
-                self.exceptions_logger.write(e)
+                _ = e
+                exception_string: str = tracebacks.get_as_string()
+                full_string: str = f"Engine: {engine_name} | {exception_string}"
+                self.exceptions_logger.write(full_string)
 
 
 def before_socket_thread_worker(
