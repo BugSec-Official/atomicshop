@@ -1,6 +1,5 @@
 import sys
 import base64
-import socket
 import logging
 from pathlib import Path
 
@@ -138,43 +137,6 @@ class SSHRemote:
     def close(self):
         self.ssh_client.close()
 
-    def exec_command_with_error_handling(self, script_string: str):
-        # Defining variables.
-        stdin = None
-        stdout = None
-        stderr = None
-        result_exception = None
-
-        # Don't put debugging break point over the next line in PyCharm. For some reason it gets stuck.
-        # Put the point right after that.
-        try:
-            stdin, stdout, stderr = self.ssh_client.exec_command(command=script_string, timeout=30)
-        except AttributeError as function_exception_object:
-            if function_exception_object.name == "open_session":
-                result_exception = "'SSHRemote().connect' wasn't executed."
-                print_api(result_exception, logger=self.logger, logger_method='error', traceback_string=True)
-
-                # Since getting Process name is not the main feature of the server, we can pass the exception
-                pass
-            else:
-                result_exception = f"Couldn't execute script over SSH. Unknown yet exception with 'AttributeError' " \
-                                   f"and name: {function_exception_object.name}"
-                print_api(result_exception, logger=self.logger, logger_method='error', traceback_string=True)
-                # Since getting Process name is not the main feature of the server, we can pass the exception
-                pass
-        except socket.error:
-            result_exception = "Couldn't execute script over SSH. SSH socket closed."
-            print_api(result_exception, logger=self.logger, logger_method='error', traceback_string=True)
-            # Since getting Process name is not the main feature of the server, we can pass the exception
-            pass
-        except Exception:
-            result_exception = "Couldn't execute script over SSH. Unknown yet exception."
-            print_api(result_exception, logger=self.logger, logger_method='error', traceback_string=True)
-            # Since getting Process name is not the main feature of the server, we can pass the exception
-            pass
-
-        return stdin, stdout, stderr, result_exception
-
     @staticmethod
     def check_console_output_for_errors(console_output_string: str):
         # Defining variables.
@@ -192,52 +154,33 @@ class SSHRemote:
 
         return function_result
 
-    def remote_execution(self, script_string: str):
-        # Defining variables.
-        output_lines = None
-        function_error = None
-        stdin = None
-        stdout = None
-        stderr = None
-        exec_exception = None
+    def remote_execution(self, script_string: str) -> tuple[str, str]:
+        output_result: str = str()
+        error_result: str = str()
 
         # Execute the command over SSH remotely.
-        stdin, stdout, stderr, exec_exception = self.exec_command_with_error_handling(script_string)
-        # If exception was returned from execution.
-        if exec_exception:
-            self.logger.info("Trying to reconnect over SSH.")
-            # Close existing SSH Connection.
-            self.close()
-            # And connect again.
-            self.connect()
-            self.logger.info("Reconnected. Trying to send the command one more time.")
-            # Try to execute the command over SSH remotely again.
-            stdin, stdout, stderr, exec_exception = self.exec_command_with_error_handling(script_string)
-            # If there was an exception again.
-            if exec_exception:
-                # Populate the function_error variable that will be returned outside.
-                function_error = exec_exception
+        # Don't put debugging break point over the next line in PyCharm. For some reason it gets stuck.
+        # Put the point right after that.
+        stdin, stdout, stderr = self.ssh_client.exec_command(command=script_string, timeout=30)
 
-        # If there was no exception executing the remote command.
-        if not function_error:
-            # Reading the buffer of stdout.
-            output_lines = stdout.readlines()
-            # Reading the buffer of stderr.
-            function_error = stderr.readlines()
+        # Reading the buffer of stdout.
+        output_lines: list = stdout.readlines()
+        # Reading the buffer of stderr.
+        error_lines: list = stderr.readlines()
 
-            # Joining error lines list to string if not empty.
-            if function_error:
-                function_error = ''.join(function_error)
-            # Else, joining output lines to string.
-            else:
-                output_lines = ''.join(output_lines)
+        # Joining error lines list to string if not empty.
+        if error_lines:
+            error_result: str = ''.join(error_lines)
+        # Else, joining output lines to string.
+        else:
+            output_result = ''.join(output_lines)
 
-            # Since they're "file-like" objects we need to close them after we finished using.
-            stdin.close()
-            stdout.close()
-            stderr.close()
+        # Since they're "file-like" objects we need to close them after we finished using.
+        stdin.close()
+        stdout.close()
+        stderr.close()
 
-        return output_lines, function_error
+        return output_result, error_result
 
     def remote_execution_python(self, script_string: str):
         """
@@ -277,8 +220,7 @@ class SSHRemote:
         :return: SSH console output, Error output
         """
         # Defining variables.
-        function_return = None
-        function_error = None
+        error_result: str | None = None
 
         encoded_base64_string = base64.b64encode(script_string.encode('ascii'))
         command_string: str = fr'python -c "import base64;exec(base64.b64decode({encoded_base64_string}))"'
@@ -295,14 +237,13 @@ class SSHRemote:
             # If the message is known and didn't return empty.
             if console_check:
                 # 'execution_error' variable will be that full error.
-                function_error = console_check
+                error_result = console_check
 
-        return remote_output, function_error
+        return remote_output, error_result
 
     def connect_get_client_commandline(self, script_string):
         # Defining locals.
-        execution_output = None
-        execution_error = None
+        execution_output: str | None = None
 
         # Making actual SSH Connection to the computer.
         execution_error = self.connect()
@@ -316,13 +257,7 @@ class SSHRemote:
         if not execution_error:
             self.logger.info("Executing SSH command to acquire the calling process.")
 
-            try:
-                execution_output, execution_error = self.remote_execution_python(script_string)
-            # Basically we don't care much about SSH exceptions. Just log them and pass to record.
-            except Exception as function_exception_object:
-                execution_error = function_exception_object
-                print_api(execution_error, logger=self.logger, logger_method='error', traceback_string=True)
-                pass
+            execution_output, execution_error = self.remote_execution_python(script_string)
 
             # Closing SSH connection at this stage.
             self.close()

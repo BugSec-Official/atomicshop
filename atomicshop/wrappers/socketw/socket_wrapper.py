@@ -578,7 +578,6 @@ class SocketWrapper:
                     # Get the protocol type from the socket.
                     is_tls: bool = False
 
-                    time.sleep(1)  # Wait a second to gather some data.
                     tls_properties = ssl_base.is_tls(client_socket)
 
                     if tls_properties:
