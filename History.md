@@ -1,7 +1,7 @@
 <!-- HISTORY -->
 ## History
 
-* 3.3.24-3.3.25 - 09.10.2025
+* 3.3.24-3.3.26 - 09-12.10.2025
   * wrappers/socketw/socket_wrapper - fixes.
 * 3.3.23 - 02.10.2025
   * web - fixes.
