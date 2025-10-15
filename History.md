@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.3.28 - 15.10.2025
+  * mitm/mitm_main - improvements.
 * 3.3.27 - 12.10.2025
   * ssh_remote, wrappers/socketw/socket_wrapper - fixes.
 * 3.3.24-3.3.26 - 09-12.10.2025

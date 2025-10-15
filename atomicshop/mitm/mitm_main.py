@@ -5,6 +5,7 @@ import datetime
 import os
 import sys
 import logging
+import signal
 
 import atomicshop   # Importing atomicshop package to get the version of the package.
 
@@ -93,6 +94,10 @@ try:
     win_console.disable_quick_edit()
 except win_console.NotWindowsConsoleError:
     pass
+
+
+def _graceful_shutdown(signum, frame):
+    exit_cleanup()
 
 
 def exit_cleanup():
@@ -768,6 +773,8 @@ def _loop_at_midnight_recs_archive(network_logger_name):
 
 
 def mitm_server_main(config_file_path: str, script_version: str):
+    signal.signal(signal.SIGINT, _graceful_shutdown)
+
     try:
         # Main function should return integer with error code, 0 is successful.
         return mitm_server(config_file_path, script_version)
