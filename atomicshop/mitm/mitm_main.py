@@ -773,7 +773,28 @@ def _loop_at_midnight_recs_archive(network_logger_name):
 
 
 def mitm_server_main(config_file_path: str, script_version: str):
+    # This is for Linux and MacOS.
+    signal.signal(signal.SIGTERM, _graceful_shutdown)
     signal.signal(signal.SIGINT, _graceful_shutdown)
+    # This is for Windows.
+    """
+    Example:
+    script = (Path(__file__).resolve().parent / "ServerTCPWithDNS.py").resolve()
+    p = subprocess.Popen(
+        [sys.executable, "-u", str(script)],
+        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+        # inherit console; do NOT use CREATE_NEW_CONSOLE
+    )
+    time.sleep(30)
+    p.send_signal(signal.CTRL_BREAK_EVENT)
+    try:
+        p.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        print("Graceful interrupt timed out; terminating")
+        p.terminate()
+        p.wait()
+    """
+    signal.signal(signal.SIGBREAK, _graceful_shutdown)
 
     try:
         # Main function should return integer with error code, 0 is successful.
