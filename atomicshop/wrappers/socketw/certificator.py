@@ -30,7 +30,9 @@ class Certificator:
             custom_private_key_path: str,
             forwarding_dns_service_ipv4_list___only_for_localhost: list,
             skip_extension_id_list: list,
-            tls: bool
+            tls: bool,
+            enable_sslkeylogfile_env_to_client_ssl_context: bool,
+            sslkeylog_file_path: str
     ):
         self.ca_certificate_name = ca_certificate_name
         self.ca_certificate_filepath = ca_certificate_filepath
@@ -49,6 +51,9 @@ class Certificator:
             forwarding_dns_service_ipv4_list___only_for_localhost)
         self.skip_extension_id_list = skip_extension_id_list
         self.tls = tls
+        self.enable_sslkeylogfile_env_to_client_ssl_context: bool = (
+            enable_sslkeylogfile_env_to_client_ssl_context)
+        self.sslkeylog_file_path: str = sslkeylog_file_path
 
         # noinspection PyTypeChecker
         self.certauth_wrapper: CertAuthWrapper = None
@@ -221,5 +226,10 @@ class Certificator:
 
         # You need to build new context and exchange the context that being inherited from the main socket,
         # or else the context will receive previous certificate each time.
-        sni_received_parameters.ssl_socket.context = \
-            creator.create_server_ssl_context___load_certificate_and_key(sni_server_certificate_file_path, None)
+        sni_received_parameters.ssl_socket.context = (
+            creator.create_server_ssl_context___load_certificate_and_key(
+                certificate_file_path=sni_server_certificate_file_path, key_file_path=None,
+                enable_sslkeylogfile_env_to_client_ssl_context=self.enable_sslkeylogfile_env_to_client_ssl_context,
+                sslkeylog_file_path=self.sslkeylog_file_path
+            )
+        )

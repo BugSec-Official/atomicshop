@@ -1,6 +1,5 @@
 import multiprocessing
 import threading
-import time
 
 import select
 from typing import Literal, Union, Callable, Any
@@ -80,6 +79,8 @@ class SocketWrapper:
             statistics_logger_queue: multiprocessing.Queue = None,
             exceptions_logger_name: str = 'SocketWrapperExceptions',
             exceptions_logger_queue: multiprocessing.Queue = None,
+            enable_sslkeylogfile_env_to_client_ssl_context: bool = False,
+            sslkeylog_file_path: str = None,
             print_kwargs: dict = None,
     ):
         """
@@ -173,6 +174,12 @@ class SocketWrapper:
         :param exceptions_logger_name: string, name of the logger that will be used to log exceptions.
         :param exceptions_logger_queue: multiprocessing.Queue, queue that will be used to log exceptions in
             multiprocessing. You need to start the logger listener in the main process to handle the queue.
+        :param enable_sslkeylogfile_env_to_client_ssl_context: boolean, if True, each client SSL context
+            that will be created by the SocketWrapper will have save the SSL handshake keys to the file
+            defined in 'sslkeylog_file_path' parameter.
+        :param sslkeylog_file_path: string, path to file where SSL handshake keys will be saved.
+            If not provided and 'enable_sslkeylogfile_env_to_client_ssl_context' is True, then
+            the environment variable 'SSLKEYLOGFILE' will be used.
         :param print_kwargs: dict, additional arguments to pass to the print function.
         """
 
@@ -208,6 +215,9 @@ class SocketWrapper:
         self.ssh_script_to_execute = ssh_script_to_execute
         self.forwarding_dns_service_ipv4_list___only_for_localhost = (
             forwarding_dns_service_ipv4_list___only_for_localhost)
+        self.enable_sslkeylogfile_env_to_client_ssl_context: bool = (
+            enable_sslkeylogfile_env_to_client_ssl_context)
+        self.sslkeylog_file_path: str = sslkeylog_file_path
         self.print_kwargs: dict = print_kwargs
 
         self.socket_object = None
@@ -616,7 +626,9 @@ class SocketWrapper:
                             forwarding_dns_service_ipv4_list___only_for_localhost=(
                                 self.forwarding_dns_service_ipv4_list___only_for_localhost),
                             tls=is_tls,
-                            exceptions_logger=self.exceptions_logger
+                            exceptions_logger=self.exceptions_logger,
+                            enable_sslkeylogfile_env_to_client_ssl_context=self.enable_sslkeylogfile_env_to_client_ssl_context,
+                            sslkeylog_file_path=self.sslkeylog_file_path
                         )
 
                         ssl_client_socket, accept_error_message = \

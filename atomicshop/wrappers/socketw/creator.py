@@ -25,7 +25,15 @@ def add_reusable_address_option(socket_instance):
     socket_instance.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
 
-def create_ssl_context_for_server(allow_legacy=False) -> ssl.SSLContext:
+def create_ssl_context_for_server(
+        enable_sslkeylogfile_env_to_client_ssl_context: bool = False,
+        sslkeylog_file_path: str = None,
+        allow_legacy: bool = False
+) -> ssl.SSLContext:
+    """
+    This function creates the SSL context for the server.
+    Meaning that your script will act like a server, and the client will connect to it.
+    """
     # Creating context with SSL certificate and the private key before the socket
     # https://docs.python.org/3/library/ssl.html
     # Creating context for SSL wrapper, specifying "PROTOCOL_TLS_SERVER" will pick the best TLS version protocol for
@@ -48,6 +56,14 @@ def create_ssl_context_for_server(allow_legacy=False) -> ssl.SSLContext:
     ssl_context.verify_mode = ssl.CERT_NONE
     ssl_context.check_hostname = False
 
+    if enable_sslkeylogfile_env_to_client_ssl_context:
+        if sslkeylog_file_path is None:
+            sslkeylog_file_path = os.environ.get('SSLKEYLOGFILE')
+
+        if not os.path.exists(sslkeylog_file_path):
+            open(sslkeylog_file_path, "a").close()
+            ssl_context.keylog_filename = sslkeylog_file_path
+
     # If you must support old clients that only offer TLS_RSA_* suites under OpenSSL 3:
     if allow_legacy:
         # This enables RSA key exchange and other legacy bits at security level 1
@@ -64,6 +80,7 @@ def create_ssl_context_for_client(
 ) -> ssl.SSLContext:
     """
     This function creates the SSL context for the client.
+    This means that your script will act like a client, and will connect to a server.
     The SSL context is created with the "PROTOCOL_TLS_CLIENT" protocol.
 
     :param enable_sslkeylogfile_env_to_client_ssl_context: boolean, enables the SSLKEYLOGFILE environment variable
@@ -83,9 +100,9 @@ def create_ssl_context_for_client(
         if sslkeylog_file_path is None:
             sslkeylog_file_path = os.environ.get('SSLKEYLOGFILE')
 
-        # This will create the file if it doesn't exist
-        open(sslkeylog_file_path, "a").close()
-        ssl_context.keylog_filename = sslkeylog_file_path
+        if not os.path.exists(sslkeylog_file_path):
+            open(sslkeylog_file_path, "a").close()
+            ssl_context.keylog_filename = sslkeylog_file_path
 
     current_ciphers = 'AES256-GCM-SHA384:' + ssl._DEFAULT_CIPHERS
     ssl_context.set_ciphers(current_ciphers)
@@ -191,10 +208,14 @@ def copy_server_ctx_settings(src: ssl.SSLContext, dst: ssl.SSLContext) -> None:
 def create_server_ssl_context___load_certificate_and_key(
         certificate_file_path: str,
         key_file_path: str | None,
-        inherit_from: ssl.SSLContext | None = None
+        inherit_from: ssl.SSLContext | None = None,
+        enable_sslkeylogfile_env_to_client_ssl_context: bool = False,
+        sslkeylog_file_path: str = None,
 ) -> ssl.SSLContext:
     # Create and set ssl context for server.
-    ssl_context: ssl.SSLContext = create_ssl_context_for_server(True)
+    ssl_context: ssl.SSLContext = create_ssl_context_for_server(
+        allow_legacy=True, enable_sslkeylogfile_env_to_client_ssl_context=enable_sslkeylogfile_env_to_client_ssl_context,
+        sslkeylog_file_path=sslkeylog_file_path)
 
     # If you replaced contexts during SNI, copy policy from the old one
     if inherit_from is not None:

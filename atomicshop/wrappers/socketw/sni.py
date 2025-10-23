@@ -47,7 +47,9 @@ class SNISetup:
             tls: bool,
             domain_from_dns_server: str = None,
             skip_extension_id_list: list = None,
-            exceptions_logger: loggingw.ExceptionCsvLogger = None
+            exceptions_logger: loggingw.ExceptionCsvLogger = None,
+            enable_sslkeylogfile_env_to_client_ssl_context: bool = False,
+            sslkeylog_file_path: str = None
     ):
         self.ca_certificate_name = ca_certificate_name
         self.ca_certificate_filepath = ca_certificate_filepath
@@ -74,6 +76,8 @@ class SNISetup:
         self.tls = tls
         self.exceptions_logger = exceptions_logger
         self.certificator_instance = None
+        self.enable_sslkeylogfile_env_to_client_ssl_context: bool = enable_sslkeylogfile_env_to_client_ssl_context
+        self.sslkeylog_file_path: str = sslkeylog_file_path
 
     def wrap_socket_with_ssl_context_server_sni_extended(
             self,
@@ -82,7 +86,7 @@ class SNISetup:
     ):
 
         # Create SSL Socket to wrap the raw socket with.
-        ssl_context: ssl.SSLContext = creator.create_ssl_context_for_server(True)
+        ssl_context: ssl.SSLContext = creator.create_ssl_context_for_server(allow_legacy=True)
 
         self.certificator_instance = certificator.Certificator(
             ca_certificate_name=self.ca_certificate_name,
@@ -101,7 +105,9 @@ class SNISetup:
             forwarding_dns_service_ipv4_list___only_for_localhost=(
                 self.forwarding_dns_service_ipv4_list___only_for_localhost),
             skip_extension_id_list=self.skip_extension_id_list,
-            tls=self.tls
+            tls=self.tls,
+            enable_sslkeylogfile_env_to_client_ssl_context=self.enable_sslkeylogfile_env_to_client_ssl_context,
+            sslkeylog_file_path=self.sslkeylog_file_path
         )
 
         # Add SNI callback function to the SSL context.
@@ -160,7 +166,10 @@ class SNISetup:
                 certificator_instance=self.certificator_instance,
                 domain_from_dns_server=self.domain_from_dns_server,
                 default_certificate_domain_list=self.default_certificate_domain_list,
-                exceptions_logger=self.exceptions_logger            )
+                exceptions_logger=self.exceptions_logger,
+                enable_sslkeylogfile_env_to_client_ssl_context=(
+                    self.certificator_instance.enable_sslkeylogfile_env_to_client_ssl_context),
+                sslkeylog_file_path=self.certificator_instance.sslkeylog_file_path)
             ssl_context.set_servername_callback(
                 sni_handler_instance.setup_sni_callback(print_kwargs=print_kwargs))
 
@@ -178,7 +187,9 @@ class SNIHandler:
             certificator_instance: certificator.Certificator,
             domain_from_dns_server: str,
             default_certificate_domain_list: list,
-            exceptions_logger: loggingw.ExceptionCsvLogger
+            exceptions_logger: loggingw.ExceptionCsvLogger,
+            enable_sslkeylogfile_env_to_client_ssl_context: bool,
+            sslkeylog_file_path: str
     ):
         self.sni_use_default_callback_function_extended = sni_use_default_callback_function_extended
         self.sni_add_new_domains_to_default_server_certificate = sni_add_new_domains_to_default_server_certificate
@@ -187,6 +198,8 @@ class SNIHandler:
         self.domain_from_dns_server: str = domain_from_dns_server
         self.default_certificate_domain_list = default_certificate_domain_list
         self.exceptions_logger = exceptions_logger
+        self.enable_sslkeylogfile_env_to_client_ssl_context: bool = enable_sslkeylogfile_env_to_client_ssl_context
+        self.sslkeylog_file_path: str = sslkeylog_file_path
 
         # noinspection PyTypeChecker
         self.sni_received_parameters: SNIReceivedParameters = None
@@ -325,7 +338,9 @@ class SNIHandler:
                     creator.create_server_ssl_context___load_certificate_and_key(
                         default_server_certificate_path,
                         None,
-                        inherit_from=self.sni_received_parameters.ssl_socket.context
+                        inherit_from=self.sni_received_parameters.ssl_socket.context,
+                        enable_sslkeylogfile_env_to_client_ssl_context=self.enable_sslkeylogfile_env_to_client_ssl_context,
+                        sslkeylog_file_path=self.sslkeylog_file_path
                     )
                 )
             else:

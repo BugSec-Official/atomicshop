@@ -1,7 +1,7 @@
 <!-- HISTORY -->
 ## History
 
-* 3.4.0 - 23.10.2025
+* 3.4.0-1 - 23.10.2025
   * mitm, wrappers/socketw - fixes and improvements.
 * 3.3.28-29 - 15-16.10.2025
   * mitm/mitm_main - improvements.

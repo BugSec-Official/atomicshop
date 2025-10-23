@@ -502,6 +502,8 @@ def mitm_server(config_file_path: str, script_version: str):
                 exceptions_logger_queue=EXCEPTIONS_CSV_LOGGER_QUEUE,
                 forwarding_dns_service_ipv4_list___only_for_localhost=[config_static.DNSServer.forwarding_dns_service_ipv4],
                 skip_extension_id_list=config_static.SkipExtensions.SKIP_EXTENSION_ID_LIST,
+                enable_sslkeylogfile_env_to_client_ssl_context=config_static.Certificates.enable_sslkeylogfile_env_to_client_ssl_context,
+                sslkeylog_file_path=config_static.Certificates.sslkeylog_file_path,
                 print_kwargs=dict(stdout=False)
             )
 
