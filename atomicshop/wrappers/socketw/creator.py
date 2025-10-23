@@ -62,7 +62,8 @@ def create_ssl_context_for_server(
 
         if not os.path.exists(sslkeylog_file_path):
             open(sslkeylog_file_path, "a").close()
-            ssl_context.keylog_filename = sslkeylog_file_path
+
+        ssl_context.keylog_filename = sslkeylog_file_path
 
     # If you must support old clients that only offer TLS_RSA_* suites under OpenSSL 3:
     if allow_legacy:

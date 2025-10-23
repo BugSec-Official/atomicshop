@@ -86,7 +86,9 @@ class SNISetup:
     ):
 
         # Create SSL Socket to wrap the raw socket with.
-        ssl_context: ssl.SSLContext = creator.create_ssl_context_for_server(allow_legacy=True)
+        ssl_context: ssl.SSLContext = creator.create_ssl_context_for_server(
+            allow_legacy=True, enable_sslkeylogfile_env_to_client_ssl_context=self.enable_sslkeylogfile_env_to_client_ssl_context,
+            sslkeylog_file_path=self.sslkeylog_file_path)
 
         self.certificator_instance = certificator.Certificator(
             ca_certificate_name=self.ca_certificate_name,
