@@ -163,10 +163,102 @@ class GitHubWrapper:
 
         self.build_links_from_user_and_repo()
 
-    def check_github_domain(self, domain):
+    def check_github_domain(
+            self,
+            domain: str
+    ):
         if self.domain not in domain:
             print_api(
                 f'This is not [{self.domain}] domain.', color="red", error_type=True)
+
+    def download_file(
+            self,
+            file_name: str,
+            target_dir: str
+    ) -> str:
+        """
+        Download a single repo file to a local directory.
+
+        :param file_name: string, Full repo-relative path to the file. Example:
+             "eng.traineddata"
+             "script\\English.script"
+        :param target_dir: string, Local directory to save into.
+
+        :return: The local path to the downloaded file.
+        """
+
+        # Normalize to GitHub path format
+        file_path = file_name.replace("\\", "/").strip("/")
+
+        headers = self._get_headers()
+        url = f"{self.contents_url}/{file_path}"
+        params = {"ref": self.branch}
+
+        resp = requests.get(url, headers=headers, params=params)
+        resp.raise_for_status()
+        item = resp.json()
+
+        # Expect a single file object
+        if isinstance(item, list) or item.get("type") != "file":
+            raise ValueError(f"'{file_name}' is not a file in branch '{self.branch}'.")
+
+        download_url = item.get("download_url")
+        if not download_url:
+            raise ValueError(f"Unable to obtain download URL for '{file_name}'.")
+
+        os.makedirs(target_dir, exist_ok=True)
+        local_name = item.get("name") or os.path.basename(file_path)
+
+        from .. import web  # ensure available in your module structure
+        web.download(
+            file_url=download_url,
+            target_directory=target_dir,
+            file_name=local_name,
+            headers=headers,
+        )
+        return os.path.join(target_dir, local_name)
+
+    def download_directory(
+            self,
+            folder_name: str,
+            target_dir: str
+    ) -> None:
+        """
+        Recursively download a repo directory to a local directory.
+
+        :param folder_name: string, Repo-relative directory path to download (e.g., "tests/langs").
+        :param target_dir: string, Local directory to save the folder tree into.
+        """
+        headers = self._get_headers()
+        root_path = folder_name.replace("\\", "/").strip("/")
+
+        def _walk_dir(rel_path: str, local_dir: str) -> None:
+            contents_url = f"{self.contents_url}/{rel_path}" if rel_path else self.contents_url
+            params = {"ref": self.branch}
+
+            response = requests.get(contents_url, headers=headers, params=params)
+            response.raise_for_status()
+            items = response.json()
+
+            # If a file path was passed accidentally, delegate to download_file
+            if isinstance(items, dict) and items.get("type") == "file":
+                self.download_file(rel_path, local_dir)
+                return
+
+            if not isinstance(items, list):
+                raise ValueError(f"Unexpected response shape when listing '{rel_path or '/'}'.")
+
+            os.makedirs(local_dir, exist_ok=True)
+
+            for item in items:
+                name = item["name"]
+                if item["type"] == "file":
+                    self.download_file(f"{rel_path}/{name}" if rel_path else name, local_dir)
+                elif item["type"] == "dir":
+                    _walk_dir(f"{rel_path}/{name}" if rel_path else name, os.path.join(local_dir, name))
+                # ignore symlinks/submodules if present
+
+        _walk_dir(root_path, target_dir)
 
     def download_and_extract_branch(
             self,
@@ -194,48 +286,6 @@ class GitHubWrapper:
                 will be extracted from there, then the downloaded branch directory will be removed.
         :return:
         """
-
-        def download_file(file_url: str, target_dir: str, file_name: str, current_headers: dict) -> None:
-            os.makedirs(target_dir, exist_ok=True)
-
-            web.download(
-                file_url=file_url,
-                target_directory=target_dir,
-                file_name=file_name,
-                headers=current_headers
-            )
-
-        def download_directory(folder_path: str, target_dir: str, current_headers: dict) -> None:
-            # Construct the API URL for the current folder.
-            contents_url = f"{self.contents_url}/{folder_path}"
-            params = {'ref': self.branch}
-
-            response = requests.get(contents_url, headers=current_headers, params=params)
-            response.raise_for_status()
-
-            # Get the list of items (files and subdirectories) in the folder.
-            items = response.json()
-
-            # Ensure the local target directory exists.
-            os.makedirs(target_dir, exist_ok=True)
-
-            # Process each item.
-            for item in items:
-                local_item_path = os.path.join(target_dir, item['name'])
-                if item['type'] == 'file':
-                    download_file(
-                        file_url=item['download_url'],
-                        target_dir=target_dir,
-                        file_name=item['name'],
-                        current_headers=current_headers
-                    )
-                elif item['type'] == 'dir':
-                    # Recursively download subdirectories.
-                    download_directory(
-                        folder_path=f"{folder_path}/{item['name']}",
-                        target_dir=local_item_path,
-                        current_headers=current_headers
-                    )
 
         headers: dict = self._get_headers()
 
@@ -275,7 +325,7 @@ class GitHubWrapper:
             else:
                 current_target_directory = os.path.join(target_directory, self.path)
 
-            download_directory(self.path, current_target_directory, headers)
+            self.download_directory(self.path, current_target_directory)
 
     def get_releases_json(
             self,
@@ -530,8 +580,77 @@ class GitHubWrapper:
         commit_message = latest_commit.get("commit", {}).get("message", "")
         return commit_message
 
+    def list_files(
+            self,
+            pattern: str = "*",
+            recursive: bool = True,
+            path: str | None = None,
+    ) -> list[str]:
+        """
+        List files in the repository (or in a specific subfolder).
 
-def parse_github_args():
+        :param pattern: Glob-style pattern (e.g., "*.ex*", "*test*.py"). Matching is done
+            against the file's base name (not the full path).
+        :param recursive: If True, include files in all subfolders (returns full repo-relative
+            paths). If False, list only the immediate files in the chosen folder.
+        :param path: Optional subfolder to list from (e.g., "tests/langs"). If omitted,
+            uses self.path if set, otherwise the repo root.
+
+        :return: A list of repo-relative file paths that match the pattern.
+        """
+        headers = self._get_headers()
+        base_path = (path or self.path or "").strip("/")
+
+        if recursive:
+            # Use the Git Trees API to fetch all files in one call, then filter.
+            tree_url = f"{self.api_url}/git/trees/{self.branch}"
+            params = {"recursive": "1"}
+            resp = requests.get(tree_url, headers=headers, params=params)
+            resp.raise_for_status()
+            data = resp.json()
+
+            files = []
+            for entry in data.get("tree", []):
+                if entry.get("type") != "blob":
+                    continue  # only files
+                entry_path = entry.get("path", "")
+                # If a base_path was provided, keep only files under it
+                if base_path and not entry_path.startswith(base_path + "/") and entry_path != base_path:
+                    continue
+                # Match pattern against the *file name* (basename)
+                if fnmatch.fnmatch(os.path.basename(entry_path), pattern):
+                    files.append(entry_path)
+            return files
+
+        else:
+            # Non-recursive: use the Contents API to list a single directory.
+            # If base_path is empty, list the repo root.
+            if base_path:
+                contents_url = f"{self.contents_url}/{base_path}"
+            else:
+                contents_url = self.contents_url
+
+            params = {"ref": self.branch}
+            resp = requests.get(contents_url, headers=headers, params=params)
+            resp.raise_for_status()
+            items = resp.json()
+
+            # The Contents API returns a dict when the path points to a single file;
+            # normalize to a list to simplify handling.
+            if isinstance(items, dict):
+                items = [items]
+
+            files = []
+            for item in items:
+                if item.get("type") == "file":
+                    name = item.get("name", "")
+                    if fnmatch.fnmatch(name, pattern):
+                        # item["path"] is the full repo-relative path we want to return
+                        files.append(item.get("path", name))
+            return files
+
+
+def _make_parser():
     import argparse
 
     parser = argparse.ArgumentParser(description='GitHub Wrapper')
@@ -562,7 +681,7 @@ def parse_github_args():
         '-db', '--download_branch', action='store_true', default=False,
         help='Sets if the branch will be downloaded. In conjunction with path, only the path will be downloaded.')
 
-    return parser.parse_args()
+    return parser
 
 
 def github_wrapper_main(
@@ -571,8 +690,8 @@ def github_wrapper_main(
         path: str = None,
         target_directory: str = None,
         pat: str = None,
-        get_latest_commit_json: bool = False,
         get_latest_commit_message: bool = False,
+        get_latest_commit_json: bool = False,
         download_branch: bool = False
 ):
     """
@@ -610,15 +729,7 @@ def github_wrapper_main(
 
 
 def github_wrapper_main_with_args():
-    args = parse_github_args()
+    main_parser = _make_parser()
+    args = main_parser.parse_args()
 
-    return github_wrapper_main(
-        repo_url=args.repo_url,
-        branch=args.branch,
-        path=args.path,
-        target_directory=args.target_directory,
-        pat=args.pat,
-        get_latest_commit_json=args.get_latest_commit_json,
-        get_latest_commit_message=args.get_latest_commit_message,
-        download_branch=args.download_branch
-    )
+    return github_wrapper_main(**vars(args))

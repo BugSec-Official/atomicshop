@@ -1,3 +1,4 @@
+import socket
 import ssl
 import logging
 from pathlib import Path
@@ -12,12 +13,12 @@ from . import base
 class Sender:
     def __init__(
             self,
-            ssl_socket: ssl.SSLSocket,
+            ssl_socket: ssl.SSLSocket | socket.socket,
             class_message: bytes,
             logger: logging.Logger = None
     ):
         self.class_message: bytes = class_message
-        self.ssl_socket: ssl.SSLSocket = ssl_socket
+        self.ssl_socket: ssl.SSLSocket | socket.socket = ssl_socket
 
         if logger:
             # Create child logger for the provided logger with the module's name.

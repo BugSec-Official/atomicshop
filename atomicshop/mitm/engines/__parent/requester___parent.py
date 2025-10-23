@@ -112,5 +112,5 @@ class RequesterParent:
     def create_request(self, class_client_message: ClientMessage, **kwargs) -> bytes:
         """ This function should be overridden in the child class. """
 
-        request_bytes: bytes = class_client_message.request_raw_bytes
+        request_bytes: bytes = None
         return request_bytes

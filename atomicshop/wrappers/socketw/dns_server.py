@@ -478,7 +478,7 @@ class DnsServer:
                     dns_cached_request = False
                     # Check if the received data request from client is already in the cache
                     if client_data in self.dns_questions_to_answers_cache:
-                        # message = "!!! Question / Answer is already in the dictionary..."
+                        # message = "!!! Request / Response is already in the dictionary..."
                         # self.logger.info(message)
 
                         # Get the response from the cached answers list
@@ -561,7 +561,7 @@ class DnsServer:
                                                 f'{self.offline_route_ipv6}')
                                         )
 
-                                        message = f"!!! Question / Answer is in offline mode returning " \
+                                        message = f"!!! Request / Response is in offline mode returning " \
                                                   f"{self.offline_route_ipv6}."
                                         self.logger.info(message)
 
@@ -577,7 +577,7 @@ class DnsServer:
                                     elif qtype_string == "SRV" or qtype_string == "SOA" or qtype_string == "HTTPS":
                                         dns_built_response.add_answer(*RR.fromZone(self.offline_srv_answer))
 
-                                        message = f"!!! Question / Answer is in offline mode returning: " \
+                                        message = f"!!! Request / Response is in offline mode returning: " \
                                                   f"{self.offline_srv_answer}."
                                         self.logger.info(message)
                                     elif qtype_string == "ANY":
@@ -586,7 +586,7 @@ class DnsServer:
                                                          self.offline_route_domain)
                                         )
 
-                                        message = f"!!! Question / Answer is in offline mode returning " \
+                                        message = f"!!! Request / Response is in offline mode returning " \
                                                   f"{self.offline_route_domain}."
                                         self.logger.info(message)
                                     else:
@@ -596,7 +596,7 @@ class DnsServer:
                                                 " " + self.offline_route_ipv4)
                                         )
 
-                                        message = f"!!! Question / Answer is in offline mode returning " \
+                                        message = f"!!! Request / Response is in offline mode returning " \
                                                   f"{self.offline_route_ipv4}."
                                         self.logger.info(message)
                                 # Values error means in most cases that you create wrong response
