@@ -1,7 +1,7 @@
 <!-- HISTORY -->
 ## History
 
-* 3.5.0 - 27.10.2025
+* 3.5.0-1 - 27.10.2025
   * Code and libraries dependencies cleaning.
 * 3.4.0-2 - 23.10.2025
   * mitm, wrappers/socketw - fixes and improvements.
