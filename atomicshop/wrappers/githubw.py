@@ -276,7 +276,7 @@ class GitHubWrapper:
         :param archive_remove_first_directory: boolean, available only if 'path' was not specified during the initialization
             Sets if archive extract function will extract the archive
             without first directory in the archive. Check reference in the
-            'archiver.zip.extract_archive_with_zipfile' function.
+            'dkarchiver.arch_wrappers.zips.extract_archive_with_zipfile' function.
         :param download_each_file: bool, available only if 'path' was specified during the initialization of the class.
             Sets if each file will be downloaded separately.
 
@@ -521,7 +521,7 @@ class GitHubWrapper:
         :param exclude_string: str, the string to exclude from the search. No wildcards can be used.
         :param archive_remove_first_directory: bool, sets if archive extract function will extract the archive
             without first directory in the archive. Check reference in the
-            'archiver.zip.extract_archive_with_zipfile' function.
+            'dkarchiver.arch_wrappers.zips.extract_archive_with_zipfile' function.
         :param kwargs: dict, the print arguments for the 'print_api' function.
         :return:
         """

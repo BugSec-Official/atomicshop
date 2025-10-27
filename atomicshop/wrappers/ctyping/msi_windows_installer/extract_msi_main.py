@@ -1,11 +1,12 @@
 import os
 import argparse
 
+from dkarchiver.arch_wrappers import sevenz_app_w
+
 from .base import msi
 from . import base, tables, cabs
 from ... import olefilew
 from ....print_api import print_api
-from ....archiver import sevenz_app_w
 
 
 # Directory names.

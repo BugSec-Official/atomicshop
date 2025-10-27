@@ -7,8 +7,8 @@ import http.client
 
 # noinspection PyPackageRequirements
 import certifi
+from dkarchiver.arch_wrappers import zips
 
-from .archiver import zips
 from .urls import url_parser
 from .file_io import file_io
 from .wrappers.playwrightw import scenarios
@@ -301,7 +301,7 @@ def download_and_extract_file(
         Default is empty. If it is empty, then the filename will be extracted from 'file_url'.
     :param target_directory: string, target directory where to save the file.
     :param archive_remove_first_directory: boolean, sets if archive extract function will extract the archive without
-        first directory in the archive. Check reference in the 'extract_archive_with_zipfile' function.
+        first directory in the archive. Check reference in the 'dkarchiver.arch_wrappers.zips.extract_archive_with_zipfile' function.
     :param headers: dictionary, HTTP headers to use when downloading the file.
     :return:
     """
@@ -313,7 +313,7 @@ def download_and_extract_file(
     # Extract the archive and remove the first directory.
     zips.extract_archive_with_zipfile(
         archive_path=f'{file_path}', extract_directory=target_directory,
-        remove_first_directory=archive_remove_first_directory, **kwargs)
+        remove_first_directory=archive_remove_first_directory)
 
     # Remove the archive file.
     filesystem.remove_file(file_path=f'{file_path}', **kwargs)

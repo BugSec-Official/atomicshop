@@ -1,10 +1,10 @@
-import sys
 import subprocess
 from pathlib import Path
 
+from dkarchiver.arch_wrappers import zips
+
 from .... import filesystem
 from ....permissions import ubuntu_permissions
-from ....archiver import zips
 from ....print_api import print_api
 from ... import githubw, pipw, ubuntu_terminal
 from ...dockerw import install_docker

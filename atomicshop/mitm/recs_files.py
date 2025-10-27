@@ -2,8 +2,9 @@ import datetime
 import os
 import multiprocessing
 import logging
+import zipfile
+import shutil
 
-from ..archiver import zips
 from .. import filesystem, print_api
 from .. wrappers.loggingw import consts, loggingw
 
@@ -11,6 +12,43 @@ from .. wrappers.loggingw import consts, loggingw
 REC_FILE_DATE_TIME_MILLISECONDS_FORMAT: str = f'{consts.DEFAULT_ROTATING_SUFFIXES_FROM_WHEN["S"]}_%f'
 REC_FILE_DATE_TIME_FORMAT: str = f'{consts.DEFAULT_ROTATING_SUFFIXES_FROM_WHEN["S"]}'
 REC_FILE_DATE_FORMAT: str = REC_FILE_DATE_TIME_FORMAT.split('_')[0]
+
+
+def archive(
+        directory_path: str,
+        include_root_directory: bool = True,
+) -> str:
+    """
+    Function archives the directory.
+    :param directory_path: string, full path to the directory.
+    :param include_root_directory: boolean, default is 'True'.
+        'True': The root directory will be included in the archive.
+        'False': The root directory will not be included in the archive.
+        True is usually the case in most archiving utilities.
+    :return: string, full path to the archived file.
+    """
+
+    # This is commonly used and supported by most ZIP utilities.
+    compression_method = zipfile.ZIP_DEFLATED
+
+    archive_path: str = directory_path + '.zip'
+    with zipfile.ZipFile(archive_path, 'w', compression_method) as zip_object:
+        for root, _, files in os.walk(directory_path):
+            for file in files:
+                file_path = os.path.join(root, file)
+
+                # If including the root directory, use the relative path from the parent directory of the root
+                if include_root_directory:
+                    arcname = os.path.relpath(file_path, os.path.dirname(directory_path))
+                else:
+                    arcname = os.path.relpath(file_path, directory_path)
+
+                zip_object.write(file_path, arcname)
+
+    # Remove the original directory after archiving.
+    shutil.rmtree(directory_path, ignore_errors=True)
+
+    return archive_path
 
 
 def recs_archiver(
@@ -83,8 +121,7 @@ def recs_archiver(
             archive_directories: list = filesystem.get_paths_from_directory(
                 directory_path.path, get_directory=True, recursive=False)
             for archive_directory in archive_directories:
-                archived_file: str = zips.archive_directory(
-                    archive_directory.path, remove_original=True, include_root_directory=True)
+                archived_file: str = archive(archive_directory.path, include_root_directory=True)
                 archived_files.append(archived_file)
 
         finalize_output_queue.put(None)

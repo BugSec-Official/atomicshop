@@ -1,8 +1,9 @@
 import os
 from pathlib import Path
 
+from dkarchiver.arch_wrappers import sevenz_app_w
+
 from . import tables
-from ....archiver import sevenz_app_w
 
 
 def resolve_directory_path(directory_info, directory_key):

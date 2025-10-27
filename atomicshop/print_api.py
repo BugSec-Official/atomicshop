@@ -1,13 +1,14 @@
 import sys
 import logging
+from typing import Any
 
 from .basics import ansi_escape_codes
 from .basics import tracebacks
 
 
 def print_api(
-        message: any,
-        color: any = None,
+        message: Any,
+        color: Any = None,
         print_end: str = '\n',
         rtl: bool = False,
         error_type: bool = False,
@@ -73,7 +74,6 @@ def print_api(
 
     # Inner functions already get all the local variables of the main function.
     def print_or_logger():
-        from .wrappers.loggingw import loggingw
         nonlocal message
         nonlocal color
         nonlocal traceback_string
@@ -83,8 +83,6 @@ def print_api(
 
         # If 'rtl' is set to 'True', we'll add Right-To-Left text conversion to 'message'.
         if rtl:
-            # Lazy importing of 'bidi' library. It's not a problem since python caches the library after first import.
-            # Off-course, it will be imported from the cache each time this section is triggered.
             # pip install python-bidi
             from bidi.algorithm import get_display
             message = get_display(message)
