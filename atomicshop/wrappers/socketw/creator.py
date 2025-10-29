@@ -103,7 +103,8 @@ def create_ssl_context_for_client(
 
         if not os.path.exists(sslkeylog_file_path):
             open(sslkeylog_file_path, "a").close()
-            ssl_context.keylog_filename = sslkeylog_file_path
+
+        ssl_context.keylog_filename = sslkeylog_file_path
 
     current_ciphers = 'AES256-GCM-SHA384:' + ssl._DEFAULT_CIPHERS
     ssl_context.set_ciphers(current_ciphers)
