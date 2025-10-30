@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.5.3 - 30.10.2025
+  * mitm/recs_files - improvements.
 * 3.5.2 - 29.10.2025
   * wrappers/socketw/creator - fixes.
 * 3.5.0-1 - 27.10.2025

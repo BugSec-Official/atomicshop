@@ -45,9 +45,6 @@ def archive(
 
                 zip_object.write(file_path, arcname)
 
-    # Remove the original directory after archiving.
-    shutil.rmtree(directory_path, ignore_errors=True)
-
     return archive_path
 
 
@@ -107,6 +104,8 @@ def recs_archiver(
     try:
         archived_files: list = list()
         for directory_path, all_recs_files in file_list_per_directory:
+            print_api.print_api(f"Archiving recs files in directory: {directory_path.path}",
+                      logger=rec_packer_logger_with_queue_handler, color='blue')
             for recs_atomic_path in all_recs_files:
                 # We don't need to archive today's files.
                 if today_date_string == recs_atomic_path.datetime_string:
@@ -120,9 +119,29 @@ def recs_archiver(
             # Archive directories.
             archive_directories: list = filesystem.get_paths_from_directory(
                 directory_path.path, get_directory=True, recursive=False)
-            for archive_directory in archive_directories:
-                archived_file: str = archive(archive_directory.path, include_root_directory=True)
-                archived_files.append(archived_file)
+
+            if not archive_directories:
+                print_api.print_api(
+                    f"No directories to archive in: {directory_path.path}",
+                    color='blue',
+                    logger=rec_packer_logger_with_queue_handler
+                )
+            else:
+                total_archived_files: int = 0
+                for archive_directory in archive_directories:
+                    files_to_archive: list = filesystem.get_paths_from_directory(
+                        directory_path=archive_directory.path, get_file=True, recursive=False)
+                    total_archived_files += len(files_to_archive)
+                    archived_file: str = archive(archive_directory.path, include_root_directory=True)
+                    # Remove the original directory after archiving.
+                    shutil.rmtree(archive_directory.path, ignore_errors=True)
+                    archived_files.append(archived_file)
+
+                print_api.print_api(
+                    f'Archived: 'f'Directories: {len(archive_directories)} | '
+                    f'Total Files: {total_archived_files} | In: {directory_path.path}',
+                    logger=rec_packer_logger_with_queue_handler, color='blue')
+                print_api.print_api(f'Archived files: {archived_files}', logger=rec_packer_logger_with_queue_handler)
 
         finalize_output_queue.put(None)
 
