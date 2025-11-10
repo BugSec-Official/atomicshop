@@ -219,7 +219,7 @@ def _fetch_content(
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless)  # Set headless=True if you don't want to see the browser
 
-        user_agent: str = web.USER_AGENTS['Windows_Chrome_Latest']
+        user_agent: str = web.USER_AGENTS['Chrome 142.0.0 Windows 10/11 x64']
 
         if text_fetch_method == "playwright_copypaste":
             context = browser.new_context(permissions=["clipboard-read", "clipboard-write"], user_agent=user_agent)

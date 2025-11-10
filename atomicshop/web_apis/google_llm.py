@@ -1,7 +1,7 @@
-import os
 from typing import Literal
 
-import google.generativeai as genai
+from google import genai
+from google.genai.types import GenerateContentConfig
 
 from . import google_custom_search
 from ..wrappers.playwrightw import scenarios
@@ -9,6 +9,9 @@ from .. import urls
 
 
 class GoogleCustomSearchError(Exception):
+    pass
+
+class GoogleLLMNoContentError(Exception):
     pass
 
 
@@ -26,12 +29,9 @@ class GoogleLLM:
         :param search_engine_id: str, the search engine ID for the Google Custom Search API.
         """
 
-        self.genai = genai
+        self.client = genai.Client(api_key=llm_api_key)
         self.search_api_key: str = search_api_key
         self.search_engine_id: str = search_engine_id
-
-        os.environ["API_KEY"] = llm_api_key
-        genai.configure(api_key=os.environ["API_KEY"])
 
     def get_current_models(
             self,
@@ -43,7 +43,7 @@ class GoogleLLM:
         :param full_info: bool, if True, returns the full information about the models, otherwise only the names for API usage.
         """
         result_list: list = []
-        for model in self.genai.list_models():
+        for model in self.client.models.list():
             if full_info:
                 result_list.append(model)
             else:
@@ -68,7 +68,7 @@ class GoogleLLM:
             temperature: float = 0,
             # max_output_tokens: int = 4096,
             # model_name: str = 'gemini-2.0-flash-thinking-exp-01-21'
-            model_name: str = 'models/gemini-2.5-pro-preview-03-25'
+            model_name: str = 'gemini-2.5-pro'
     ) -> str:
         """
         Function to get the answer to a question by searching Google Custom Console API and processing the content using Gemini API.
@@ -112,6 +112,9 @@ class GoogleLLM:
                 urls=links[:number_of_top_links], number_of_characters_per_link=number_of_characters_per_link,
                 text_fetch_method=text_fetch_method)
 
+        if not contents:
+            raise GoogleLLMNoContentError("No content was fetched from the provided URL(s).")
+
         combined_content = ""
         for content in contents:
             combined_content += f'{content}\n\n\n\n================================================================'
@@ -126,12 +129,12 @@ class GoogleLLM:
         gemini_response = self.ask_gemini(final_question, temperature, model_name)
         return gemini_response
 
-    @staticmethod
     def ask_gemini(
+            self,
             question: str,
             temperature: float,
             # max_output_tokens: int,
-            model_name: str = 'gemini-2.0-flash-thinking-exp-01-21'
+            model_name: str = 'gemini-2.5-pro'
     ) -> str:
         """
         Function to ask the Gemini API a question and get the response.
@@ -161,8 +164,8 @@ class GoogleLLM:
             # "max_output_tokens": max_output_tokens,
         }
 
-        # model = genai.GenerativeModel('gemini-1.5-pro-latest',
-        # noinspection PyTypeChecker
-        model = genai.GenerativeModel(model_name, generation_config=model_config)
-        response = model.generate_content(question)
+        response = self.client.models.generate_content(
+            model=model_name,
+            contents=question,
+            config=GenerateContentConfig(**model_config))
         return response.text

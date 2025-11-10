@@ -18,10 +18,12 @@ from . import filesystem, print_api
 # https://www.useragents.me/
 # https://user-agents.net/
 USER_AGENTS = {
-    'Chrome_111.0.0_Windows_10-11_x64':
+    'Chrome 111.0.0 Windows_10/11 x64':
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36',
-    'Chrome 132.0.0, Windows 10/11':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36'
+    'Chrome 132.0.0 Windows 10/11 x64':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
+    'Chrome 142.0.0 Windows 10/11 x64':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36'
 }
 
 
@@ -75,7 +77,7 @@ def get_page_bytes(
         raise ValueError('ERROR: [user_agent] specified and [chrome_user_agent] usage is [True]. Choose one.')
 
     if chrome_user_agent:
-        user_agent = USER_AGENTS['Chrome_111.0.0_Windows_10-11_x64']
+        user_agent = USER_AGENTS['Chrome 142.0.0 Windows 10/11 x64']
 
     if user_agent:
         # Create a 'Request' object with the URL and user agent.

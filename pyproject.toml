@@ -63,7 +63,7 @@ dependencies = [
     "docker",
     "flask_socketio",
     "google-api-python-client",
-    "google-generativeai",
+    "google-genai",
     "icmplib",
     "numpy",
     "olefile",
