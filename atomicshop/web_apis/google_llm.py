@@ -15,6 +15,11 @@ class GoogleLLMNoContentError(Exception):
     pass
 
 
+"""
+Rate Limits and Quotas: https://ai.google.dev/gemini-api/docs/rate-limits
+"""
+
+
 class GoogleLLM:
     def __init__(
             self,

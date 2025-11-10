@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.5.5 - 10.11.2025
+  * mitm/mitm_main, python_functions - fixes.
 * 3.5.4 - 10.11.2025
   * web_apis/google_llm - updated to the new google generative ai api.
 * 3.5.3 - 30.10.2025

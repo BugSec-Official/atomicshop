@@ -11,7 +11,7 @@ import atomicshop   # Importing atomicshop package to get the version of the pac
 
 from .. import filesystem, on_exit, print_api, networks, dns
 from ..permissions import permissions
-from ..python_functions import get_current_python_version_string, check_python_version_compliance
+from .. import python_functions
 from ..wrappers.socketw import socket_wrapper, dns_server, base, statistics_csv
 from ..wrappers.loggingw import loggingw
 from ..wrappers.ctyping import win_console
@@ -161,7 +161,7 @@ def startup_output(system_logger, script_version: str):
     # Writing first log.
     system_logger.info("======================================")
     system_logger.info("Server Started.")
-    system_logger.info(f"Python Version: {get_current_python_version_string()}")
+    system_logger.info(f"Python Version: {python_functions.get_python_version_string()}")
     system_logger.info(f"Script Version: {script_version}")
     system_logger.info(f"Atomic Workshop Version: {atomicshop.__version__}")
     system_logger.info(f"Log folder: {config_static.LogRec.logs_path}")
@@ -268,10 +268,10 @@ def get_ipv4s_for_tcp_server():
         ports_to_create_ips_for += list(engine.on_port_connect.keys())
 
     engine_ips: list[str] = list()
+    create_ips: int = len(domains_to_create_ips_for) + len(ports_to_create_ips_for)
+
     # Check if we need the localhost ips (12.0.0.1) or external local ips (192.168.0.100).
     if config_static.ENGINES_LIST[0].is_localhost:
-        create_ips: int = len(domains_to_create_ips_for) + len(ports_to_create_ips_for)
-
         # Generate the list of localhost ips.
         for i in range(create_ips):
             engine_ips.append(f"127.0.0.{i+1}")
@@ -299,7 +299,6 @@ def get_ipv4s_for_tcp_server():
 
         # If the number of currently assigned IPs is smaller than the number of IPs to create,
         # subtract the current IPs count from the number of IPs to create, to create only what is missing.
-        create_ips: int = len(domains_to_create_ips_for)
         if current_ips_count <= create_ips:
             create_ips -= current_ips_count
 
@@ -323,14 +322,18 @@ def get_ipv4s_for_tcp_server():
                 engine.port_target_dict[port]['ip'] = engine_ips.pop(0)
 
 
-def mitm_server(config_file_path: str, script_version: str):
+def mitm_server(config_file_path: str, script_version: str) -> int:
     on_exit.register_exit_handler(exit_cleanup, at_exit=False, kill_signal=False)
 
-    # Main function should return integer with error code, 0 is successful.
-    # Since listening server is infinite, this will not be reached.
-    # After modules import - we check for python version.
-    if not check_python_version_compliance(minor_version='3.12'):
+    python_version: str = python_functions.get_python_version_string()
+    print_api.print_api(f"[*] Python Version: {python_version}")
+
+    compliance_message: str | None = python_functions.check_python_version_compliance(min_ver=(3,12), max_ver=(3,13,99))
+    if compliance_message is not None:
+        print_api.print_api(f"[!] {compliance_message}", error_type=True, color="red")
         return 1
+
+    print_api.print_api("[*] Version Check PASSED.", color="green")
 
     # Import the configuration file.
     result = config_static.load_config(config_file_path, print_kwargs=dict(stdout=False))
@@ -592,6 +595,8 @@ def mitm_server(config_file_path: str, script_version: str):
                 break
 
             time.sleep(1)
+
+    return 0
 
 
 # noinspection PyTypeHints
