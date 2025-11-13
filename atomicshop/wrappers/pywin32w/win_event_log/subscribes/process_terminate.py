@@ -1,7 +1,5 @@
-import subprocess
-
 from .. import subscribe
-from .....print_api import print_api
+from .... import win_auditw
 
 
 LOG_CHANNEL: str = 'Security'
@@ -27,7 +25,7 @@ class ProcessTerminateSubscriber(subscribe.EventLogSubscriber):
 
     def start(self):
         """Start the subscription process."""
-        enable_audit_process_termination()
+        win_auditw.enable_audit_process_termination()
 
         super().start()
 
@@ -49,55 +47,3 @@ class ProcessTerminateSubscriber(subscribe.EventLogSubscriber):
         data['ProcessIdInt'] = int(data['ProcessId'], 16)
 
         return data
-
-
-def enable_audit_process_termination(print_kwargs: dict = None):
-    """
-    Enable the 'Audit Process Termination' policy.
-
-    :param print_kwargs: Optional keyword arguments for the print function.
-    """
-    if is_audit_process_termination_enabled():
-        print_api("Audit Process Termination is already enabled.", color='blue', **(print_kwargs or {}))
-        return
-
-    audit_policy_command = [
-        "auditpol", "/set", "/subcategory:Process Termination", "/success:enable", "/failure:enable"
-    ]
-    try:
-        subprocess.run(audit_policy_command, check=True)
-        print_api("Successfully enabled 'Audit Process Termination'.", color='green', **(print_kwargs or {}))
-    except subprocess.CalledProcessError as e:
-        print_api(f"Failed to enable 'Audit Process Termination': {e}", error_type=True, color='red', **(print_kwargs or {}))
-        raise e
-
-
-def is_audit_process_termination_enabled(print_kwargs: dict = None) -> bool:
-    """
-    Check if the 'Audit Process Termination' policy is enabled.
-
-    :param print_kwargs: Optional keyword arguments for the print function.
-    """
-    # Command to check the "Audit Process Creation" policy
-    audit_policy_check_command = [
-        "auditpol", "/get", "/subcategory:Process Termination"
-    ]
-    try:
-        result = subprocess.run(audit_policy_check_command, check=True, capture_output=True, text=True)
-        output = result.stdout
-        # print_api(output)  # Print the output for inspection
-
-        if "Process Termination" in output and "Success and Failure" in output:
-            # print_api(
-            #     "'Audit Process Termination' is enabled for both success and failure.",
-            #     color='green', **(print_kwargs or {}))
-            return True
-        else:
-            # print_api(output, **(print_kwargs or {}))
-            # print_api(
-            #     "'Audit Process Termination' is not fully enabled. Check the output above for details.",
-            #     color='yellow', **(print_kwargs or {}))
-            return False
-    except subprocess.CalledProcessError as e:
-        print_api(f"Failed to check 'Audit Process Termination': {e}", color='red', error_type=True, **(print_kwargs or {}))
-        return False

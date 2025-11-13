@@ -583,6 +583,25 @@ class SocketWrapper:
                         logger=self.logger)
                     process_name = get_command_instance.get_process_name(print_kwargs={'logger': self.logger})
 
+                    # from ..pywin32w.win_event_log import fetch
+                    # events = fetch.get_latest_events(
+                    #     server_ip=source_ip,
+                    #     username=self.ssh_user,
+                    #     password=self.ssh_pass,
+                    #     log_name='Security',
+                    #     count=50,
+                    #     event_id_list=[5156]
+                    # )
+                    #
+                    # source_port = client_address[1]
+                    # for event in events:
+                    #     if source_port == event['StringsDict']['Source Port']:
+                    #         process_name = event['StringsDict']['Application Name']
+                    #         break
+                    #
+                    # if process_name == '':
+                    #     raise RuntimeError("Failed to get process name from the remote host via Event Log.")
+
                 # If 'accept()' function worked well, SSL worked well, then 'client_socket' won't be empty.
                 if client_socket:
                     # Get the protocol type from the socket.

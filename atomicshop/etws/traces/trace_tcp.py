@@ -1,8 +1,7 @@
 import multiprocessing.managers
 
-from .. import trace, const, providers
+from .. import trace, providers
 from ...basics import dicts
-from ... import dns, ip_addresses
 
 
 ETW_DEFAULT_SESSION_NAME: str = 'AtomicShopTcpTrace'

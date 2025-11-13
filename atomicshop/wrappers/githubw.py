@@ -486,7 +486,8 @@ class GitHubWrapper:
             target_directory: str,
             asset_pattern: str,
             exclude_string: str = None,
-            **kwargs):
+            **kwargs
+    ) -> str:
         """
         This function will download the latest release from the GitHub repository.
         :param target_directory: str, the target directory to download the file.
@@ -494,7 +495,7 @@ class GitHubWrapper:
         :param exclude_string: str, the string to exclude from the search. No wildcards can be used.
             The 'excluded_string' will be filtered before the 'asset_pattern' entries.
         :param kwargs: dict, the print arguments for the 'print_api' function.
-        :return:
+        :return: str, the downloaded file path.
         """
 
         headers: dict = self._get_headers()
