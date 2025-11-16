@@ -2,12 +2,12 @@ import subprocess
 from pathlib import Path
 
 from dkarchiver.arch_wrappers import zips
+from dkinst.installers.helpers import docker_installer
 
 from .... import filesystem
 from ....permissions import ubuntu_permissions
 from ....print_api import print_api
 from ... import githubw, pipw, ubuntu_terminal
-from ...dockerw import install_docker
 from .. import config_install
 
 
@@ -87,7 +87,7 @@ def install_before_restart(
 
         # Install docker. FACT installs the docker, but there can be a problem with permissions, so we need to add
         # the user permissions to the docker group before restart.
-        if not install_docker.add_current_user_to_docker_group():
+        if not docker_installer.add_current_user_to_docker_group():
             print_api("Docker is installed, but the current user was not added to the docker group.", color='red')
             return 1
     else:
@@ -108,7 +108,7 @@ def install_before_restart(
         #     use_docker_installer=True, rootless=True, add_current_user_to_docker_group_bool=False)
 
         # Install docker in regular mode.
-        result: int = install_docker.install_docker_ubuntu(
+        result: int = docker_installer.install_docker_ubuntu(
             use_docker_installer=True, rootless=False, add_current_user_to_docker_group_bool=True)
         if result != 0:
             print_api("Docker installation failed. Please install Docker manually.", color='red')

@@ -1,3 +1,11 @@
+# TODO: Change manual wrapper to:
+# from ffmpy import FFmpeg
+# ff = FFmpeg(
+#     inputs={'input.mp4': None},
+#     outputs={'output.avi': None}
+# )
+# ff.run()
+
 from .wrappers.ffmpegw import FFmpegWrapper
 from .tempfiles import TempFile
 from .web import download

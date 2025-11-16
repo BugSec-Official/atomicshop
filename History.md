@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.6.2 - 16.11.2025
+  * wrappers/factw - fixes.
 * 3.6.0-1 - 13.11.2025
   * wrappers/pywin32w/win_event_log - improvements.
 * 3.5.5 - 10.11.2025
