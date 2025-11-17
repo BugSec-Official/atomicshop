@@ -106,7 +106,10 @@ class SSHRemote:
         else:
             self.logger: logging.Logger = logger
 
-    def connect(self):
+    def connect(
+            self,
+            timeout: int = 60
+    ):
         error: str = str()
 
         # Get all local interfaces IPv4 addresses.
@@ -130,7 +133,7 @@ class SSHRemote:
         self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
         # Executing SSH connection to client.
-        self.ssh_client.connect(self.ip_address, username=self.username, password=self.password, timeout=60)
+        self.ssh_client.connect(self.ip_address, username=self.username, password=self.password, timeout=timeout)
 
         return error
 

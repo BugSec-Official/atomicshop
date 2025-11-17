@@ -1,7 +1,7 @@
 """Loading resources using stdlib importlib.resources APIs (Python 3.7+)
 https://docs.python.org/3/library/importlib.html#module-importlib.resources"""
 import importlib.resources
-from typing import Literal
+from typing import Literal, Any
 
 from .print_api import print_api
 
@@ -24,7 +24,7 @@ class ScriptAsStringProcessor:
 
         return self
 
-    def put_variable_into_script_string(self, input_variable: any, print_kwargs: dict = None):
+    def put_variable_into_script_string(self, input_variable: Any, print_kwargs: dict = None):
         # Defining variables
         function_result: str = str()
 

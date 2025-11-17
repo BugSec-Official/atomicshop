@@ -1,12 +1,13 @@
 import multiprocessing
 import threading
-
 import select
 from typing import Literal, Union, Callable, Any
 from pathlib import Path
 import socket
 import shutil
 import os
+
+import paramiko
 
 from ...mitm import initialize_engines
 from ..psutilw import psutil_networks
@@ -724,6 +725,17 @@ class SocketWrapper:
                         host=domain_from_engine,
                         process_name=process_name)
             except ConnectionResetError as e:
+                exception_string: str = tracebacks.get_as_string()
+                full_string: str = f"{str(e)} | {exception_string}"
+                self.statistics_writer.write_accept_error(
+                    engine=engine_name,
+                    source_host=source_hostname,
+                    source_ip=source_ip,
+                    error_message=full_string,
+                    dest_port=str(dest_port),
+                    host=domain_from_engine,
+                    process_name=process_name)
+            except paramiko.ssh_exception.SSHException as e:
                 exception_string: str = tracebacks.get_as_string()
                 full_string: str = f"{str(e)} | {exception_string}"
                 self.statistics_writer.write_accept_error(

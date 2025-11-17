@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.6.3 - 17.11.2025
+  * wrappers/socketw/socket_wrapper, ssh_remote - fixes.
 * 3.6.2 - 16.11.2025
   * wrappers/factw - fixes.
 * 3.6.0-1 - 13.11.2025
