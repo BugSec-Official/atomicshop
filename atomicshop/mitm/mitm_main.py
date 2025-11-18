@@ -328,7 +328,7 @@ def mitm_server(config_file_path: str, script_version: str) -> int:
     python_version: str = python_functions.get_python_version_string()
     print_api.print_api(f"[*] Python Version: {python_version}")
 
-    compliance_message: str | None = python_functions.check_python_version_compliance(min_ver=(3,12), max_ver=(3,13,99))
+    compliance_message: str | None = python_functions.check_python_version_compliance(min_ver=(3,13), max_ver=(3,13,99))
     if compliance_message is not None:
         print_api.print_api(f"[!] {compliance_message}", error_type=True, color="red")
         return 1

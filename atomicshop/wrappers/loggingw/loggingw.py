@@ -1037,6 +1037,8 @@ class ExceptionCsvLogger(CsvLogger):
             self,
             message: Union[str, Exception] = None,
             custom_csv_string: str = None,
+            custom_exception_attribute: str = None,
+            custom_exception_attribute_placement: Literal['before', 'after'] = 'before',
             stdout: bool = True
     ):
         """
@@ -1050,11 +1052,25 @@ class ExceptionCsvLogger(CsvLogger):
             Meaning, that you need to provide the 'custom_header' during the initialization of the object.
             Off course, you can use as many commas as you need in the 'custom_csv_string': "custom1,custom2,custom3".
             This need to be mirrored in the 'custom_header' as well: "custom1,custom2,custom3".
+        :param custom_exception_attribute: If the 'message' is an Exception, you can provide a custom attribute
+            name to extract from the Exception object and add it to the exception message.
+            For example, if the Exception has an attribute 'engine_name', you can provide it here
+            and the exception message will be appended with the value of that attribute.
+        :param custom_exception_attribute_placement: 'before' or 'after', where to place
+            the custom exception attribute value in the exception message.
         :param stdout: If set to True, the exception will be printed to the console.
         """
 
         if message is None or isinstance(message, Exception):
-            message = tracebacks.get_as_string()
+            custom_attribute: str | None = getattr(message, custom_exception_attribute, None)
+            traceback_string: str = tracebacks.get_as_string()
+            if custom_attribute:
+                if custom_exception_attribute_placement == 'before':
+                    message = f"{custom_exception_attribute}: [{custom_attribute}] | {traceback_string}"
+                else:
+                    message = f"{traceback_string} | {custom_exception_attribute}: [{custom_attribute}]"
+            else:
+                message = traceback_string
 
         if custom_csv_string:
             row_of_cols: list = [datetime.datetime.now(), custom_csv_string, message]

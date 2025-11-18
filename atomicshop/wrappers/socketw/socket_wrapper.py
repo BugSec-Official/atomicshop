@@ -769,7 +769,7 @@ def before_socket_thread_worker(
     try:
         callable_function(*callable_args)
     except Exception as e:
-        exceptions_logger.write(e)
+        exceptions_logger.write(e, custom_exception_attribute='engine_name', custom_exception_attribute_placement='before')
 
 
 def get_engine_name(domain: str, engine_list: list):

@@ -371,7 +371,7 @@ def thread_worker_main(
 
             # Send the bytes back to the client socket.
             error_on_send: str = sender.Sender(
-                ssl_socket=sending_socket, class_message=bytes_to_send_single,
+                ssl_socket=sending_socket, bytes_to_send=bytes_to_send_single,
                 logger=network_logger).send()
 
             if error_on_send:
@@ -449,7 +449,7 @@ def thread_worker_main(
             record_and_statistics_write(client_message)
 
             error_on_send: str = sender.Sender(
-                ssl_socket=receiving_socket, class_message=bytes_to_send_single,
+                ssl_socket=receiving_socket, bytes_to_send=bytes_to_send_single,
                 logger=network_logger).send()
 
             if error_on_send:
@@ -511,7 +511,7 @@ def thread_worker_main(
             record_and_statistics_write(client_message)
 
         error_on_send: str = sender.Sender(
-            ssl_socket=sending_socket, class_message=client_message.request_raw_bytes,
+            ssl_socket=sending_socket, bytes_to_send=client_message.request_raw_bytes,
             logger=network_logger).send()
 
         if error_on_send:
@@ -577,7 +577,7 @@ def thread_worker_main(
                 record_and_statistics_write(client_message)
 
             error_on_send: str = sender.Sender(
-                ssl_socket=sending_socket, class_message=bytes_to_send_single,
+                ssl_socket=sending_socket, bytes_to_send=bytes_to_send_single,
                 logger=network_logger).send()
 
             if error_on_send:
@@ -685,6 +685,9 @@ def thread_worker_main(
         record_and_statistics_write(client_message)
 
         finish_thread()
+
+        # Add custom attribute to the exception.
+        exc.engine_name = client_message.engine_name
 
         # After the socket clean up, we will still raise the exception to the main thread.
         raise exc

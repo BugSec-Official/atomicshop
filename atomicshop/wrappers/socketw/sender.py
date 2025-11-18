@@ -14,10 +14,10 @@ class Sender:
     def __init__(
             self,
             ssl_socket: ssl.SSLSocket | socket.socket,
-            class_message: bytes,
+            bytes_to_send: bytes,
             logger: logging.Logger = None
     ):
-        self.class_message: bytes = class_message
+        self.bytes_to_send: bytes = bytes_to_send
         self.ssl_socket: ssl.SSLSocket | socket.socket = ssl_socket
 
         if logger:
@@ -43,7 +43,7 @@ class Sender:
 
         try:
             # Getting byte length of current message
-            current_message_length = len(self.class_message)
+            current_message_length = len(self.bytes_to_send)
 
             self.logger.info(
                 f"Sending message to "
@@ -52,7 +52,7 @@ class Sender:
             # Looping through "socket.send()" method while total sent bytes are less than message length
             while total_sent_bytes < current_message_length:
                 # Sending the message and getting the amount of bytes sent
-                sent_bytes = self.ssl_socket.send(self.class_message[total_sent_bytes:])
+                sent_bytes = self.ssl_socket.send(self.bytes_to_send[total_sent_bytes:])
                 # If there were only "0" bytes sent, then connection on the other side was terminated
                 if sent_bytes == 0:
                     error_message = (
@@ -62,7 +62,7 @@ class Sender:
                     break
 
                 # Adding amount of currently sent bytes to the total amount of bytes sent
-                total_sent_bytes = total_sent_bytes + sent_bytes
+                total_sent_bytes += sent_bytes
                 self.logger.info(f"Sent {total_sent_bytes} bytes out of {current_message_length}")
 
             # At this point the sending loop finished successfully
