@@ -202,5 +202,4 @@ class ResponderParent:
     def create_response(self, class_client_message: ClientMessage):
         """ This function should be overridden in the child class. """
 
-        response_bytes_list: list[bytes] = [class_client_message.response_raw_bytes]
-        return response_bytes_list
+        return None

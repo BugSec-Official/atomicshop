@@ -76,7 +76,7 @@ class RecorderParent:
             self.recorder_worker_thread = threading.Thread(
                 target=save_message_worker,
                 args=(self.record_file_path, self.message_queue, self.logger),
-                name=f"Thread-{self.class_client_message.thread_id}-Recorder",
+                name=f"{self.class_client_message.thread_process} | Thread-{self.class_client_message.thread_id}-Recorder",
                 daemon=True
             )
             self.recorder_worker_thread.start()

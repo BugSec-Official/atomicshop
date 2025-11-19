@@ -608,7 +608,12 @@ class SocketWrapper:
                     # Get the protocol type from the socket.
                     is_tls: bool = False
 
-                    tls_properties = ssl_base.is_tls(client_socket)
+                    try:
+                        tls_properties = ssl_base.is_tls(client_socket, timeout=1)
+                    except TimeoutError:
+                        self.logger.error("TimeoutError: TLS detection timed out. Dropping accepted socket.")
+                        client_socket.close()
+                        continue
 
                     if tls_properties:
                         is_tls = True

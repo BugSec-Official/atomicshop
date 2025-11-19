@@ -218,7 +218,6 @@ class SocketClient:
         self.socket_instance = None
         self.logger.info(f"Closed socket to service server [{self.service_name}:{self.service_port}]")
 
-    # noinspection PyUnusedLocal
     def send_receive_to_service(
             self,
             request_bytes: Union[bytearray, bytes],
@@ -231,9 +230,8 @@ class SocketClient:
         :param skip_send: If True, the data will not be sent to the service server. After the connection is established,
             the function will wait for the response only.
         """
-        # Define variables
-        function_service_data = None
-        error_message = None
+
+        origin_data: bytes | None = None
 
         service_socket, error_message = self.service_connection()
         # If connection to service server wasn't successful
@@ -257,7 +255,7 @@ class SocketClient:
             if not skip_send:
                 # Send the data received from the client to the service over socket
                 error_on_send = Sender(
-                    ssl_socket=self.socket_instance, class_message=request_bytes, logger=self.logger).send()
+                    ssl_socket=self.socket_instance, bytes_to_send=request_bytes, logger=self.logger).send()
 
                 # If the socket disconnected on data send
                 if error_on_send:
@@ -268,17 +266,17 @@ class SocketClient:
 
             # Else if send was successful
             if not error_on_send:
-                function_service_data = Receiver(
+                origin_data, is_socket_closed, error_message = Receiver(
                     ssl_socket=self.socket_instance, logger=self.logger).receive()
 
                 # If data received is empty meaning the socket was closed on the other side
-                if not function_service_data:
+                if not origin_data:
                     error_message = "Service server closed the connection on receive"
 
                     # We'll close the socket and nullify the object
                     self.close_socket()
 
-        return function_service_data, error_message, self.connection_ip, self.socket_instance
+        return origin_data, error_message, self.connection_ip, self.socket_instance
 
     def send_receive_message_list_with_interval(
             self, requests_bytes_list: list, intervals_list: list, intervals_defaults: int, cycles: int = 1):

@@ -24,15 +24,19 @@ def convert_der_x509_bytes_to_pem_string(certificate) -> str:
     return ssl.DER_cert_to_PEM_cert(certificate)
 
 
-def is_tls(client_socket) -> Optional[Tuple[str, str]]:
+def is_tls(
+        client_socket,
+        timeout: float = None
+) -> Optional[Tuple[str, str]]:
     """
     Return protocol type of the incoming socket after 'accept()'.
     :param client_socket: incoming socket after 'accept()'.
+    :param timeout: optional timeout for receiving/peeking the first bytes.
     :return: tuple with content type, protocol type + version.
         If the length of the first bytes is less than 3, return None.
     """
 
-    first_bytes = receiver.peek_first_bytes(client_socket, bytes_amount=3)
+    first_bytes = receiver.peek_first_bytes(client_socket, bytes_amount=3, timeout=timeout)
 
     # Sometimes only one byte is available, so we need to handle that case.
     # convert to a tuple of ints, add three Nones, and keep only the first 3 items.

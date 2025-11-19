@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Union
+from typing import Union, Any
 
 from .. import http_parse
 from ..basics import dicts
@@ -14,12 +14,12 @@ class ClientMessage:
         # noinspection PyTypeChecker
         self.request_raw_bytes: bytes = None
         self.request_auto_parsed: Union[http_parse.HTTPRequestParse, any] = None
-        self.request_custom_parsed: any = None
+        self.request_custom_parsed: Any = None
         self.request_raw_hex: hex = None
         # noinspection PyTypeChecker
         self.response_raw_bytes: bytes = None
-        self.response_auto_parsed: any = None
-        self.response_custom_parsed: any = None
+        self.response_auto_parsed: Any = None
+        self.response_custom_parsed: Any = None
         self.response_raw_hex: hex = None
         self.server_name: str = str()
         self.server_ip: str = str()
@@ -29,6 +29,7 @@ class ClientMessage:
         self.destination_port: int = int()
         self.process_name: str = str()
         self.thread_id = None
+        self.thread_process: str = str()
         self.info: str = str()
         self.errors: list = list()
         self.protocol: str = str()

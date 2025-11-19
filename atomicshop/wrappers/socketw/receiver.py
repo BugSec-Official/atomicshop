@@ -1,26 +1,44 @@
 import logging
 import socket
 import ssl
-import time
 
 import select
 from pathlib import Path
 
 from ...print_api import print_api
+from ...basics import tracebacks
 from ..loggingw import loggingw
 
 
-def peek_first_bytes(client_socket, bytes_amount: int = 1) -> bytes:
+def peek_first_bytes(
+        client_socket,
+        bytes_amount: int = 1,
+        timeout: float = None
+) -> bytes:
     """
     Peek first byte from the socket without removing it from the buffer.
 
     :param client_socket: Socket object.
     :param bytes_amount: Amount of bytes to peek.
+    :param timeout: float, Timeout in seconds.
 
     :return: the first X bytes from the socket buffer.
     """
 
-    return client_socket.recv(bytes_amount, socket.MSG_PEEK)
+    error: bool = False
+    client_socket.settimeout(timeout)
+
+    try:
+        peek_a_bytes: bytes = client_socket.recv(bytes_amount, socket.MSG_PEEK)
+    except socket.timeout:
+        error = True
+    finally:
+        client_socket.settimeout(None)
+
+    if error:
+        raise TimeoutError
+
+    return peek_a_bytes
 
 
 def is_socket_ready_for_read(socket_instance, timeout: float = 0) -> bool:
@@ -93,14 +111,11 @@ class Receiver:
             # A signal to close connection will be empty bytes string: b''.
             received_data = self.ssl_socket.recv(self.buffer_size_receive)
         except ConnectionAbortedError:
-            error_message = "ConnectionAbortedError: * Connection was aborted by the other side..."
-            print_api(error_message, logger=self.logger, logger_method='critical', traceback_string=False)
+            error_message = "ConnectionAbortedError: Connection was aborted by local TCP stack (not remote close)..."
         except ConnectionResetError:
-            error_message = "ConnectionResetError: * Connection was forcibly closed by the other side..."
-            print_api(error_message, logger=self.logger, logger_method='critical', traceback_string=False)
+            error_message = "ConnectionResetError: Connection was forcibly closed by the other side..."
         except ssl.SSLError:
-            error_message = "ssl.SSLError: * Encountered SSL error on receive..."
-            print_api(error_message, logger=self.logger, logger_method='critical', traceback_string=True)
+            error_message = f"ssl.SSLError: Encountered SSL error on receive...\n{tracebacks.get_as_string()}"
 
         if received_data == b'':
             self.logger.info("Empty message received, socket closed on the other side.")
