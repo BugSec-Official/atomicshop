@@ -611,7 +611,18 @@ class SocketWrapper:
                     try:
                         tls_properties = ssl_base.is_tls(client_socket, timeout=1)
                     except TimeoutError:
-                        self.logger.error("TimeoutError: TLS detection timed out. Dropping accepted socket.")
+                        error: str = "TimeoutError: TLS detection timed out. Dropping accepted socket."
+                        self.logger.error(error)
+
+                        self.statistics_writer.write_accept_error(
+                            engine=engine_name,
+                            source_host=source_hostname,
+                            source_ip=source_ip,
+                            error_message=error,
+                            dest_port=str(dest_port),
+                            host=domain_from_engine,
+                            process_name=process_name)
+
                         client_socket.close()
                         continue
 

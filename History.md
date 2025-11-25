@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.7.1-2 - 25.11.2025
+  * wrappers/socketw/socket_wrapper - improvements.
 * 3.7.0 - 19.11.2025
   * mitm, wrappers/socketw - fixes and improvements.
 * 3.6.4-5 - 18.11.2025
