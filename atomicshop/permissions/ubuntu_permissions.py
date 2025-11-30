@@ -2,6 +2,7 @@ import os
 import stat
 import contextlib
 import subprocess
+import getpass
 
 # Import pwd only on linux.
 if os.name == 'posix':
@@ -18,6 +19,52 @@ def get_sudo_executer_username() -> str:
         return os.environ['SUDO_USER']
     else:
         return ''
+
+
+def detect_current_user(
+        optional_env_user_var: str = 'CUSTOM_SCRIPTED_USER'
+) -> str:
+    """
+    Try to robustly determine the 'real' installing user.
+
+    Priority:
+      1. FDB_INSTALL_USER env var (explicit override).
+      2. If running as root with sudo: use SUDO_USER.
+      3. Otherwise: use effective uid.
+      4. Fallbacks: getpass.getuser() / $USER.
+
+    :param optional_env_user_var: str, name of the environment variable that can override the user detection.
+    :return: str, username.
+    """
+
+    # 1. Explicit override for weird environments (CI, containers, etc.)
+    env_user = os.getenv(optional_env_user_var)
+    if env_user:
+        return env_user
+
+    # 2. If we are root, prefer the sudo caller if any
+    try:
+        euid = os.geteuid()
+    except AttributeError:  # non-POSIX, very unlikely here
+        euid = None
+
+    if euid == 0:
+        sudo_user = os.environ.get("SUDO_USER")
+        if sudo_user:
+            return sudo_user
+
+    # 3. Normal case: effective uid -> username
+    if euid is not None:
+        try:
+            return pwd.getpwuid(euid).pw_name
+        except Exception:
+            pass
+
+    # 4. Fallbacks that don’t depend on utmp/tty
+    try:
+        return getpass.getuser()
+    except Exception:
+        return os.environ.get("USER", "unknown")
 
 
 def set_executable(file_path: str):

@@ -1,6 +1,10 @@
 <!-- HISTORY -->
 ## History
 
+* 3.8.1 - 30.11.2025
+  * permissions/ubuntu_permissions - improvements.
+* 3.8.0 - 27.11.2025
+  * script_as_string_processor, ssh_remote, ssh_scripts, wrappers/socketw - fixes and improvements.
 * 3.7.1-2 - 25.11.2025
   * wrappers/socketw/socket_wrapper - improvements.
 * 3.7.0 - 19.11.2025
@@ -16,7 +20,7 @@
 * 3.5.5 - 10.11.2025
   * mitm/mitm_main, python_functions - fixes.
 * 3.5.4 - 10.11.2025
-  * web_apis/google_llm - updated to the new google generative ai api.
+  * web_apis/google_llm - updated to the new Google generative ai api.
 * 3.5.3 - 30.10.2025
   * mitm/recs_files - improvements.
 * 3.5.2 - 29.10.2025

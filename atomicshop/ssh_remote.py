@@ -14,6 +14,11 @@ from .wrappers.loggingw import loggingw
 from .wrappers.socketw import base
 
 
+class SSHRemoteWrapperNoPythonFound(Exception):
+    """Raised when no usable Python 3 interpreter found on remote host."""
+    pass
+
+
 class SSHRemote:
     """
     Tried using paramiko SSH concurrently within threads, but with bigger loads it just breaks.
@@ -100,6 +105,9 @@ class SSHRemote:
         # Initializing paramiko SSHClient class
         self.ssh_client = paramiko.SSHClient()
 
+        # Variable to store detected python command on remote (python3 / python).
+        self.python_cmd: str | None = None
+
         if logger:
             # Create child logger for the provided logger with the module's name.
             self.logger: logging.Logger = loggingw.get_logger_with_level(f'{logger.name}.{Path(__file__).stem}')
@@ -157,14 +165,45 @@ class SSHRemote:
 
         return function_result
 
-    def remote_execution(self, script_string: str) -> tuple[str, str]:
+    def remote_execution(
+            self,
+            command: str,
+            script_string: str = None
+    ) -> tuple[str, str]:
+        """
+        Function to execute any command over SSH.
+
+        :param command: command to execute over SSH.
+        :param script_string: string representation of script to execute as input.
+            Example:
+                command = "python - 56734"
+                script_string = "import sys;print(f'sys.argv[0]')"
+
+            Under ssh in terminal it would execute like this:
+                ssh User@HostIpv4
+
+                python - 56734 << EOF
+                import sys;print(f'sys.argv[0]')
+                EOF
+
+            Or as onliner:
+                ssh User@HostIpv4 "python - 56734 << EOF import sys;print(f'sys.argv[0]') EOF"
+
+            or using a specific file path:
+                ssh User@HostIpv4 "python - 56734" < /path/to/script.py
+
+        :return: SSH console output, Error output
+        """
         output_result: str = str()
         error_result: str = str()
 
         # Execute the command over SSH remotely.
-        # Don't put debugging break point over the next line in PyCharm. For some reason it gets stuck.
-        # Put the point right after that.
-        stdin, stdout, stderr = self.ssh_client.exec_command(command=script_string, timeout=30)
+        stdin, stdout, stderr = self.ssh_client.exec_command(command=command, timeout=30)
+
+        # Writing the script string into stdin buffer.
+        if script_string:
+            stdin.write(script_string)
+            stdin.channel.shutdown_write()
 
         # Reading the buffer of stdout.
         output_lines: list = stdout.readlines()
@@ -185,53 +224,67 @@ class SSHRemote:
 
         return output_result, error_result
 
-    def remote_execution_python(self, script_string: str):
+    def _detect_remote_python_cmd_name(self) -> str:
+        """
+        Try 'python3' then 'python' on the remote, return the one that is Python 3.
+        Raises if neither works.
+        """
+        for candidate in ("python3", "python"):
+            # Use a simple version check that works on both Windows and Linux
+            cmd = f'{candidate} -c "import sys; print(sys.version_info[0])"'
+            stdin, stdout, stderr = self.ssh_client.exec_command(cmd, timeout=5)
+
+            out = stdout.read().decode().strip()
+            exit_status = stdout.channel.recv_exit_status()
+
+            if exit_status == 0 and out == "3":
+                print_api(f"Detected remote Python 3 interpreter (once per client port): {candidate}", logger=self.logger)
+                return candidate
+
+        raise SSHRemoteWrapperNoPythonFound("No usable Python 3 interpreter found on remote host")
+
+    def _get_python_cmd(self) -> str:
+        if self.python_cmd is None:
+            self.python_cmd = self._detect_remote_python_cmd_name()
+        return self.python_cmd
+
+    def remote_execution_python(
+            self,
+            script_string: str,
+            script_arg_values: tuple = None,
+            script_kwargs: dict = None,
+    ):
         """
         Function to execute python script over SSH.
 
-        Example:
-                network.logger.info("Initializing SSH connection to get the calling process.")
-
-                # Initializing SSHRemote class.
-                ssh_client = SSHRemote(ip_address=client_message.client_ip, username=username, password=password)
-                # Making actual SSH Connection to the computer.
-                ssh_connection_error = ssh_client.connect()
-                # If there's an exception / error during connection.
-                if ssh_connection_error:
-                    # Put the error in the process name value.
-                    client_message.process_name = ssh_connection_error
-                else:
-                    # If no error, then initialize the variables for python script execution over SSH.
-                    remote_output = remote_error = None
-
-                    # Put source port variable inside the string script.
-                    script_string: str = \
-                        put_variable_into_string_script(ssh_script_port_by_process_string, client_message.source_port)
-
-                    # Execute the python script on remote computer over SSH.
-                    remote_output, remote_error = ssh_client.remote_execution_python(script_string)
-
-                    # If there was an error during execution, put it in process name.
-                    if remote_error:
-                        client_message.process_name = remote_error
-                    # If there was no error during execution, put the output of the ssh to process name.
-                    else:
-                        client_message.process_name = remote_output
-                        network.logger.info(f"Remote SSH: Client executing Command Line: {client_message.process_name}")
-
         :param script_string: string representation of python script.
+        :param script_arg_values: values arguments to pass to the script. Example for first argument: 56734
+        :param script_kwargs: keyword arguments to pass to the script.
+            Example: {'-r': None}
+            Interpreted as: -r
+            Example: {'-f': 'value'}
+            Interpreted as: -f value
+            Example: {'--arg': value}
+            Interpreted as: --arg value
+
         :return: SSH console output, Error output
         """
         # Defining variables.
         error_result: str | None = None
 
-        encoded_base64_string = base64.b64encode(script_string.encode('ascii'))
-        command_string: str = fr'python -c "import base64;exec(base64.b64decode({encoded_base64_string}))"'
+        python_cmd = self._get_python_cmd()
+        command: str = f"{python_cmd} -"
 
-        # remote_output, remote_error = ssh_client.remote_execution('ipconfig')
-        # remote_output, remote_error = ssh_client.remote_execution("python -c print('Hello')")
-        # remote_output, remote_error = ssh_client.remote_execution("python -c import psutil")
-        remote_output, remote_error = self.remote_execution(command_string)
+        if script_arg_values:
+            command += ' ' + ' '.join(script_arg_values)
+
+        if script_kwargs:
+            for key, value in script_kwargs.items():
+                command += f' {key}'
+                if value is not None:
+                    command += f' {value}'
+
+        remote_output, remote_error = self.remote_execution(command=command, script_string=script_string)
 
         # If there was an error during remote execution
         if remote_error:
@@ -244,7 +297,10 @@ class SSHRemote:
 
         return remote_output, error_result
 
-    def connect_get_client_commandline(self, script_string):
+    def connect_get_client_commandline(
+            self,
+            port: int,
+            script_string: str):
         # Defining locals.
         execution_output: str | None = None
 
@@ -260,7 +316,7 @@ class SSHRemote:
         if not execution_error:
             self.logger.info("Executing SSH command to acquire the calling process.")
 
-            execution_output, execution_error = self.remote_execution_python(script_string)
+            execution_output, execution_error = self.remote_execution_python(script_string=script_string, script_arg_values=(str(port),))
 
             # Closing SSH connection at this stage.
             self.close()

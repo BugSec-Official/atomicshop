@@ -18,6 +18,7 @@ from ...permissions import permissions
 from ... import filesystem, certificates
 from ...basics import booleans, tracebacks
 from ...print_api import print_api
+from ...ssh_remote import SSHRemote
 
 from . import base, creator, get_process, accepter, statistics_csv, ssl_base, sni
 
@@ -67,10 +68,7 @@ class SocketWrapper:
             ssh_user: str = None,
             ssh_pass: str = None,
             ssh_script_to_execute: Union[
-                Literal[
-                    'process_from_port',
-                    'process_from_ipv4'
-                ],
+                Literal['process_from_port'],
                 None
             ] = None,
             logs_directory: str = None,
@@ -237,12 +235,17 @@ class SocketWrapper:
         # Defining listening sockets list, which will be used with "select" library in 'loop_for_incoming_sockets'.
         self.listening_sockets: list = list()
 
-        # Defining 'ssh_script_processor' variable, which will be used to process SSH scripts.
+        # Defining 'ssh_script_string' variable, which will be used to process SSH scripts.
         self.ssh_script_processor = None
         if self.get_process_name:
             # noinspection PyTypeChecker
-            self.ssh_script_processor = \
-                ScriptAsStringProcessor().read_script_to_string(self.ssh_script_to_execute)
+            self.ssh_script_string: str = ScriptAsStringProcessor().read_script_to_string(self.ssh_script_to_execute)
+
+        else:
+            self.ssh_script_string = str()
+
+        # We will initialize it during the first 'get_process_name' function call.
+        self.ssh_client: SSHRemote | None = None
 
         # If logs directory was not set, we will use the working directory.
         if not logs_directory:
@@ -575,12 +578,16 @@ class SocketWrapper:
                 # SSH Remote / LOCALHOST script execution to identify process section.
                 # If 'get_process_name' was set to True, then this will be executed.
                 if self.get_process_name:
+                    # Initializing SSHRemote class if not initialized.
+                    if self.ssh_client is None:
+                        self.ssh_client = SSHRemote(
+                            ip_address=source_ip, username=self.ssh_user, password=self.ssh_pass, logger=self.logger)
+
                     # Get the process name from the socket.
                     get_command_instance = get_process.GetCommandLine(
                         client_socket=client_socket,
-                        ssh_script_processor=self.ssh_script_processor,
-                        ssh_user=self.ssh_user,
-                        ssh_pass=self.ssh_pass,
+                        script_string=self.ssh_script_string,
+                        ssh_client=self.ssh_client,
                         logger=self.logger)
                     process_name = get_command_instance.get_process_name(print_kwargs={'logger': self.logger})
 

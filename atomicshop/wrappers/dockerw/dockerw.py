@@ -68,8 +68,8 @@ def change_image_content(
         dockerw.change_image_content(
             image_id_or_name="your_docker_image_id_or_name",
             list_of_commands=[
-                "apt-get update",
-                "apt-get install -y python3"
+                "apt update",
+                "apt install -y python3"
             ]
         )
     ----------------------

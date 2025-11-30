@@ -4,8 +4,8 @@ from contextlib import redirect_stdout
 import logging
 
 from . import base
-from ...ssh_remote import SSHRemote
 from ...print_api import print_api
+from ...ssh_remote import SSHRemote
 
 import psutil
 
@@ -14,38 +14,19 @@ class GetCommandLine:
     def __init__(
             self,
             client_socket=None,
-            ssh_script_processor=None,
-            ssh_user: str = None,
-            ssh_pass: str = None,
+            script_string: str = None,
+            ssh_client: SSHRemote = None,
             logger: logging.Logger = None
     ):
         self.client_socket = client_socket
-        self.ssh_script_processor = ssh_script_processor
-        self.ssh_user: str = ssh_user
-        self.ssh_pass: str = ssh_pass
+        self.script_string: str = script_string
+        self.ssh_client: SSHRemote = ssh_client
         self.logger: logging.Logger = logger
 
     def get_process_name(self, print_kwargs: dict = None):
         # Get client ip and the source port.
-        client_ip, source_port = base.get_source_address_from_socket(self.client_socket)
+        client_ip, client_port = base.get_source_address_from_socket(self.client_socket)
 
-        # Put source port variable inside the string script.
-        updated_script_string = self.ssh_script_processor.put_variable_into_script_string(
-            source_port, print_kwargs=print_kwargs)
-
-        process_name = self.get_process_commandline(
-            client_ip=client_ip,
-            script_string=updated_script_string,
-            print_kwargs=print_kwargs)
-
-        return process_name
-
-    def get_process_commandline(
-            self,
-            client_ip: str,
-            script_string: str,
-            print_kwargs: dict = None
-    ):
         execution_output = None
         execution_error = None
 
@@ -55,11 +36,8 @@ class GetCommandLine:
             # So, better using it separately for each thread.
 
             print_api(f"Initializing SSH connection to [{client_ip}]", **print_kwargs)
-            # Initializing SSHRemote class.
-            current_ssh_client = SSHRemote(
-                ip_address=client_ip, username=self.ssh_user, password=self.ssh_pass, logger=self.logger)
 
-            execution_output, execution_error = current_ssh_client.connect_get_client_commandline(script_string)
+            execution_output, execution_error = self.ssh_client.connect_get_client_commandline(port=client_port, script_string=self.script_string)
         # Else, if we're on localhost, then execute the script directly without SSH.
         else:
             print_api(f"Executing LOCALHOST command to get the calling process.", **print_kwargs)
@@ -67,7 +45,7 @@ class GetCommandLine:
             with io.StringIO() as buffer, redirect_stdout(buffer):
                 # Executing the script with print to console.
                 try:
-                    exec(script_string)
+                    exec(self.script_string)
                 except ModuleNotFoundError as function_exception_object:
                     execution_error = f"Module not installed: {function_exception_object}"
                     print_api(

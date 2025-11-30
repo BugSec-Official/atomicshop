@@ -16,13 +16,13 @@ class ScriptAsStringProcessor:
 
     def read_script_to_string(
             self,
-            script_file_name: Literal['process_from_port', 'process_from_ipv4']
+            script_file_name: Literal['process_from_port']
     ):
         self.script_string = importlib.resources.read_text(
             f'{__package__}.{self.resources_directory_name}',
             f'{script_file_name}.py')
 
-        return self
+        return self.script_string
 
     def put_variable_into_script_string(self, input_variable: Any, print_kwargs: dict = None):
         # Defining variables

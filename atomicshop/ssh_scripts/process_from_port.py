@@ -1,27 +1,119 @@
-# importing the psutil library to get the source ports and get the process full command line from it.
-import psutil
-# 'psutil.Process(connection.pid).cmdline()' returns list of full command line parts, it is needed to reassemble
-# these parts to regular command line string.
+#!/usr/bin/env python3
+"""
+Print the command line of the process that owns a given TCP/UDP source port.
+
+Usage:
+    python get_cmdline_from_port.py <port> [kind]
+
+<port> is required (e.g. 54321)
+[kind] is optional: 'tcp', 'udp', or 'inet' (default: 'inet')
+
+Requires: psutil
+
+===========================
+
+In Ubuntu, you can check available TCP connections and processes with:
+    ss -tnpa
+In Windows, you can check available TCP connections and processes with (only PIDs, no command lines):
+    netstat -ano
+"""
+
+import sys
 import shlex
+import psutil
 
-# 'input_variable' will be string exchanged in the real script. It is the first line, so it won't take time to find the
-# line for the main script.
-# noinspection PyUnresolvedReferences
-source_port = exchange_input_variable
 
-# Iterating through all the connections on the computer.
-for connection in psutil.net_connections():
-    # 'connection.laddr' is a tuple consisting of IPv4 address [0] and the port [1].
-    if connection.laddr[1] == source_port:
-        # Get the command line from the connection PID.
-        command_line = psutil.Process(connection.pid).cmdline()
-        # Command line object is returned as list of parameters. We need 'shlex.join' to join the iterables
-        # to regular, readable string.
-        result = shlex.join(command_line)
-        # If the result is still a PID, we'll try to get process name.
+def find_cmdline_by_port(
+        port: int,
+        # kind: str = "inet"
+        kind: str = "tcp"
+) -> str | None:
+    """
+    Return the command line (joined string) of the first process whose local
+    port == `port`, for connections of type `kind` ('tcp', 'udp', 'inet', etc).
+
+    'tcp' is much more specific and faster than 'inet' (which includes both TCP and UDP).
+    """
+
+    # Single system-wide call; 'inet' = IPv4 + IPv6 only (no unix sockets)
+    # Use 'tcp' if you know it's TCP only – slightly faster.
+    try:
+        conns = psutil.net_connections(kind=kind)
+    except psutil.Error:
+        return None
+
+    for conn in conns:
+        # Some entries have no local address or PID (e.g. kernel sockets)
+        laddr = conn.laddr
+        if not laddr:
+            continue
+
+        # laddr is a namedtuple (ip, port) for AF_INET / AF_INET6
+        try:
+            local_port = laddr.port
+        except AttributeError:
+            # Older psutil: laddr is a simple tuple (ip, port)
+            if len(laddr) < 2:
+                continue
+            local_port = laddr[1]
+
+        if local_port != port:
+            continue
+
+        pid = conn.pid
+        if pid is None or pid == 0:
+            continue
+
+        try:
+            proc = psutil.Process(pid)
+            cmdline_list = proc.cmdline()
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            continue
+
+        if cmdline_list:
+            result = shlex.join(cmdline_list)
+        else:
+            # Fallback to process name if cmdline missing
+            try:
+                result = proc.name()
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                return None
+
+        # If result is just a PID string, also fallback to name
         if result.isnumeric():
-            # Get the process name from the connection PID.
-            result = psutil.Process(connection.pid).name()
+            try:
+                result = proc.name()
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                return None
+
+        return result
+
+    return None
+
+
+def main() -> None:
+    if len(sys.argv) < 2:
+        print("Usage: get_cmdline_from_port.py <port> [kind]", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        port = int(sys.argv[1])
+    except ValueError:
+        print("Port must be an integer", file=sys.stderr)
+        sys.exit(1)
+
+    kind = sys.argv[2] if len(sys.argv) >= 3 else "tcp"
+
+    result = find_cmdline_by_port(port, kind)
+    if result is not None:
         print(result)
-        # Break the loop, when first match is found.
-        break
+        sys.exit(0)
+    else:
+        # Print nothing, or a message – up to you.
+        # Empty output is often nicer for scripts that just parse stdout.
+        # print(f"No process found with local port {port}", file=sys.stderr)
+        sys.exit(2)
+
+
+if __name__ == "__main__":
+    main()
