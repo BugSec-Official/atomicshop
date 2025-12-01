@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 3.8.3 - 01.12.2025
+  * wrappers/socketw, package_mains_processor - fixes and improvements.
+  * Some mains directories and files were renamed for better clarity.
 * 3.8.1 - 30.11.2025
   * permissions/ubuntu_permissions - improvements.
 * 3.8.0 - 27.11.2025

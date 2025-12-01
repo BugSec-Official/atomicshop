@@ -1,34 +1,27 @@
-# Needed to redirect output from console to logger on LOCALHOST process command line harvesting.
-import io
-from contextlib import redirect_stdout
 import logging
 
 from . import base
 from ...print_api import print_api
 from ...ssh_remote import SSHRemote
-
-import psutil
+from ... import package_mains_processor
 
 
 class GetCommandLine:
     def __init__(
             self,
             client_socket=None,
-            script_string: str = None,
+            package_processor: package_mains_processor.PackageMainsProcessor = None,
             ssh_client: SSHRemote = None,
             logger: logging.Logger = None
     ):
         self.client_socket = client_socket
-        self.script_string: str = script_string
+        self.package_processor: package_mains_processor.PackageMainsProcessor = package_processor
         self.ssh_client: SSHRemote = ssh_client
         self.logger: logging.Logger = logger
 
     def get_process_name(self, print_kwargs: dict = None):
         # Get client ip and the source port.
         client_ip, client_port = base.get_source_address_from_socket(self.client_socket)
-
-        execution_output = None
-        execution_error = None
 
         # Checking if we're on localhost. If not, we'll execute SSH connection to get calling process name.
         if client_ip not in base.THIS_DEVICE_IP_LIST:
@@ -37,30 +30,13 @@ class GetCommandLine:
 
             print_api(f"Initializing SSH connection to [{client_ip}]", **print_kwargs)
 
-            execution_output, execution_error = self.ssh_client.connect_get_client_commandline(port=client_port, script_string=self.script_string)
+            script_string: str = self.package_processor.read_script_file_to_string()
+
+            execution_output, execution_error = self.ssh_client.connect_get_client_commandline(port=client_port, script_string=script_string)
         # Else, if we're on localhost, then execute the script directly without SSH.
         else:
             print_api(f"Executing LOCALHOST command to get the calling process.", **print_kwargs)
-            # Getting the redirection from console print, since that what the 'script_string' does.
-            with io.StringIO() as buffer, redirect_stdout(buffer):
-                # Executing the script with print to console.
-                try:
-                    exec(self.script_string)
-                except ModuleNotFoundError as function_exception_object:
-                    execution_error = f"Module not installed: {function_exception_object}"
-                    print_api(
-                        execution_error, error_type=True, logger_method="error", traceback_string=True,
-                        **print_kwargs)
-                except psutil.AccessDenied:
-                    execution_error = f"Access Denied for 'psutil' to read system process command line. " \
-                                      f"Run script with Admin Rights."
-                    print_api(
-                        execution_error, error_type=True, logger_method="error", traceback_string=True,
-                        **print_kwargs)
-
-                if not execution_error:
-                    # Reading the buffer.
-                    execution_output = buffer.getvalue()
+            execution_output, execution_error, rc = self.package_processor.execute_script_with_subprocess(arguments=[str(client_port)])
 
         # This section is generic for both remote SSH and localhost executions of the script.
         process_name = self.get_commandline_and_error(execution_output, execution_error, print_kwargs=print_kwargs)
@@ -95,7 +71,8 @@ class GetCommandLine:
                 print_api(f"Client Process Command Line: {process_name}", **(print_kwargs or {}))
             # Else if the script output came back empty.
             else:
-                process_name = "Client Process Command Line came back empty after script execution."
-                print_api(process_name, error_type=True, logger_method='error', **(print_kwargs or {}))
+                process_name = ''
+                message = "Client Process Command Line came back empty after script execution."
+                print_api(message, error_type=True, logger_method='error', **(print_kwargs or {}))
 
         return process_name

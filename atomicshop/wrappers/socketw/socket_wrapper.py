@@ -13,7 +13,7 @@ from ...mitm import initialize_engines
 from ..psutilw import psutil_networks
 from ..certauthw import certauthw
 from ..loggingw import loggingw
-from ...script_as_string_processor import ScriptAsStringProcessor
+from ... import package_mains_processor
 from ...permissions import permissions
 from ... import filesystem, certificates
 from ...basics import booleans, tracebacks
@@ -239,10 +239,10 @@ class SocketWrapper:
         self.ssh_script_processor = None
         if self.get_process_name:
             # noinspection PyTypeChecker
-            self.ssh_script_string: str = ScriptAsStringProcessor().read_script_to_string(self.ssh_script_to_execute)
+            self.package_processor: package_mains_processor.PackageMainsProcessor | None = package_mains_processor.PackageMainsProcessor(script_file_stem=self.ssh_script_to_execute)
 
         else:
-            self.ssh_script_string = str()
+            self.package_processor = None
 
         # We will initialize it during the first 'get_process_name' function call.
         self.ssh_client: SSHRemote | None = None
@@ -586,7 +586,7 @@ class SocketWrapper:
                     # Get the process name from the socket.
                     get_command_instance = get_process.GetCommandLine(
                         client_socket=client_socket,
-                        script_string=self.ssh_script_string,
+                        package_processor=self.package_processor,
                         ssh_client=self.ssh_client,
                         logger=self.logger)
                     process_name = get_command_instance.get_process_name(print_kwargs={'logger': self.logger})
