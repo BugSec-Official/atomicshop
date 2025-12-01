@@ -747,18 +747,8 @@ class SocketWrapper:
                         dest_port=str(dest_port),
                         host=domain_from_engine,
                         process_name=process_name)
-            except ConnectionResetError as e:
-                exception_string: str = tracebacks.get_as_string()
-                full_string: str = f"{str(e)} | {exception_string}"
-                self.statistics_writer.write_accept_error(
-                    engine=engine_name,
-                    source_host=source_hostname,
-                    source_ip=source_ip,
-                    error_message=full_string,
-                    dest_port=str(dest_port),
-                    host=domain_from_engine,
-                    process_name=process_name)
-            except paramiko.ssh_exception.SSHException as e:
+            # Sometimes paramiko SSH connection return EOFError on connection reset, so we need to catch it separately.
+            except (ConnectionResetError, paramiko.ssh_exception.SSHException, EOFError) as e:
                 exception_string: str = tracebacks.get_as_string()
                 full_string: str = f"{str(e)} | {exception_string}"
                 self.statistics_writer.write_accept_error(
