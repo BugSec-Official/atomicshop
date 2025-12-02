@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.8.5 - 02.12.2025
+  * wrappers/socketw/get_process - fixes.
 * 3.8.4 - 02.12.2025
   * package_mains_processor, ssh_remote, wrappers/socketw/get_process - fixes.
 * 3.8.3 - 01.12.2025
