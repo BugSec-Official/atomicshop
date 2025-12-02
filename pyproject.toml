@@ -71,7 +71,7 @@ dependencies = [
     "pefile",
     "playwright",
     "protobuf",
-    "psutil",
+    "psutil==7.1.3",
 	"pymongo",
     "pyopenssl",
     "python-docx",

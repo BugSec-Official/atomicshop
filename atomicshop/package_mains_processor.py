@@ -5,6 +5,7 @@ from contextlib import redirect_stdout
 import io
 import subprocess
 import sys
+from typing import Callable
 
 
 class PackageMainsProcessor:
@@ -27,7 +28,8 @@ class PackageMainsProcessor:
             self,
             function_name: str = 'main',
             args: tuple = None,
-            kwargs: dict = None
+            kwargs: dict = None,
+            get_printed_output: bool = False
     ) -> str:
         """
         Execute a script file from the package resources and get result as string.
@@ -35,6 +37,7 @@ class PackageMainsProcessor:
         :param function_name: Name of the function to call within the script.
         :param args: Tuple of positional arguments to pass to the function.
         :param kwargs: Dictionary of keyword arguments to pass to the function.
+        :param get_printed_output: If True, captures and returns printed output instead of return value.
 
         :return: Output of the script execution as a string.
         """
@@ -47,14 +50,16 @@ class PackageMainsProcessor:
         module_name = f"{self.get_resource_path()}.{self.script_file_stem}"  # script_file_name WITHOUT ".py"
 
         module = importlib.import_module(module_name)
+        callable_function: Callable = getattr(module, function_name)
 
-        with io.StringIO() as buffer, redirect_stdout(buffer):
-            callable_function = getattr(module, function_name)
-            callable_function(*args, **kwargs)
+        if get_printed_output:
+            with io.StringIO() as buffer, redirect_stdout(buffer):
+                callable_function(*args, **kwargs)
+                result = buffer.getvalue()
+        else:
+            result = callable_function(*args, **kwargs)
 
-            output = buffer.getvalue()
-
-        return output
+        return result
 
     def execute_script_with_subprocess(
             self,

@@ -6,6 +6,9 @@ from ...ssh_remote import SSHRemote
 from ... import package_mains_processor
 
 
+GET_LOCALHOST_FUNCTION_NAME = 'find_cmdline_by_port'
+
+
 class GetCommandLine:
     def __init__(
             self,
@@ -37,6 +40,9 @@ class GetCommandLine:
         else:
             print_api(f"Executing LOCALHOST command to get the calling process.", **print_kwargs)
             execution_output, execution_error, rc = self.package_processor.execute_script_with_subprocess(arguments=[str(client_port)])
+            # execution_output = self.package_processor.execute_script_file(
+            #     function_name=GET_LOCALHOST_FUNCTION_NAME, args=(client_port,))
+            # execution_error = None
 
         # This section is generic for both remote SSH and localhost executions of the script.
         process_name = self.get_commandline_and_error(execution_output, execution_error, print_kwargs=print_kwargs)
