@@ -20,7 +20,7 @@ from ...basics import booleans, tracebacks
 from ...print_api import print_api
 from ...ssh_remote import SSHRemote
 
-from . import base, creator, get_process, accepter, statistics_csv, ssl_base, sni
+from . import base, creator, process_getter, accepter, statistics_csv, ssl_base, sni
 
 
 class SocketWrapperPortInUseError(Exception):
@@ -565,6 +565,7 @@ class SocketWrapper:
                     print_kwargs={'logger': self.logger})
 
                 source_ip: str = client_address[0]
+                source_port: int = client_address[1]
                 dest_port: int = listening_socket_object.getsockname()[1]
 
                 # Not always there will be a hostname resolved by the IP address, so we will leave it empty if it fails.
@@ -584,8 +585,9 @@ class SocketWrapper:
                             ip_address=source_ip, username=self.ssh_user, password=self.ssh_pass, logger=self.logger)
 
                     # Get the process name from the socket.
-                    get_command_instance = get_process.GetCommandLine(
-                        client_socket=client_socket,
+                    get_command_instance = process_getter.GetCommandLine(
+                        client_ip=source_ip,
+                        client_port=source_port,
                         package_processor=self.package_processor,
                         ssh_client=self.ssh_client,
                         logger=self.logger)

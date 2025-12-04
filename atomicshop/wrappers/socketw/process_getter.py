@@ -12,36 +12,38 @@ GET_LOCALHOST_FUNCTION_NAME = 'find_cmdline_by_port'
 class GetCommandLine:
     def __init__(
             self,
-            client_socket=None,
+            client_ip: str,
+            client_port: int = None,
             package_processor: package_mains_processor.PackageMainsProcessor = None,
             ssh_client: SSHRemote = None,
             logger: logging.Logger = None
     ):
-        self.client_socket = client_socket
+        self.client_ip: str = client_ip
+        self.client_port: int = client_port
         self.package_processor: package_mains_processor.PackageMainsProcessor = package_processor
         self.ssh_client: SSHRemote = ssh_client
         self.logger: logging.Logger = logger
 
     def get_process_name(self, print_kwargs: dict = None):
-        # Get client ip and the source port.
-        client_ip, client_port = base.get_source_address_from_socket(self.client_socket)
+        if print_kwargs is None:
+            print_kwargs = {}
 
         # Checking if we're on localhost. If not, we'll execute SSH connection to get calling process name.
-        if client_ip not in base.THIS_DEVICE_IP_LIST:
+        if self.client_ip not in base.THIS_DEVICE_IP_LIST:
             # Tried using paramiko SSH concurrently within threads, but with bigger loads it just breaks.
             # So, better using it separately for each thread.
 
-            print_api(f"Initializing SSH connection to [{client_ip}]", **print_kwargs)
+            print_api(f"Initializing SSH connection to [{self.client_ip}]", **print_kwargs)
 
             script_string: str = self.package_processor.read_script_file_to_string()
 
-            execution_output, execution_error = self.ssh_client.connect_get_client_commandline(port=client_port, script_string=script_string)
+            execution_output, execution_error = self.ssh_client.connect_get_client_commandline(port=self.client_port, script_string=script_string)
         # Else, if we're on localhost, then execute the script directly without SSH.
         else:
             print_api(f"Executing LOCALHOST command to get the calling process.", **print_kwargs)
             # execution_output, execution_error, rc = self.package_processor.execute_script_with_subprocess(arguments=[str(client_port)])
             execution_output = self.package_processor.execute_script_file(
-                function_name=GET_LOCALHOST_FUNCTION_NAME, args=(client_port,))
+                function_name=GET_LOCALHOST_FUNCTION_NAME, args=(self.client_port,))
             execution_error = None
 
         # This section is generic for both remote SSH and localhost executions of the script.

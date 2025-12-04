@@ -307,18 +307,18 @@ class SSHRemote:
         execution_error = self.connect()
         # if there was an error, try to connect again.
         if execution_error:
-            self.logger.info("Retrying SSH Connection Initialization.")
+            print_api("Retrying SSH Connection Initialization.", logger=self.logger, logger_method='info')
             execution_error = self.connect()
 
         # If there was still an error, we won't be executing the script. And the error will be passed to
         # 'process_name'.
         if not execution_error:
-            self.logger.info("Executing SSH command to acquire the calling process.")
+            print_api("Executing SSH command to acquire the calling process.", logger=self.logger, logger_method='info')
 
             execution_output, execution_error = self.remote_execution_python(script_string=script_string, script_arg_values=(str(port),))
 
             # Closing SSH connection at this stage.
             self.close()
-            self.logger.info("Acquired. Closed SSH connection.")
+            print_api("Acquired. Closed SSH connection.", logger=self.logger, logger_method='info')
 
         return execution_output, execution_error

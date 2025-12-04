@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 3.8.6 - 04.12.2025
+  * wrappers/socketw/socket_wrapper, ssh_remote - fixes and improvements.
+  * Added a_mains/get_local_tcp_ports
 * 3.8.5 - 02.12.2025
   * wrappers/socketw/get_process - fixes.
 * 3.8.4 - 02.12.2025
