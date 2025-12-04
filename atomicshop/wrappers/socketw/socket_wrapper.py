@@ -568,6 +568,9 @@ class SocketWrapper:
                 source_port: int = client_address[1]
                 dest_port: int = listening_socket_object.getsockname()[1]
 
+                message: str = f"Accepted connection from [{source_ip}:{source_port}] to [{listening_ip}:{dest_port}] | domain: {domain_from_engine}"
+                print_api(message, logger=self.logger)
+
                 # Not always there will be a hostname resolved by the IP address, so we will leave it empty if it fails.
                 try:
                     source_hostname = socket.gethostbyaddr(source_ip)[0]
