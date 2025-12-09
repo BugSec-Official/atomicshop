@@ -161,6 +161,7 @@ def download(
         target_directory: str = None,
         file_name: str = None,
         headers: dict = None,
+        overwrite: bool = False,
         # use_certifi_ca_repository: bool = False,
         **kwargs
 ) -> str | None:
@@ -176,6 +177,9 @@ def download(
     :param file_name: string, file name (example: file.zip) that you want the downloaded file to be saved as.
         If not specified, the default filename from 'file_url' will be used.
     :param headers: dictionary, HTTP headers to use when downloading the file.
+    :param overwrite: boolean, if True, the file will be overwritten if it already exists.
+        If False, the file will not be overwritten and the function will return None if the file already exists.
+        Default is False.
     :param use_certifi_ca_repository: boolean, if True, the certifi CA store will be used for SSL context
         instead of the system's default CA store.
     :return: string, full file path of downloaded file. If download failed, 'None' will be returned.
@@ -202,6 +206,13 @@ def download(
 
     # Build full path to file.
     file_path: str = f'{target_directory}{os.sep}{file_name}'
+
+    if os.path.exists(file_path):
+        if overwrite:
+            print_api.print_api(f'File already exists: {file_path}. Overwriting...', **kwargs)
+        else:
+            print_api.print_api(f'File already exists: {file_path}. Skipping download.', **kwargs)
+            return file_path
 
     print_api.print_api(f'Downloading: {file_url}', **kwargs)
     print_api.print_api(f'To: {file_path}', **kwargs)

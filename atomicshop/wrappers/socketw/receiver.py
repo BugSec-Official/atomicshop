@@ -114,6 +114,11 @@ class Receiver:
             error_message = "ConnectionAbortedError: Connection was aborted by local TCP stack (not remote close)..."
         except ConnectionResetError:
             error_message = "ConnectionResetError: Connection was forcibly closed by the other side..."
+        except TimeoutError as e:
+            if e.errno == 10060:
+                error_message = "TimeoutError: [WinError 10060] Socket receive operation timed out..."
+            else:
+                raise e
         except ssl.SSLError:
             error_message = f"ssl.SSLError: Encountered SSL error on receive...\n{tracebacks.get_as_string()}"
 

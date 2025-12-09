@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 3.8.9 - 09.12.2025
+  * wrappers/socketw/receiver - fixes.
+  * pyproject.toml - dependencies update.
 * 3.8.8 - 04.12.2025
   * mitm/ssh_tester - new release.
 * 3.8.7 - 04.12.2025
