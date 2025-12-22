@@ -15,7 +15,7 @@ from . import loggers, formatters, filters, consts
 from ... import datetimes, filesystem
 
 
-"""
+r"""
 # Not used, only for the reference:
 DEFAULT_DATE_STRING_FORMAT: str = "%Y_%m_%d"
 DEFAULT_DATE_REGEX_PATTERN: str = r"^\d{4}_\d{2}_\d{2}$"

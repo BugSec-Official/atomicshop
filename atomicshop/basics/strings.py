@@ -423,7 +423,7 @@ def replace_words_with_values_from_dict(
 
 
 def replace_strings_with_values_from_dict(string_to_replace: str, dictionary: dict) -> str:
-    """
+    r"""
     Function replaces strings, which are keys with values from dictionary.
 
     :param string_to_replace: string, to replace words in.

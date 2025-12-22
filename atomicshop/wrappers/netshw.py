@@ -1,6 +1,6 @@
 import subprocess
 import re
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 # ── regex helpers ─────────────────────────────────────────────────────────
 IP_PATTERN        = r'(?:\d{1,3}\.){3}\d{1,3}'
@@ -10,7 +10,7 @@ RE_SUBNET         = re.compile(rf'(?P<prefix>{IP_PATTERN}/\d+)\s+\(mask\s+(?P<ma
 RE_IP             = re.compile(IP_PATTERN)
 
 
-def _get_netsh_show_config() -> str:
+def get_netsh_show_config() -> str:
     """Run `netsh interface ipv4 show config` and return the raw text."""
     return subprocess.check_output(
         ["netsh", "interface", "ipv4", "show", "config"],
@@ -27,7 +27,7 @@ def get_netsh_ipv4() -> List[Dict[str, Any]]:
         default_gateways, gateway_metric, interface_metric,
         dns_mode, dns_servers, wins_mode, wins_servers
     """
-    config_text = _get_netsh_show_config()
+    config_text = get_netsh_show_config()
 
     adapters: List[Dict[str, Any]] = []
     adapter: Dict[str, Any] | None = None
@@ -148,3 +148,123 @@ def get_netsh_ipv4() -> List[Dict[str, Any]]:
     #             ad['wins_mode'] = 'mixed'
 
     return adapters
+
+
+def run_netsh(*args: str) -> str:
+    """
+    Run a netsh command and return stdout as text.
+
+    Example:
+        run_netsh("interface", "ipv4", "show", "interfaces")
+    """
+    cmd = ["netsh"] + list(args)
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        check=True
+    )
+    return result.stdout
+
+
+def enable_dhcp_static_coexistence(interface_name: str) -> str:
+    """
+    Enable DHCP + static IP coexistence on an interface.
+
+    Equivalent to:
+        netsh interface ipv4 set interface "Ethernet0" dhcpstaticipcoexistence=enabled
+    """
+    return run_netsh(
+        "interface", "ipv4", "set", "interface",
+        interface_name,
+        "dhcpstaticipcoexistence=enabled"
+    )
+
+
+def disable_dhcp_static_coexistence(interface_name: str) -> str:
+    """
+    Disable DHCP + static IP coexistence on an interface (optional).
+
+    Equivalent to:
+        netsh interface ipv4 set interface "Ethernet0" dhcpstaticipcoexistence=disabled
+    """
+    return run_netsh(
+        "interface", "ipv4", "set", "interface",
+        interface_name,
+        "dhcpstaticipcoexistence=disabled"
+    )
+
+
+def add_virtual_ip(
+        interface_name: str,
+        ip: str,
+        mask: str,
+        skip_as_source: bool = True
+) -> str:
+    """
+    Add a static 'virtual' IP to a DHCP interface, keeping DHCP intact.
+
+    Equivalent to:
+        netsh interface ipv4 add address "Ethernet0" 192.168.1.201 255.255.255.0 skipassource=true
+
+    Args:
+        interface_name: Interface name, e.g. "Ethernet0"
+        ip:     IP to add, e.g. "192.168.1.201"
+        mask:   Subnet mask, e.g. "255.255.255.0"
+        skip_as_source: If True, adds 'skipassource=true' so Windows does
+                        not prefer this IP as the outbound source address.
+    """
+    args = [
+        "interface", "ipv4", "add", "address",
+        interface_name,
+        ip,
+        mask,
+    ]
+    if skip_as_source:
+        args.append("skipassource=true")
+
+    return run_netsh(*args)
+
+
+def remove_virtual_ip(
+        interface_name: str,
+        ip: str
+) -> str:
+    """
+    Remove a previously added virtual IP from the interface.
+
+    Equivalent to:
+        netsh interface ipv4 delete address "Ethernet0" addr=192.168.1.201
+    """
+    return run_netsh(
+        "interface", "ipv4", "delete", "address",
+        interface_name,
+        f"addr={ip}"
+    )
+
+
+def show_interface_config(
+        interface_name: Optional[str] = None
+) -> str:
+    """
+    Show IPv4 configuration for all interfaces or a specific one.
+
+    Equivalent to:
+        netsh interface ipv4 show config
+    or:
+        netsh interface ipv4 show config "Ethernet0"
+    """
+    if interface_name:
+        return run_netsh("interface", "ipv4", "show", "config", interface_name)
+    else:
+        return run_netsh("interface", "ipv4", "show", "config")
+
+
+def list_ipv4_interfaces() -> str:
+    """
+    List IPv4 interfaces.
+
+    Equivalent to:
+        netsh interface ipv4 show interfaces
+    """
+    return run_netsh("interface", "ipv4", "show", "interfaces")

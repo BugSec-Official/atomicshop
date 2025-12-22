@@ -5,41 +5,6 @@ from typing import Literal
 from . import import_config
 from .message import ClientMessage
 
-# CONFIG = None
-LIST_OF_BOOLEANS: list = [
-    ('dnstcp', 'offline'),
-    ('dns', 'enable'),
-    ('dns', 'resolve_by_engine'),
-    ('dns', 'resolve_regular_pass_thru'),
-    ('dns', 'resolve_all_domains_to_ipv4'),
-    ('dns', 'set_default_dns_gateway_to_localhost'),
-    ('dns', 'set_default_dns_gateway_to_default_interface_ipv4'),
-    ('tcp', 'enable'),
-    ('tcp', 'no_engines_usage_to_listen_addresses'),
-    ('logrec', 'enable_request_response_recordings_in_logs'),
-    ('certificates', 'install_ca_certificate_to_root_store'),
-    ('certificates', 'uninstall_unused_ca_certificates_with_mitm_ca_name'),
-    ('certificates', 'default_server_certificate_usage'),
-    ('certificates', 'sni_add_new_domains_to_default_server_certificate'),
-    ('certificates', 'custom_server_certificate_usage'),
-    ('certificates', 'sni_create_server_certificate_for_each_domain'),
-    ('certificates', 'sni_get_server_certificate_from_server_socket'),
-    ('skip_extensions', 'tls_web_client_authentication'),
-    ('skip_extensions', 'crl_distribution_points'),
-    ('skip_extensions', 'authority_information_access'),
-    ('process_name', 'get_process_name')
-]
-
-
-TOML_TO_STATIC_CATEGORIES: dict = {
-    'dnstcp': 'MainConfig',
-    'dns': 'DNSServer',
-    'tcp': 'TCPServer',
-    'logrec': 'LogRec',
-    'certificates': 'Certificates',
-    'skip_extensions': 'SkipExtensions',
-    'process_name': 'ProcessName'
-}
 
 # noinspection PyTypeChecker
 ENGINES_LIST: list = None           # list[initialize_engines.ModuleCategory]
@@ -47,6 +12,12 @@ REFERENCE_MODULE = None             # initialize_engines.ModuleCategory
 
 
 class MainConfig:
+    # '' (empty) - system's default internet interface.
+    # Any other network interface name available on the system.
+    is_offline: bool
+    network_interface: str
+    is_localhost: bool
+
     LOGGER_NAME: str = 'network'
 
     SCRIPT_DIRECTORY: str = None
@@ -66,7 +37,6 @@ class MainConfig:
     # Default server certificate file name and path.
     default_server_certificate_filename = f'{default_server_certificate_name}.pem'
     default_server_certificate_filepath: str = None
-    offline: bool = False
 
     @classmethod
     def update(cls):
@@ -80,8 +50,11 @@ class MainConfig:
 
 @dataclass
 class DNSServer:
-    enable: bool
+    is_enabled: bool
     offline_mode: bool
+
+    listening_ipv4: str
+    listening_port: int
 
     listening_address: str
     forwarding_dns_service_ipv4: str
@@ -92,20 +65,22 @@ class DNSServer:
     resolve_all_domains_to_ipv4_enable: bool
     target_ipv4: str
 
-    set_default_dns_gateway: str
-    set_default_dns_gateway_to_localhost: bool
-    set_default_dns_gateway_to_default_interface_ipv4: bool
-
     # Convertable variables.
     resolve_all_domains_to_ipv4: dict
+
+    set_default_dns_gateway: list[str]
+    set_default_dns_gateway_to_localhost: bool = False
+    set_default_dns_gateway_to_network_interface_ipv4: bool = False
 
     # Static variables.
     forwarding_dns_service_port: int = 53
 
+    default_localhost_dns_gateway_ipv4: str = '127.0.0.1'
+
 
 @dataclass
 class TCPServer:
-    enable: bool
+    is_enabled: bool
     no_engines_usage_to_listen_addresses_enable: bool
     no_engines_listening_address_list: list[str]
 
@@ -198,7 +173,7 @@ def get_listening_addresses(client_message: ClientMessage) -> dict | None:
 CONFIG_INI_TESTER_FILE_NAME: str = 'config_tester.ini'
 
 """
-config.ini:
+config.toml:
 target_domain_or_ip: the domain or ip that the requests will be sent to. Better use domains, for better testing
     simulation.
 target_port: the port that requests will be sent to.

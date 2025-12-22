@@ -1,6 +1,6 @@
 import logging
 
-from . import base
+from . import socket_base
 from ...print_api import print_api
 from ...ssh_remote import SSHRemote
 from ... import package_mains_processor
@@ -29,7 +29,7 @@ class GetCommandLine:
             print_kwargs = {}
 
         # Checking if we're on localhost. If not, we'll execute SSH connection to get calling process name.
-        if self.client_ip not in base.THIS_DEVICE_IP_LIST:
+        if self.client_ip not in socket_base.THIS_DEVICE_IP_LIST:
             # Tried using paramiko SSH concurrently within threads, but with bigger loads it just breaks.
             # So, better using it separately for each thread.
 

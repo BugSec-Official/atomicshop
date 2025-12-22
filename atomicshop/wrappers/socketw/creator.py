@@ -2,7 +2,7 @@ import os
 import socket
 import ssl
 
-from . import base, exception_wrapper
+from . import socket_base, exception_wrapper
 from ...print_api import print_api
 
 
@@ -313,7 +313,7 @@ def set_listen_on_socket(socket_object, **kwargs):
     # To determine the maximum listening sockets, you may use the 'socket' library and 'SOMAXCONN' parameter
     # from it.
     socket_object.listen(socket.SOMAXCONN)
-    ip_address, port = base.get_destination_address_from_socket(socket_object)
+    ip_address, port = socket_base.get_destination_address_from_socket(socket_object)
 
     print_api(f"Listening for new connections on: {ip_address}:{port}", **kwargs)
 

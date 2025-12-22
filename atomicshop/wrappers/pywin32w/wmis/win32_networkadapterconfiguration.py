@@ -6,7 +6,6 @@ from win32com.client import CDispatch
 import pywintypes
 
 from . import wmi_helpers, win32networkadapter
-from ...psutilw import psutil_networks
 from .... import ip_addresses
 
 
@@ -30,16 +29,13 @@ def get_network_configuration_by_adapter(
 
 
 def get_adapter_network_configuration(
-        use_default_interface: bool = False,
-        connection_name: str = None,
+        interface_name: str = None,
         mac_address: str = None,
         wmi_instance: CDispatch = None
 ) -> tuple:
     """
     Get the WMI network configuration for a network adapter.
-    :param use_default_interface: bool, if True, the default network interface will be used.
-        This is the adapter that your internet is being used from.
-    :param connection_name: string, adapter name as shown in the network settings.
+    :param interface_name: string, adapter name as shown in the network settings.
     :param mac_address: string, MAC address of the adapter. Format: '00:00:00:00:00:00'.
     :param wmi_instance: WMI instance. You can get it from:
         wrappers.pywin32s.wmis.wmi_helpers.get_wmi_instance()
@@ -47,37 +43,25 @@ def get_adapter_network_configuration(
     :return: tuple(Win32_NetworkAdapterConfiguration, Win32_NetworkAdapter)
     """
 
-    if use_default_interface and connection_name:
-        raise ValueError("Only one of 'use_default_interface' or 'connection_name' must be provided.")
-    elif not use_default_interface and not connection_name:
-        raise ValueError("Either 'use_default_interface' or 'connection_name' must be provided.")
-
     if not wmi_instance:
         wmi_instance, _ = wmi_helpers.get_wmi_instance()
 
     adapters = win32networkadapter.list_network_adapters(wmi_instance)
 
+    if interface_name is None and mac_address is None:
+        raise ValueError("Either 'interface_name' or 'mac_address' must be provided.")
+    elif interface_name and mac_address:
+        raise ValueError("Only one of 'interface_name' or 'mac_address' must be provided.")
+
     current_adapter = None
-    if use_default_interface:
-        default_connection_name_dict: dict = psutil_networks.get_default_connection_name()
-        if not default_connection_name_dict:
-            raise wmi_helpers.WMINetworkAdapterNotFoundError("Default network adapter not found.")
-        # Get the first key from the dictionary.
-        connection_name: str = list(default_connection_name_dict.keys())[0]
-
-    if connection_name is None and mac_address is None:
-        raise ValueError("Either 'connection_name' or 'mac_address' must be provided.")
-    elif connection_name and mac_address:
-        raise ValueError("Only one of 'connection_name' or 'mac_address' must be provided.")
-
-    if connection_name:
+    if interface_name:
         for adapter in adapters:
-            if connection_name == adapter.NetConnectionID:
+            if interface_name == adapter.NetConnectionID:
                 current_adapter = adapter
                 break
 
         if not current_adapter:
-            raise wmi_helpers.WMINetworkAdapterNotFoundError(f"Adapter with connection name '{connection_name}' not found.")
+            raise wmi_helpers.WMINetworkAdapterNotFoundError(f"Adapter with interface name '{interface_name}' not found.")
     elif mac_address:
         for adapter in adapters:
             if mac_address == adapter.MACAddress:
@@ -93,7 +77,7 @@ def get_adapter_network_configuration(
 
     # Check if the adapter exists
     if len(adapter_configs) == 0:
-        raise wmi_helpers.WMINetworkAdapterNotFoundError(f"Adapter with connection name '{connection_name}' not found.")
+        raise wmi_helpers.WMINetworkAdapterNotFoundError(f"Adapter with interface name '{interface_name}' not found.")
 
     return adapter_configs[0], current_adapter
 
@@ -260,6 +244,7 @@ def get_info_from_network_config(
 
     ipv4s, ipv6s, ipv4subnets, ipv6prefixes = _split_ips(network_config)
     adapter = {
+            "caption": network_config.Caption,
             "description": network_config.Description,
             "interface_index": network_config.InterfaceIndex,
             "is_dynamic": bool(network_config.DHCPEnabled),

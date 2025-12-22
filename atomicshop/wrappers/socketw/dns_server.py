@@ -305,7 +305,7 @@ class DnsServer:
 
         # If the listening interface is not localhost, check if the interface can be bound to.
         if not self.listening_interface.startswith('127.'):
-            host_ips: list[str] = networks.get_host_ips(ipv6=False)
+            host_ips: list[str] = networks.get_host_ips_psutil(ipv6=False)
             if self.listening_interface not in host_ips:
                 message = (f"Listening interface [{self.listening_interface}] is not assigned to any of the host "
                            f"network interfaces. Current host IPv4 addresses: {host_ips}")

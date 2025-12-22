@@ -85,8 +85,7 @@ class CreateModuleTemplate:
         domains_with_quotes: list = [f'"{domain}"' for domain in self.domains]
 
         config_lines_list.append('[engine]')
-        config_lines_list.append(f'domains = [{", ".join(domains_with_quotes)}]')
-        config_lines_list.append('localhost = 1\n')
+        config_lines_list.append(f'domains = [{", ".join(domains_with_quotes)}]\n')
         config_lines_list.append('[on_port_connect]')
         config_lines_list.append('#5000 = "31.31.31.31:443"')
         config_lines_list.append('#5000 = "ip_port_address.txt"\n')

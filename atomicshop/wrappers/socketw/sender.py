@@ -7,7 +7,7 @@ from ...print_api import print_api
 from ..loggingw import loggingw
 from ...basics import tracebacks
 
-from . import base
+from . import socket_base
 
 
 class Sender:
@@ -68,7 +68,7 @@ class Sender:
             # At this point the sending loop finished successfully
             self.logger.info(f"Sent the message to destination.")
         except Exception as e:
-            source_tuple, destination_tuple = base.get_source_destination(self.ssl_socket)
+            source_tuple, destination_tuple = socket_base.get_source_destination(self.ssl_socket)
             source_address, source_port = source_tuple
             destination_address, destination_port = destination_tuple
             if self.ssl_socket.server_hostname:

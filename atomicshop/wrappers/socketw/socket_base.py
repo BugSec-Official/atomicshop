@@ -1,4 +1,5 @@
 import socket
+import time
 
 
 LOCALHOST_IPV4: str = '127.0.0.1'
@@ -100,3 +101,34 @@ def get_host_name_from_ip_address(ip_address: str) -> str:
     _ = alias_list, ipaddr_list
 
     return host_name
+
+
+def wait_for_ip_bindable(
+    ip: str,
+    port: int = 0,
+    timeout: float = 15.0,
+    interval: float = 0.5,
+) -> None:
+    """
+    Wait until a single IP is bindable (or timeout).
+
+    Raises TimeoutError if the IP cannot be bound within 'timeout' seconds.
+    """
+    deadline = time.time() + timeout
+    last_err: OSError | None = None
+
+    while time.time() < deadline:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            s.bind((ip, port))
+            s.close()
+            return  # success
+        except OSError as e:
+            last_err = e
+            s.close()
+            time.sleep(interval)
+
+    raise TimeoutError(
+        f"IP {ip} not bindable within {timeout} seconds; "
+        f"last error: {last_err}"
+    )

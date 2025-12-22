@@ -1,3 +1,4 @@
+from logging import Logger
 from typing import Union
 
 from win32com.client import CDispatch
@@ -80,27 +81,32 @@ def get_default_network_adapter(wmi_instance: CDispatch = None):
 
 def set_dns_server(
         dns_servers: Union[list[str], None],
-        use_default_interface: bool = False,
-        connection_name: str = None,
-        mac_address: str = None
+        interface_name: str = None,
+        mac_address: str = None,
+        verbose: bool = False,
+        logger: Logger = None
 ):
     """
     Set the DNS servers for a network adapter.
     :param dns_servers: list of strings, DNS server IPv4 addresses.
         None, if you want to remove the DNS servers and make the interface to obtain them automatically from DHCP.
         list[str], if you want to set the DNS servers manually to the list of strings.
-    :param use_default_interface: bool, if True, the default network interface will be used.
-        This is the adapter that your internet is being used from.
-    :param connection_name: string, adapter name as shown in the network settings.
+    :param interface_name: string, network interface name as shown in the network settings.
     :param mac_address: string, MAC address of the adapter. Format: '00:00:00:00:00:00'.
+
+    :param verbose: bool, if True, print verbose output.
+    :param logger: Logger object, if provided, will log the output instead of printing.
     :return:
     """
 
     adapter_config, current_adapter = win32_networkadapterconfiguration.get_adapter_network_configuration(
-        use_default_interface=use_default_interface, connection_name=connection_name, mac_address=mac_address)
+        interface_name=interface_name, mac_address=mac_address)
 
-    print_api(f"Adapter [{current_adapter.Description}], Connection name [{current_adapter.NetConnectionID}]\n"
-              f"Setting DNS servers to {dns_servers}", color='blue')
+    if verbose:
+        message = (
+            f"Adapter [{current_adapter.Description}], Connection name [{current_adapter.NetConnectionID}]\n"
+            f"Setting DNS servers to {dns_servers}")
+        print_api(message, color='blue', logger=logger)
 
     # Set DNS servers
     wmi_helpers.call_method(adapter_config, 'SetDNSServerSearchOrder', dns_servers)

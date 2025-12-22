@@ -54,7 +54,6 @@ class ModuleCategory:
 
         # Getting the parameters from engine config file
         self.domain_list = configuration_data['engine']['domains']
-        self.is_localhost = bool(configuration_data['engine']['localhost'])
 
         if 'on_port_connect' in configuration_data:
             self.on_port_connect = configuration_data['on_port_connect']
@@ -88,7 +87,7 @@ class ModuleCategory:
                 error_string: str = f"No [domain:port] pair found in: {domain_port_string}"
                 return 1, error_string
 
-            self.domain_target_dict[domain] = {'ip': None, 'port': port}
+            self.domain_target_dict[domain] = {'ip': None, 'port': int(port)}
 
         for port, value in self.on_port_connect.items():
             self.port_target_dict[port] = {'ip': None, 'port': int(port)}

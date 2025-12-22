@@ -7,7 +7,7 @@ import ssl
 from typing import Literal
 import struct
 
-from ..wrappers.socketw import receiver, sender, socket_client, base
+from ..wrappers.socketw import receiver, sender, socket_client, socket_base
 from .. import websocket_parse, ip_addresses
 from ..http_parse import HTTPRequestParse, HTTPResponseParse
 from ..basics import threads, tracebacks
@@ -228,7 +228,7 @@ def thread_worker_main(
         else:
             # If we're in offline mode, and it's the first cycle and the protocol is Websocket, then we'll create the HTTP Handshake
             # response automatically.
-            if config_static.MainConfig.offline and protocol == 'Websocket' and client_receive_count == 1:
+            if config_static.MainConfig.is_offline and protocol == 'Websocket' and client_receive_count == 1:
                 responses: list = list()
                 responses.append(
                     websocket_parse.create_byte_http_response(client_message.request_raw_bytes))
@@ -275,7 +275,7 @@ def thread_worker_main(
         else:
             # If we're on localhost, then use external services list in order to resolve the domain:
             # config['tcp']['forwarding_dns_service_ipv4_list___only_for_localhost']
-            if client_message.client_ip in base.THIS_DEVICE_IP_LIST:
+            if client_message.client_ip in socket_base.THIS_DEVICE_IP_LIST:
                 service_client_instance = socket_client.SocketClient(
                     service_name=client_message.server_name,
                     service_port=client_message.destination_port,
@@ -681,7 +681,7 @@ def thread_worker_main(
                     client_connection_message = None
                     if result == 'continue':
                         continue
-                elif side == 'Client' and config_static.MainConfig.offline:
+                elif side == 'Client' and config_static.MainConfig.is_offline:
                     result: Literal['return'] | None = receive_send_client_offline(client_message, receiving_socket, sending_socket)
                 elif side == 'Client':
                     result: Literal['return'] | None = receive_send_client(client_message, receiving_socket, sending_socket)
@@ -822,7 +822,7 @@ def thread_worker_main(
             _, destination_port_str = initialize_engines.get_ipv4_from_engine_on_connect_port(on_port_connect_value)
             destination_port: int = int(destination_port_str)
 
-        if config_static.MainConfig.offline:
+        if config_static.MainConfig.is_offline:
             # If in offline mode, then we'll get the TCP server's input address.
             server_ip = client_socket.getsockname()[0]
         else:
@@ -844,7 +844,7 @@ def thread_worker_main(
         client_message_connection.action = 'service_connect'
         client_message_connection.timestamp = datetime.now()
 
-        if config_static.MainConfig.offline:
+        if config_static.MainConfig.is_offline:
             client_message_connection.info = 'Offline Mode'
         else:
             origin_service_client_instance = create_client_socket(client_message_connection)
@@ -868,7 +868,7 @@ def thread_worker_main(
             client_thread.start()
 
             service_exception_queue: queue.Queue = queue.Queue()
-            if not config_static.MainConfig.offline:
+            if not config_static.MainConfig.is_offline:
                 service_thread = threading.Thread(
                     target=receive_send_start,
                     args=(service_socket_instance, client_socket, service_exception_queue, client_message_connection),
@@ -878,7 +878,7 @@ def thread_worker_main(
 
             client_thread.join()
             # If we're in offline mode, then there is no service thread.
-            if not config_static.MainConfig.offline:
+            if not config_static.MainConfig.is_offline:
                 # If we're not in offline mode, then we'll wait for the service thread to finish.
                 # noinspection PyUnboundLocalVariable
                 service_thread.join()

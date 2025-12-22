@@ -1,18 +1,22 @@
 import socket
 import time
-from typing import Union
+from typing import Union, Literal
 import os
 import psutil
 import ctypes
+from logging import Logger
 
 from icmplib import ping
 from icmplib.models import Host
 from win32com.client import CDispatch
 
-from .wrappers.pywin32w.wmis import win32networkadapter, win32_networkadapterconfiguration, wmi_helpers, msft_netipaddress
+from .print_api import print_api
+from .wrappers.pywin32w.wmis import win32networkadapter, win32_networkadapterconfiguration, wmi_helpers
 from .wrappers.ctyping import setup_device
 from .wrappers.winregw import winreg_network
 from .wrappers.psutilw import psutil_networks
+from .wrappers import powershell_networking, netshw
+from .wrappers.socketw import socket_base
 
 
 MICROSOFT_LOOPBACK_DEVICE_NAME: str = 'Microsoft KM-TEST Loopback Adapter'
@@ -105,6 +109,24 @@ def get_default_internet_ipv4(target: str = "8.8.8.8") -> str:
         return s.getsockname()[0]  # local address of that route
 
 
+def get_default_interface_name() -> str:
+    default_connection_name_dict: dict = psutil_networks.get_default_connection_name()
+    if not default_connection_name_dict:
+        return ""
+    # Get the first key from the dictionary.
+    connection_name: str = list(default_connection_name_dict.keys())[0]
+    return connection_name
+
+
+def list_network_interfaces() -> list[str]:
+    """
+    List all network interfaces on the system.
+    :return: list of strings, network interface names.
+    """
+
+    return psutil_networks.list_network_interfaces()
+
+
 def get_hostname() -> str:
     """
     Get the default network interface name that is being used for internet.
@@ -114,23 +136,7 @@ def get_hostname() -> str:
     return socket.gethostname()
 
 
-def get_default_internet_interface_name() -> str | None:
-    """
-    Get the default network interface name that is being used for internet.
-    :return: string, default network interface name.
-    """
-
-    interface_dict: dict = psutil_networks.get_default_connection_name()
-    if not interface_dict:
-        result = None
-    else:
-        # Get the first interface name from the dictionary.
-        result = next(iter(interface_dict.keys()), None)
-
-    return result
-
-
-def get_interface_ips(
+def get_interface_ips_psutil(
         interface_name: str = None,
         ipv4: bool = True,
         ipv6: bool = True,
@@ -144,7 +150,7 @@ def get_interface_ips(
 
     if default_interface:
         # Get the default interface name.
-        interface_name = get_default_internet_interface_name()
+        interface_name = get_default_interface_name()
 
     physical_ip_types: list[str] = []
     if ipv4:
@@ -169,7 +175,7 @@ def get_interface_ips(
     return ips
 
 
-def get_host_ips(
+def get_host_ips_psutil(
         localhost: bool = True,
         ipv4: bool = True,
         ipv6: bool = True
@@ -220,6 +226,22 @@ def get_host_ips(
             ip_list.append(ip)
 
     return ip_list
+
+
+def get_interface_ips_powershell(
+        interface_name: str = None,
+        ip_type: Literal["virtual", "dynamic", "all"] = "virtual"
+) -> list[str]:
+    """
+    Get the IP addresses of a network interface using PowerShell.
+
+    :param interface_name: string, name of the network interface.
+        If None, all interfaces will be queried.
+    :param ip_type: string, type of IP addresses to retrieve.
+    :return: list of strings, IP addresses of the network interface.
+    """
+
+    return powershell_networking.get_interface_ips(interface_name=interface_name, ip_type=ip_type)
 
 
 def get_microsoft_loopback_device_network_configuration(
@@ -356,17 +378,14 @@ def change_interface_metric_restart_device(
 
 
 def get_wmi_network_adapter_configuration(
-        use_default_interface: bool = False,
-        connection_name: str = None,
+        interface_name: str = None,
         mac_address: str = None,
         wmi_instance: CDispatch = None,
         get_info_from_network_config: bool = True
 ) -> tuple:
     """
     Get the WMI network configuration for a network adapter.
-    :param use_default_interface: bool, if True, the default network interface will be used.
-        This is the adapter that your internet is being used from.
-    :param connection_name: string, adapter name as shown in the network settings.
+    :param interface_name: string, adapter name as shown in the network settings.
     :param mac_address: string, MAC address of the adapter. Format: '00:00:00:00:00:00'.
     :param wmi_instance: WMI instance. You can get it from:
         wrappers.pywin32s.wmis.wmi_helpers.get_wmi_instance()
@@ -377,14 +396,14 @@ def get_wmi_network_adapter_configuration(
     """
 
     wmi_network_config, wmi_network_adapter = win32_networkadapterconfiguration.get_adapter_network_configuration(
-        use_default_interface=use_default_interface,
-        connection_name=connection_name,
+        interface_name=interface_name,
         mac_address=mac_address,
         wmi_instance=wmi_instance
     )
 
     if get_info_from_network_config:
         adapter_info: dict = win32_networkadapterconfiguration.get_info_from_network_config(wmi_network_config)
+        adapter_info['name'] = wmi_network_adapter.NetConnectionID
     else:
         adapter_info: dict = {}
 
@@ -468,7 +487,7 @@ def generate_unused_ipv4_addresses_from_ip(
     return generated_ips, masks_for_ips
 
 
-def set_dynamic_ip_for_adapter(
+def set_dynamic_ip_for_adapter_wmi(
         network_config: CDispatch,
         reset_dns: bool = True,
         reset_wins: bool = True
@@ -484,7 +503,7 @@ def set_dynamic_ip_for_adapter(
         nic_cfg=network_config, reset_dns=reset_dns, reset_wins=reset_wins)
 
 
-def set_static_ip_for_adapter(
+def set_static_ip_for_adapter_wmi(
         network_config: CDispatch,
         ips: list[str],
         masks: list[str],
@@ -512,19 +531,19 @@ def set_static_ip_for_adapter(
     )
 
 
-def add_virtual_ips_to_default_adapter_by_current_setting(
+def add_virtual_ips_to_network_interface(
+        interface_name: str,
         number_of_ips: int = 0,
         virtual_ipv4s_to_add: list[str] = None,
         virtual_ipv4_masks_to_add: list[str] = None,
         set_virtual_ips_skip_as_source: bool = True,
-        gateways: list[str] | None = None,
-        dns_gateways: list[str] | None = None,
-        availability_wait_seconds: int = 15,
         simulate_only: bool = False,
         locator: CDispatch = None,
         wait_until_applied: bool = True,
-        wait_until_applied_seconds: int = 15
-) -> tuple[list[str], list[str], list[str], list[str]]:
+        wait_until_applied_seconds: int = 15,
+        verbose: bool = False,
+        logger: Logger = None,
+) -> tuple[list[str], list[str]]:
     """
     Add virtual IP addresses to the default network adapter.
     The adapter will set to static IP and DNS gateway, instead of dynamic DHCP.
@@ -535,6 +554,8 @@ def add_virtual_ips_to_default_adapter_by_current_setting(
     While generating the IPs, the function will skip the already existing IPs in the adapter, like default gateway
     and DNS servers.
 
+    :param interface_name: string, adapter name as shown in the network settings.
+
     :param number_of_ips: int, number of IPs to generate in addition to the IPv4s that already exist in the adapter.
         Or you add the IPs and masks to the adapter with the parameters virtual_ipv4s_to_add and virtual_ipv4_masks_to_add.
 
@@ -544,15 +565,11 @@ def add_virtual_ips_to_default_adapter_by_current_setting(
 
     :param set_virtual_ips_skip_as_source: bool, if True, the SkipAsSource flag will be set for the virtual IPs.
         This is needed to avoid the endless accept() loop.
-    :param gateways: list of strings, default IPv4 gateways to assign.
-        None: The already existing gateways in the adapter will be used.
-        []: No gateways will be assigned.
-    :param dns_gateways: list of strings, IPv4 DNS servers to assign.
-        None: The already existing DNS servers in the adapter will be used.
-        []: No DNS servers will be assigned.
-    :param availability_wait_seconds: int, seconds to wait for the adapter to be available after setting the IP address.
-    :param simulate_only: bool, if True, the function will only prepare the ip addresses and return them without changing anything.
-    :param locator: CDispatch, WMI locator object. If not specified, it will be created.
+
+    :param simulate_only: bool, if True, the function will only simulate the addition of the IP addresses.
+        No changes will be made to the system.
+    :param locator: CDispatch, WMI locator object. You can get it from:
+        wrappers.pywin32s.wmis.wmi_helpers.get_wmi_instance()
 
     :param wait_until_applied: bool, if True, the function will wait until the IP addresses are applied.
         By default, while WMI command is executed, there is no indication if the addresses were finished applying or not.
@@ -562,7 +579,10 @@ def add_virtual_ips_to_default_adapter_by_current_setting(
         after setting the IP addresses. This is the time to wait for the IP addresses to be
         applied after setting them. If the IP addresses are not applied in this time, a TimeoutError will be raised.
 
-    :return: tuple of lists, (current_ipv4s, current_ipv4_masks, ips_to_assign, masks_to_assign)
+    :param verbose: bool, if True, the function will print verbose output.
+    :param logger: Logger, if provided, the function will log messages to this logger.
+
+    :return: tuple of lists, (ips_to_assign, masks_to_assign)
     """
 
     if virtual_ipv4s_to_add and not virtual_ipv4_masks_to_add:
@@ -579,24 +599,19 @@ def add_virtual_ips_to_default_adapter_by_current_setting(
     # Connect to WMi.
     wmi_civ2_instance, locator = wmi_helpers.get_wmi_instance(locator=locator)
 
-    # initial_default_ipv4: str = socket.gethostbyname(socket.gethostname())
+    # Get the network adapter configuration.
+    network_adapter_config, network_adapter, adapter_info = get_wmi_network_adapter_configuration(
+        interface_name=interface_name, wmi_instance=wmi_civ2_instance, get_info_from_network_config=True)
 
-    # Get the default network adapter configuration.
-    default_network_adapter_config, default_network_adapter, default_adapter_info = get_wmi_network_adapter_configuration(
-        use_default_interface=True, wmi_instance=wmi_civ2_instance, get_info_from_network_config=True)
-
-    current_ipv4s: list[str] = default_adapter_info['ipv4s']
-    current_ipv4_masks: list[str] = default_adapter_info['ipv4_subnet_masks']
-
-    # print(f"Current IPs: {current_ipv4s}")
-    # current_ips_count: int = len(current_ipv4s)
+    current_ipv4s: list[str] = adapter_info['ipv4s']
+    current_ipv4_masks: list[str] = adapter_info['ipv4_subnet_masks']
 
     if number_of_ips > 0:
         ips_to_assign, masks_to_assign = generate_unused_ipv4_addresses_from_ip(
             ip_address=current_ipv4s[0],
             mask=current_ipv4_masks[0],
             number_of_ips=number_of_ips,
-            skip_ips=current_ipv4s + default_adapter_info['default_gateways'] + default_adapter_info['dns_gateways']
+            skip_ips=current_ipv4s + adapter_info['default_gateways'] + adapter_info['dns_gateways']
         )
     elif virtual_ipv4s_to_add and virtual_ipv4_masks_to_add:
         ips_to_assign = virtual_ipv4s_to_add
@@ -606,51 +621,43 @@ def add_virtual_ips_to_default_adapter_by_current_setting(
         masks_to_assign = []
 
     if not simulate_only:
-        # Final list of IPs to assign.
-        ips: list[str] = current_ipv4s + ips_to_assign
-        masks: list[str] = current_ipv4_masks + masks_to_assign
+        # Enable DHCP + static IP coexistence on the interface.
+        netshw.enable_dhcp_static_coexistence(interface_name=interface_name)
 
-        # ---------- IP assignment --------------------------------------------
-        if ips != current_ipv4s:
-            # print("[+] Setting static IPv4 addresses …")
-            if gateways is None:
-                gateways = default_adapter_info['default_gateways']
+        for ip, mask in zip(ips_to_assign, masks_to_assign):
+            if verbose:
+                print_api(f"[+] Adding virtual IP {ip} with mask {mask} to interface {interface_name}.", logger=logger)
 
-            if dns_gateways is None:
-                dns_gateways = default_adapter_info['dns_gateways']
-
-            # We will get the default IP address of the machine.
-            default_ip_address: str = get_default_internet_ipv4()
-            # So we can make it the first IP in the list, but first remove it from the list.
-            _ = ips.pop(ips.index(default_ip_address))
-            # At this point we will copy the list of IPs that we will set the SkipAsSource flag for.
-            ips_for_skip_as_source = ips.copy()
-            # Add it back to the beginning of the list.
-            ips.insert(0, default_ip_address)
-
-            win32_networkadapterconfiguration.set_static_ips(
-                default_network_adapter_config, ips=ips, masks=masks,
-                gateways=gateways, dns_gateways=dns_gateways,
-                availability_wait_seconds=availability_wait_seconds)
-
-            # If there were already virtual IPs assigned to the adapter and already were set SkipAsSource,
-            # we need to set SkipAsSource for them once again as well as for the new IPs.
-            if set_virtual_ips_skip_as_source:
-                wmi_standard_cimv2_instance, _ = wmi_helpers.get_wmi_instance(
-                    namespace='root\\StandardCimv2', wmi_instance=wmi_civ2_instance, locator=locator)
-                msft_netipaddress.set_skip_as_source(ips_for_skip_as_source, enable=True, wmi_instance=wmi_standard_cimv2_instance)
-        else:
-            # print("[!] No new IPs to assign.")
-            pass
+            netshw.add_virtual_ip(
+                interface_name=interface_name,
+                ip=ip,
+                mask=mask,
+                skip_as_source=set_virtual_ips_skip_as_source
+            )
 
         if wait_until_applied:
             # Wait until the IP addresses are applied.
             for _ in range(wait_until_applied_seconds):
-                current_ips = get_interface_ips(ipv4=True, ipv6=False, localhost=False, default_interface=True)
-                if set(current_ips) == set(ips):
+                current_virtual_ips = get_interface_ips_powershell(interface_name=interface_name, ip_type="virtual")
+                if set(current_virtual_ips) == set(ips_to_assign):
                     break
                 time.sleep(1)
             else:
                 raise TimeoutError("Timeout while waiting for the IP addresses to be applied.")
 
-    return current_ipv4s, current_ipv4_masks, ips_to_assign, masks_to_assign
+    return ips_to_assign, masks_to_assign
+
+
+def wait_for_ip_bindable_socket(
+    ip: str,
+    port: int = 0,
+    timeout: float = 15.0,
+    interval: float = 0.5,
+) -> None:
+    """
+    Wait until a single IP is bindable (or timeout).
+
+    Raises TimeoutError if the IP cannot be bound within 'timeout' seconds.
+    """
+
+    socket_base.wait_for_ip_bindable(ip=ip, port=port, timeout=timeout, interval=interval)

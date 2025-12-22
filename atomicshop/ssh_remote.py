@@ -10,7 +10,7 @@ except ImportError as exception_object:
 
 from .print_api import print_api
 from .wrappers.loggingw import loggingw
-from .wrappers.socketw import base
+from .wrappers.socketw import socket_base
 
 
 class SSHRemoteWrapperNoPythonFound(Exception):
@@ -120,7 +120,7 @@ class SSHRemote:
         error: str = str()
 
         # Get all local interfaces IPv4 addresses.
-        local_interfaces_ipv4 = base.get_local_network_interfaces_ip_address("ipv4", True)
+        local_interfaces_ipv4 = socket_base.get_local_network_interfaces_ip_address("ipv4", True)
         # Check if the target IP address is in the list of local interfaces.
         if self.ip_address in local_interfaces_ipv4:
             # If it is, we don't need to connect to it via SSH, it means that we want to connect to ourselves.

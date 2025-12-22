@@ -5,33 +5,10 @@ import socket
 from ..print_api import print_api
 from .. import config_init, filesystem, dns
 from ..permissions import permissions
-from ..wrappers.socketw import base
+from ..wrappers.socketw import socket_base
 from ..basics import booleans
 
 from . import config_static, initialize_engines
-
-
-def assign_bool(dict_instance: dict, section: str, key: str):
-    # If the value is already boolean, don't do anything.
-    if dict_instance[section][key] is True or dict_instance[section][key] is False:
-        return
-    elif dict_instance[section][key] == 1:
-        dict_instance[section][key] = True
-    elif dict_instance[section][key] == 0:
-        dict_instance[section][key] = False
-    elif isinstance(dict_instance[section][key], dict):
-        for subkey, subvalue in dict_instance[section][key].items():
-            if subkey == '1':
-                dict_instance[section][key] = {True: subvalue}
-            elif subkey == '0':
-                dict_instance[section][key] = {False: subvalue}
-            else:
-                print_api(f"Error: {section}.{key}.{subkey} must be 0 or 1.", color='red')
-                return 1
-            break
-    else:
-        print_api(f"Error: {section}.{key} must be 0 or 1.", color='red')
-        return 1
 
 
 def import_config_files(
@@ -52,17 +29,48 @@ def import_config_files(
         print_kwargs=print_kwargs or {}
     )
 
-    # Assign boolean values to the toml dict module.
-    for boolean_tuple in config_static.LIST_OF_BOOLEANS:
-        assign_bool(config_toml, boolean_tuple[0], boolean_tuple[1])
 
-    # Assign the configuration file content to the 'config_static' dataclasses module.
-    for category, category_settings in config_toml.items():
-        for setting_name, value in category_settings.items():
-            # Get the dynamic class or dataclass from the 'config_static' module.
-            dynamic_class = getattr(config_static, config_static.TOML_TO_STATIC_CATEGORIES[category])
-            # Set the value to the dynamic class setting.
-            setattr(dynamic_class, setting_name, value)
+    config_static.MainConfig.is_offline = bool(config_toml['dnstcp']['offline'])
+    config_static.MainConfig.network_interface = config_toml['dnstcp']['network_interface']
+    config_static.MainConfig.is_localhost = bool(config_toml['dnstcp']['localhost'])
+
+    config_static.DNSServer.is_enabled = bool(config_toml['dns']['enable'])
+    config_static.DNSServer.listening_ipv4 = config_toml['dns']['listening_ipv4']
+    config_static.DNSServer.listening_port = config_toml['dns']['listening_port']
+    config_static.DNSServer.forwarding_dns_service_ipv4 = config_toml['dns']['forwarding_dns_service_ipv4']
+    config_static.DNSServer.cache_timeout_minutes = config_toml['dns']['cache_timeout_minutes']
+    config_static.DNSServer.resolve_by_engine = bool(config_toml['dns']['resolve_by_engine'])
+    config_static.DNSServer.resolve_regular_pass_thru = bool(config_toml['dns']['resolve_regular_pass_thru'])
+    config_static.DNSServer.resolve_all_domains_to_ipv4 = config_toml['dns']['resolve_all_domains_to_ipv4']
+    config_static.DNSServer.set_default_dns_gateway = config_toml['dns']['set_default_dns_gateway']
+
+    config_static.TCPServer.is_enabled = bool(config_toml['tcp']['enable'])
+    config_static.TCPServer.no_engines_usage_to_listen_addresses = config_toml['tcp']['no_engines_usage_to_listen_addresses']
+
+    config_static.LogRec.logs_path = config_toml['logrec']['logs_path']
+    config_static.LogRec.enable_request_response_recordings_in_logs = bool(config_toml['logrec']['enable_request_response_recordings_in_logs'])
+    config_static.LogRec.store_logs_for_x_days = config_toml['logrec']['store_logs_for_x_days']
+
+    config_static.Certificates.install_ca_certificate_to_root_store = bool(config_toml['certificates']['install_ca_certificate_to_root_store'])
+    config_static.Certificates.uninstall_unused_ca_certificates_with_mitm_ca_name = bool(config_toml['certificates']['uninstall_unused_ca_certificates_with_mitm_ca_name'])
+    config_static.Certificates.default_server_certificate_usage = bool(config_toml['certificates']['default_server_certificate_usage'])
+    config_static.Certificates.sni_add_new_domains_to_default_server_certificate = bool(config_toml['certificates']['sni_add_new_domains_to_default_server_certificate'])
+    config_static.Certificates.custom_server_certificate_usage = bool(config_toml['certificates']['custom_server_certificate_usage'])
+    config_static.Certificates.custom_server_certificate_path = config_toml['certificates']['custom_server_certificate_path']
+    config_static.Certificates.custom_private_key_path = config_toml['certificates']['custom_private_key_path']
+    config_static.Certificates.sni_create_server_certificate_for_each_domain = bool(config_toml['certificates']['sni_create_server_certificate_for_each_domain'])
+    config_static.Certificates.sni_server_certificates_cache_directory = config_toml['certificates']['sni_server_certificates_cache_directory']
+    config_static.Certificates.sni_get_server_certificate_from_server_socket = bool(config_toml['certificates']['sni_get_server_certificate_from_server_socket'])
+    config_static.Certificates.sni_server_certificate_from_server_socket_download_directory = config_toml['certificates']['sni_server_certificate_from_server_socket_download_directory']
+
+    config_static.SkipExtensions.tls_web_client_authentication = bool(config_toml['skip_extensions']['tls_web_client_authentication'])
+    config_static.SkipExtensions.crl_distribution_points = bool(config_toml['skip_extensions']['crl_distribution_points'])
+    config_static.SkipExtensions.authority_information_access = bool(config_toml['skip_extensions']['authority_information_access'])
+
+    config_static.ProcessName.get_process_name = bool(config_toml['process_name']['get_process_name'])
+    config_static.ProcessName.ssh_user = config_toml['process_name']['ssh_user']
+    config_static.ProcessName.ssh_pass = config_toml['process_name']['ssh_pass']
+
 
     manipulations_after_import()
 
@@ -93,14 +101,14 @@ def import_engines_configs(print_kwargs: dict) -> int:
     for engine_config_path in engine_config_path_list:
         # Initialize engine.
         current_module: initialize_engines.ModuleCategory = initialize_engines.ModuleCategory(config_static.MainConfig.SCRIPT_DIRECTORY)
-        result_code, error = current_module.fill_engine_fields_from_config(engine_config_path.path, print_kwargs=print_kwargs or {})
-        if result_code != 0:
+        rc, error = current_module.fill_engine_fields_from_config(engine_config_path.path, print_kwargs=print_kwargs or {})
+        if rc != 0:
             print_api(f"Error reading engine config file: {engine_config_path.path}\n{error}", color='red')
-            return result_code
-        result_code, error = current_module.initialize_engine(print_kwargs=print_kwargs or {})
-        if result_code != 0:
+            return rc
+        rc, error = current_module.initialize_engine(print_kwargs=print_kwargs or {})
+        if rc != 0:
             print_api(f"Error initializing engine from directory: {Path(engine_config_path.path).parent}\n{error}", color='red')
-            return result_code
+            return rc
 
         # Extending the full engine domain list with this list.
         domains_engine_list_full.extend(current_module.domain_list)
@@ -142,7 +150,7 @@ def check_configurations() -> int:
     is_admin = permissions.is_admin()
 
     # Check if both DNS and TCP servers are disabled. ==============================================================
-    if not config_static.DNSServer.enable and not config_static.TCPServer.enable:
+    if not config_static.DNSServer.is_enabled and not config_static.TCPServer.is_enabled:
         print_api("Both DNS and TCP servers in config ini file, nothing to run. Exiting...", color='red')
         return 1
 
@@ -173,7 +181,6 @@ def check_configurations() -> int:
         print_api(error_message, color="red")
         return 1
 
-    is_localhost: bool | None = None
     for engine in config_static.ENGINES_LIST:
         port_list: list[str] = []
         for domain_port in engine.domain_list:
@@ -214,21 +221,6 @@ def check_configurations() -> int:
                 return 1
 
 
-        # Check if 'localhost' is set in all the engines, or not.
-        # There can't be mixed engines where local host is set and not set.
-        # It can be all engines will be localhost or none of them.
-        if is_localhost is None:
-            is_localhost = engine.is_localhost
-        else:
-            if is_localhost != engine.is_localhost:
-                message = (
-                    f"[*] Mixed [localhost] setting in the engines found.\n"
-                    f"[*] Some engines are set to [localhost] and some are not.\n"
-                    f"[*] This is not allowed. All engines must be set to [localhost = 1] or All engines must be set to [localhost = 0].\n"
-                    f"Please check your engine configuration files.")
-                print_api(message, color="red")
-                return 1
-
     # Check admin right if on localhost ============================================================================
     # If any of the DNS IP target addresses is localhost loopback, then we need to check if the script
     # is executed with admin rights. There are some processes that 'psutil' can't get their command line if not
@@ -238,16 +230,15 @@ def check_configurations() -> int:
     if config_static.ProcessName.get_process_name:
         # If the DNS server was set to resolve by engines, we need to check all relevant engine settings.
         if config_static.DNSServer.resolve_by_engine:
-            for engine in config_static.ENGINES_LIST:
-                # Check if the DNS target is localhost loopback.
-                if engine.is_localhost and not is_admin:
-                    message: str = \
-                        ("Need to run the script with administrative rights to get the process name while TCP "
-                         "running on the same computer.\nExiting...")
-                    print_api(message, color='red')
-                    return 1
+            # Check if the DNS target is localhost loopback.
+            if config_static.MainConfig.is_localhost and not is_admin:
+                message: str = \
+                    ("Need to run the script with administrative rights to get the process name while TCP "
+                     "running on the same computer.\nExiting...")
+                print_api(message, color='red')
+                return 1
         if config_static.DNSServer.resolve_all_domains_to_ipv4:
-            if config_static.DNSServer.target_ipv4 in base.THIS_DEVICE_IP_LIST or \
+            if config_static.DNSServer.target_ipv4 in socket_base.THIS_DEVICE_IP_LIST or \
                     config_static.DNSServer.target_ipv4.startswith('127.'):
                 if not is_admin:
                     message: str = \
@@ -260,10 +251,8 @@ def check_configurations() -> int:
         booleans.is_only_1_true_in_list(
             booleans_list_of_tuples=[
                 (config_static.DNSServer.set_default_dns_gateway, '[dns][set_default_dns_gateway]'),
-                (config_static.DNSServer.set_default_dns_gateway_to_localhost,
-                 '[dns][set_default_dns_gateway_to_localhost]'),
-                (config_static.DNSServer.set_default_dns_gateway_to_default_interface_ipv4,
-                 '[dns][set_default_dns_gateway_to_default_interface_ipv4]')
+                (config_static.DNSServer.set_default_dns_gateway_to_network_interface_ipv4,
+                 '[dns][set_default_dns_gateway_to_network_interface_ipv4]')
             ],
             raise_if_all_false=False
         )
@@ -272,17 +261,16 @@ def check_configurations() -> int:
         return 1
 
     if (config_static.DNSServer.set_default_dns_gateway or
-            config_static.DNSServer.set_default_dns_gateway_to_localhost or
-            config_static.DNSServer.set_default_dns_gateway_to_default_interface_ipv4):
+            config_static.DNSServer.set_default_dns_gateway_to_network_interface_ipv4):
         # Get current settings of the DNS gateway.
         is_dns_dynamic, current_dns_gateway = dns.get_default_dns_gateway()
 
         if not is_admin:
             if config_static.DNSServer.set_default_dns_gateway:
                 ipv4_address_list = config_static.DNSServer.set_default_dns_gateway
-            elif config_static.DNSServer.set_default_dns_gateway_to_localhost:
-                ipv4_address_list = ['127.0.0.1']
-            elif config_static.DNSServer.set_default_dns_gateway_to_default_interface_ipv4:
+            elif config_static.DNSServer.set_default_dns_gateway_to_network_interface_ipv4 and config_static.MainConfig.is_localhost:
+                ipv4_address_list = [config_static.DNSServer.default_localhost_dns_gateway_ipv4]
+            elif config_static.DNSServer.set_default_dns_gateway_to_network_interface_ipv4 and not config_static.MainConfig.is_localhost:
                 ipv4_address_list = [socket.gethostbyname(socket.gethostname())]
             else:
                 raise ValueError("Error: DNS gateway configuration is not set.")
@@ -319,11 +307,21 @@ def check_configurations() -> int:
 
 def manipulations_after_import():
     for key, value in config_static.DNSServer.resolve_all_domains_to_ipv4.items():
+        key = bool(int(key))
         config_static.DNSServer.resolve_all_domains_to_ipv4_enable = key
         config_static.DNSServer.target_ipv4 = value
         break
 
+    if config_static.DNSServer.set_default_dns_gateway:
+        if config_static.DNSServer.set_default_dns_gateway[0] == 'l':
+            config_static.DNSServer.set_default_dns_gateway_to_localhost = True
+            config_static.DNSServer.set_default_dns_gateway = list()
+        elif config_static.DNSServer.set_default_dns_gateway[0] == 'n':
+            config_static.DNSServer.set_default_dns_gateway_to_network_interface_ipv4 = True
+            config_static.DNSServer.set_default_dns_gateway = list()
+
     for key, value in config_static.TCPServer.no_engines_usage_to_listen_addresses.items():
+        key = bool(int(key))
         # If the key is False, it means that the user doesn't want to use the no_engines_listening_address_list.
         # So, we'll assign an empty list to it.
         if not key:

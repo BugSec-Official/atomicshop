@@ -20,7 +20,7 @@ from ...basics import booleans, tracebacks
 from ...print_api import print_api
 from ...ssh_remote import SSHRemote
 
-from . import base, creator, process_getter, accepter, statistics_csv, ssl_base, sni
+from . import socket_base, creator, process_getter, accepter, statistics_csv, ssl_base, sni
 
 
 class SocketWrapperPortInUseError(Exception):
@@ -738,7 +738,7 @@ class SocketWrapper:
                     self.threads_list.append(thread_current)
 
                     # 'thread_callable_args[1][0]' is the client socket.
-                    client_address = base.get_source_address_from_socket(client_socket)
+                    client_address = socket_base.get_source_address_from_socket(client_socket)
 
                     self.logger.info(f"Accepted connection, thread created {client_address}. Continue listening...")
                 # Else, if no client_socket was opened during, accept, then print the error.

@@ -1,7 +1,7 @@
 import ssl
 import functools
 
-from . import base
+from . import socket_base
 from ...print_api import print_api
 from ...inspect_wrapper import get_target_function_default_args_and_combine_with_current
 
@@ -80,14 +80,14 @@ def connection_exception_decorator(function_name):
                 # Getting the exact reason of "ssl.SSLError"
                 if exception_object.reason == "HTTP_REQUEST":
                     message = f"Socket Accept: HTTP Request on SSL Socket: " \
-                              f"{base.get_source_destination(kwargs['socket_object'])}"
+                              f"{socket_base.get_source_destination(kwargs['socket_object'])}"
                     wrapper_handle_connection_exceptions.message = message
                     print_api(message, logger_method='error', traceback_string=True, oneline=True, **kwargs['print_kwargs'])
 
                     excepted = True
                 elif exception_object.reason == "TSV1_ALERT_UNKNOWN_CA":
                     message = f"Socket Accept: Check CA certificate on the client " \
-                              f"{base.get_source_destination(kwargs['socket_object'])}"
+                              f"{socket_base.get_source_destination(kwargs['socket_object'])}"
                     wrapper_handle_connection_exceptions.message = message
                     print_api(message, logger_method='error', traceback_string=True, oneline=True, **kwargs['print_kwargs'])
 

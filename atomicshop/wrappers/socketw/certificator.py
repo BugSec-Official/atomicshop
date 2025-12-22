@@ -3,7 +3,7 @@ import sys
 
 from cryptography import x509
 
-from . import creator, base, socket_client
+from . import creator, socket_base, socket_client
 from .. import pyopensslw, cryptographyw
 from ..certauthw.certauthw import CertAuthWrapper
 from ...print_api import print_api
@@ -151,13 +151,13 @@ class Certificator:
                 self.sni_server_certificate_from_server_socket_download_directory + \
                 os.sep + sni_received_parameters.destination_name + ".pem"
             # Get client ip.
-            client_ip = base.get_source_address_from_socket(sni_received_parameters.ssl_socket)[0]
+            client_ip = socket_base.get_source_address_from_socket(sni_received_parameters.ssl_socket)[0]
 
             # If we're on localhost, then use external services list in order to resolve the domain:
-            if client_ip in base.THIS_DEVICE_IP_LIST:
+            if client_ip in socket_base.THIS_DEVICE_IP_LIST:
                 service_client = socket_client.SocketClient(
                     service_name=sni_received_parameters.destination_name,
-                    service_port=base.get_destination_address_from_socket(sni_received_parameters.ssl_socket)[1],
+                    service_port=socket_base.get_destination_address_from_socket(sni_received_parameters.ssl_socket)[1],
                     tls=self.tls,
                     dns_servers_list=self.forwarding_dns_service_ipv4_list___only_for_localhost,
                     logger=print_kwargs.get('logger') if print_kwargs else None
@@ -166,7 +166,7 @@ class Certificator:
             else:
                 service_client = socket_client.SocketClient(
                     service_name=sni_received_parameters.destination_name,
-                    service_port=base.get_destination_address_from_socket(sni_received_parameters.ssl_socket)[1],
+                    service_port=socket_base.get_destination_address_from_socket(sni_received_parameters.ssl_socket)[1],
                     tls=self.tls,
                     logger=print_kwargs.get('logger') if print_kwargs else None
                 )
@@ -220,7 +220,7 @@ class Certificator:
             sni_received_parameters.destination_name, certificate_from_socket_x509)
 
         message = f"SNI Handler: port " \
-                  f"{base.get_destination_address_from_socket(sni_received_parameters.ssl_socket)[1]}: " \
+                  f"{socket_base.get_destination_address_from_socket(sni_received_parameters.ssl_socket)[1]}: " \
                   f"Using certificate: {sni_server_certificate_file_path}"
         print_api(message, **print_kwargs)
 

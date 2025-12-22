@@ -74,3 +74,12 @@ def get_default_connection_name() -> Union[dict, None]:
                     return {interface: details}
 
     return None
+
+
+def list_network_interfaces() -> list:
+    """
+    Function to list all network interfaces.
+    :return: list of interface names.
+    """
+    iface_names = list(psutil.net_if_addrs().keys())
+    return iface_names
