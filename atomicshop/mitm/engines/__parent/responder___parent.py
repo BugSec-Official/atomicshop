@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 from urllib.parse import parse_qs
 
 from ...message import ClientMessage
+from ...import initialize_engines
 from ....http_parse import HTTPResponseParse
 from ....print_api import print_api
 
@@ -18,6 +19,18 @@ class ResponderParent:
     """The class that is responsible for generating response to client based on the received message."""
     def __init__(self):
         self.logger = create_custom_logger()
+        self.engine: initialize_engines.ModuleCategory | None = None
+
+    def add_args(
+            self,
+            engine: initialize_engines.ModuleCategory = None
+    ):
+        """
+        Add more arguments to the class.
+        This is needed to be backwards compatible and not to change the child class apis.
+        """
+
+        self.engine = engine
 
     @staticmethod
     def get_path_parts(path: str):

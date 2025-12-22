@@ -29,7 +29,7 @@ def thread_worker_main(
         tls_version: str,
         domain_from_dns,
         statistics_writer,
-        engines_list,
+        engines_list: list[initialize_engines.ModuleCategory],
 
         # These parameters come from the main mitm module.
         config_static: cf
@@ -745,7 +745,6 @@ def thread_worker_main(
 
     # ================================================================================================================
     # This is the start of the thread_worker_main function
-
     network_logger = loggingw.get_logger_with_level(config_static.MainConfig.LOGGER_NAME)
 
     # Only protocols that are encrypted with TLS have the server name attribute.
@@ -788,6 +787,13 @@ def thread_worker_main(
     responder = found_domain_module.responder_class_object()
     recorder = found_domain_module.recorder_class_object(record_path=config_static.LogRec.recordings_path)
 
+    engine_name: str = recorder.engine_name
+
+    for engine in engines_list:
+        if engine.engine_name == engine_name:
+            responder.add_args(engine=engine)
+            break
+
     network_logger.info(f"Assigned Modules for [{server_name}]: "
         f"{parser.__name__}, "
         f"{requester.__class__.__name__}, "
@@ -803,7 +809,6 @@ def thread_worker_main(
     http_path_queue: queue.Queue = queue.Queue()
 
     try:
-        engine_name: str = recorder.engine_name
         client_ip, source_port = client_socket.getpeername()
 
         try:
