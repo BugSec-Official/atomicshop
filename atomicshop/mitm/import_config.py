@@ -33,6 +33,7 @@ def import_config_files(
     config_static.MainConfig.is_offline = bool(config_toml['dnstcp']['offline'])
     config_static.MainConfig.network_interface = config_toml['dnstcp']['network_interface']
     config_static.MainConfig.is_localhost = bool(config_toml['dnstcp']['localhost'])
+    config_static.MainConfig.set_default_dns_gateway = config_toml['dnstcp']['set_default_dns_gateway']
 
     config_static.DNSServer.is_enabled = bool(config_toml['dns']['enable'])
     config_static.DNSServer.listening_ipv4 = config_toml['dns']['listening_ipv4']
@@ -42,7 +43,6 @@ def import_config_files(
     config_static.DNSServer.resolve_by_engine = bool(config_toml['dns']['resolve_by_engine'])
     config_static.DNSServer.resolve_regular_pass_thru = bool(config_toml['dns']['resolve_regular_pass_thru'])
     config_static.DNSServer.resolve_all_domains_to_ipv4 = config_toml['dns']['resolve_all_domains_to_ipv4']
-    config_static.DNSServer.set_default_dns_gateway = config_toml['dns']['set_default_dns_gateway']
 
     config_static.TCPServer.is_enabled = bool(config_toml['tcp']['enable'])
     config_static.TCPServer.no_engines_usage_to_listen_addresses = config_toml['tcp']['no_engines_usage_to_listen_addresses']
@@ -247,30 +247,17 @@ def check_configurations() -> int:
                     print_api(message, color='red')
                     return 1
 
-    try:
-        booleans.is_only_1_true_in_list(
-            booleans_list_of_tuples=[
-                (config_static.DNSServer.set_default_dns_gateway, '[dns][set_default_dns_gateway]'),
-                (config_static.DNSServer.set_default_dns_gateway_to_network_interface_ipv4,
-                 '[dns][set_default_dns_gateway_to_network_interface_ipv4]')
-            ],
-            raise_if_all_false=False
-        )
-    except ValueError as e:
-        print_api(str(e), color='red')
-        return 1
-
-    if (config_static.DNSServer.set_default_dns_gateway or
-            config_static.DNSServer.set_default_dns_gateway_to_network_interface_ipv4):
+    if (config_static.MainConfig.set_default_dns_gateway or
+            config_static.MainConfig.set_default_dns_gateway_to_network_interface_ipv4):
         # Get current settings of the DNS gateway.
         is_dns_dynamic, current_dns_gateway = dns.get_default_dns_gateway()
 
         if not is_admin:
-            if config_static.DNSServer.set_default_dns_gateway:
-                ipv4_address_list = config_static.DNSServer.set_default_dns_gateway
-            elif config_static.DNSServer.set_default_dns_gateway_to_network_interface_ipv4 and config_static.MainConfig.is_localhost:
-                ipv4_address_list = [config_static.DNSServer.default_localhost_dns_gateway_ipv4]
-            elif config_static.DNSServer.set_default_dns_gateway_to_network_interface_ipv4 and not config_static.MainConfig.is_localhost:
+            if config_static.MainConfig.set_default_dns_gateway:
+                ipv4_address_list = config_static.MainConfig.set_default_dns_gateway
+            elif config_static.MainConfig.set_default_dns_gateway_to_network_interface_ipv4 and config_static.MainConfig.is_localhost:
+                ipv4_address_list = [config_static.MainConfig.default_localhost_dns_gateway_ipv4]
+            elif config_static.MainConfig.set_default_dns_gateway_to_network_interface_ipv4 and not config_static.MainConfig.is_localhost:
                 ipv4_address_list = [socket.gethostbyname(socket.gethostname())]
             else:
                 raise ValueError("Error: DNS gateway configuration is not set.")
@@ -312,13 +299,13 @@ def manipulations_after_import():
         config_static.DNSServer.target_ipv4 = value
         break
 
-    if config_static.DNSServer.set_default_dns_gateway:
-        if config_static.DNSServer.set_default_dns_gateway[0] == 'l':
-            config_static.DNSServer.set_default_dns_gateway_to_localhost = True
-            config_static.DNSServer.set_default_dns_gateway = list()
-        elif config_static.DNSServer.set_default_dns_gateway[0] == 'n':
-            config_static.DNSServer.set_default_dns_gateway_to_network_interface_ipv4 = True
-            config_static.DNSServer.set_default_dns_gateway = list()
+    if config_static.MainConfig.set_default_dns_gateway:
+        if config_static.MainConfig.set_default_dns_gateway[0] == 'l':
+            config_static.MainConfig.set_default_dns_gateway_to_localhost = True
+            config_static.MainConfig.set_default_dns_gateway = list()
+        elif config_static.MainConfig.set_default_dns_gateway[0] == 'n':
+            config_static.MainConfig.set_default_dns_gateway_to_network_interface_ipv4 = True
+            config_static.MainConfig.set_default_dns_gateway = list()
 
     for key, value in config_static.TCPServer.no_engines_usage_to_listen_addresses.items():
         key = bool(int(key))

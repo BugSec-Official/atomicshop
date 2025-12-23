@@ -333,11 +333,11 @@ def get_ipv4s_for_tcp_server() -> int:
             engine_ips.append(f"127.0.0.{i}")
 
         # If the current default DNS gateway ipv4 is inside the engine_ips, then we will remove it and add the next in line.
-        if config_static.DNSServer.default_localhost_dns_gateway_ipv4 in engine_ips:
-            engine_ips.remove(config_static.DNSServer.default_localhost_dns_gateway_ipv4)
+        if config_static.MainConfig.default_localhost_dns_gateway_ipv4 in engine_ips:
+            engine_ips.remove(config_static.MainConfig.default_localhost_dns_gateway_ipv4)
             engine_ips.append(f"127.0.0.{create_ips + 2}")
 
-        dns_listening_ipv4: str = config_static.DNSServer.default_localhost_dns_gateway_ipv4
+        dns_listening_ipv4: str = config_static.MainConfig.default_localhost_dns_gateway_ipv4
     else:
         # Generate the IPs for the domains.
         global IPS_TO_ASSIGN, MASKS_TO_ASSIGN
@@ -750,13 +750,13 @@ def _add_virtual_ips_set_default_dns_gateway(system_logger: logging.Logger) -> i
     # This setting is needed only for the dns gateways configurations from the main config on localhost.
     set_local_dns_gateway: bool = False
     # Set the default gateway if specified.
-    if config_static.DNSServer.set_default_dns_gateway:
-        dns_gateway_server_list = config_static.DNSServer.set_default_dns_gateway
+    if config_static.MainConfig.set_default_dns_gateway:
+        dns_gateway_server_list = config_static.MainConfig.set_default_dns_gateway
         set_local_dns_gateway = True
-    elif config_static.DNSServer.set_default_dns_gateway_to_localhost:
-        dns_gateway_server_list = [config_static.DNSServer.default_localhost_dns_gateway_ipv4]
+    elif config_static.MainConfig.set_default_dns_gateway_to_localhost:
+        dns_gateway_server_list = [config_static.MainConfig.default_localhost_dns_gateway_ipv4]
         set_local_dns_gateway = True
-    elif config_static.DNSServer.set_default_dns_gateway_to_network_interface_ipv4:
+    elif config_static.MainConfig.set_default_dns_gateway_to_network_interface_ipv4:
         dns_gateway_server_list = [NETWORK_INTERFACE_SETTINGS.ipv4s[0]]
         set_local_dns_gateway = True
     else:

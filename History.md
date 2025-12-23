@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.9.3 - 23.12.2025
+  * mitm - improvements.
 * 3.9.1-2 - 22.12.2025
   * mitm - fixes.
 * 3.9.0 - 22.12.2025

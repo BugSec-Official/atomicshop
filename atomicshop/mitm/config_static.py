@@ -18,6 +18,11 @@ class MainConfig:
     network_interface: str
     is_localhost: bool
 
+    set_default_dns_gateway: list[str]
+    set_default_dns_gateway_to_localhost: bool = False
+    set_default_dns_gateway_to_network_interface_ipv4: bool = False
+    default_localhost_dns_gateway_ipv4: str = '127.0.0.1'
+
     LOGGER_NAME: str = 'network'
 
     SCRIPT_DIRECTORY: str = None
@@ -68,14 +73,9 @@ class DNSServer:
     # Convertable variables.
     resolve_all_domains_to_ipv4: dict
 
-    set_default_dns_gateway: list[str]
-    set_default_dns_gateway_to_localhost: bool = False
-    set_default_dns_gateway_to_network_interface_ipv4: bool = False
-
     # Static variables.
     forwarding_dns_service_port: int = 53
 
-    default_localhost_dns_gateway_ipv4: str = '127.0.0.1'
 
 
 @dataclass
