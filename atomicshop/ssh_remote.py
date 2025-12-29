@@ -1,6 +1,7 @@
 import sys
 import logging
 from pathlib import Path
+import shlex
 
 try:
     import paramiko
@@ -161,6 +162,8 @@ class SSHRemote:
                 if "ModuleNotFoundError: No module named" in line:
                     function_result = f"Python library is not installed - {line}"
                     break
+        else:
+            function_result = console_output_string
 
         return function_result
 
@@ -275,13 +278,14 @@ class SSHRemote:
         command: str = f"{python_cmd} -"
 
         if script_arg_values:
-            command += ' ' + ' '.join(script_arg_values)
+            for arg in script_arg_values:
+                command += " " + shlex.quote(str(arg))
 
         if script_kwargs:
             for key, value in script_kwargs.items():
-                command += f' {key}'
+                command += f" {shlex.quote(str(key))}"
                 if value is not None:
-                    command += f' {value}'
+                    command += " " + shlex.quote(str(value))
 
         remote_output, remote_error = self.remote_execution(command=command, script_string=script_string)
 
@@ -293,6 +297,8 @@ class SSHRemote:
             if console_check:
                 # 'execution_error' variable will be that full error.
                 error_result = console_check
+            else:
+                error_result = remote_error
 
         return remote_output, error_result
 

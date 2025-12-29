@@ -18,6 +18,7 @@ def get_netsh_show_config() -> str:
     )
 
 
+# noinspection PyUnresolvedReferences
 def get_netsh_ipv4() -> List[Dict[str, Any]]:
     """
     Parse *all* data from `netsh interface ipv4 show config`.
@@ -150,7 +151,7 @@ def get_netsh_ipv4() -> List[Dict[str, Any]]:
     return adapters
 
 
-def run_netsh(*args: str) -> str:
+def run_netsh(*args: str) -> subprocess.CompletedProcess:
     """
     Run a netsh command and return stdout as text.
 
@@ -162,12 +163,12 @@ def run_netsh(*args: str) -> str:
         cmd,
         capture_output=True,
         text=True,
-        check=True
+        check=False
     )
-    return result.stdout
+    return result
 
 
-def enable_dhcp_static_coexistence(interface_name: str) -> str:
+def enable_dhcp_static_coexistence(interface_name: str) -> subprocess.CompletedProcess:
     """
     Enable DHCP + static IP coexistence on an interface.
 
@@ -181,7 +182,7 @@ def enable_dhcp_static_coexistence(interface_name: str) -> str:
     )
 
 
-def disable_dhcp_static_coexistence(interface_name: str) -> str:
+def disable_dhcp_static_coexistence(interface_name: str) -> subprocess.CompletedProcess:
     """
     Disable DHCP + static IP coexistence on an interface (optional).
 
@@ -200,7 +201,7 @@ def add_virtual_ip(
         ip: str,
         mask: str,
         skip_as_source: bool = True
-) -> str:
+) -> subprocess.CompletedProcess:
     """
     Add a static 'virtual' IP to a DHCP interface, keeping DHCP intact.
 
@@ -229,7 +230,7 @@ def add_virtual_ip(
 def remove_virtual_ip(
         interface_name: str,
         ip: str
-) -> str:
+) -> subprocess.CompletedProcess:
     """
     Remove a previously added virtual IP from the interface.
 
@@ -245,7 +246,7 @@ def remove_virtual_ip(
 
 def show_interface_config(
         interface_name: Optional[str] = None
-) -> str:
+) -> subprocess.CompletedProcess:
     """
     Show IPv4 configuration for all interfaces or a specific one.
 
@@ -260,7 +261,7 @@ def show_interface_config(
         return run_netsh("interface", "ipv4", "show", "config")
 
 
-def list_ipv4_interfaces() -> str:
+def list_ipv4_interfaces() -> subprocess.CompletedProcess:
     """
     List IPv4 interfaces.
 

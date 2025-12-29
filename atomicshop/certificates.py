@@ -5,7 +5,7 @@ https://oidref.com/1.3.6.1.5.5.7.3.1
 
 
 import ssl
-from typing import Literal
+from typing import Literal, Any
 
 from .wrappers import cryptographyw
 from .wrappers.pywin32w import cert_store
@@ -64,7 +64,7 @@ def write_crt_certificate_file_in_pem_format_from_pem_file(
 
 
 def is_certificate_in_store(
-        certificate: any = None,
+        certificate: Any = None,
         by_cert_issuer: bool = True,
         by_cert_thumbprint: bool = True,
         issuer_name: str = None,

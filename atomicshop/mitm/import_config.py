@@ -221,6 +221,12 @@ def check_configurations() -> int:
                 return 1
 
 
+    if not config_static.MainConfig.is_localhost and not is_admin:
+        # If we're not in localhost mode, this means we need to set virtual IPv4 addresses, which requires admin rights.
+        message = "In order to run the server in non-localhost mode, administrative rights are required.\nExiting..."
+        print_api(message, color='red')
+        return 1
+
     # Check admin right if on localhost ============================================================================
     # If any of the DNS IP target addresses is localhost loopback, then we need to check if the script
     # is executed with admin rights. There are some processes that 'psutil' can't get their command line if not

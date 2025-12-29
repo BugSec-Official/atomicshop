@@ -257,6 +257,27 @@ def startup_output(system_logger, script_version: str):
     print_api.print_api(f"Listening DNS address: {config_static.DNSServer.listening_address}", logger=system_logger)
 
 
+def _get_interface_name() -> str | None:
+    if config_static.MainConfig.network_interface == '':
+        interface_name: str = networks.get_default_interface_name()
+        if interface_name == '':
+            print_api.print_api(
+                "Default network interface not found.",
+                error_type=True, color="red")
+            return None
+    else:
+        current_network_interface_names: list[str] = networks.list_network_interfaces()
+        if config_static.MainConfig.network_interface not in current_network_interface_names:
+            print_api.print_api(
+                f"Not found Network interface with the name: {config_static.MainConfig.network_interface}",
+                error_type=True, color="red")
+            return None
+        else:
+            interface_name = config_static.MainConfig.network_interface
+
+    return interface_name
+
+
 def get_ipv4s_for_tcp_server() -> int:
     """
     Function to get the IPv4 addresses for the default network adapter to set them to the adapter.
@@ -272,23 +293,10 @@ def get_ipv4s_for_tcp_server() -> int:
     engine_ips: list[str] = list()
     create_ips: int = len(domains_to_create_ips_for) + len(ports_to_create_ips_for)
 
-    # Get current network interface state.
-    if config_static.MainConfig.network_interface == '':
-        interface_name: str = networks.get_default_interface_name()
-        if interface_name == '':
-            print_api.print_api(
-                "Default network interface not found.",
-                error_type=True, color="red")
-            return 1
-    else:
-        current_network_interface_names: list[str] = networks.list_network_interfaces()
-        if config_static.MainConfig.network_interface not in current_network_interface_names:
-            print_api.print_api(
-                f"Not found Network interface with the name: {config_static.MainConfig.network_interface}",
-                error_type=True, color="red")
-            return 1
-        else:
-            interface_name = config_static.MainConfig.network_interface
+    # Get network interface name.
+    interface_name: str = _get_interface_name()
+    if interface_name is None:
+        return 1
 
     # Get selected network interface virtual IPs from previous runs.
     # We still need network interface settings for DNS gateway assignment for the network interface doesn't matter in localhost mode or not.
@@ -341,10 +349,15 @@ def get_ipv4s_for_tcp_server() -> int:
     else:
         # Generate the IPs for the domains.
         global IPS_TO_ASSIGN, MASKS_TO_ASSIGN
-        IPS_TO_ASSIGN, MASKS_TO_ASSIGN = networks.add_virtual_ips_to_network_interface(
+        assignment_result: tuple | None = networks.add_virtual_ips_to_network_interface(
             interface_name=interface_name,
             number_of_ips=create_ips,
             simulate_only=True)
+
+        if assignment_result is None:
+            return 1
+
+        IPS_TO_ASSIGN, MASKS_TO_ASSIGN = assignment_result
 
         engine_ips += IPS_TO_ASSIGN
         dns_listening_ipv4: str = NETWORK_INTERFACE_SETTINGS.ipv4s[0]

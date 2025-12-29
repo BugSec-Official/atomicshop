@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.10.0 - 29.12.2025
+  * mitm, certificates, ssh_remote, networks, wrappers/netshw - fixes and improvements.
 * 3.9.3 - 23.12.2025
   * mitm - improvements.
 * 3.9.1-2 - 22.12.2025

@@ -5,6 +5,7 @@ import os
 import psutil
 import ctypes
 from logging import Logger
+import subprocess
 
 from icmplib import ping
 from icmplib.models import Host
@@ -65,6 +66,7 @@ def is_ip_in_use_arp(
     def _send_arp(ip: str) -> str | None:
         """Return MAC string like 'aa:bb:cc:dd:ee:ff' if IP is claimed on the LAN, else None."""
         # inet_addr returns DWORD in network byte order
+        # noinspection PyUnresolvedReferences
         dest_ip = ws2_32.inet_addr(ip.encode('ascii'))
         if dest_ip == 0xFFFFFFFF:  # INVALID
             raise ValueError(f"Bad IPv4 address: {ip}")
@@ -72,6 +74,7 @@ def is_ip_in_use_arp(
         mac_buf = ctypes.c_uint64(0)  # storage for up to 8 bytes
         mac_len = ctypes.c_ulong(ctypes.sizeof(mac_buf))  # in/out len
         # SrcIP=0 lets Windows pick the right interface
+        # noinspection PyUnresolvedReferences
         rc = iphlpapi.SendARP(dest_ip, 0, ctypes.byref(mac_buf), ctypes.byref(mac_len))
         if rc != 0:  # Non-zero means no ARP reply / not on-link / other error
             return None
@@ -543,7 +546,7 @@ def add_virtual_ips_to_network_interface(
         wait_until_applied_seconds: int = 15,
         verbose: bool = False,
         logger: Logger = None,
-) -> tuple[list[str], list[str]]:
+) -> tuple[list[str], list[str]] | None:
     """
     Add virtual IP addresses to the default network adapter.
     The adapter will set to static IP and DNS gateway, instead of dynamic DHCP.
@@ -622,7 +625,12 @@ def add_virtual_ips_to_network_interface(
 
     if not simulate_only:
         # Enable DHCP + static IP coexistence on the interface.
-        netshw.enable_dhcp_static_coexistence(interface_name=interface_name)
+        process_complete: subprocess.CompletedProcess = netshw.enable_dhcp_static_coexistence(interface_name=interface_name)
+        if process_complete.returncode != 0:
+            print_api(f"[!] Failed to enable DHCP + static IP coexistence on interface {interface_name}.\n"
+                      f"    stdout: {process_complete.stdout}\n"
+                      f"    stderr: {process_complete.stderr}", color="red", logger=logger)
+            return None
 
         for ip, mask in zip(ips_to_assign, masks_to_assign):
             if verbose:
