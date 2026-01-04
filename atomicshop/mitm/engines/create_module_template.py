@@ -1,3 +1,4 @@
+import sys
 import os
 import argparse
 from typing import Literal
@@ -25,16 +26,13 @@ SCRIPT_DIRECTORY: str = filesystem.get_file_directory(__file__)
 ENGINES_DIRECTORY_PATH: str = filesystem.get_working_directory() + os.sep + ENGINES_DIRECTORY_NAME
 
 
-def parse_arguments():
-    parser = argparse.ArgumentParser(description='Create a new engine module template.')
-    parser.add_argument('engine_name', type=str, help='The name of the new engine.')
-    return parser.parse_args()
-
-
 class CreateModuleTemplate:
-    def __init__(self):
+    def __init__(
+            self,
+            engine_name: str = None
+    ):
         # === Get input variables. ===
-        self.engine_name: str = parse_arguments().engine_name
+        self.engine_name: str = engine_name
         self.domains: list = ['example.com:443', 'example.org:80']
 
         # New engine's directory.
@@ -132,3 +130,25 @@ class CreateModuleTemplate:
 
         print(f"Converted: {file_path}")
         console.print(f"To: {new_module_full_path}", style="green")
+
+
+def create_template(engine_name: str) -> int:
+    CreateModuleTemplate(engine_name=engine_name)
+    return 0
+
+
+def _make_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description='Create a new engine module template.')
+    parser.add_argument('engine_name', type=str, help='The name of the new engine.')
+    return parser
+
+
+def main() -> int:
+    arg_parser: argparse.ArgumentParser = _make_parser()
+    args = arg_parser.parse_args()
+
+    return create_template(**vars(args))
+
+
+if __name__ == '__main__':
+    sys.exit(main())
