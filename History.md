@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.10.3 - 05.01.2025
+  * mitm/connection_thread_worker - fixes.
 * 3.10.2 - 05.01.2025
   * mitm/engines/create_module_template, web_apis/google_llm - improvements.
 * 3.10.1 - 04.01.2025

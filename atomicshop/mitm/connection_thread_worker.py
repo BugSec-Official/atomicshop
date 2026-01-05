@@ -530,9 +530,9 @@ def thread_worker_main(
             print_api(error_on_receive, logger=network_logger, logger_method='critical')
 
         # At this point if the socket was closed on receive, then there's no point to send anything to the service.
-        # So, we check for 'is_socket_closed' here.
+        # But if the data was received and then the socket was closed, we first send the data and then close the socket.
         error_on_send: str = str()
-        if not is_socket_closed:
+        if received_raw_data != b'':
             # Send to requester.
             # THERE IS ALWAYS WILL BE ONLY ONE REQUEST FROM REQUESTER, SINCE THIS IS WHAT WE GOT FROM THE CLIENT.
             request_custom_raw, is_requester_worked = create_requester_request(client_message, sending_socket=sending_socket)
@@ -602,9 +602,9 @@ def thread_worker_main(
         # Meaning the 'received_raw_data' is None for exception or b'' for just closed socket.
         # So, there's no point to send anything back to the client.
         # Close both sockets and finish the threads.
-        # So, we check for 'is_socket_closed' here.
+        # But if the data was received and then the socket was closed, we first send the data and then close the socket.
         error_on_send: str = str()
-        if not is_socket_closed:
+        if received_raw_data != b'':
             # Now send it to requester/responder.
             bytes_to_send_list: list[bytes] = create_responder_response(client_message)
 
