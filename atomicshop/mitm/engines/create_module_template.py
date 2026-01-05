@@ -73,8 +73,6 @@ class CreateModuleTemplate:
 
         self.create_config_file()
 
-        consoles.wait_any_key()
-
     def create_config_file(self):
         # Defining variables.
         config_lines_list: list = list()
@@ -147,7 +145,9 @@ def main() -> int:
     arg_parser: argparse.ArgumentParser = _make_parser()
     args = arg_parser.parse_args()
 
-    return create_template(**vars(args))
+    rc: int = create_template(**vars(args))
+    consoles.wait_any_key()
+    return rc
 
 
 if __name__ == '__main__':

@@ -40,19 +40,31 @@ class GoogleLLM:
 
     def get_current_models(
             self,
-            full_info: bool = False
+            full_info: bool = False,
+            model_type: str = None,
+            verbose: bool = False
     ) -> list:
         """
         Function to get the current models available in the Gemini API
 
         :param full_info: bool, if True, returns the full information about the models, otherwise only the names for API usage.
+        :param model_type: str, the type of models to filter by. None, for all models.
+            Examples of known types: 'gemini', 'veo', 'imagen', 'deep-research', 'nano-banana'.
+        :param verbose: bool, if True, prints the models information to the console.
         """
         result_list: list = []
         for model in self.client.models.list():
+            if model_type and model_type not in model.name:
+                continue
+
             if full_info:
                 result_list.append(model)
             else:
                 result_list.append(model.name)
+
+        if verbose:
+            for model in result_list:
+                print(model)
 
         return result_list
 
@@ -141,7 +153,7 @@ class GoogleLLM:
             # max_output_tokens: int,
             model_name: str = 'gemini-2.5-pro'
     ) -> str:
-        """
+        r"""
         Function to ask the Gemini API a question and get the response.
         :param question: str, the question to ask the Gemini API.
         :param temperature: float, the temperature parameter for the LLM.
