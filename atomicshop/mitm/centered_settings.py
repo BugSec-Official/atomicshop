@@ -84,17 +84,16 @@ def centered_settings_main(config_file_path: str, script_version: str):
         print_api(f"No target hosts found in the file: {target_hosts_file_path}", color="red")
         return 1
 
+    dns_script_string: str | None = None
     if set_default_dns_gateway:
         package_processor: package_mains_processor.PackageMainsProcessor = package_mains_processor.PackageMainsProcessor(
             script_file_stem="set_default_dns_gateway")
-    elif install_ca_cert:
+        dns_script_string = package_processor.read_script_file_to_string()
+    ca_script_string: str | None = None
+    if install_ca_cert:
         package_processor: package_mains_processor.PackageMainsProcessor = package_mains_processor.PackageMainsProcessor(
             script_file_stem="install_ca_certificate")
-    else:
-        print_api("No valid action specified.", color="red")
-        return 1
-
-    script_string: str = package_processor.read_script_file_to_string()
+        ca_script_string = package_processor.read_script_file_to_string()
 
     for host in target_hosts:
         ssh_client = ssh_remote.SSHRemote(
@@ -110,16 +109,16 @@ def centered_settings_main(config_file_path: str, script_version: str):
 
         if set_default_dns_gateway:
             stdout, stderr = ssh_client.remote_execution_python(
-                script_string=script_string, script_arg_values=(main_ipv4,))
+                script_string=dns_script_string, script_arg_values=(main_ipv4,))
 
             if stderr:
                 print_api(f"Failed to apply settings on {host}:\n{stderr}", color="red")
             else:
                 print_api(f"Successfully applied settings on {host}:\n{stdout}", color="green")
-        elif install_ca_cert:
+        if install_ca_cert:
             cert_b64 = base64.b64encode(ca_certificate_string.encode("utf-8")).decode("ascii")
             stdout, stderr = ssh_client.remote_execution_python(
-                script_string=script_string, script_arg_values=(config_static.MainConfig.ca_certificate_name, cert_b64,))
+                script_string=ca_script_string, script_arg_values=(config_static.MainConfig.ca_certificate_name, cert_b64,))
 
             if stderr:
                 print_api(f"Failed to install CA certificate on {host}:\n{stderr}", color="red")

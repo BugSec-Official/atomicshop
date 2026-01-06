@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.10.5 - 06.01.2026
+  * mitm/centered_settings - fixes.
 * 3.10.4 - 06.01.2026
   * mitm - fixes.
 * 3.10.3 - 05.01.2026
