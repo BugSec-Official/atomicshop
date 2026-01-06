@@ -1,11 +1,13 @@
 <!-- HISTORY -->
 ## History
 
-* 3.10.3 - 05.01.2025
+* 3.10.4 - 06.01.2026
+  * mitm - fixes.
+* 3.10.3 - 05.01.2026
   * mitm/connection_thread_worker - fixes.
-* 3.10.2 - 05.01.2025
+* 3.10.2 - 05.01.2026
   * mitm/engines/create_module_template, web_apis/google_llm - improvements.
-* 3.10.1 - 04.01.2025
+* 3.10.1 - 04.01.2026
   * mitm/engines/create_module_template - improvements.
 * 3.10.0 - 29.12.2025
   * mitm, certificates, ssh_remote, networks, wrappers/netshw - fixes and improvements.

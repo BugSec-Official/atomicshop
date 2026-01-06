@@ -81,7 +81,7 @@ class RecorderParent:
             )
             self.recorder_worker_thread.start()
 
-        self.logger.info("Recording Message...")
+        self.logger.info("Putting Message to Recorder Thread Queue...")
 
         # Convert the requests and responses to hex.
         self.convert_messages()
