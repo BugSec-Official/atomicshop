@@ -821,6 +821,9 @@ def thread_worker_main(
         destination_port: int = client_socket.getsockname()[1]
         destination_port_str: str = str(destination_port)
 
+        new_thread_name: str = f"{current_thread.name}-{destination_port_str}"
+        current_thread.name = new_thread_name
+
         # If the destination port is in the on_port_connect dictionary, then we'll get the port from there.
         if destination_port_str in found_domain_module.on_port_connect:
             on_port_connect_value = found_domain_module.on_port_connect[destination_port_str]
@@ -868,7 +871,7 @@ def thread_worker_main(
             client_thread = threading.Thread(
                 target=receive_send_start,
                 args=(client_socket, service_socket_instance, client_exception_queue, None),
-                name=f"{process_name} | Thread-{thread_id}-Client",
+                name=f"{process_name} | Thread-{thread_id}-{destination_port_str}-Client",
                 daemon=True)
             client_thread.start()
 
@@ -877,7 +880,7 @@ def thread_worker_main(
                 service_thread = threading.Thread(
                     target=receive_send_start,
                     args=(service_socket_instance, client_socket, service_exception_queue, client_message_connection),
-                    name=f"{process_name} | Thread-{thread_id}-Service",
+                    name=f"{process_name} | Thread-{thread_id}-{destination_port_str}-Service",
                     daemon=True)
                 service_thread.start()
 

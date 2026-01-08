@@ -87,7 +87,10 @@ class ModuleCategory:
                 error_string: str = f"No [domain:port] pair found in: {domain_port_string}"
                 return 1, error_string
 
-            self.domain_target_dict[domain] = {'ip': None, 'port': int(port)}
+            if domain not in self.domain_target_dict:
+                self.domain_target_dict[domain] = {'ip': None, 'ports': [int(port)]}
+            else:
+                self.domain_target_dict[domain]['ports'].append(int(port))
 
         for port, value in self.on_port_connect.items():
             self.port_target_dict[port] = {'ip': None, 'port': int(port)}

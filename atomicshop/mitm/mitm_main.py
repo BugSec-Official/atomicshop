@@ -508,7 +508,7 @@ def mitm_server(config_file_path: str, script_version: str) -> int:
                         'engine': engine,
                         'process_name': f'tcp_server-{engine.engine_name}-{domain_or_port}',
                         'ip': ip_port_dict['ip'],
-                        'port': int(ip_port_dict['port'])
+                        'ports': ip_port_dict['ports']
                     }
                     listening_interfaces.append(current_interface_dict)
         else:
@@ -519,58 +519,62 @@ def mitm_server(config_file_path: str, script_version: str) -> int:
                     'engine': None,  # No engine for this address.
                     'process_name': f'tcp_server-{listening_ip_address}_{port_str}',
                     'ip': listening_ip_address,
-                    'port': int(port_str)
+                    'ports': [int(port_str)]
                 }
                 listening_interfaces.append(current_interface_dict)
 
         # Starting the TCP server multiprocessing processes.
+        socket_wrapper_kwargs_list: list[dict] = list()
         for interface_dict in listening_interfaces:
-            socket_wrapper_kwargs: dict = dict(
-                ip_address=interface_dict['ip'],
-                port=interface_dict['port'],
-                engine=interface_dict['engine'],
-                ca_certificate_name=config_static.MainConfig.ca_certificate_name,
-                ca_certificate_filepath=config_static.MainConfig.ca_certificate_filepath,
-                ca_certificate_crt_filepath=config_static.MainConfig.ca_certificate_crt_filepath,
-                install_ca_certificate_to_root_store=config_static.Certificates.install_ca_certificate_to_root_store,
-                uninstall_unused_ca_certificates_with_ca_certificate_name=(
-                    config_static.Certificates.uninstall_unused_ca_certificates_with_mitm_ca_name),
-                default_server_certificate_usage=config_static.Certificates.default_server_certificate_usage,
-                default_server_certificate_name=config_static.MainConfig.default_server_certificate_name,
-                default_certificate_domain_list=config_static.Certificates.domains_all_times,
-                default_server_certificate_directory=config_static.MainConfig.SCRIPT_DIRECTORY,
-                sni_use_default_callback_function=True,
-                sni_use_default_callback_function_extended=True,
-                sni_add_new_domains_to_default_server_certificate=(
-                    config_static.Certificates.sni_add_new_domains_to_default_server_certificate),
-                sni_create_server_certificate_for_each_domain=(
-                    config_static.Certificates.sni_create_server_certificate_for_each_domain),
-                sni_server_certificates_cache_directory=(
-                    config_static.Certificates.sni_server_certificates_cache_directory),
-                sni_get_server_certificate_from_server_socket=(
-                    config_static.Certificates.sni_get_server_certificate_from_server_socket),
-                sni_server_certificate_from_server_socket_download_directory=(
-                    config_static.Certificates.sni_server_certificate_from_server_socket_download_directory),
-                custom_server_certificate_usage=config_static.Certificates.custom_server_certificate_usage,
-                custom_server_certificate_path=config_static.Certificates.custom_server_certificate_path,
-                custom_private_key_path=config_static.Certificates.custom_private_key_path,
-                get_process_name=config_static.ProcessName.get_process_name,
-                ssh_user=config_static.ProcessName.ssh_user,
-                ssh_pass=config_static.ProcessName.ssh_pass,
-                ssh_script_to_execute=config_static.ProcessName.ssh_script_to_execute,
-                logs_directory=config_static.LogRec.logs_path,
-                logger_name=network_logger_name,
-                logger_queue=NETWORK_LOGGER_QUEUE,
-                statistics_logger_name=STATISTICS_LOGGER_NAME,
-                statistics_logger_queue=STATISTICS_CSV_LOGGER_QUEUE,
-                exceptions_logger_name=EXCEPTIONS_CSV_LOGGER_NAME,
-                exceptions_logger_queue=EXCEPTIONS_CSV_LOGGER_QUEUE,
-                forwarding_dns_service_ipv4_list___only_for_localhost=[config_static.DNSServer.forwarding_dns_service_ipv4],
-                skip_extension_id_list=config_static.SkipExtensions.SKIP_EXTENSION_ID_LIST,
-                enable_sslkeylogfile_env_to_client_ssl_context=config_static.Certificates.enable_sslkeylogfile_env_to_client_ssl_context,
-                sslkeylog_file_path=config_static.Certificates.sslkeylog_file_path,
-                print_kwargs=dict(stdout=False)
-            )
+            for port in interface_dict['ports']:
+                socket_wrapper_kwargs: dict = dict(
+                    ip_address=interface_dict['ip'],
+                    port=port,
+                    engine=interface_dict['engine'],
+                    ca_certificate_name=config_static.MainConfig.ca_certificate_name,
+                    ca_certificate_filepath=config_static.MainConfig.ca_certificate_filepath,
+                    ca_certificate_crt_filepath=config_static.MainConfig.ca_certificate_crt_filepath,
+                    install_ca_certificate_to_root_store=config_static.Certificates.install_ca_certificate_to_root_store,
+                    uninstall_unused_ca_certificates_with_ca_certificate_name=(
+                        config_static.Certificates.uninstall_unused_ca_certificates_with_mitm_ca_name),
+                    default_server_certificate_usage=config_static.Certificates.default_server_certificate_usage,
+                    default_server_certificate_name=config_static.MainConfig.default_server_certificate_name,
+                    default_certificate_domain_list=config_static.Certificates.domains_all_times,
+                    default_server_certificate_directory=config_static.MainConfig.SCRIPT_DIRECTORY,
+                    sni_use_default_callback_function=True,
+                    sni_use_default_callback_function_extended=True,
+                    sni_add_new_domains_to_default_server_certificate=(
+                        config_static.Certificates.sni_add_new_domains_to_default_server_certificate),
+                    sni_create_server_certificate_for_each_domain=(
+                        config_static.Certificates.sni_create_server_certificate_for_each_domain),
+                    sni_server_certificates_cache_directory=(
+                        config_static.Certificates.sni_server_certificates_cache_directory),
+                    sni_get_server_certificate_from_server_socket=(
+                        config_static.Certificates.sni_get_server_certificate_from_server_socket),
+                    sni_server_certificate_from_server_socket_download_directory=(
+                        config_static.Certificates.sni_server_certificate_from_server_socket_download_directory),
+                    custom_server_certificate_usage=config_static.Certificates.custom_server_certificate_usage,
+                    custom_server_certificate_path=config_static.Certificates.custom_server_certificate_path,
+                    custom_private_key_path=config_static.Certificates.custom_private_key_path,
+                    get_process_name=config_static.ProcessName.get_process_name,
+                    ssh_user=config_static.ProcessName.ssh_user,
+                    ssh_pass=config_static.ProcessName.ssh_pass,
+                    ssh_script_to_execute=config_static.ProcessName.ssh_script_to_execute,
+                    logs_directory=config_static.LogRec.logs_path,
+                    logger_name=network_logger_name,
+                    logger_queue=NETWORK_LOGGER_QUEUE,
+                    statistics_logger_name=STATISTICS_LOGGER_NAME,
+                    statistics_logger_queue=STATISTICS_CSV_LOGGER_QUEUE,
+                    exceptions_logger_name=EXCEPTIONS_CSV_LOGGER_NAME,
+                    exceptions_logger_queue=EXCEPTIONS_CSV_LOGGER_QUEUE,
+                    forwarding_dns_service_ipv4_list___only_for_localhost=[config_static.DNSServer.forwarding_dns_service_ipv4],
+                    skip_extension_id_list=config_static.SkipExtensions.SKIP_EXTENSION_ID_LIST,
+                    enable_sslkeylogfile_env_to_client_ssl_context=config_static.Certificates.enable_sslkeylogfile_env_to_client_ssl_context,
+                    sslkeylog_file_path=config_static.Certificates.sslkeylog_file_path,
+                    print_kwargs=dict(stdout=False)
+                )
+
+                socket_wrapper_kwargs_list.append(socket_wrapper_kwargs)
 
             # noinspection PyTypeHints
             is_tcp_process_ready: multiprocessing.Event = multiprocessing.Event()
@@ -580,7 +584,7 @@ def mitm_server(config_file_path: str, script_version: str) -> int:
                 target=_create_tcp_server_process,
                 name=interface_dict['process_name'],
                 args=(
-                    socket_wrapper_kwargs,
+                    socket_wrapper_kwargs_list,
                     config_file_path,
                     network_logger_name,
                     NETWORK_LOGGER_QUEUE,
@@ -663,7 +667,7 @@ def mitm_server(config_file_path: str, script_version: str) -> int:
 
 # noinspection PyTypeHints
 def _create_tcp_server_process(
-        socket_wrapper_kwargs: dict,
+        socket_wrapper_kwargs_list: list[dict],
         config_file_path: str,
         network_logger_name: str,
         network_logger_queue: multiprocessing.Queue,
@@ -684,37 +688,38 @@ def _create_tcp_server_process(
     # If the listener logger is available in current process, the SocketWrapper will use it.
     _ = loggingw.get_logger_with_level(f'{network_logger_name}.listener')
 
-    try:
-        # noinspection PyTypeChecker
-        socket_wrapper_instance = socket_wrapper.SocketWrapper(**socket_wrapper_kwargs)
-    except socket_wrapper.SocketWrapperPortInUseError as e:
-        print_api.print_api(e, error_type=True, color="red", logger=system_logger)
-        # Wait for the message to be printed and saved to file.
-        time.sleep(1)
-        # network_logger_queue_listener.stop()
-        sys.exit(1)
-    except socket_wrapper.SocketWrapperConfigurationValuesError as e:
-        print_api.print_api(e, error_type=True, color="red", logger=system_logger, logger_method='critical')
-        # Wait for the message to be printed and saved to file.
-        time.sleep(1)
-        # network_logger_queue_listener.stop()
-        sys.exit(1)
-
-    try:
-        socket_wrapper_instance.start_listening_socket(
-            callable_function=thread_worker_main, callable_args=(config_static,))
-    except OSError as e:
-        if e.winerror == 10022:  # Invalid argument error on Windows.
-            message = (
-                str(f"{e}\n"
-                    f"Check that the IP address and port are correct: {socket_wrapper_kwargs['ip_address']}:{socket_wrapper_kwargs['port']}\n"))
-            print_api.print_api(message, error_type=True, color="red", logger=system_logger, logger_method='critical')
+    for socket_wrapper_kwargs in socket_wrapper_kwargs_list:
+        try:
+            # noinspection PyTypeChecker
+            socket_wrapper_instance = socket_wrapper.SocketWrapper(**socket_wrapper_kwargs)
+        except socket_wrapper.SocketWrapperPortInUseError as e:
+            print_api.print_api(e, error_type=True, color="red", logger=system_logger)
             # Wait for the message to be printed and saved to file.
             time.sleep(1)
             # network_logger_queue_listener.stop()
             sys.exit(1)
-        else:
-            raise e
+        except socket_wrapper.SocketWrapperConfigurationValuesError as e:
+            print_api.print_api(e, error_type=True, color="red", logger=system_logger, logger_method='critical')
+            # Wait for the message to be printed and saved to file.
+            time.sleep(1)
+            # network_logger_queue_listener.stop()
+            sys.exit(1)
+
+        try:
+            socket_wrapper_instance.start_listening_socket(
+                callable_function=thread_worker_main, callable_args=(config_static,))
+        except OSError as e:
+            if e.winerror == 10022:  # Invalid argument error on Windows.
+                message = (
+                    str(f"{e}\n"
+                        f"Check that the IP address and port are correct: {socket_wrapper_kwargs['ip_address']}:{socket_wrapper_kwargs['port']}\n"))
+                print_api.print_api(message, error_type=True, color="red", logger=system_logger, logger_method='critical')
+                # Wait for the message to be printed and saved to file.
+                time.sleep(1)
+                # network_logger_queue_listener.stop()
+                sys.exit(1)
+            else:
+                raise e
 
     # Notify that the TCP server is ready.
     is_tcp_process_ready.set()
@@ -811,10 +816,19 @@ def _add_virtual_ips_set_default_dns_gateway(system_logger: logging.Logger) -> i
             )
 
             for engine in config_static.ENGINES_LIST:
-                bindable_test_dict: dict = engine.domain_target_dict | engine.port_target_dict
-                for port_or_domain_name, ip_port_dict in bindable_test_dict.items():
-                    print_api.print_api(f"Checking that virtual IP is bindable: {ip_port_dict['ip']}:{ip_port_dict['port']}", logger=system_logger)
-                    networks.wait_for_ip_bindable_socket(ip_port_dict['ip'], port=int(ip_port_dict['port']), timeout=15)
+                # Add all the ips and ports to test bindability.
+                bindable_test_list: list[tuple[str, int]] = []
+                for ip_port_dict in engine.domain_target_dict.values():
+                    for port in ip_port_dict['ports']:
+                        bindable_test_list.append((ip_port_dict['ip'], port))
+                for ip_port_dict in engine.port_target_dict.values():
+                    bindable_test_list.append((ip_port_dict['ip'], ip_port_dict['port']))
+
+                # Test that all the virtual IPs are bindable.
+                for ip_port_tuple in bindable_test_list:
+                    ipv4, port = ip_port_tuple
+                    print_api.print_api(f"Checking that virtual IP is bindable: {ipv4}:{port}", logger=system_logger)
+                    networks.wait_for_ip_bindable_socket(ipv4, port=int(port), timeout=15)
             print_api.print_api("BIND test successful for all virtual IPs.", logger=system_logger)
         except (PermissionError, TimeoutError) as e:
             print_api.print_api(e, error_type=True, color="red", logger=system_logger)

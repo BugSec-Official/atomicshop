@@ -2,7 +2,7 @@ import win32com.client
 import pythoncom
 
 
-"""
+r"""
 Sample example:
 import win32com.client
 import time
@@ -139,7 +139,7 @@ class Pywin32Processes:
 
         # noinspection PyUnresolvedReferences
         com_object_wmi_service = win32com.client.Dispatch("WbemScripting.SWbemLocator", pythoncom.CoInitialize())
-        self.wmi_cim_root = com_object_wmi_service.ConnectServer(self.host_to_query, "root\cimv2")
+        self.wmi_cim_root = com_object_wmi_service.ConnectServer(self.host_to_query, r"root\cimv2")
 
     def get_processes(self) -> list:
         """

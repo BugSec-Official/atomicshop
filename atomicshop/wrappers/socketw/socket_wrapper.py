@@ -359,6 +359,11 @@ class SocketWrapper:
                     print_api(message, color='red', logger=self.logger)
                     return 1
 
+        # Check if the port is in usable port range.
+        if not (0 < self.port < 65536):
+            message = f"Port number [{self.port}] is out of usable port range (1-65535)."
+            raise SocketWrapperConfigurationValuesError(message)
+
         # Checking if listening address is in use.
         listening_check_list = [f"{self.ip_address}:{self.port}"]
         port_in_use = psutil_networks.get_processes_using_port_list(listening_check_list)
@@ -368,6 +373,7 @@ class SocketWrapper:
                 error_messages.append(f"Port [{port}] is already in use by process: {process_info}")
             raise SocketWrapperPortInUseError("\n".join(error_messages))
 
+        # Creating CA certificate if it doesn't exist.
         if not filesystem.is_file_exists(file_path=self.ca_certificate_filepath):
             # Initialize CertAuthWrapper.
             ca_certificate_directory: str = str(Path(self.ca_certificate_filepath).parent)
