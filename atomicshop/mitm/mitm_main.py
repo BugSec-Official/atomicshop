@@ -504,12 +504,22 @@ def mitm_server(config_file_path: str, script_version: str) -> int:
 
                 # Start all the regular listening interfaces.
                 for domain_or_port, ip_port_dict in connection_dict.items():
-                    current_interface_dict: dict = {
-                        'engine': engine,
-                        'process_name': f'tcp_server-{engine.engine_name}-{domain_or_port}',
-                        'ip': ip_port_dict['ip'],
-                        'ports': ip_port_dict['ports']
-                    }
+                    if 'ports' in ip_port_dict:
+                        current_interface_dict: dict = {
+                            'engine': engine,
+                            'process_name': f'tcp_server-{engine.engine_name}-{domain_or_port}',
+                            'ip': ip_port_dict['ip'],
+                            'ports': ip_port_dict['ports']
+                        }
+                    elif 'port' in ip_port_dict:
+                        current_interface_dict: dict = {
+                            'engine': engine,
+                            'process_name': f'tcp_server-{engine.engine_name}-{domain_or_port}',
+                            'ip': ip_port_dict['ip'],
+                            'ports': [ip_port_dict['port']]
+                        }
+                    else:
+                        raise RuntimeError("ip_port_dict must contain 'port' or 'ports' key.")
                     listening_interfaces.append(current_interface_dict)
         else:
             # If no engines were passed, we will use the listening addresses from the configuration.
@@ -524,8 +534,8 @@ def mitm_server(config_file_path: str, script_version: str) -> int:
                 listening_interfaces.append(current_interface_dict)
 
         # Starting the TCP server multiprocessing processes.
-        socket_wrapper_kwargs_list: list[dict] = list()
         for interface_dict in listening_interfaces:
+            socket_wrapper_kwargs_list: list[dict] = list()
             for port in interface_dict['ports']:
                 socket_wrapper_kwargs: dict = dict(
                     ip_address=interface_dict['ip'],

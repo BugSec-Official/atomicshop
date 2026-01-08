@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.11.1 - 08.01.2026
+  * mitm/mitm_main - fixes.
 * 3.11.0 - 08.01.2026
   * mitm, wrappers/socketw/socket_wrapper - fixes and improvements.
 * 3.10.5 - 06.01.2026
