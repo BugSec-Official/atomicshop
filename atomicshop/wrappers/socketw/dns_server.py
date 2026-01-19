@@ -32,7 +32,7 @@ class DnsConfigurationValuesError(Exception):
 
 LOGGER_NAME: str = 'dns_traffic'
 DNS_STATISTICS_HEADER: str = (
-    'timestamp,dns_type,client_ipv4,client_port,qname,qtype,qclass,header,error')
+    'timestamp,dns_type,client_ipv4,client_port,qname,qtype,qclass,rr,header,error,engined')
 
 
 class DnsStatisticsCSVWriter:
@@ -61,6 +61,7 @@ class DnsStatisticsCSVWriter:
             dns_request = None,
             dns_response = None,
             error: str = None,
+            engined: bool | None = None
     ):
         if not timestamp:
             timestamp = datetime.datetime.now()
@@ -101,6 +102,15 @@ class DnsStatisticsCSVWriter:
             rr: str = str(dns_response.rr)
             header = str(dns_response.header)
 
+        if engined is None:
+            engined_str: str = ''
+        elif engined is True:
+            engined_str: str = 'TRUE'
+        elif engined is False:
+            engined_str: str = 'FALSE'
+        else:
+            raise ValueError(f"Engined value must be either True, False or None. Provided: {engined}")
+
         escaped_line_string: str = csvs.escape_csv_line_to_string([
             timestamp,
             dns_type,
@@ -111,7 +121,8 @@ class DnsStatisticsCSVWriter:
             qclass,
             rr,
             header,
-            error
+            error,
+            engined_str
         ])
 
         self.csv_logger.info(escaped_line_string)
@@ -719,7 +730,7 @@ class DnsServer:
                     if forward_to_tcp_server:
                         # self.logger.info(f"Response {dns_built_response.short()}")
                         self.dns_statistics_csv_writer.write_row(
-                            client_address=client_address, dns_response=dns_built_response)
+                            client_address=client_address, dns_response=dns_built_response, engined=forward_to_tcp_server)
 
                         message = f"Response Details: {dns_built_response.rr}"
                         print_api(message, logger=self.logger, logger_method='info', oneline=True)
@@ -746,7 +757,7 @@ class DnsServer:
                             for rr in dns_response_parsed.rr:
                                 if isinstance(rr.rdata, A):
                                     self.dns_statistics_csv_writer.write_row(
-                                        client_address=client_address, dns_response=dns_response_parsed)
+                                        client_address=client_address, dns_response=dns_response_parsed, engined=forward_to_tcp_server)
 
                                     self.logger.info(f"Response IP: {rr.rdata}")
 
