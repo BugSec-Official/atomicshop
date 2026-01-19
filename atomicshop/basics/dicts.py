@@ -1,4 +1,8 @@
 import datetime
+from collections.abc import Mapping, Iterable
+
+_PRIMITIVES = (str, int, float, bool, bytes,
+               datetime.datetime, datetime.date, datetime.time, type(None))
 
 
 def get_first_key_name(input_dict: dict) -> str:
@@ -212,44 +216,73 @@ def convert_object_with_attributes_to_dict(
     """
 
     if skip_attributes is None:
-        skip_attributes = list()
+        skip_attributes = []
+
+    skip_set = set(skip_attributes)
+
+    def should_include(attr_name: str) -> bool:
+        if attr_name in skip_set:
+            return False
+        if attr_name.startswith("_") and not attr_name.startswith("__"):
+            return include_private_1
+        if attr_name.startswith("__"):
+            return include_private_2
+        return True
+
+    def convert_value(value, level: int):
+        # Base cases
+        if level <= 0 or isinstance(value, _PRIMITIVES):
+            return value
+
+        # Mapping (dict): recurse into values (dict is iterable over keys, so special-case it)
+        if isinstance(value, Mapping):
+            return {k: convert_value(v, level - 1) for k, v in value.items()}
+
+        # Common container types: preserve container type
+        if isinstance(value, list):
+            return [convert_value(item, level - 1) for item in value]
+        if isinstance(value, tuple):
+            return tuple(convert_value(item, level - 1) for item in value)
+        if isinstance(value, set):
+            return {convert_value(item, level - 1) for item in value}
+        if isinstance(value, frozenset):
+            return frozenset(convert_value(item, level - 1) for item in value)
+
+        # Recurse into attribute-bearing objects only (avoid `isinstance(x, object)` which is always True)
+        if hasattr(value, "__dict__") or hasattr(value, "__slots__"):
+            return convert_object_with_attributes_to_dict(
+                value,
+                include_private_1=include_private_1,
+                include_private_2=include_private_2,
+                skip_attributes=skip_attributes,
+                recursion_level=level - 1
+            )
+
+        # Fallback: return as-is (e.g., iterators/generators/custom types you don't want to consume)
+        return value
 
     obj_dict = {}
+
+    # Your original behavior: iterate attribute names via dir()
     for attr_name in dir(obj):
-        # Skip over any attributes that are in the skip_attributes list
-        if attr_name in skip_attributes:
+        if not should_include(attr_name):
             continue
+
         # Filter out callable attributes (methods, etc.). We only want attributes.
-        if callable(getattr(obj, attr_name)):
+        try:
+            if callable(getattr(obj, attr_name)):
+                continue
+        except AttributeError:
+            # Some descriptors/properties may raise; skip them
             continue
 
-        # Check for private attributes with one underscore.
-        if attr_name.startswith("_") and not attr_name.startswith("__"):
-            if not include_private_1:
-                continue
-        # Check for private attributes with two underscores (dunder methods).
-        elif attr_name.startswith("__"):
-            if not include_private_2:
-                continue
+        try:
+            attr_value = getattr(obj, attr_name)
+        except AttributeError:
+            continue
 
-        attr_value = getattr(obj, attr_name)
-
-        # If recursion level is greater than 0, recurse into attribute values if possible
         if recursion_level > 0:
-            # If the attribute is a non-string.
-            if not isinstance(attr_value, (str, int, bytes, float, datetime.datetime, datetime.date, datetime.time)):
-                # If the value is not iterable, convert its items
-                if hasattr(attr_value, '__iter__'):
-                    attr_value = [convert_object_with_attributes_to_dict(
-                        item, include_private_1, include_private_2, skip_attributes, recursion_level - 1
-                    ) for item in attr_value]
-                # Otherwise, if it's an object with attributes, convert it to a dictionary
-                elif (hasattr(attr_value, '__dict__') or
-                      hasattr(attr_value, '__slots__') or
-                      isinstance(attr_value, object)):
-                    attr_value = convert_object_with_attributes_to_dict(
-                        attr_value, include_private_1, include_private_2, skip_attributes, recursion_level - 1
-                    )
+            attr_value = convert_value(attr_value, recursion_level)
 
         obj_dict[attr_name] = attr_value
 

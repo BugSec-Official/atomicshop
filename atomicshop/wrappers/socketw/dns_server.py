@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 from typing import Literal, Optional
 import multiprocessing
+import re
 
 from ...print_api import print_api
 from ..loggingw import loggingw
@@ -228,12 +229,16 @@ class DnsServer:
         self.resolve_all_domains_target: str
 
         self.intercept_domain_dict: dict = dict()
+        self.intercept_domain_exclude_list: list[str] = list()
         for engine in self.engine_list:
             # If the engine is not a reference engine.
             if engine.engine_name != '__reference_general':
                 # Get the domains from the engine.
-
                 self.intercept_domain_dict.update(engine.domain_target_dict)
+                # Get the excluded domains from the engine.
+                self.intercept_domain_exclude_list.extend(engine.domain_exclude_list)
+        # Compile the exclude patterns for faster matching.
+        self._exclude_rx = _compile_exclude_patterns(self.intercept_domain_exclude_list)
 
         # Settings for static DNS Responses in offline mode.
         self.offline_route_ipv4: str = '10.10.10.10'
@@ -493,9 +498,19 @@ class DnsServer:
                             # Check if 'resolve_to_tcp_server_only_tcp_resolve_domains' is set to 'True'.
                             # If so, we need to check if the incoming domain contain any of the domains in the list.
                             if self.resolve_by_engine_enable:
+                                question_domain_norm = question_domain.strip().lower().rstrip(".")
+
+                                # Stronger and safer than `x in question_domain`: matches the domain itself or any subdomain of it
+                                intercept_hit = any(
+                                    question_domain_norm == d or question_domain_norm.endswith("." + d)
+                                    for d in self.intercept_domain_dict.keys()
+                                )
+
+                                excluded_hit = any(rx.search(question_domain_norm) for rx in self._exclude_rx)
+
                                 # If current query domain (+ subdomains) CONTAIN any of the domains from modules config
                                 # files and current request contains "A" (IPv4) record.
-                                if any(x in question_domain for x in self.intercept_domain_dict.keys()):
+                                if intercept_hit and not excluded_hit:
                                     # If incoming domain contains any of the 'engine_domains' then domain will
                                     # be forwarded to our TCP Server.
                                     forward_to_tcp_server = True
@@ -984,3 +999,18 @@ def start_dns_server_multiprocessing_worker(
         return 1
 
     dns_server_instance.start(is_ready_multiprocessing=is_ready_multiprocessing)
+
+
+def _compile_exclude_patterns(patterns):
+    """
+    Convert wildcard patterns like 'sub.*.example.com' into regexes.
+    - '*' becomes '.*' (matches across dots too)
+    - Uses re.search semantics (substring match), to match your current style.
+    """
+    compiled = []
+    for p in patterns:
+        p = p.strip().lower().rstrip(".")
+        # Escape everything, then unescape '*' into '.*'
+        rx = re.compile(re.escape(p).replace(r"\*", ".*"), re.IGNORECASE)
+        compiled.append(rx)
+    return compiled

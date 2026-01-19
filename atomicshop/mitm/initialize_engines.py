@@ -13,7 +13,8 @@ class ModuleCategory:
         self.engine_name: str = str()
         self.script_directory: str = script_directory
 
-        self.domain_list: list = list()
+        self.domain_list: list[str] = list()
+        self.domain_exclude_list: list[str] = list()
         self.domain_target_dict: dict = dict()
         self.port_target_dict: dict = dict()
 
@@ -26,10 +27,10 @@ class ModuleCategory:
         self.responder_file_path: str = str()
         self.recorder_file_path: str = str()
 
-        self.parser_class_object: str = str()
-        self.requester_class_object: str = str()
-        self.responder_class_object: str = str()
-        self.recorder_class_object: str = str()
+        self.parser_class_object: type[parser___reference_general.ParserGeneral] | None = None
+        self.requester_class_object: type[requester___reference_general.RequesterGeneral] | None = None
+        self.responder_class_object: type[responder___reference_general.ResponderGeneral] | None = None
+        self.recorder_class_object: type[recorder___reference_general.RecorderGeneral] | None = None
 
     def fill_engine_fields_from_general_reference(self, engines_fullpath: str):
         # Reference module variables.
@@ -53,7 +54,10 @@ class ModuleCategory:
         self.engine_name = Path(engine_directory_path).name
 
         # Getting the parameters from engine config file
-        self.domain_list = configuration_data['engine']['domains']
+        self.domain_list: list[str] = configuration_data['engine']['domains']
+
+        if 'domains_exclude' in configuration_data['engine']:
+            self.domain_exclude_list: list[str] = configuration_data['engine']['domains_exclude']
 
         if 'on_port_connect' in configuration_data:
             self.on_port_connect = configuration_data['on_port_connect']

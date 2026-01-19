@@ -206,6 +206,7 @@ def startup_output(system_logger, script_version: str):
                    f"{engine.recorder_class_object.__name__}")
         print_api.print_api(message, logger=system_logger)
         print_api.print_api(f"[*] Domains: {list(engine.domain_target_dict.keys())}", logger=system_logger)
+        print_api.print_api(f"[*] Domain Patterns Excluded: {engine.domain_exclude_list}", logger=system_logger)
         dns_targets: list = list()
         for domain, ip_port in engine.domain_target_dict.items():
             dns_targets.append(ip_port['ip'])

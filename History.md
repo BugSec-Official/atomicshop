@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.11.2 - 19.01.2026
+  * basics/dicts, mitm, wrappers/socketw/dns_server - fixes and improvements.
 * 3.11.1 - 08.01.2026
   * mitm/mitm_main - fixes.
 * 3.11.0 - 08.01.2026
