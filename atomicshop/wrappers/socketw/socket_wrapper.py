@@ -18,7 +18,7 @@ from ...permissions import permissions
 from ... import filesystem, certificates
 from ...basics import booleans, tracebacks
 from ...print_api import print_api
-from ...ssh_remote import SSHRemote
+from ...import ssh_remote
 
 from . import socket_base, creator, process_getter, accepter, statistics_csv, ssl_base, sni
 
@@ -245,7 +245,7 @@ class SocketWrapper:
             self.package_processor = None
 
         # We will initialize it during the first 'get_process_name' function call.
-        self.ssh_client: SSHRemote | None = None
+        self.ssh_client: ssh_remote.SSHRemote | None = None
 
         # If logs directory was not set, we will use the working directory.
         if not logs_directory:
@@ -590,7 +590,7 @@ class SocketWrapper:
                 if self.get_process_name:
                     # Initializing SSHRemote class if not initialized.
                     if self.ssh_client is None:
-                        self.ssh_client = SSHRemote(
+                        self.ssh_client = ssh_remote.SSHRemote(
                             ip_address=source_ip, username=self.ssh_user, password=self.ssh_pass, logger=self.logger)
 
                     # Get the process name from the socket.
@@ -759,7 +759,14 @@ class SocketWrapper:
                         host=domain_from_engine,
                         process_name=process_name)
             # Sometimes paramiko SSH connection return EOFError on connection reset, so we need to catch it separately.
-            except (ConnectionResetError, paramiko.ssh_exception.SSHException, EOFError) as e:
+            # Basically all these exceptions mean that there was a problem with the connection in some way, besides the
+            # python not being found, but it also can be that there was a problem with the connection and the script
+            # was cut mid-action.
+            except (
+                ConnectionResetError, EOFError, TimeoutError,
+                paramiko.ssh_exception.SSHException, paramiko.ssh_exception.NoValidConnectionsError,
+                ssh_remote.SSHRemoteWrapperNoPythonFound
+            ) as e:
                 exception_string: str = tracebacks.get_as_string()
                 full_string: str = f"{str(e)} | {exception_string}"
                 self.statistics_writer.write_accept_error(

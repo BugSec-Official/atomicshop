@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.11.4 - 20.01.2026
+  * wrappers/socketw/socket_wrapper - fixes.
 * 3.11.3 - 19.01.2026
   * wrappers/socketw/dns_serve - improvements.
 * 3.11.2 - 19.01.2026
