@@ -299,23 +299,24 @@ def get_ipv4s_for_tcp_server() -> int:
     if interface_name is None:
         return 1
 
-    # Get selected network interface virtual IPs from previous runs.
-    # We still need network interface settings for DNS gateway assignment for the network interface doesn't matter in localhost mode or not.
-    current_virtual_ips: list[str] = networks.get_interface_ips_powershell(interface_name, "virtual")
+    if not config_static.MainConfig.is_localhost:
+        # Get selected network interface virtual IPs from previous runs.
+        # We still need network interface settings for DNS gateway assignment for the network interface doesn't matter in localhost mode or not.
+        current_virtual_ips: list[str] = networks.get_interface_ips_powershell(interface_name, "virtual")
 
-    if current_virtual_ips:
-        print_api.print_api(
-            f"Removing previous virtual IPs from interface [{interface_name}]: {current_virtual_ips}",
-            color="blue")
-
-        if not permissions.is_admin():
+        if current_virtual_ips:
             print_api.print_api(
-                f"Administrator permissions are required to remove virtual IPs from interface.",
-                error_type=True, color="red")
-            return 1
-    # Remove all the virtual IPs from the interface.
-    for ip in current_virtual_ips:
-        netshw.remove_virtual_ip(interface_name, ip)
+                f"Removing previous virtual IPs from interface [{interface_name}]: {current_virtual_ips}",
+                color="blue")
+
+            if not permissions.is_admin():
+                print_api.print_api(
+                    f"Administrator permissions are required to remove virtual IPs from interface.",
+                    error_type=True, color="red")
+                return 1
+        # Remove all the virtual IPs from the interface.
+        for ip in current_virtual_ips:
+            netshw.remove_virtual_ip(interface_name, ip)
 
     network_adapter_config, network_adapter, adapter_info = networks.get_wmi_network_adapter_configuration(
         interface_name=interface_name,
@@ -337,9 +338,42 @@ def get_ipv4s_for_tcp_server() -> int:
 
     # Check if we need the localhost ips (12.0.0.1) or external local ips (192.168.0.100).
     if config_static.MainConfig.is_localhost:
+        # Add all the ips and ports to test bindability.
+        bindable_port_list: list[int] = []
+        for engine in config_static.ENGINES_LIST:
+            for ip_port_dict in engine.domain_target_dict.values():
+                bindable_port_list.extend(ip_port_dict['ports'])
+            for ip_port_dict in engine.port_target_dict.values():
+                bindable_port_list.append(ip_port_dict['port'])
+
+            # # Test that all the virtual IPs are bindable.
+            # for ip_port_tuple in bindable_port_list:
+            #     ipv4, port = ip_port_tuple
+            #     print_api.print_api(f"Checking that virtual IP is bindable: {ipv4}:{port}", logger=system_logger)
+            #     networks.wait_for_ip_bindable_socket(ipv4, port=int(port), timeout=15)
+
+
+
         # Generate the list of localhost ips. We will start from 127.0.0.2 and end with 127.0.0.2(create_ips + 1)
-        for i in range(2, create_ips + 2):
-            engine_ips.append(f"127.0.0.{i}")
+        i = 1
+        bindable: bool = True
+        port_check: int | None = None
+        while len(bindable_port_list) > 0:
+            i += 1
+
+            if bindable:
+                port_check: int = bindable_port_list.pop(0)
+
+            ip_check: str = f"127.0.0.{i}"
+
+            try:
+                networks.wait_for_ip_bindable_socket(ip_check, port=port_check, timeout=0)
+            except TimeoutError:
+                bindable = False
+                continue
+
+            bindable = True
+            engine_ips.append(ip_check)
 
         # If the current default DNS gateway ipv4 is inside the engine_ips, then we will remove it and add the next in line.
         if config_static.MainConfig.default_localhost_dns_gateway_ipv4 in engine_ips:
@@ -826,20 +860,20 @@ def _add_virtual_ips_set_default_dns_gateway(system_logger: logging.Logger) -> i
                 logger=system_logger
             )
 
+            # Add all the ips and ports to test bindability.
+            bindable_test_list: list[tuple[str, int]] = []
             for engine in config_static.ENGINES_LIST:
-                # Add all the ips and ports to test bindability.
-                bindable_test_list: list[tuple[str, int]] = []
                 for ip_port_dict in engine.domain_target_dict.values():
                     for port in ip_port_dict['ports']:
                         bindable_test_list.append((ip_port_dict['ip'], port))
                 for ip_port_dict in engine.port_target_dict.values():
                     bindable_test_list.append((ip_port_dict['ip'], ip_port_dict['port']))
 
-                # Test that all the virtual IPs are bindable.
-                for ip_port_tuple in bindable_test_list:
-                    ipv4, port = ip_port_tuple
-                    print_api.print_api(f"Checking that virtual IP is bindable: {ipv4}:{port}", logger=system_logger)
-                    networks.wait_for_ip_bindable_socket(ipv4, port=int(port), timeout=15)
+            # Test that all the virtual IPs are bindable.
+            for ip_port_tuple in bindable_test_list:
+                ipv4, port = ip_port_tuple
+                print_api.print_api(f"Checking that virtual IP is bindable: {ipv4}:{port}", logger=system_logger)
+                networks.wait_for_ip_bindable_socket(ipv4, port=int(port), timeout=15)
             print_api.print_api("BIND test successful for all virtual IPs.", logger=system_logger)
         except (PermissionError, TimeoutError) as e:
             print_api.print_api(e, error_type=True, color="red", logger=system_logger)

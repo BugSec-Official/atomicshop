@@ -115,20 +115,23 @@ def wait_for_ip_bindable(
     Raises TimeoutError if the IP cannot be bound within 'timeout' seconds.
     """
     deadline = time.time() + timeout
-    last_err: OSError | None = None
+    # last_err: OSError | None = None
 
-    while time.time() < deadline:
+    while True:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             s.bind((ip, port))
-            s.close()
             return  # success
         except OSError as e:
             last_err = e
+        finally:
             s.close()
-            time.sleep(interval)
 
-    raise TimeoutError(
-        f"IP {ip} not bindable within {timeout} seconds; "
-        f"last error: {last_err}"
-    )
+        # If we've reached/exceeded the deadline, stop (this still allows one attempt when timeout==0).
+        if time.time() >= deadline:
+            raise TimeoutError(
+                f"IP {ip} not bindable within {timeout} seconds; "
+                f"last error: {last_err}"
+            )
+
+        time.sleep(interval)
