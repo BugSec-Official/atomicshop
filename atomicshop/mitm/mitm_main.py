@@ -6,6 +6,7 @@ import os
 import sys
 import logging
 import signal
+from pathlib import Path
 
 import atomicshop   # Importing atomicshop package to get the version of the package.
 
@@ -434,6 +435,27 @@ def mitm_server(config_file_path: str, script_version: str) -> int:
     rc: int = config_static.load_config(config_file_path, print_kwargs=dict(stdout=False))
     if rc != 0:
         return rc
+
+    # Check if sslkeylog file exists and rename it if it does.
+    if config_static.Certificates.enable_sslkeylogfile_env_to_client_ssl_context:
+        sslkeylog_file_path: str = os.path.join(
+            config_static.LogRec.logs_path, config_static.Certificates.sslkeylog_file_name)
+        if os.path.isfile(sslkeylog_file_path):
+            creation_time: float = os.path.getctime(sslkeylog_file_path)
+            creation_timestamp_str: str = datetime.datetime.fromtimestamp(creation_time).strftime("%Y%m%d_%H%M%S")
+            now_timestamp_str: str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+            keylog_stem: str = Path(sslkeylog_file_path).stem
+            keylog_extension: str = Path(sslkeylog_file_path).suffix
+            renamed_sslkeylog_file_path: str = os.path.join(
+                config_static.LogRec.logs_path,
+                f'{keylog_stem}_{creation_timestamp_str}-{now_timestamp_str}{keylog_extension}'
+            )
+            os.rename(sslkeylog_file_path, renamed_sslkeylog_file_path)
+            print_api.print_api(
+                f"Renamed existing sslkeylog file to: {renamed_sslkeylog_file_path}",
+                color="blue"
+            )
 
     # Get the IPs that will be set for the adapter and fill the engine configuration with the IPs.
     rc: int = get_ipv4s_for_tcp_server()
