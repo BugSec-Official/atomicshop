@@ -1,12 +1,60 @@
 import statistics
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Iterable, Dict, Any
 import datetime
+import fnmatch
 
 from ...print_api import print_api
 from ...wrappers.loggingw import reading, consts
 from ...file_io import csvs
 from ... import urls, filesystem
+
+
+def match_filter(line: Dict[str, Any], filter_settings: Iterable[Dict[str, Any]]) -> bool:
+    """
+    Returns True if `line` matches ANY rule in `filter_settings` (i.e., should be removed).
+    Rules:
+      - Empty value in filter rule => wildcard (matches anything)
+      - 'host' and 'path' support glob wildcards: * ? []
+      - Other fields are exact string match (after strip), unless empty (wildcard)
+      - Host match is case-insensitive (common behavior for domains)
+    """
+    def is_empty(v) -> bool:
+        return v is None or str(v).strip() == ""
+
+    def norm(v) -> str:
+        return "" if v is None else str(v).strip()
+
+    def eq_match(field: str, rule_val) -> bool:
+        # empty rule => wildcard
+        if is_empty(rule_val):
+            return True
+        return norm(line.get(field)) == norm(rule_val)
+
+    def host_match(rule_val) -> bool:
+        if is_empty(rule_val):
+            return True
+        return fnmatch.fnmatch(norm(line.get("host")).lower(), norm(rule_val).lower())
+
+    def path_match(rule_val) -> bool:
+        # NOTE: fnmatch matches whole string. Use *foo* to mean "contains foo".
+        if is_empty(rule_val):
+            return True
+        return fnmatch.fnmatch(norm(line.get("path")), norm(rule_val))
+
+    for rule in filter_settings:
+        if (
+            eq_match("dest_port", rule.get("dest_port")) and
+            host_match(rule.get("host")) and
+            path_match(rule.get("path")) and
+            eq_match("command", rule.get("command")) and
+            eq_match("status_code", rule.get("status_code")) and
+            eq_match("request_size_bytes", rule.get("request_size_bytes")) and
+            eq_match("response_size_bytes", rule.get("response_size_bytes"))
+        ):
+            return True
+
+    return False
 
 
 def calculate_moving_average(
@@ -18,8 +66,9 @@ def calculate_moving_average(
         get_deviation_for_last_day_only: bool = False,
         get_deviation_for_date: str = None,
         skip_total_count_less_than: int = None,
+        filter_csv_file_path: str = None,
         print_kwargs: dict = None
-) -> list:
+) -> tuple[list, list]:
     """
     This function calculates the moving average of the daily statistics.
 
@@ -33,7 +82,11 @@ def calculate_moving_average(
     :param get_deviation_for_last_day_only: bool, check the 'get_all_files_content' function.
     :param get_deviation_for_date: str, check the 'get_all_files_content' function.
     :param skip_total_count_less_than: integer, if the total count is less than this number, skip the deviation.
+    :param filter_csv_file_path: str, the path to the CSV file that contains the filter rules.
+        If provided, The options in the rules will be removed from the statistics content before calculating the moving average.
+        And the second list in the tuple will contain only the entries that were removed by the filter.
     :param print_kwargs: dict, the print_api arguments.
+    :return: tuple[list, list], the first list is the deviation list, the second list is the removed entries by filter.
     """
 
     if not file_path and not statistics_content:
@@ -50,6 +103,32 @@ def calculate_moving_average(
             get_deviation_for_last_day_only=get_deviation_for_last_day_only,
             get_deviation_for_date=get_deviation_for_date,
             print_kwargs=print_kwargs)
+
+    # Get the filter settings csv.
+    if filter_csv_file_path:
+        filter_settings, _ = csvs.read_csv_to_list_of_dicts_by_header(filter_csv_file_path, **(print_kwargs or {}))
+    else:
+        filter_settings = []
+
+    # Apply the filter to the statistics content.
+    removed_content: list = []
+    if filter_settings:
+        for date_string, day_dict in statistics_content.items():
+            filtered_content: list = []
+            for line in day_dict['content']:
+                if line['host'] == 'host':
+                    # Skip the header line.
+                    filtered_content.append(line)
+                    continue
+
+                remove_line = match_filter(line, filter_settings)
+
+                if remove_line:
+                    removed_content.append(line)
+                else:
+                    filtered_content.append(line)
+            day_dict['content'] = filtered_content
+            # day_dict['removed_by_filter'] = removed_content
 
     for date_string, day_dict in statistics_content.items():
         day_dict['content_no_useless'] = get_content_without_useless(day_dict['content'])
@@ -74,7 +153,7 @@ def calculate_moving_average(
     deviation_list: list = find_deviation_from_moving_average(
         statistics_content, top_bottom_deviation_percentage, skip_total_count_less_than)
 
-    return deviation_list
+    return deviation_list, removed_content
 
 
 def get_all_files_content(

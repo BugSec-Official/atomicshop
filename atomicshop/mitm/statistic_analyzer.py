@@ -357,8 +357,13 @@ def deviation_calculator_by_moving_average(
         output_file_path: str = None,
         output_file_type: Literal['json', 'csv'] = 'json',
         convert_sizes_lists_and_ma_data_to_string: bool = False,
-        skip_total_count_less_than: int = None
-) -> Union[list, None]:
+        skip_total_count_less_than: int = None,
+        filter_csv_file_path: str = None,
+        print_kwargs: dict = None
+) -> tuple[
+        Union[list, None],
+        list
+    ]:
     """
     This function is the main function for the moving average calculator.
 
@@ -401,8 +406,15 @@ def deviation_calculator_by_moving_average(
         only if the total count of the checked type
         (request average size, response average, request count, response count)
         is greater or equal to this number.
+    :param filter_csv_file_path: string, if specified, the CSV file at this path will be used to filter
+        the hosts or URLs to analyze.
+    :param print_kwargs: dict, additional keyword arguments to pass to the print_api function.
+
     -----------------------------
-    :return: the deviation list of dicts.
+    :return: tuple:
+        - list of deviations found. Each entry in the list is a dict.
+        - list of removed content entries that were skipped during the analysis, if 'filter_csv_file_path' is specified.
+            If not specified, this will be an empty list.
 
     Example:
     import sys
@@ -448,7 +460,7 @@ def deviation_calculator_by_moving_average(
     else:
         statistics_file_path: str | None = None
 
-    deviation_list = moving_average_helper.calculate_moving_average(
+    deviation_list, removed_content = moving_average_helper.calculate_moving_average(
         statistics_file_path,
         statistics_content,
         by_type,
@@ -456,7 +468,9 @@ def deviation_calculator_by_moving_average(
         top_bottom_deviation_percentage,
         get_deviation_for_last_day_only,
         get_deviation_for_date,
-        skip_total_count_less_than
+        skip_total_count_less_than,
+        filter_csv_file_path,
+        print_kwargs=print_kwargs
     )
 
     if deviation_list:
@@ -483,9 +497,9 @@ def deviation_calculator_by_moving_average(
             elif output_file_type == 'json':
                 jsons.write_json_file(deviation_list, output_file_path, use_default_indent=True)
 
-        return deviation_list
+        return deviation_list, removed_content
 
-    return []
+    return [], removed_content
 
 
 def deviation_calculator_by_moving_average_main():

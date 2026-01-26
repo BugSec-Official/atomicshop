@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.11.6 - 26.01.2026
+  * mitm/statistic_analyzer* - fixes and improvements.
 * 3.11.5 - 21.01.2026
   * mitm/mitm_main, wrappers/socketw/socket_base - fixes.
 * 3.11.4 - 20.01.2026
