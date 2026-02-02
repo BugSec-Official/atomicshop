@@ -1,17 +1,17 @@
 from typing import Optional, Dict, Any
 
 from .. import subscribe
-from .... import win_auditw
 
 
-LOG_CHANNEL: str = 'Security'
-EVENT_ID: int = 4688
+LOG_CHANNEL: str = 'Application'
+EVENT_ID: int = 1000
+# Optional also 1001 for process crash with dump by WERmgr (if WER is enabled), but it has fewer details.
 
 
-class ProcessCreationSubscriber(subscribe.EventLogSubscriber):
+class ProcessCrashSubscriber(subscribe.EventLogSubscriber):
     """
-    Process creation specific module.
-    Wraps EventLogSubscriber configured for Security/4688 and exposes:
+    Process crash specific module.
+    Wraps EventLogSubscriber configured for Security/1000 and exposes:
       - start()
       - stop()
       - emit(timeout=None) -> parsed dict (not raw xml)
@@ -23,7 +23,7 @@ class ProcessCreationSubscriber(subscribe.EventLogSubscriber):
         user: Optional[str] = None,
         domain: Optional[str] = None,
         password: Optional[str] = None,
-        bookmark_path: str = "bookmark_security_4688.xml",
+        bookmark_path: str = "bookmark_application_1000.xml",
         resume: bool = True,
         from_oldest: bool = False,
     ):
@@ -40,11 +40,6 @@ class ProcessCreationSubscriber(subscribe.EventLogSubscriber):
         )
 
     def start(self) -> None:
-        # Enable auditing only if local server.
-        if self.server is None:
-            win_auditw.enable_audit_process_creation()
-            win_auditw.enable_command_line_auditing()
-
         super().start()
 
     def stop(self) -> None:

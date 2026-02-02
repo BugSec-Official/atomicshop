@@ -296,7 +296,14 @@ def get_ipv4s_for_tcp_server() -> int:
     create_ips: int = len(domains_to_create_ips_for) + len(ports_to_create_ips_for)
 
     # Get network interface name.
-    interface_name: str = _get_interface_name()
+    try:
+        interface_name: str | None = _get_interface_name()
+    except OSError:
+        interface_name = None
+        print_api.print_api(
+            f"Couldn't get default interface name. Use manual setting in config.toml [dnstcp.network_interface].",
+            color="red"
+        )
     if interface_name is None:
         return 1
 
@@ -319,9 +326,16 @@ def get_ipv4s_for_tcp_server() -> int:
         for ip in current_virtual_ips:
             netshw.remove_virtual_ip(interface_name, ip)
 
-    network_adapter_config, network_adapter, adapter_info = networks.get_wmi_network_adapter_configuration(
-        interface_name=interface_name,
-        get_info_from_network_config=True)
+    try:
+        network_adapter_config, network_adapter, adapter_info = networks.get_wmi_network_adapter_configuration(
+            interface_name=interface_name,
+            get_info_from_network_config=True)
+    except Exception as e:
+        print_api.print_api(
+            f"Couldn't get network adapter configuration for interface [{interface_name}]: {e}\n"
+            f"Try other interface or check your network configuration.",
+            error_type=True, color="red")
+        return 1
 
     global NETWORK_INTERFACE_SETTINGS
     NETWORK_INTERFACE_SETTINGS = NetworkSettings(

@@ -1,5 +1,6 @@
 import winreg
 import sys
+from typing import Optional, Dict, Any
 
 from .. import subscribe
 from .....print_api import print_api
@@ -25,12 +26,34 @@ class SchannelLoggingSubscriber(subscribe.EventLogSubscriber):
             event = process_create_subscriber.emit()
             print(event)
     """
-    def __init__(self):
-        super().__init__(log_channel=LOG_CHANNEL, provider=PROVIDER)
+
+    def __init__(
+            self,
+            server: Optional[str] = None,
+            user: Optional[str] = None,
+            domain: Optional[str] = None,
+            password: Optional[str] = None,
+            bookmark_path: str = "bookmark_security_schannel.xml",
+            resume: bool = True,
+            from_oldest: bool = False,
+    ):
+        super().__init__(
+            log_channel=LOG_CHANNEL,
+            provider=PROVIDER,
+            server=server,
+            user=user,
+            domain=domain,
+            password=password,
+            bookmark_path=bookmark_path,
+            resume=resume,
+            from_oldest=from_oldest,
+        )
 
     def start(self):
         """Start the subscription process."""
-        enable_schannel_logging()
+        # Enable Schannel logging only for local subscriptions.
+        if not self.server:
+            enable_schannel_logging()
 
         super().start()
 
@@ -38,7 +61,7 @@ class SchannelLoggingSubscriber(subscribe.EventLogSubscriber):
         """Stop the subscription process."""
         super().stop()
 
-    def emit(self, timeout: float = None) -> dict:
+    def emit(self, timeout: float = None) -> Optional[Dict[str, Any]]:
         """
         Get the next event from the event queue.
 

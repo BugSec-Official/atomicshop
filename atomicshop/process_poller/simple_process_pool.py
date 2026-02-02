@@ -144,14 +144,15 @@ class SimpleProcessPool:
         return self._processes
 
     def _start_main_thread(self, shared_dict_update_queue):
-        get_instance = process_create.ProcessCreateSubscriber()
+        get_instance = process_create.ProcessCreationSubscriber()
         get_instance.start()
 
         while self._running:
-            event = get_instance.emit()
-            process_id = event['NewProcessIdInt']
-            process_name = Path(event['NewProcessName']).name
-            command_line = event['CommandLine']
+            creation_event_emit: dict = get_instance.emit()
+            creation_event: dict = creation_event_emit['event']['event_data']
+            process_id = creation_event['NewProcessIdInt']
+            process_name = Path(creation_event['NewProcessName']).name
+            command_line = creation_event['CommandLine']
 
             # The event log tracing method doesn't always give the command line, unlike the psutil method.
             # So, we'll get the command line from the current psutil snapshot separately.
@@ -188,7 +189,8 @@ class SimpleProcessPool:
         process_terminate_instance.start()
 
         while self._running:
-            termination_event = process_terminate_instance.emit()
+            termination_event_emit: dict = process_terminate_instance.emit()
+            termination_event: dict = termination_event_emit['event']['event_data']
             process_id = termination_event['ProcessIdInt']
 
             removal_thread = threading.Thread(target=self._remove_pid, args=(process_id,))
