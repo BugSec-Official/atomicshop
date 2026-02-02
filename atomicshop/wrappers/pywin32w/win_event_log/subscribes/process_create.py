@@ -28,8 +28,7 @@ class ProcessCreationSubscriber(subscribe.EventLogSubscriber):
         from_oldest: bool = False,
     ):
         super().__init__(
-            log_channel=LOG_CHANNEL,
-            event_id=EVENT_ID,
+            subscriptions=[(LOG_CHANNEL, [EVENT_ID])],
             server=server,
             user=user,
             domain=domain,

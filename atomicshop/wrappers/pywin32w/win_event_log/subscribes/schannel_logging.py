@@ -38,8 +38,7 @@ class SchannelLoggingSubscriber(subscribe.EventLogSubscriber):
             from_oldest: bool = False,
     ):
         super().__init__(
-            log_channel=LOG_CHANNEL,
-            provider=PROVIDER,
+            subscriptions=[(LOG_CHANNEL, [PROVIDER])],
             server=server,
             user=user,
             domain=domain,

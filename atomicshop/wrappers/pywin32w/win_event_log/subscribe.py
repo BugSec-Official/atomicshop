@@ -3,9 +3,10 @@ import time
 import queue
 import threading
 from pathlib import Path
-from typing import Optional, Union, Dict, Any, List
+from typing import Optional, Union, Dict, Any, List, Sequence, Iterable, Tuple
 import xml.etree.ElementTree as Et
 import binascii
+import re
 
 import pywintypes
 import win32api
@@ -249,18 +250,160 @@ def open_remote_session(
     return win32evtlog.EvtOpenSession(login, win32evtlog.EvtRpcLogin, 0, 0)
 
 
+def _xpath_str_literal(s: str) -> str:
+    """Return an XPath string literal for s, handling quotes safely."""
+    if "'" not in s:
+        return f"'{s}'"
+    if '"' not in s:
+        return f'"{s}"'
+    parts = s.split("'")
+    inner = ", \"'\", ".join([f"'{p}'" for p in parts])
+    return f"concat({inner})"
+
+
+def _sanitize_filename_component(s: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]+", "_", s).strip("_") or "x"
+
+
+def _resolve_bookmark_path(
+    base: Union[str, Path],
+    subscriptions_count: int,
+    log_channel: str,
+    query: str,
+) -> Path:
+    """Derive a per-subscription bookmark file path when subscribing to multiple channels."""
+    base_path = Path(base)
+
+    # Backwards compatible: single-subscription keeps the original path semantics.
+    if subscriptions_count == 1:
+        return base_path
+
+    # Multi-subscription: treat a *.xml path as a "prefix template"; otherwise treat as a directory.
+    if base_path.suffix.lower() == ".xml":
+        directory = base_path.parent
+        stem = base_path.stem
+    else:
+        directory = base_path
+        stem = "bookmark"
+
+    key = f"{log_channel}|{query}".encode("utf-8")
+    crc = f"{(binascii.crc32(key) & 0xFFFFFFFF):08x}"
+    fname = f"{stem}_{_sanitize_filename_component(log_channel)}_{crc}.xml"
+    return directory / fname
+
+
+def _normalize_subscriptions(subscriptions: Sequence[Any]) -> List[Dict[str, Any]]:
+    """
+    Normalize subscriptions into:
+        [{"log_channel": str, "event_ids": Optional[List[int]], "providers": Optional[List[str]]}, ...]
+
+    Required input shape:
+        [("Application", [1000, 1001]), ("System", [1014, "Schannel"]), ...]
+
+    Notes:
+      - selectors may mix ints (EventIDs) and strs (Provider names) within the same channel.
+      - strings that look numeric (e.g. "1014") are rejected to avoid ambiguity; use int(1014).
+    """
+    if subscriptions is None:
+        raise ValueError("subscriptions cannot be None.")
+    spec_list = list(subscriptions)
+    if not spec_list:
+        raise ValueError("subscriptions cannot be empty.")
+
+    if not all(isinstance(x, (list, tuple)) and len(x) == 2 and isinstance(x[0], str) for x in spec_list):
+        raise ValueError('subscriptions must be a list of pairs: [("Channel", selectors), ...].')
+
+    out: List[Dict[str, Any]] = []
+
+    for ch, selectors in spec_list:
+        if isinstance(selectors, (int, str)):
+            selectors_list = [selectors]
+        elif isinstance(selectors, Iterable) and not isinstance(selectors, (str, bytes)):
+            selectors_list = list(selectors)
+        else:
+            raise ValueError(
+                f"Selectors for channel {ch!r} must be an int (EventID), str (Provider), or a list of those."
+            )
+
+        if not selectors_list:
+            raise ValueError(f"Selectors list for channel {ch!r} cannot be empty.")
+
+        event_ids: List[int] = []
+        providers: List[str] = []
+
+        for sel in selectors_list:
+            if isinstance(sel, int):
+                event_ids.append(int(sel))
+                continue
+
+            if isinstance(sel, str):
+                s = sel.strip()
+                if not s:
+                    raise ValueError(f"Empty provider name in selectors for channel {ch!r}.")
+                if s.isdigit():
+                    raise ValueError(
+                        f"Selector {sel!r} for channel {ch!r} looks like an EventID; use an int, not a numeric string."
+                    )
+                providers.append(s)
+                continue
+
+            raise ValueError(
+                f"Invalid selector type {type(sel).__name__} for channel {ch!r}; expected int or str."
+            )
+
+        if not event_ids and not providers:
+            raise ValueError(f"No valid selectors for channel {ch!r}.")
+
+        out.append({
+            "log_channel": ch,
+            "event_ids": event_ids or None,
+            "providers": providers or None,
+        })
+
+    return out
+
+
 def build_xpath_query(
-        event_id: Optional[str] = None,
-        provider: Optional[str] = None
+        event_ids: Optional[Sequence[Union[int, str]]] = None,
+        providers: Optional[Sequence[str]] = None
 ) -> str:
-    """Build the XPath query used by EvtSubscribe."""
-    if (event_id is None) == (provider is None):
-        raise ValueError("You must specify exactly one of event_id or provider.")
+    """Build the XPath query used by EvtSubscribe (EventIDs and/or Provider names)."""
 
-    if provider:
-        return f"*[System/Provider[@Name='{provider}']]"
+    ids: List[str] = []
+    if event_ids:
+        for x in event_ids:
+            if isinstance(x, int):
+                ids.append(str(x))
+            elif isinstance(x, str) and x.strip().isdigit():
+                # tolerate numeric strings if someone passes them, but prefer ints in subscription specs
+                ids.append(str(int(x.strip())))
+            else:
+                raise ValueError(f"Invalid event id: {x!r}")
 
-    return f"*[System[(EventID={event_id})]]"
+    provs: List[str] = []
+    if providers:
+        for p in providers:
+            s = str(p).strip()
+            if not s:
+                raise ValueError("Provider name cannot be empty.")
+            provs.append(s)
+
+    if not ids and not provs:
+        raise ValueError("You must specify at least one EventID and/or Provider name.")
+
+    system_terms: List[str] = []
+
+    if ids:
+        event_expr = " or ".join([f"EventID={i}" for i in ids])
+        system_terms.append(f"({event_expr})")
+
+    if provs:
+        prov_expr = " or ".join([f"@Name={_xpath_str_literal(p)}" for p in provs])
+        system_terms.append(f"Provider[{prov_expr}]")
+
+    # If both were provided, match events satisfying either condition.
+    sys_expr = " or ".join(system_terms)
+    return f"*[System[{sys_expr}]]"
 
 
 class EventLogSubscriber:
@@ -281,9 +424,7 @@ class EventLogSubscriber:
 
     def __init__(
             self,
-            log_channel: str,
-            event_id: int = None,
-            provider: str = None,
+            subscriptions: Sequence[Any],
             server: Optional[str] = None,
             user: Optional[str] = None,
             domain: Optional[str] = None,
@@ -306,20 +447,29 @@ class EventLogSubscriber:
             {"xml": "<Event .../>"}                          (if parse_xml=False)
 
         Args:
-            log_channel:
-                Windows Event Log channel name (local or remote), e.g. "Security", "System", "Application".
-                Example:
-                    EventLogSubscriber(log_channel="Security", event_id=4688)
+            subscriptions:
+                List of (log_channel, selectors) pairs.
 
-            event_id:
-                Subscribe only to a specific EventID in the channel (mutually exclusive with `provider`).
-                Example:
-                    EventLogSubscriber(log_channel="Security", event_id=4688)
+                - log_channel: Windows Event Log channel name, e.g. "Security", "System", "Application".
+                - selectors: list containing any mix of:
+                    * int  -> EventID
+                    * str  -> Provider name
 
-            provider:
-                Subscribe only to a specific Provider Name in the channel (mutually exclusive with `event_id`).
-                Example:
-                    EventLogSubscriber(log_channel="System", provider="Service Control Manager")
+                Examples:
+                    # EventID-only
+                    EventLogSubscriber(subscriptions=[("Security", [4688, 4689])])
+
+                    # Provider-only
+                    EventLogSubscriber(subscriptions=[("System", ["Schannel"])])
+
+                    # Mixed (EventIDs + Provider) in the same channel
+                    EventLogSubscriber(
+                        subscriptions=[
+                            ("Application", [1000, 1001]),
+                            ("Security", [4688, 4689]),
+                            ("System", [1014, "Schannel"]),
+                        ]
+                    )
 
             server:
                 Remote host to connect to (enables RPC session via EvtOpenSession).
@@ -414,14 +564,17 @@ class EventLogSubscriber:
                     EventLogSubscriber(log_channel="Security", event_id=4688, parse_xml=False)
         """
 
-        if event_id is None and provider is None:
-            raise ValueError("You must specify either an event ID or provider name to subscribe to.")
-        if event_id is not None and provider is not None:
-            raise ValueError("You can only subscribe by event ID or provider, not both.")
+        self._subscription_specs = _normalize_subscriptions(subscriptions)
+        self.subscriptions = subscriptions
 
-        self.log_channel = log_channel
-        self.provider = provider
-        self.event_id = str(event_id) if event_id is not None else None
+        # Backwards-compatible single-filter fields (populated only when they are unambiguous).
+        if len(self._subscription_specs) == 1:
+            s0 = self._subscription_specs[0]
+            self.provider = s0["providers"][0] if s0.get("providers") and len(s0["providers"]) == 1 else None
+            self.event_id = str(s0["event_ids"][0]) if s0.get("event_ids") and len(s0["event_ids"]) == 1 else None
+        else:
+            self.provider = None
+            self.event_id = None
 
         self.server = server
         self.user = user
@@ -442,9 +595,7 @@ class EventLogSubscriber:
         self._thread: Optional[threading.Thread] = None
 
         self._session_handle = None
-        self._subscription_handle = None
-        self._bookmark_handle = None
-        self._signal_handle = None
+        self._subscriptions: List[Dict[str, Any]] = []
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -494,9 +645,6 @@ class EventLogSubscriber:
         return result
 
     def _run(self) -> None:
-        bookmark_exists = False
-        last_flush = time.monotonic()
-
         try:
             # Session (remote or local)
             if self.server:
@@ -504,112 +652,168 @@ class EventLogSubscriber:
             else:
                 self._session_handle = None
 
-            query = build_xpath_query(event_id=self.event_id, provider=self.provider)
+            self._subscriptions = []
+            subs_count = len(self._subscription_specs)
 
-            # Bookmark
-            if self.bookmark_path is not None:
-                bookmark_exists = self.bookmark_path.exists()
-                if self.resume and bookmark_exists:
-                    self._bookmark_handle = load_bookmark(self.bookmark_path)
+            # Create one EvtSubscribe per (channel + selector list) entry.
+            for spec in self._subscription_specs:
+                log_channel = spec["log_channel"]
+                event_ids = spec.get("event_ids")
+                providers = spec.get("providers")
+
+                query = build_xpath_query(event_ids=event_ids, providers=providers)
+
+                # Bookmark
+                bookmark_path = None
+                bookmark_exists = False
+                bookmark_handle = None
+                last_flush = time.monotonic()
+
+                if self.bookmark_path is not None:
+                    bookmark_path = _resolve_bookmark_path(self.bookmark_path, subs_count, log_channel, query)
+                    bookmark_exists = bookmark_path.exists()
+                    if self.resume and bookmark_exists:
+                        bookmark_handle = load_bookmark(bookmark_path)
+                    else:
+                        bookmark_handle = win32evtlog.EvtCreateBookmark(None)
+
+                # Flags
+                if self.from_oldest:
+                    flags = win32evtlog.EvtSubscribeStartAtOldestRecord
+                elif self.resume and bookmark_exists:
+                    flags = win32evtlog.EvtSubscribeStartAfterBookmark
                 else:
-                    self._bookmark_handle = win32evtlog.EvtCreateBookmark(None)
-            else:
-                self._bookmark_handle = None
+                    flags = win32evtlog.EvtSubscribeToFutureEvents
 
-            # Flags
-            if self.from_oldest:
-                flags = win32evtlog.EvtSubscribeStartAtOldestRecord
-            elif self.resume and bookmark_exists:
-                flags = win32evtlog.EvtSubscribeStartAfterBookmark
-            else:
-                flags = win32evtlog.EvtSubscribeToFutureEvents
+                bookmark_arg = bookmark_handle if flags == win32evtlog.EvtSubscribeStartAfterBookmark else None
 
-            bookmark_arg = self._bookmark_handle if flags == win32evtlog.EvtSubscribeStartAfterBookmark else None
+                # Signal event (optional; we still poll EvtNext)
+                signal_handle = win32event.CreateEvent(None, 0, 0, None)
 
-            # Signal event (optional; we still poll EvtNext)
-            self._signal_handle = win32event.CreateEvent(None, 0, 0, None)
+                subscription_handle = win32evtlog.EvtSubscribe(
+                    log_channel,
+                    flags,
+                    SignalEvent=signal_handle,
+                    Query=query,
+                    Session=self._session_handle,
+                    Bookmark=bookmark_arg,
+                )
 
-            self._subscription_handle = win32evtlog.EvtSubscribe(
-                self.log_channel,
-                flags,
-                SignalEvent=self._signal_handle,
-                Query=query,
-                Session=self._session_handle,
-                Bookmark=bookmark_arg,
-            )
+                self._subscriptions.append({
+                    "log_channel": log_channel,
+                    "event_ids": event_ids,
+                    "providers": providers,
+                    "query": query,
+                    "bookmark_path": bookmark_path,
+                    "bookmark_handle": bookmark_handle,
+                    "subscription_handle": subscription_handle,
+                    "signal_handle": signal_handle,
+                    "last_flush": last_flush,
+                })
+
+            idle_sleep_s = max(self.poll_timeout_ms, 1) / 1000.0
 
             while not self._stop_event.is_set():
-                try:
-                    events = win32evtlog.EvtNext(
-                        self._subscription_handle,
-                        self.batch_size,
-                        Timeout=self.poll_timeout_ms,
-                    )
-                except pywintypes.error as e:
-                    # Idle-ish cases (pywin32 varies here)
-                    if e.winerror in (
-                        winerror.ERROR_TIMEOUT,          # 1460
-                        winerror.ERROR_NO_MORE_ITEMS,    # 259
-                        winerror.ERROR_INVALID_OPERATION # 4317
-                    ):
-                        self._maybe_flush_bookmark(last_flush)
-                        if self.bookmark_path is not None:
-                            now = time.monotonic()
-                            if now - last_flush >= self.flush_every_seconds:
-                                last_flush = now
-                        continue
-                    raise
+                got_any = False
 
-                for evt in events:
+                for sub in self._subscriptions:
                     try:
-                        xml_string: str = win32evtlog.EvtRender(evt, win32evtlog.EvtRenderEventXml)
-                        msg: Dict[str, Any] = {"xml": xml_string}
+                        # Non-blocking poll per subscription; we do the sleeping ourselves after the loop.
+                        events = win32evtlog.EvtNext(
+                            sub["subscription_handle"],
+                            self.batch_size,
+                            Timeout=0,
+                        )
+                    except pywintypes.error as e:
+                        # Idle-ish cases (pywin32 varies here)
+                        if e.winerror in (
+                            winerror.ERROR_TIMEOUT,          # 1460
+                            winerror.ERROR_NO_MORE_ITEMS,    # 259
+                            winerror.ERROR_INVALID_OPERATION # 4317
+                        ):
+                            self._maybe_flush_bookmark(sub)
+                            continue
+                        raise
 
-                        if self.parse_xml:
-                            msg['event'] = self._parse_event_xml(xml_string)
+                    if not events:
+                        self._maybe_flush_bookmark(sub)
+                        continue
 
-                        self._put(msg)
-                        if self._bookmark_handle is not None:
-                            win32evtlog.EvtUpdateBookmark(self._bookmark_handle, evt)
-                    finally:
-                        _safe_evt_close(evt)
+                    got_any = True
 
-                if self.bookmark_path is not None and self._bookmark_handle is not None:
-                    now = time.monotonic()
-                    if now - last_flush >= self.flush_every_seconds:
-                        save_bookmark(self._bookmark_handle, self.bookmark_path)
-                        last_flush = now
+                    for evt in events:
+                        try:
+                            xml_string: str = win32evtlog.EvtRender(evt, win32evtlog.EvtRenderEventXml)
+
+                            msg: Dict[str, Any] = {
+                                "xml": xml_string,
+                                "log_channel": sub["log_channel"],
+                            }
+
+                            # Optional metadata to disambiguate multiple subscriptions.
+                            if sub.get("event_ids") is not None:
+                                msg["event_ids"] = sub["event_ids"]
+                            if sub.get("providers") is not None:
+                                msg["providers"] = sub["providers"]
+
+                            if self.parse_xml:
+                                msg["event"] = self._parse_event_xml(xml_string)
+
+                            self._put(msg)
+
+                            if sub.get("bookmark_handle") is not None:
+                                win32evtlog.EvtUpdateBookmark(sub["bookmark_handle"], evt)
+                        finally:
+                            _safe_evt_close(evt)
+
+                    # Periodic bookmark flush
+                    bookmark_path = sub.get("bookmark_path")
+                    bookmark_handle = sub.get("bookmark_handle")
+                    if bookmark_path is not None and bookmark_handle is not None:
+                        now = time.monotonic()
+                        if now - sub["last_flush"] >= self.flush_every_seconds:
+                            save_bookmark(bookmark_handle, bookmark_path)
+                            sub["last_flush"] = now
+
+                if not got_any:
+                    time.sleep(idle_sleep_s)
 
         finally:
-            # Final bookmark flush
-            try:
-                if self.bookmark_path is not None and self._bookmark_handle is not None:
-                    save_bookmark(self._bookmark_handle, self.bookmark_path)
-            except Exception:
-                pass
+            # Final bookmark flush + cleanup for each subscription.
+            for sub in self._subscriptions:
+                try:
+                    bookmark_path = sub.get("bookmark_path")
+                    bookmark_handle = sub.get("bookmark_handle")
+                    if bookmark_path is not None and bookmark_handle is not None:
+                        save_bookmark(bookmark_handle, bookmark_path)
+                except Exception:
+                    pass
 
-            _safe_evt_close(self._subscription_handle)
-            self._subscription_handle = None
+                _safe_evt_close(sub.get("subscription_handle"))
+                _safe_evt_close(sub.get("bookmark_handle"))
 
-            _safe_evt_close(self._bookmark_handle)
-            self._bookmark_handle = None
+                try:
+                    signal_handle = sub.get("signal_handle")
+                    if signal_handle:
+                        win32api.CloseHandle(signal_handle)
+                except Exception:
+                    pass
+
+            self._subscriptions = []
 
             _safe_evt_close(self._session_handle)
             self._session_handle = None
 
-            try:
-                if self._signal_handle:
-                    win32api.CloseHandle(self._signal_handle)
-            except Exception:
-                pass
-            self._signal_handle = None
-
-    def _maybe_flush_bookmark(self, last_flush: float) -> None:
-        if self.bookmark_path is None or self._bookmark_handle is None:
+    def _maybe_flush_bookmark(self, sub: Dict[str, Any]) -> None:
+        bookmark_path = sub.get("bookmark_path")
+        bookmark_handle = sub.get("bookmark_handle")
+        if bookmark_path is None or bookmark_handle is None:
             return
+
         now = time.monotonic()
-        if now - last_flush >= self.flush_every_seconds:
+        if now - sub["last_flush"] >= self.flush_every_seconds:
             try:
-                save_bookmark(self._bookmark_handle, self.bookmark_path)
+                save_bookmark(bookmark_handle, bookmark_path)
+                sub["last_flush"] = now
             except Exception:
                 pass

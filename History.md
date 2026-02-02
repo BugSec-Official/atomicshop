@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.12.1 - 02.02.2026
+  * wrappers/pywin32w/win_event_log - improvements. 
 * 3.12.0 - 02.02.2026
   * mitm/mitm_main, process_poller/simple_process_pool, wrappers/pywin32w/win_event_log - fixes and improvements.
 * 3.11.7 - 26.01.2026
