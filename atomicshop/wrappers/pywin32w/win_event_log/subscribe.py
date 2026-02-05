@@ -562,6 +562,40 @@ class EventLogSubscriber:
                 Examples:
                     EventLogSubscriber(log_channel="Security", event_id=4688, parse_xml=True)
                     EventLogSubscriber(log_channel="Security", event_id=4688, parse_xml=False)
+
+        ============================================
+        Usage Example Main:
+        from atomicshop.wrappers.pywin32w.win_event_log import subscribe
+
+
+        def main():
+            sub = subscribe.EventLogSubscriber(
+                subscriptions=[
+                    ('Security', [4688, 4689]),
+                    ('Application', [1000, 1001]),
+                ],
+                server="192.168.50.14",                   # or "REMOTE_HOSTNAME"
+                user=username,
+                password=password,
+                bookmark_path="bookmark.xml",
+                resume=True,
+                from_oldest=False,
+            )
+
+            sub.start()
+            try:
+                while True:
+                    evt = sub.emit(timeout=1.0)
+                    if evt is None:
+                        continue
+                    print(evt['event'])  # or handle it however you want
+            except KeyboardInterrupt:
+                pass
+            finally:
+                sub.stop()
+
+        if __name__ == "__main__":
+            main()
         """
 
         self._subscription_specs = _normalize_subscriptions(subscriptions)

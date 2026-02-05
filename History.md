@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.12.2 - 05.02.2026
+  * mitm/statistic_analyzer, mitm/statistic_analyzer_helper/moving_average_helper - improvements.
 * 3.12.1 - 02.02.2026
   * wrappers/pywin32w/win_event_log - improvements. 
 * 3.12.0 - 02.02.2026

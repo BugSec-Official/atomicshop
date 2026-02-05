@@ -60,7 +60,8 @@ def match_filter(line: Dict[str, Any], filter_settings: Iterable[Dict[str, Any]]
 def calculate_moving_average(
         file_path: str = None,
         statistics_content: dict = None,
-        by_type: Literal['host', 'url'] = 'url',
+        aggregate_by_type: Literal['host', 'url'] = 'url',
+        aggregation_rules: list[dict] = None,
         moving_average_window_days: int = 5,
         top_bottom_deviation_percentage: float = 0.25,
         get_deviation_for_last_day_only: bool = False,
@@ -75,7 +76,11 @@ def calculate_moving_average(
     :param file_path: string, the path to the 'statistics.csv' file.
     :param statistics_content: dict, the statistics content dictionary. If provided, 'file_path' will be ignored.
         The dictionary should be in the format returned by 'get_all_files_content' function.
-    :param by_type: string, the type to calculate the moving average by. Can be 'host' or 'url'.
+    :param aggregate_by_type:
+        string, the type to calculate the moving average by. Can be 'host' or 'url'.
+    :param aggregation_rules: list of dict, custom aggregation rules. Each dict should contain:
+        'host': str, the domain to match.
+        'path': str, the path to match. Can contain wildcards, currently implemented only wildcard in the end of the path.
     :param moving_average_window_days: integer, the window size for the moving average.
     :param top_bottom_deviation_percentage: float, the percentage of deviation from the moving average to the top or
         bottom.
@@ -135,7 +140,7 @@ def calculate_moving_average(
 
         # Get the data dictionary from the statistics content.
         day_dict['statistics_daily'] = compute_statistics_from_content(
-            day_dict['content_no_useless'], by_type)
+            day_dict['content_no_useless'], aggregate_by_type, aggregation_rules)
 
     moving_average_dict: dict = compute_moving_averages_from_average_statistics(
         statistics_content,
@@ -264,21 +269,26 @@ def get_content_without_useless(content: list) -> list:
 
 def get_data_dict_from_statistics_content(
         content: list,
-        by_type: Literal['host', 'url']
+        aggregate_by_type: Literal['host', 'url'],
+        aggregation_rules: list[dict] = None,
 ) -> dict:
     """
     This function gets the data dictionary from the 'statistics.csv' file content.
 
     :param content: list, the content list.
-    :param by_type: string, the type to calculate the moving average by. Can be 'host' or 'url'.
+    :param aggregate_by_type:
+        string, the type to calculate the moving average by. Can be 'host' or 'url'.
+    :param aggregation_rules: list of dict, custom aggregation rules. Each dict should contain:
+        'host': str, the domain to match.
+        'path': str, the path to match. Can contain wildcards, currently implemented only wildcard in the end of the path.
     :return: dict, the data dictionary.
     """
 
     hosts_requests_responses: dict = {}
     for line in content:
-        if by_type == 'host':
+        if isinstance(aggregate_by_type, str) and aggregate_by_type == 'host':
             type_to_check: str = line['host']
-        elif by_type == 'url':
+        elif isinstance(aggregate_by_type, str) and aggregate_by_type == 'url':
             # Combine host and path to URL.
             type_to_check: str = line['host'] + line['path']
             # Remove the parameters from the URL.
@@ -291,8 +301,16 @@ def get_data_dict_from_statistics_content(
 
             # Remove the last slash from the URL.
             type_to_check = type_to_check.removesuffix('/')
+
+            if aggregation_rules:
+                for rule in aggregation_rules:
+                    rule_line: str = rule['host'] + rule['path']
+
+                    if fnmatch.fnmatch(type_to_check, rule_line):
+                        type_to_check = rule_line
+                        break
         else:
-            raise ValueError(f'Invalid by_type: {by_type}')
+            raise ValueError(f'Invalid aggregate_by_type: {aggregate_by_type}')
 
         # If subdomain is not in the dictionary, add it.
         if type_to_check not in hosts_requests_responses:
@@ -342,17 +360,22 @@ def compute_statistics_from_data_dict(data_dict: dict):
 
 def compute_statistics_from_content(
         content: list,
-        by_type: Literal['host', 'url']
+        aggregate_by_type: Literal['host', 'url'],
+        aggregation_rules: list[dict] = None,
 ):
     """
     This function computes the statistics from the 'statistics.csv' file content.
 
     :param content: list, the content list.
-    :param by_type: string, the type to calculate the moving average by. Can be 'host' or 'url'.
+    :param aggregate_by_type:
+        string, the type to calculate the moving average by. Can be 'host' or 'url'.
+    :param aggregation_rules: list of dict, custom aggregation rules. Each dict should contain:
+        'host': str, the domain to match.
+        'path': str, the path to match. Can contain wildcards, currently implemented only wildcard in the end of the path.
     :return: dict, the statistics dictionary.
     """
 
-    requests_responses: dict = get_data_dict_from_statistics_content(content, by_type)
+    requests_responses: dict = get_data_dict_from_statistics_content(content, aggregate_by_type, aggregation_rules)
     compute_statistics_from_data_dict(requests_responses)
 
     return requests_responses

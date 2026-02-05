@@ -348,7 +348,8 @@ def analyze(main_file_path: str):
 def deviation_calculator_by_moving_average(
         statistics_file_directory: str = None,
         statistics_content: dict = None,
-        by_type: Literal['host', 'url'] = 'url',
+        aggregate_by_type: Literal['host', 'url'] = 'url',
+        aggregation_rules: list[dict] = None,
         moving_average_window_days: int = 5,
         top_bottom_deviation_percentage: float = 0.25,
         get_deviation_for_last_day_only: bool = False,
@@ -374,9 +375,17 @@ def deviation_calculator_by_moving_average(
         These will be analyzed in the order of the date in the file name.
     :param statistics_content: dict, if specified, this will be used instead of reading the files from the directory.
         The dict should be a result of the 'atomicshop.mitm.statistic_analyzer_helper.moving_average_helper.get_all_files_content'.
-    :param by_type: string, 'host' or 'url'. The type of the deviation calculation.
+    :param aggregate_by_type: string ('host' or 'url'). The entry aggregation type of the deviation calculation.
         'host' will calculate the deviation by the host name. Example: maps.google.com, yahoo.com, etc.
         'url' will calculate the deviation by the URL. Example: maps.google.com/maps, yahoo.com/news, etc.
+    :param aggregation_rules: list of dicts, each dict must contain 'domain' (host) + 'uri' (path). Wildcards '*' are supported in the 'path'.
+        Example:
+            [
+                {'host': 'example.com', 'path': '/path1*'},
+                {'host': 'example.com', 'path': '/path2*'},
+                {'host': 'anotherexample.com', 'path': '/path3*'}
+            ]
+        If specified, these rules will be used to aggregate the statistics before calculating the moving average.
     :param moving_average_window_days: integer, the moving average window days.
     :param top_bottom_deviation_percentage: float, the top bottom deviation percentage. Example: 0.1 for 10%.
     :param get_deviation_for_last_day_only: bool, if True, only the last day will be analyzed.
@@ -449,8 +458,8 @@ def deviation_calculator_by_moving_average(
     if output_file_type not in ['json', 'csv']:
         raise ValueError(f'output_file_type must be "json" or "csv", not [{output_file_type}]')
 
-    if by_type not in ['host', 'url']:
-        raise ValueError(f'by_type must be "host" or "url", not [{by_type}]')
+    if aggregate_by_type not in ['host', 'url']:
+        raise ValueError(f'aggregate_by_type must be "host" or "url", not [{aggregate_by_type}]')
 
     if get_deviation_for_last_day_only and get_deviation_for_date:
         raise ValueError('Either [get_deviation_for_last_day_only] or [get_deviation_for_date] can be provided, not both.')
@@ -463,7 +472,8 @@ def deviation_calculator_by_moving_average(
     deviation_list, removed_content = moving_average_helper.calculate_moving_average(
         statistics_file_path,
         statistics_content,
-        by_type,
+        aggregate_by_type,
+        aggregation_rules,
         moving_average_window_days,
         top_bottom_deviation_percentage,
         get_deviation_for_last_day_only,
@@ -514,13 +524,15 @@ def deviation_calculator_by_moving_average_main():
             '-d', '--directory', type=str, required=True,
             help='Provide full path to directory with statistics.csv files.')
         parser.add_argument(
-            '-of', '--output_file', type=str, required=True, help='Provide full path to output file.')
+            '-of', '--output-file', type=str, required=True, help='Provide full path to output file.')
         parser.add_argument(
-            '-ot', '--output_type', type=str, required=True, help='Provide output type: [json] or [csv].')
+            '-ot', '--output-type', type=str, required=True, help='Provide output type: [json] or [csv].')
         parser.add_argument(
-            '-by', '--by_type', type=str, required=True, help='Calculate by [host] or [url].')
+            '-aby', '--aggregate-by-type', type=str, required=True, help='Calculate by [host] or [url].')
         parser.add_argument(
-            '-f', '--full_details', action='store_true', required=False,
+            '-arf', '--aggregation-rules-file-path', type=str, required=False, help='Aggfregation rules CSV file path.')
+        parser.add_argument(
+            '-f', '--full-details', action='store_true', required=False,
             help='(OPTIONAL) Output full processing details instead of summary.')
         parser.add_argument(
             '-w', '--window', type=int, required=True, help='Moving average window in days.')
@@ -528,7 +540,7 @@ def deviation_calculator_by_moving_average_main():
             '-p', '--percentage', type=float, required=True,
             help='Percentage of deviation from moving average. Example: 0.1 for 10%%.')
         parser.add_argument(
-            '-slt', '--skip_total_count_less_than', type=int, required=False,
+            '-slt', '--skip-total-count-less-than', type=int, required=False,
             help='An integer to skip the deviation calculation if the total count is less than this number.')
 
         return parser.parse_args()
@@ -555,9 +567,16 @@ def deviation_calculator_by_moving_average_main():
         summary = True
         convert_sizes_lists_and_ma_data_to_string = False
 
+    if args.aggregation_rules_file_path:
+        aggregation_rules, _ = csvs.read_csv_to_list_of_dicts_by_header(
+            args.aggregation_rules_file_path)
+    else:
+        aggregation_rules = None
+
     _ = deviation_calculator_by_moving_average(
         statistics_file_directory=args.directory,
-        by_type=args.by_type,
+        aggregate_by_type=args.aggregate_by_type,
+        aggregation_rules=aggregation_rules,
         moving_average_window_days=args.window,
         top_bottom_deviation_percentage=args.percentage,
         summary=summary,
