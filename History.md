@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.12.4 - 17.02.2026
+  * a_mains/get_local_tcp_ports, a_mains/process_from_port, mitm/ssh_tester, wrappers/ubuntu_terminal - fixes and improvements.
 * 3.12.3 - 09.02.2026
   * setuptools dependency fix.
 * 3.12.2 - 05.02.2026

@@ -1,12 +1,10 @@
 import os
-import sys
 import subprocess
 import shutil
 import time
 
 from rich.console import Console
 
-from ..print_api import print_api
 from ..permissions import ubuntu_permissions
 
 

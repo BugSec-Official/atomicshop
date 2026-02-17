@@ -580,7 +580,7 @@ def temporary_change_working_directory(new_working_directory: str) -> None:
         os.chdir(original_working_directory)
 
 
-def move_file(source_file_path: str, target_directory: str, overwrite: bool = True) -> None:
+def move_file(source_file_path: str, target_directory: str, overwrite: bool = True) -> str:
     """
     The function moves file from source to target.
 
@@ -602,7 +602,7 @@ def move_file(source_file_path: str, target_directory: str, overwrite: bool = Tr
         'C:/Users/user1/Downloads'
         'C:/Users/user1/Documents/file-to-move.txt'
 
-    :return: None
+    :return: target file path as string.
     """
 
     target_file_path = target_directory + os.sep + Path(source_file_path).name
@@ -614,6 +614,8 @@ def move_file(source_file_path: str, target_directory: str, overwrite: bool = Tr
 
     # Move file.
     shutil.move(source_file_path, target_file_path)
+
+    return target_file_path
 
 
 def move_folder(source_directory: str, target_directory: str, overwrite: bool = True) -> None:

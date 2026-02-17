@@ -55,7 +55,7 @@ def test_ssh_main(config: dict) -> int:
 
         tcp_ports_list: list = tcp_ports_output.strip().splitlines()
         if not tcp_ports_list:
-            print_api(f"No TCP ports found on host {host}", color='red')
+            print_api(f"SSH worked to find python, but no TCP ports with CommandLine found on host {host}", color='yellow')
             continue
 
         last_port: int = int(tcp_ports_list[-1])
