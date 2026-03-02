@@ -26,6 +26,36 @@ def _strip_ns(tag: str) -> str:
     return tag
 
 
+_INT_STRING_RE = re.compile(r"^[+-]?\d+$")
+
+
+def _convert_int_strings(obj: Any) -> Any:
+    """Recursively convert base-10 integer strings into ints."""
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            obj[k] = _convert_int_strings(v)
+        return obj
+
+    if isinstance(obj, list):
+        for i, v in enumerate(obj):
+            obj[i] = _convert_int_strings(v)
+        return obj
+
+    if isinstance(obj, tuple):
+        return tuple(_convert_int_strings(v) for v in obj)
+
+    if isinstance(obj, str):
+        s = obj.strip()
+        if s and _INT_STRING_RE.fullmatch(s):
+            try:
+                return int(s, 10)
+            except ValueError:
+                return obj
+        return obj
+
+    return obj
+
+
 def _element_to_obj(elem: Et.Element) -> Any:
     """
     Convert an ElementTree element into a JSON-serializable object.
@@ -138,6 +168,7 @@ def parse_event_xml(xml_text: str) -> Dict[str, Any]:
             "security": dict(security.attrib) if security is not None and security.attrib else None,
         }
 
+    event_data: Optional[Dict[str, Any]] = None
     if event_data_elem is not None:
         data_dict: Dict[str, Any] = {}
         unnamed: List[Any] = []
@@ -192,12 +223,14 @@ def parse_event_xml(xml_text: str) -> Dict[str, Any]:
 
     raw_tree = _element_to_obj(root)
 
-    return {
+    result = {
         "system": system if system else None,
         "event_data": event_data,
         "user_data": user_data,
         "raw_tree": raw_tree,
     }
+
+    return _convert_int_strings(result)
 
 
 # ---------------------------
@@ -631,17 +664,142 @@ class EventLogSubscriber:
         self._session_handle = None
         self._subscriptions: List[Dict[str, Any]] = []
 
-    def start(self) -> None:
-        if self._thread and self._thread.is_alive():
-            return
-        self._stop_event.clear()
-        self._thread = threading.Thread(target=self._run, name="EventLogSubscriber", daemon=True)
-        self._thread.start()
+        self._stop_lock = threading.Lock()
+        self._hard_stop = threading.Event()
+        self._connected: bool = False
 
-    def stop(self) -> None:
-        self._stop_event.set()
-        if self._thread:
-            self._thread.join()
+    def connect(self) -> None:
+        """
+        Establish remote session (if configured) and create EvtSubscribe handles.
+
+        This method does NOT start the event consumption loop. Call start() afterwards.
+        """
+        with self._stop_lock:
+            if self._thread and self._thread.is_alive():
+                raise RuntimeError("Cannot call connect() while the subscriber thread is running.")
+
+            if self._connected:
+                return
+
+            # Ensure a clean slate (covers previous partial connects).
+            self._cleanup()
+
+            try:
+                # Session (remote or local)
+                if self.server:
+                    self._session_handle = open_remote_session(self.server, self.user, self.domain, self.password)
+                else:
+                    self._session_handle = None
+
+                self._subscriptions = []
+                subs_count = len(self._subscription_specs)
+
+                # Create one EvtSubscribe per (channel + selector list) entry.
+                for spec in self._subscription_specs:
+                    log_channel = spec["log_channel"]
+                    event_ids = spec.get("event_ids")
+                    providers = spec.get("providers")
+
+                    query = build_xpath_query(event_ids=event_ids, providers=providers)
+
+                    # Bookmark
+                    bookmark_path = None
+                    bookmark_exists = False
+                    bookmark_handle = None
+                    last_flush = time.monotonic()
+
+                    if self.bookmark_path is not None:
+                        bookmark_path = _resolve_bookmark_path(self.bookmark_path, subs_count, log_channel, query)
+                        bookmark_exists = bookmark_path.exists()
+                        if self.resume and bookmark_exists:
+                            bookmark_handle = load_bookmark(bookmark_path)
+                        else:
+                            bookmark_handle = win32evtlog.EvtCreateBookmark(None)
+
+                    # Flags
+                    if self.from_oldest:
+                        flags = win32evtlog.EvtSubscribeStartAtOldestRecord
+                    elif self.resume and bookmark_exists:
+                        flags = win32evtlog.EvtSubscribeStartAfterBookmark
+                    else:
+                        flags = win32evtlog.EvtSubscribeToFutureEvents
+
+                    bookmark_arg = bookmark_handle if flags == win32evtlog.EvtSubscribeStartAfterBookmark else None
+
+                    # Signal event (optional; we still poll EvtNext)
+                    signal_handle = win32event.CreateEvent(None, 0, 0, None)
+
+                    subscription_handle = win32evtlog.EvtSubscribe(
+                        log_channel,
+                        flags,
+                        SignalEvent=signal_handle,
+                        Query=query,
+                        Session=self._session_handle,
+                        Bookmark=bookmark_arg,
+                    )
+
+                    self._subscriptions.append({
+                        "log_channel": log_channel,
+                        "event_ids": event_ids,
+                        "providers": providers,
+                        "query": query,
+                        "bookmark_path": bookmark_path,
+                        "bookmark_handle": bookmark_handle,
+                        "subscription_handle": subscription_handle,
+                        "signal_handle": signal_handle,
+                        "last_flush": last_flush,
+                    })
+
+                self._connected = True
+
+            except Exception:
+                self._cleanup()
+                raise
+
+    def start(self) -> None:
+        with self._stop_lock:
+            if self._thread and self._thread.is_alive():
+                return
+            if not self._connected:
+                raise RuntimeError("EventLogSubscriber.connect() must be called before start().")
+            self._stop_event.clear()
+            self._hard_stop.clear()
+            self._thread = threading.Thread(target=self._run, name="EventLogSubscriber", daemon=True)
+            self._thread.start()
+
+    def stop(self, timeout: Optional[float] = 10.0) -> None:
+        """
+        Stop the background thread.
+
+        timeout:
+          - None => wait indefinitely (old behavior, but still nudges)
+          - float => seconds to wait before escalating to a forced stop
+        """
+        with self._stop_lock:
+            self._stop_event.set()
+            self._nudge_subscriptions()
+
+            t = self._thread
+            if not t:
+                # Connected but no worker thread (e.g., connect() called without start()).
+                if self._connected:
+                    self._cleanup()
+                return
+
+            t.join(timeout=timeout)
+
+            if t.is_alive():
+                # Escalate: skip slow final flush + try to break out of blocking calls.
+                self._hard_stop.set()
+                self._force_break_blocking_calls()
+
+                # Give it a short grace window after escalation.
+                t.join(timeout=2.0)
+
+                if t.is_alive():
+                    # Keep the thread reference so another stop() attempt is possible.
+                    raise TimeoutError("EventLogSubscriber.stop() timed out: worker thread did not exit.")
+
             self._thread = None
 
     def emit(self, timeout: float = None) -> Optional[dict]:
@@ -649,6 +807,34 @@ class EventLogSubscriber:
             return self._q.get(timeout=timeout)
         except queue.Empty:
             return None
+
+    def _cleanup(self) -> None:
+        # Final bookmark flush + cleanup for each subscription.
+        for sub in self._subscriptions:
+            if not self._hard_stop.is_set():
+                try:
+                    bookmark_path = sub.get("bookmark_path")
+                    bookmark_handle = sub.get("bookmark_handle")
+                    if bookmark_path is not None and bookmark_handle is not None:
+                        save_bookmark(bookmark_handle, bookmark_path)
+                except Exception:
+                    pass
+
+            _safe_evt_close(sub.get("subscription_handle"))
+            _safe_evt_close(sub.get("bookmark_handle"))
+
+            try:
+                signal_handle = sub.get("signal_handle")
+                if signal_handle:
+                    win32api.CloseHandle(signal_handle)
+            except Exception:
+                pass
+
+        self._subscriptions = []
+
+        _safe_evt_close(self._session_handle)
+        self._session_handle = None
+        self._connected = False
 
     def _put(self, item: Dict[str, Any]) -> None:
         while not self._stop_event.is_set():
@@ -680,71 +866,6 @@ class EventLogSubscriber:
 
     def _run(self) -> None:
         try:
-            # Session (remote or local)
-            if self.server:
-                self._session_handle = open_remote_session(self.server, self.user, self.domain, self.password)
-            else:
-                self._session_handle = None
-
-            self._subscriptions = []
-            subs_count = len(self._subscription_specs)
-
-            # Create one EvtSubscribe per (channel + selector list) entry.
-            for spec in self._subscription_specs:
-                log_channel = spec["log_channel"]
-                event_ids = spec.get("event_ids")
-                providers = spec.get("providers")
-
-                query = build_xpath_query(event_ids=event_ids, providers=providers)
-
-                # Bookmark
-                bookmark_path = None
-                bookmark_exists = False
-                bookmark_handle = None
-                last_flush = time.monotonic()
-
-                if self.bookmark_path is not None:
-                    bookmark_path = _resolve_bookmark_path(self.bookmark_path, subs_count, log_channel, query)
-                    bookmark_exists = bookmark_path.exists()
-                    if self.resume and bookmark_exists:
-                        bookmark_handle = load_bookmark(bookmark_path)
-                    else:
-                        bookmark_handle = win32evtlog.EvtCreateBookmark(None)
-
-                # Flags
-                if self.from_oldest:
-                    flags = win32evtlog.EvtSubscribeStartAtOldestRecord
-                elif self.resume and bookmark_exists:
-                    flags = win32evtlog.EvtSubscribeStartAfterBookmark
-                else:
-                    flags = win32evtlog.EvtSubscribeToFutureEvents
-
-                bookmark_arg = bookmark_handle if flags == win32evtlog.EvtSubscribeStartAfterBookmark else None
-
-                # Signal event (optional; we still poll EvtNext)
-                signal_handle = win32event.CreateEvent(None, 0, 0, None)
-
-                subscription_handle = win32evtlog.EvtSubscribe(
-                    log_channel,
-                    flags,
-                    SignalEvent=signal_handle,
-                    Query=query,
-                    Session=self._session_handle,
-                    Bookmark=bookmark_arg,
-                )
-
-                self._subscriptions.append({
-                    "log_channel": log_channel,
-                    "event_ids": event_ids,
-                    "providers": providers,
-                    "query": query,
-                    "bookmark_path": bookmark_path,
-                    "bookmark_handle": bookmark_handle,
-                    "subscription_handle": subscription_handle,
-                    "signal_handle": signal_handle,
-                    "last_flush": last_flush,
-                })
-
             idle_sleep_s = max(self.poll_timeout_ms, 1) / 1000.0
 
             while not self._stop_event.is_set():
@@ -761,9 +882,9 @@ class EventLogSubscriber:
                     except pywintypes.error as e:
                         # Idle-ish cases (pywin32 varies here)
                         if e.winerror in (
-                            winerror.ERROR_TIMEOUT,          # 1460
-                            winerror.ERROR_NO_MORE_ITEMS,    # 259
-                            winerror.ERROR_INVALID_OPERATION # 4317
+                                winerror.ERROR_TIMEOUT,  # 1460
+                                winerror.ERROR_NO_MORE_ITEMS,  # 259
+                                winerror.ERROR_INVALID_OPERATION  # 4317
                         ):
                             self._maybe_flush_bookmark(sub)
                             continue
@@ -777,6 +898,9 @@ class EventLogSubscriber:
 
                     for evt in events:
                         try:
+                            if self._stop_event.is_set():
+                                continue
+
                             xml_string: str = win32evtlog.EvtRender(evt, win32evtlog.EvtRenderEventXml)
 
                             msg: Dict[str, Any] = {
@@ -810,33 +934,10 @@ class EventLogSubscriber:
                             sub["last_flush"] = now
 
                 if not got_any:
-                    time.sleep(idle_sleep_s)
+                    self._stop_event.wait(idle_sleep_s)
 
         finally:
-            # Final bookmark flush + cleanup for each subscription.
-            for sub in self._subscriptions:
-                try:
-                    bookmark_path = sub.get("bookmark_path")
-                    bookmark_handle = sub.get("bookmark_handle")
-                    if bookmark_path is not None and bookmark_handle is not None:
-                        save_bookmark(bookmark_handle, bookmark_path)
-                except Exception:
-                    pass
-
-                _safe_evt_close(sub.get("subscription_handle"))
-                _safe_evt_close(sub.get("bookmark_handle"))
-
-                try:
-                    signal_handle = sub.get("signal_handle")
-                    if signal_handle:
-                        win32api.CloseHandle(signal_handle)
-                except Exception:
-                    pass
-
-            self._subscriptions = []
-
-            _safe_evt_close(self._session_handle)
-            self._session_handle = None
+            self._cleanup()
 
     def _maybe_flush_bookmark(self, sub: Dict[str, Any]) -> None:
         bookmark_path = sub.get("bookmark_path")
@@ -851,3 +952,36 @@ class EventLogSubscriber:
                 sub["last_flush"] = now
             except Exception:
                 pass
+
+    def _nudge_subscriptions(self) -> None:
+        """
+        Best-effort: signal any subscription events so the underlying machinery wakes up quickly.
+        We still poll with EvtNext(Timeout=0), but this is harmless and sometimes helps on remote/session edge-cases.
+        """
+        for sub in list(self._subscriptions):
+            h = sub.get("signal_handle")
+            if not h:
+                continue
+            try:
+                win32event.SetEvent(h)
+            except Exception:
+                pass
+
+    def _force_break_blocking_calls(self) -> None:
+        """
+        Best-effort: close handles from the caller thread to break the worker out of long/blocking Win32 calls.
+        Safe because:
+          - worker cleanup uses try/except around closes
+          - double-close exceptions are swallowed
+        """
+        for sub in list(self._subscriptions):
+            _safe_evt_close(sub.get("subscription_handle"))
+            _safe_evt_close(sub.get("bookmark_handle"))
+            h = sub.get("signal_handle")
+            if h:
+                try:
+                    win32api.CloseHandle(h)
+                except Exception:
+                    pass
+
+        _safe_evt_close(self._session_handle)

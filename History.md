@@ -1,6 +1,10 @@
 <!-- HISTORY -->
 ## History
 
+* 3.12.6 - 02.03.2026
+  * file_io/tomls, mitm/engines/__parent/recorder___parent, web_apis/google_llm, wrappers/psutilw/processes, wrappers/pywin32w/win_event_log/subscribe - fixes and improvements.
+* 3.12.5 - 23.02.2026
+  * pyproject.toml - dependencies update.
 * 3.12.4 - 17.02.2026
   * a_mains/get_local_tcp_ports, a_mains/process_from_port, mitm/ssh_tester, wrappers/ubuntu_terminal - fixes and improvements.
 * 3.12.3 - 09.02.2026

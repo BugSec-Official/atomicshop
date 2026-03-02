@@ -64,7 +64,10 @@ class RecorderParent:
         if self.class_client_message.response_raw_bytes:
             self.class_client_message.response_raw_hex = self.class_client_message.response_raw_bytes.hex()
 
-    def record(self, class_client_message: message.ClientMessage):
+    def record(
+            self,
+            class_client_message: message.ClientMessage
+    ):
         self.class_client_message = class_client_message
 
         # Build full file path if it is not already built.

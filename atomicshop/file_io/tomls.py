@@ -114,6 +114,7 @@ def update_toml_file_with_new_config(
         If provided, the changes will be written to this file.
         If not, the changes will be written to the 'main_config_file_path'.
     """
+    import re
 
     if not changes_config_file_path and not changes_dict:
         raise ValueError("You must provide either 'changes_config_file_path' or 'changes_dict'.")
@@ -125,92 +126,212 @@ def update_toml_file_with_new_config(
 
     main_config_file_text_lines_backup: list = list(main_config_file_text_lines)
 
-    # Read the new config file.
+    # Read the main config file.
     main_config_file_dict: dict = read_toml_file(main_config_file_path)
 
+    changes_config_file_text_lines = None
     if not changes_dict:
-        changes_dict: dict = read_toml_file(changes_config_file_path)
+        with open(changes_config_file_path, 'r') as file:
+            changes_config_file_text_lines = file.readlines()
+        changes_dict = read_toml_file(changes_config_file_path)
 
-    # Update the config text lines.
-    for category, settings in main_config_file_dict.items():
-        if category not in changes_dict:
-            continue
+    def _is_section_header(line: str) -> bool:
+        # Matches: [section] or [section] # comment
+        return re.match(r'^\s*\[[^\]]+\]\s*(#.*)?$', line) is not None
 
-        for key, value in settings.items():
-            # If the key is in the old config file, use the old value.
-            if key not in changes_dict[category]:
+    def _get_section_bounds(lines: list, section_name: str = None):
+        """
+        Returns (start_index, end_index) boundaries for a section search.
+        section_name=None means top-level (before first [section]).
+        """
+        if section_name is None:
+            for i, line in enumerate(lines):
+                if _is_section_header(line):
+                    return 0, i
+            return 0, len(lines)
+
+        section_pattern = re.compile(rf'^\s*\[{re.escape(section_name)}\]\s*(#.*)?$')
+        section_start = None
+
+        for i, line in enumerate(lines):
+            if section_pattern.match(line):
+                section_start = i
+                break
+
+        if section_start is None:
+            return None, None
+
+        for i in range(section_start + 1, len(lines)):
+            if _is_section_header(lines[i]):
+                return section_start, i
+
+        return section_start, len(lines)
+
+    def _find_key_block(lines: list, key: str, section_name: str = None):
+        """
+        Returns (start_index, end_index) for the key block in the specified section.
+        Handles single-line values and multi-line list blocks.
+        """
+        section_start, section_end = _get_section_bounds(lines, section_name)
+        if section_start is None:
+            return None
+
+        key_pattern = re.compile(rf'^\s*{re.escape(key)}\s*=')
+
+        for i in range(section_start, section_end):
+            line = lines[i]
+
+            # Skip commented lines
+            if line.lstrip().startswith('#'):
                 continue
 
-            if main_config_file_dict[category][key] != changes_dict[category][key]:
-                # Get the line of the current category line.
-                current_category_line_index_in_text = None
-                for current_category_line_index_in_text, line in enumerate(main_config_file_text_lines):
-                    if f"[{category}]" in line:
-                        break
+            if not key_pattern.match(line):
+                continue
 
-                # Get the index inside the main config file dictionary of the current category.
-                main_config_list_of_keys: list = list(main_config_file_dict.keys())
-                current_category_index_in_main_config_dict = main_config_list_of_keys.index(category)
+            # Single-line key (not a list block)
+            rhs = line.split('=', 1)[1]
+            if '[' not in rhs:
+                return i, i + 1
 
-                try:
-                    next_category_name = list(
-                        main_config_file_dict.keys())[current_category_index_in_main_config_dict + 1]
-                except IndexError:
-                    next_category_name = list(main_config_file_dict.keys())[-1]
+            # List block (possibly multi-line)
+            bracket_depth = 0
+            for j in range(i, section_end):
+                bracket_depth += lines[j].count('[')
+                bracket_depth -= lines[j].count(']')
 
-                next_category_line_index_in_text = None
-                for next_category_line_index_in_text, line in enumerate(main_config_file_text_lines):
-                    if f"[{next_category_name}]" in line:
-                        break
+                if bracket_depth <= 0:
+                    return i, j + 1
 
-                # In case the current and the next categories are the same and the last in the file.
-                if next_category_line_index_in_text == current_category_line_index_in_text:
-                    next_category_line_index_in_text = len(main_config_file_text_lines)
+            return i, section_end
 
-                string_to_check_list: list = list()
-                if isinstance(value, bool):
-                    string_to_check_list.append(f"{key} = {str(value).lower()}")
-                elif isinstance(value, int):
-                    string_to_check_list.append(f"{key} = {value}")
-                elif isinstance(value, str):
-                    string_to_check_list.append(f"{key} = '{value}'")
-                    string_to_check_list.append(f'{key} = "{value}"')
+        return None
+
+    def _replace_list_block_from_changes(section_name: str, key: str) -> bool:
+        """
+        Copy the exact list block text (including comments) from the changes file into the main file.
+        Returns True if replaced, False otherwise.
+        """
+        if changes_config_file_text_lines is None:
+            return False
+
+        src_block = _find_key_block(changes_config_file_text_lines, key, section_name)
+        dst_block = _find_key_block(main_config_file_text_lines, key, section_name)
+
+        if not src_block or not dst_block:
+            return False
+
+        src_start, src_end = src_block
+        dst_start, dst_end = dst_block
+
+        main_config_file_text_lines[dst_start:dst_end] = changes_config_file_text_lines[src_start:src_end]
+        return True
+
+    def _replace_scalar_line(section_name: str, key: str, new_value) -> bool:
+        """
+        Replace a scalar key=value line while preserving inline comments and indentation.
+        """
+        key_block = _find_key_block(main_config_file_text_lines, key, section_name)
+        if not key_block:
+            return False
+
+        start, end = key_block
+        if (end - start) != 1:
+            return False  # Not a scalar line
+
+        original_line = main_config_file_text_lines[start]
+
+        # Preserve indentation
+        indent = original_line[:len(original_line) - len(original_line.lstrip())]
+
+        # Preserve inline comment (simple split, consistent with current function behavior)
+        if '#' in original_line:
+            line_without_comment, comment_part = original_line.split('#', 1)
+            comment = '#' + comment_part
+        else:
+            line_without_comment = original_line
+            comment = ''
+
+        if isinstance(new_value, bool):
+            value_string_to_set = str(new_value).lower()
+        elif isinstance(new_value, str):
+            value_string_to_set = f"'{new_value}'"
+        elif isinstance(new_value, int):
+            value_string_to_set = str(new_value)
+        elif isinstance(new_value, float):
+            value_string_to_set = str(new_value)
+        else:
+            raise TomlValueNotImplementedError(f"Value type '{type(new_value)}' not implemented.")
+
+        # Ensure newline is preserved
+        line_has_newline = original_line.endswith('\n')
+        if comment:
+            if line_has_newline and not comment.endswith('\n'):
+                comment += '\n'
+            new_line = f"{indent}{key} = {value_string_to_set}{comment}"
+        else:
+            new_line = f"{indent}{key} = {value_string_to_set}" + ('\n' if line_has_newline else '')
+
+        main_config_file_text_lines[start] = new_line
+        return True
+
+    def _update_key(section_name: str, key: str, current_value, new_value):
+        """
+        Update a key in the specified section.
+        Lists are copied as raw text from the changes file (to preserve comments).
+        Scalars are replaced in-place.
+        """
+        if current_value == new_value:
+            return
+
+        if isinstance(current_value, list) and isinstance(new_value, list):
+            # Best path: preserve comments and formatting from the changes config file.
+            if _replace_list_block_from_changes(section_name, key):
+                return
+
+            # Fallback path (when only changes_dict is provided): rewrite list without comments.
+            key_block = _find_key_block(main_config_file_text_lines, key, section_name)
+            if not key_block:
+                return
+
+            start, end = key_block
+            indent_match = re.match(r'^(\s*)', main_config_file_text_lines[start])
+            indent = indent_match.group(1) if indent_match else ''
+
+            new_block = [f"{indent}{key} = [\n"]
+            for item in new_value:
+                if isinstance(item, str):
+                    item_value = f"'{item}'"
+                elif isinstance(item, bool):
+                    item_value = str(item).lower()
+                elif isinstance(item, (int, float)):
+                    item_value = str(item)
                 else:
-                    raise TomlValueNotImplementedError(f"Value type '{type(value)}' not implemented.")
+                    raise TomlValueNotImplementedError(f"List item type '{type(item)}' not implemented.")
+                new_block.append(f"{indent}    {item_value},\n")
+            new_block.append(f"{indent}]\n")
 
-                # next_category_line_index_in_text = main_config_file_text_lines.index(f"[{next_category_name}]\n")
-                # Find the index of this line in the text file between current category line and
-                # the next category line.
-                line_index = None
-                found_line = False
-                for line_index in range(current_category_line_index_in_text, next_category_line_index_in_text):
-                    if found_line:
-                        line_index = line_index - 1
-                        break
-                    for string_to_check in string_to_check_list:
-                        if string_to_check in main_config_file_text_lines[line_index]:
-                            found_line = True
-                            break
+            main_config_file_text_lines[start:end] = new_block
+            return
 
-                if found_line:
-                    # If there are comments, get only them from the line. Comment will also get the '\n' character.
-                    # noinspection PyUnboundLocalVariable
-                    comment = main_config_file_text_lines[line_index].replace(string_to_check, '')
+        _replace_scalar_line(section_name, key, new_value)
 
-                    object_type = type(changes_dict[category][key])
-                    if object_type == bool:
-                        value_string_to_set = str(changes_dict[category][key]).lower()
-                    elif object_type == str:
-                        value_string_to_set = f"'{changes_dict[category][key]}'"
-                    elif object_type == int:
-                        value_string_to_set = str(changes_dict[category][key])
+    # Iterate only over keys that exist in the main config (do not add new keys from changes).
+    for top_level_key, top_level_value in main_config_file_dict.items():
+        # Section/table
+        if isinstance(top_level_value, dict):
+            if top_level_key not in changes_dict or not isinstance(changes_dict[top_level_key], dict):
+                continue
 
-                    # noinspection PyUnboundLocalVariable
-                    line_to_set = f"{key} = {value_string_to_set}{comment}"
-                    # Replace the line with the old value.
-                    main_config_file_text_lines[line_index] = line_to_set
+            for key, value in top_level_value.items():
+                if key not in changes_dict[top_level_key]:
+                    continue
+                _update_key(top_level_key, key, value, changes_dict[top_level_key][key])
 
-                    main_config_file_dict[category][key] = changes_dict[category][key]
+        # Top-level scalar/list key (e.g. devices = [ ... ])
+        else:
+            if top_level_key not in changes_dict:
+                continue
+            _update_key(None, top_level_key, top_level_value, changes_dict[top_level_key])
 
     if new_config_file_path:
         file_path_to_write = new_config_file_path

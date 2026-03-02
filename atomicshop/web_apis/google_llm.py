@@ -185,4 +185,10 @@ class GoogleLLM:
             model=model_name,
             contents=question,
             config=GenerateContentConfig(**model_config))
-        return response.text
+
+        if response.text is None:
+            result = ''
+        else:
+            result = response.text
+
+        return result
