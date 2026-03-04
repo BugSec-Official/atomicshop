@@ -188,6 +188,7 @@ class SocketClient:
             exception_type: str = type(e).__name__
             exception_error: str = tracebacks.get_as_string(one_line=True)
             error_string: str = f"Socket Client Connect: {destination}: {exception_type}"
+            print_api.print_api(error_string, logger=self.logger, logger_method='error')
 
             if exception_type in ['ConnectionRefusedError', 'ConnectionAbortedError', 'ConnectionResetError',
                                   'TimeoutError'] or 'ssl' in exception_type.lower():

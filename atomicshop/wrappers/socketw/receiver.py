@@ -114,6 +114,11 @@ class Receiver:
             error_message = "ConnectionAbortedError: Connection was aborted by local TCP stack (not remote close)..."
         except ConnectionResetError:
             error_message = "ConnectionResetError: Connection was forcibly closed by the other side..."
+        except InterruptedError as e:
+            if e.errno == 10004:
+                error_message = "InterruptedError: [WinError 10004] A blocking operation was interrupted by a call to WSACancelBlockingCall..."
+            else:
+                raise e
         except TimeoutError as e:
             if e.errno == 10060:
                 error_message = "TimeoutError: [WinError 10060] Socket receive operation timed out..."
