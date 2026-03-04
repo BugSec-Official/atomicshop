@@ -198,7 +198,13 @@ def stop_remove_containers_by_image_name(image_name: str):
 
     containers_to_remove: list[Container] = []
     for container in all_containers:
-        if any(image_name in tag for tag in container.image.tags):
+        try:
+            tags = container.image.tags
+        except docker.errors.ImageNotFound:
+            containers_to_remove.append(container)
+            continue
+
+        if any(image_name in tag for tag in tags):
             containers_to_remove.append(container)
 
     for removing_container in containers_to_remove:

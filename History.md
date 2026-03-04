@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.12.7 - 04.03.2026
+  * wrappers/dockerw/dockerw - fixes and improvements.
 * 3.12.6 - 02.03.2026
   * file_io/tomls, mitm/engines/__parent/recorder___parent, web_apis/google_llm, wrappers/psutilw/processes, wrappers/pywin32w/win_event_log/subscribe - fixes and improvements.
 * 3.12.5 - 23.02.2026
