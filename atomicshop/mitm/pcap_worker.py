@@ -1,0 +1,98 @@
+import os
+import multiprocessing
+from datetime import datetime
+
+from . import recs_files
+
+
+def pcap_writer_worker(
+        pcap_queue: multiprocessing.Queue,
+        logging_queue: multiprocessing.Queue,
+        logger_name: str,
+        recordings_path: str
+):
+    """
+    Multiprocessing worker that receives pcap data from a queue and writes
+    to per-engine daily pcapng files with thread_id comments.
+    """
+    from ..wrappers.loggingw import loggingw
+
+    # Set up logging with QueueHandler (same pattern as _create_tcp_server_process).
+    _ = loggingw.create_logger(
+        logger_name=logger_name,
+        add_queue_handler=True,
+        log_queue=logging_queue,
+    )
+    logger = loggingw.get_logger_with_level(f'{logger_name}.pcap_writer')
+
+    # Suppress scapy import warning.
+    import logging as _logging
+    _logging.getLogger("scapy.loading").setLevel(_logging.ERROR)
+    from scapy.layers.inet import IP, TCP
+    from scapy.packet import Raw
+    from scapy.utils import PcapNgWriter
+
+    # {engine_dir: {'writer': PcapNgWriter, 'date': str, 'path': str}}
+    writers: dict = {}
+
+    while True:
+        msg = pcap_queue.get()
+
+        # None = stop signal
+        if msg is None:
+            break
+
+        engine_dir = msg['engine_dir']
+        current_date = datetime.now().strftime(recs_files.REC_FILE_DATE_FORMAT)
+
+        # Get or create writer, handle daily rotation
+        writer_info = writers.get(engine_dir)
+        if writer_info is None or writer_info['date'] != current_date:
+            if writer_info is not None:
+                writer_info['writer'].close()
+            pcap_file_path = f'{engine_dir}{os.sep}{current_date}.pcapng'
+            writer = PcapNgWriter(pcap_file_path)
+            # PcapNgWriter doesn't accept append/sync in constructor.
+            # Manually enable sync (flush after each write) via inherited attribute.
+            writer.sync = True
+            # Support appending if file already exists (e.g., server restart mid-day):
+            # reopen in "ab" mode and skip re-writing the pcapng header.
+            if os.path.exists(pcap_file_path) and os.path.getsize(pcap_file_path) > 0:
+                writer.f.close()
+                writer.f = open(pcap_file_path, "ab", 4096)
+                writer.header_present = True
+            writer_info = {'writer': writer, 'date': current_date, 'path': pcap_file_path}
+            writers[engine_dir] = writer_info
+
+        # Max payload per packet: 65000 bytes.
+        # Keeps each packet under both the IP/TCP 16-bit field limit (65535)
+        # and Wireshark's pcapng cap_len limit (262144).
+        MAX_CHUNK = 65000
+
+        raw_bytes = msg['raw_bytes']
+        chunks = [raw_bytes[i:i + MAX_CHUNK] for i in range(0, len(raw_bytes), MAX_CHUNK)]
+        total_chunks = len(chunks)
+
+        for chunk_idx, chunk in enumerate(chunks):
+            packet = IP(
+                src=msg['source_ip'], dst=msg['dest_ip']
+            ) / TCP(
+                sport=msg['source_port'], dport=msg['dest_port']
+            ) / Raw(load=chunk)
+            packet.time = msg['timestamp']
+
+            comment = f"thread_id={msg['thread_id']}"
+            if total_chunks > 1:
+                comment += f" chunk={chunk_idx + 1}/{total_chunks}"
+            packet.comments = [comment.encode()]
+
+            writer_info['writer'].write(packet)
+
+        logger.info(f"Appended to pcap file: {writer_info['path']}")
+
+    # Cleanup: close all writers
+    for info in writers.values():
+        try:
+            info['writer'].close()
+        except Exception:
+            pass

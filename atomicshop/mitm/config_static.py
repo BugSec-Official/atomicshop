@@ -93,6 +93,8 @@ class LogRec:
     recordings_path: str
     enable_request_response_recordings_in_logs: bool
     store_logs_for_x_days: int
+    record_json: bool
+    record_pcap: bool
 
     recordings_directory_name: str = 'recs'
 

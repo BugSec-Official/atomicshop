@@ -90,6 +90,8 @@ EXCEPTIONS_CSV_LOGGER_QUEUE: multiprocessing.Queue = multiprocessing.Queue()
 # Create finalization queue for the rec archiving process.
 FINALIZE_RECS_ARCHIVE_QUEUE: multiprocessing.Queue = multiprocessing.Queue()
 
+PCAP_WRITER_QUEUE: multiprocessing.Queue = None  # Created only if record_pcap is enabled
+
 
 try:
     win_console.disable_quick_edit()
@@ -133,6 +135,10 @@ def exit_cleanup():
         print_api.print_api(f'Recs archive process alive: {RECS_PROCESS_INSTANCE.is_alive()}')
         RECS_PROCESS_INSTANCE.terminate()
         RECS_PROCESS_INSTANCE.join()
+
+    # Send stop signal to pcap writer process before terminating children.
+    if PCAP_WRITER_QUEUE is not None:
+        PCAP_WRITER_QUEUE.put(None)
 
     # Before terminating multiprocessing child processes, we need to put None to all the QueueListeners' queues,
     # so they will stop waiting for new logs and will be able to terminate.
@@ -604,6 +610,21 @@ def mitm_server(config_file_path: str, script_version: str) -> int:
                 }
                 listening_interfaces.append(current_interface_dict)
 
+        # Start pcap writer process if recording pcap is enabled.
+        global PCAP_WRITER_QUEUE
+        if config_static.LogRec.record_pcap:
+            from . import pcap_worker
+            PCAP_WRITER_QUEUE = multiprocessing.Queue()
+            pcap_process = multiprocessing.Process(
+                target=pcap_worker.pcap_writer_worker,
+                args=(PCAP_WRITER_QUEUE, NETWORK_LOGGER_QUEUE, network_logger_name,
+                      config_static.LogRec.recordings_path),
+                name="pcap_writer",
+                daemon=True
+            )
+            pcap_process.start()
+            multiprocess_list.append(pcap_process)
+
         # Starting the TCP server multiprocessing processes.
         for interface_dict in listening_interfaces:
             socket_wrapper_kwargs_list: list[dict] = list()
@@ -669,7 +690,8 @@ def mitm_server(config_file_path: str, script_version: str) -> int:
                     config_file_path,
                     network_logger_name,
                     NETWORK_LOGGER_QUEUE,
-                    is_tcp_process_ready
+                    is_tcp_process_ready,
+                    PCAP_WRITER_QUEUE
                 ),
                 daemon=True
             )
@@ -752,10 +774,15 @@ def _create_tcp_server_process(
         config_file_path: str,
         network_logger_name: str,
         network_logger_queue: multiprocessing.Queue,
-        is_tcp_process_ready: multiprocessing.Event
+        is_tcp_process_ready: multiprocessing.Event,
+        pcap_writer_queue: multiprocessing.Queue = None
 ):
     # Load config_static per process, since it is not shared between processes.
     config_static.load_config(config_file_path, print_kwargs=dict(stdout=False))
+
+    # Make pcap queue available to recorder workers in this process.
+    from .engines.__parent import recorder___parent
+    recorder___parent.PCAP_QUEUE = pcap_writer_queue
 
     # First create a network logger with a queue handler.
     _ = loggingw.create_logger(

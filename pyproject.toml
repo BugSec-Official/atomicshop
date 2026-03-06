@@ -75,6 +75,7 @@ dependencies = [
     "pyopenssl==25.3.0",
     "python-docx",
     "pywin32==311; platform_system == 'Windows'",
+    "scapy==2.7.0",
     "SoundCard",
     "soundfile",
     "SpeechRecognition",

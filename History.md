@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.13.0 - 06.03.2026
+  * mitm - fixes and improvements.
 * 3.12.8 - 04.03.2026
   * wrappers/socketw - fixes and improvements.
 * 3.12.7 - 04.03.2026

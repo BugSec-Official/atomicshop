@@ -1,3 +1,4 @@
+import copy
 import os
 from datetime import datetime
 import queue
@@ -5,10 +6,12 @@ import threading
 from pathlib import Path
 
 from ...shared_functions import build_module_names, create_custom_logger
-from ... import message, recs_files
+from ... import message, recs_files, config_static
 from .... import filesystem
 from ....file_io import jsons
 from ....print_api import print_api
+
+PCAP_QUEUE = None  # multiprocessing.Queue, set by _create_tcp_server_process
 
 
 # The class that is responsible for Recording Requests / Responses.
@@ -86,13 +89,9 @@ class RecorderParent:
 
         self.logger.info("Putting Message to Recorder Thread Queue...")
 
-        # Convert the requests and responses to hex.
-        self.convert_messages()
-        # Get the message in dict / JSON format
-        record_message_dict: dict = dict(self.class_client_message)
-
-        # Put the message in the queue to be processed by the worker thread
-        self.message_queue.put(record_message_dict)
+        # Put a copy of the client message object to the queue,
+        # so the worker can convert to JSON and/or pcap independently.
+        self.message_queue.put(copy.copy(self.class_client_message))
 
         return self.record_file_path
 
@@ -115,30 +114,71 @@ def save_message_worker(
 
     while True:
         # Get a message from the queue
-        record_message_dict = message_queue.get()
+        class_client_message = message_queue.get()
 
         # Check for the "stop" signal
-        if record_message_dict is None:
+        if class_client_message is None:
             break
 
         current_date_string: str = get_date_string()
 
-        # If current datetime string is different from the original datetime string, we will create a new file path.
+        # If current date is different, create new file paths.
         if current_date_string != previous_date_string:
             previous_date_string = current_date_string
             current_datetime_string: str = get_datetime_string()
             record_file_path = f'{original_file_directory}{os.sep}{current_datetime_string}_{original_file_stem}_partof_{original_datetime_string}{original_file_extension}'
 
-        try:
-            jsons.append_to_json(
-                record_message_dict, record_file_path, indent=2,
-                enable_long_file_path=True, print_kwargs={'logger': logger}
-            )
-        except TypeError as e:
-            print_api(str(e), logger_method="critical", logger=logger)
-            raise e
+        # Write JSON if enabled.
+        if config_static.LogRec.record_json:
+            # Convert raw bytes to hex for JSON serialization.
+            if class_client_message.request_raw_bytes:
+                class_client_message.request_raw_hex = class_client_message.request_raw_bytes.hex()
+            if class_client_message.response_raw_bytes:
+                class_client_message.response_raw_hex = class_client_message.response_raw_bytes.hex()
 
-        logger.info(f"Recorded to file: {record_file_path}")
+            record_message_dict: dict = dict(class_client_message)
+
+            try:
+                jsons.append_to_json(
+                    record_message_dict, record_file_path, indent=2,
+                    enable_long_file_path=True, print_kwargs={'logger': logger}
+                )
+            except TypeError as e:
+                print_api(str(e), logger_method="critical", logger=logger)
+                raise e
+
+            logger.info(f"Recorded to file: {record_file_path}")
+
+        # Write pcap if enabled — send data to the pcap writer process via queue.
+        if config_static.LogRec.record_pcap and PCAP_QUEUE is not None:
+            if class_client_message.action == "client_receive":
+                raw_bytes = class_client_message.request_raw_bytes
+                source_ip = class_client_message.client_ip
+                source_port = class_client_message.source_port
+                dest_ip = class_client_message.server_ip
+                dest_port = class_client_message.destination_port
+                timestamp = int(class_client_message.timestamp.timestamp())
+            elif class_client_message.action == "service_receive":
+                raw_bytes = class_client_message.response_raw_bytes
+                source_ip = class_client_message.server_ip
+                source_port = class_client_message.destination_port
+                dest_ip = class_client_message.client_ip
+                dest_port = class_client_message.source_port
+                timestamp = int(class_client_message.timestamp.timestamp())
+            else:
+                raw_bytes = None
+
+            if raw_bytes is not None:
+                PCAP_QUEUE.put({
+                    'engine_dir': original_file_directory,
+                    'source_ip': source_ip,
+                    'dest_ip': dest_ip,
+                    'source_port': source_port,
+                    'dest_port': dest_port,
+                    'raw_bytes': raw_bytes,
+                    'timestamp': timestamp,
+                    'thread_id': class_client_message.thread_id
+                })
 
         # Indicate task completion
         message_queue.task_done()
