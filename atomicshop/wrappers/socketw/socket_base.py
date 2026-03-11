@@ -90,6 +90,28 @@ def is_socket_closed(socket_object) -> bool:
         return False
 
 
+def get_host_name_from_ip_address_with_timeout(ip_address: str, timeout: float = 0.01) -> str:
+    """
+    Get the host name from the IP address with a timeout.
+    Uses concurrent.futures.ThreadPoolExecutor to enforce the timeout,
+    since socket.gethostbyaddr has no native timeout parameter.
+    Returns empty string if lookup times out or fails.
+
+    :param ip_address: string, IP address.
+    :param timeout: float, timeout in seconds.
+    :return: string, host name or empty string.
+    """
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(socket.gethostbyaddr, ip_address)
+        try:
+            result = future.result(timeout=timeout)
+            return result[0]
+        except (TimeoutError, socket.herror):
+            return ""
+
+
 def get_host_name_from_ip_address(ip_address: str) -> str:
     """
     Get the host name from the IP address.
@@ -97,10 +119,7 @@ def get_host_name_from_ip_address(ip_address: str) -> str:
     :return: string, host name.
     """
 
-    host_name, alias_list, ipaddr_list = socket.gethostbyaddr(ip_address)
-    _ = alias_list, ipaddr_list
-
-    return host_name
+    return get_host_name_from_ip_address_with_timeout(ip_address)
 
 
 def wait_for_ip_bindable(

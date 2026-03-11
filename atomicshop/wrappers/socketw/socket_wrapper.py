@@ -578,11 +578,8 @@ class SocketWrapper:
                 print_api(message, logger=self.logger)
 
                 # Not always there will be a hostname resolved by the IP address, so we will leave it empty if it fails.
-                try:
-                    source_hostname = socket.gethostbyaddr(source_ip)[0]
-                    source_hostname = source_hostname.lower()
-                except socket.herror:
-                    pass
+                source_hostname = socket_base.get_host_name_from_ip_address_with_timeout(source_ip)
+                source_hostname = source_hostname.lower()
 
                 # This is the earliest stage to ask for process name.
                 # SSH Remote / LOCALHOST script execution to identify process section.

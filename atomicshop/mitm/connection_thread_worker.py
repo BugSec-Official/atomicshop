@@ -811,11 +811,7 @@ def thread_worker_main(
     try:
         client_ip, source_port = client_socket.getpeername()
 
-        try:
-            client_name: str = socket.gethostbyaddr(client_ip)[0]
-        # This can happen if the host changed IP address, but it wasn't propagated over DHCP.
-        except socket.herror:
-            client_name = ""
+        client_name: str = socket_base.get_host_name_from_ip_address_with_timeout(client_ip)
 
         client_name = client_name.lower()
         destination_port: int = client_socket.getsockname()[1]

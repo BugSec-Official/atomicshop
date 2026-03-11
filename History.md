@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.13.2 - 11.03.2026
+  * mitm/connection_thread_worker, wrappers/socketw - fixes.
 * 3.13.1 - 11.03.2026
   * mitm/import_config - fixes.
 * 3.13.0 - 06.03.2026
