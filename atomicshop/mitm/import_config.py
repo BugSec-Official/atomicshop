@@ -50,8 +50,8 @@ def import_config_files(
     config_static.LogRec.logs_path = config_toml['logrec']['logs_path']
     config_static.LogRec.enable_request_response_recordings_in_logs = bool(config_toml['logrec']['enable_request_response_recordings_in_logs'])
     config_static.LogRec.store_logs_for_x_days = config_toml['logrec']['store_logs_for_x_days']
-    config_static.LogRec.record_json = bool(config_toml['logrec']['record_json'])
-    config_static.LogRec.record_pcap = bool(config_toml['logrec']['record_pcap'])
+    config_static.LogRec.record_json = bool(config_toml['logrec'].get('record_json', 1))
+    config_static.LogRec.record_pcap = bool(config_toml['logrec'].get('record_pcap', 0))
 
     config_static.Certificates.install_ca_certificate_to_root_store = bool(config_toml['certificates']['install_ca_certificate_to_root_store'])
     config_static.Certificates.uninstall_unused_ca_certificates_with_mitm_ca_name = bool(config_toml['certificates']['uninstall_unused_ca_certificates_with_mitm_ca_name'])

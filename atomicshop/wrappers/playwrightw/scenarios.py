@@ -6,13 +6,37 @@ For example: run playwright, navigate to URL, get text from a locator.
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Literal
 
-from playwright.sync_api import sync_playwright
-from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+try:
+    from playwright.sync_api import sync_playwright
+    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+    PLAYWRIGHT_AVAILABLE: bool = True
+except ImportError:
+    import struct
+    arch = struct.calcsize("P") * 8
+    import warnings
+    warnings.warn(
+        f"Playwright is not available. "
+        f"If you see 'DLL load failed', install 'VC Redist 2015+' for x{arch}: "
+        f"https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist",
+        ImportWarning,
+        stacklevel=2,
+    )
+    sync_playwright = None
+    PlaywrightTimeoutError = None
+    PLAYWRIGHT_AVAILABLE = False
 from bs4 import BeautifulSoup
 
 from . import engine, base, combos
 from ...basics import threads, multiprocesses
 from ... import web
+
+
+def _require_playwright() -> None:
+    if not PLAYWRIGHT_AVAILABLE:
+        raise RuntimeError(
+            "Playwright is not available. Install 'VC Redist 2015+' and reinstall playwright. "
+            "See: https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist"
+        )
 
 
 def get_text_from_html_tag(url: str, tag_name: str, attribute: str, value: str) -> str:
@@ -33,6 +57,8 @@ def get_text_from_html_tag(url: str, tag_name: str, attribute: str, value: str) 
     :param value: string value of the specified attribute.
     :return: string text from html tag.
     """
+
+    _require_playwright()
 
     # Execute playwright engine with default settings
     playwright_engine = engine.PlaywrightEngine(headless=True)
@@ -77,6 +103,8 @@ def get_page_content(
     :return: any page content in specified format.
     """
 
+    _require_playwright()
+
     # Execute playwright engine with default settings
     playwright_engine = engine.PlaywrightEngine(headless=True)
     playwright_engine.start()
@@ -119,6 +147,8 @@ def get_page_content_in_thread(
     execute it in a thread with arguments and return the result.
     """
 
+    _require_playwright()
+
     return threads.thread_wrap_var(
             function_reference=get_page_content,
             url=url,
@@ -137,6 +167,8 @@ def _get_page_content_in_process(
     The function uses 'threads.thread_wrap_var' function in order to wrap the function 'get_page_content' and
     execute it in a thread with arguments and return the result.
     """
+
+    _require_playwright()
 
     return multiprocesses.process_wrap_queue(
             function_reference=get_page_content,
@@ -161,6 +193,9 @@ def fetch_urls_content_in_threads(
         ]
 ) -> list[str]:
     """ The function to fetch all URLs concurrently using threads """
+
+    _require_playwright()
+
     contents = []
 
     # Use ThreadPoolExecutor to run multiple threads
@@ -192,6 +227,9 @@ def fetch_urls_content(
         ],
 ) -> list[str]:
     """ The function to fetch all URLs not concurrently without using threads """
+
+    _require_playwright()
+
     contents = []
 
     for url in urls:
@@ -215,6 +253,8 @@ def _fetch_content(
         ],
         headless: bool = True):
     """ Function to fetch content from a single URL using the synchronous Playwright API """
+
+    _require_playwright()
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless)  # Set headless=True if you don't want to see the browser
