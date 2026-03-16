@@ -177,7 +177,8 @@ def save_message_worker(
                     'dest_port': dest_port,
                     'raw_bytes': raw_bytes,
                     'timestamp': timestamp,
-                    'thread_id': class_client_message.thread_id
+                    'thread_id': class_client_message.thread_id,
+                    'process_name': class_client_message.process_name
                 })
 
         # Indicate task completion

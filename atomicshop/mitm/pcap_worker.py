@@ -82,6 +82,8 @@ def pcap_writer_worker(
             packet.time = msg['timestamp']
 
             comment = f"thread_id={msg['thread_id']}"
+            if msg.get('process_name'):
+                comment += f" process_cmdline={msg['process_name']}"
             if total_chunks > 1:
                 comment += f" chunk={chunk_idx + 1}/{total_chunks}"
             packet.comments = [comment.encode()]
