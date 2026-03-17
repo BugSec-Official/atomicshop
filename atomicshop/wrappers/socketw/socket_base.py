@@ -106,13 +106,15 @@ def get_host_name_from_ip_address_with_timeout(ip_address: str, timeout: float =
     """
     from concurrent.futures import ThreadPoolExecutor, TimeoutError
 
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(socket.gethostbyaddr, ip_address)
-        try:
-            result = future.result(timeout=timeout)
-            return result[0]
-        except (TimeoutError, socket.herror):
-            return ""
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(socket.gethostbyaddr, ip_address)
+    try:
+        result = future.result(timeout=timeout)
+        return result[0]
+    except (TimeoutError, socket.herror):
+        return ""
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
 
 
 def get_host_name_from_ip_address(ip_address: str) -> str:
