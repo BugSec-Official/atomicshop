@@ -195,7 +195,9 @@ class SocketClient:
                 error_message: str = f"{error_string}: {exception_error}"
                 print_api.print_api(error_message, logger=self.logger, logger_method='error')
                 return None, error_message
-            elif exception_type == 'socket.gaierror':
+            elif exception_type == 'gaierror' and hasattr(e, 'winerror') and e.winerror == 11022:
+                error_message: str = f'socket.gaierror: {e.winerror}'
+                print_api.print_api(error_message, logger=self.logger, logger_method='error')
                 custom_error_message: str = (
                     f"Couldn't resolve [{self.service_name}] to IP using default methods. "
                     f"Domain doesn't exist or there's no IP assigned to it.")

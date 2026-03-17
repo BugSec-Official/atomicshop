@@ -461,21 +461,29 @@ def mitm_server(config_file_path: str, script_version: str) -> int:
         sslkeylog_file_path: str = os.path.join(
             config_static.LogRec.logs_path, config_static.Certificates.sslkeylog_file_name)
         if os.path.isfile(sslkeylog_file_path):
-            creation_time: float = os.path.getctime(sslkeylog_file_path)
-            creation_timestamp_str: str = datetime.datetime.fromtimestamp(creation_time).strftime("%Y%m%d_%H%M%S")
-            now_timestamp_str: str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            file_size_mb: float = os.path.getsize(sslkeylog_file_path) / (1024 * 1024)
+            if file_size_mb < config_static.Certificates.sslkeylog_minimum_size_mb:
+                print_api.print_api(
+                    f"sslkeylog file size {file_size_mb:.1f} MB is below "
+                    f"{config_static.Certificates.sslkeylog_minimum_size_mb} MB threshold, keeping existing file.",
+                    color="blue"
+                )
+            else:
+                creation_time: float = os.path.getctime(sslkeylog_file_path)
+                creation_timestamp_str: str = datetime.datetime.fromtimestamp(creation_time).strftime("%Y%m%d_%H%M%S")
+                now_timestamp_str: str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
-            keylog_stem: str = Path(sslkeylog_file_path).stem
-            keylog_extension: str = Path(sslkeylog_file_path).suffix
-            renamed_sslkeylog_file_path: str = os.path.join(
-                config_static.LogRec.logs_path,
-                f'{keylog_stem}_{creation_timestamp_str}-{now_timestamp_str}{keylog_extension}'
-            )
-            os.rename(sslkeylog_file_path, renamed_sslkeylog_file_path)
-            print_api.print_api(
-                f"Renamed existing sslkeylog file to: {renamed_sslkeylog_file_path}",
-                color="blue"
-            )
+                keylog_stem: str = Path(sslkeylog_file_path).stem
+                keylog_extension: str = Path(sslkeylog_file_path).suffix
+                renamed_sslkeylog_file_path: str = os.path.join(
+                    config_static.LogRec.logs_path,
+                    f'{keylog_stem}_{creation_timestamp_str}-{now_timestamp_str}{keylog_extension}'
+                )
+                os.rename(sslkeylog_file_path, renamed_sslkeylog_file_path)
+                print_api.print_api(
+                    f"Renamed existing sslkeylog file to: {renamed_sslkeylog_file_path}",
+                    color="blue"
+                )
 
     # Get the IPs that will be set for the adapter and fill the engine configuration with the IPs.
     rc: int = get_ipv4s_for_tcp_server()

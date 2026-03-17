@@ -77,7 +77,6 @@ class DNSServer:
     forwarding_dns_service_port: int = 53
 
 
-
 @dataclass
 class TCPServer:
     is_enabled: bool
@@ -86,6 +85,7 @@ class TCPServer:
 
     # Convertable variables.
     no_engines_usage_to_listen_addresses: dict
+
 
 @dataclass
 class LogRec:
@@ -121,6 +121,7 @@ class Certificates:
 
     sslkeylog_file_name: str = "sslkeylog.txt"
     enable_sslkeylogfile_env_to_client_ssl_context: bool = True
+    sslkeylog_minimum_size_mb: int = 300
 
 
 @dataclass

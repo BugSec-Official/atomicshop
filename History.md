@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.13.4 - 17.03.2026
+  * mitm, wrappers/socketw/socket_client - fixes and improvements.
 * 3.13.3 - 16.03.2026
   * mitm - fixes and improvements.
 * 3.13.2 - 11.03.2026
