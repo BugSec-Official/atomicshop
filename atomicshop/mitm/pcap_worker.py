@@ -31,6 +31,7 @@ def pcap_writer_worker(
     from scapy.layers.inet import IP, TCP
     from scapy.packet import Raw
     from scapy.utils import PcapNgWriter
+    from scapy.config import conf
 
     # {engine_dir: {'writer': PcapNgWriter, 'date': str, 'path': str}}
     writers: dict = {}
@@ -65,6 +66,9 @@ def pcap_writer_worker(
                     writer.f.close()
                     writer.f = open(pcap_file_path, "ab", 4096)
                     writer.header_present = True
+                    # write_header() won't run (header_present=True), so set linktype
+                    # manually — scapy's write() needs it.
+                    writer.linktype = conf.l2types.layer2num[IP]
                 writer.sync = True
                 writer_info = {'writer': writer, 'date': current_date, 'path': pcap_file_path}
                 writers[engine_dir] = writer_info

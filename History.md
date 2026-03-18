@@ -1,7 +1,7 @@
 <!-- HISTORY -->
 ## History
 
-* 3.13.7 - 18.03.2026
+* 3.13.7-3.13.8 - 18.03.2026
   * mitm/pcap_worker - fixes.
 * 3.13.6 - 18.03.2026
   * mitm/pcap_worker - fixes.
