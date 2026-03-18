@@ -98,7 +98,7 @@ def get_host_name_from_ip_address_with_timeout(ip_address: str, timeout: float =
     Returns empty string if lookup times out or fails.
 
     :param ip_address: string, IP address.
-    :param timeout: float, timeout in seconds. 10ms is more than enough to get the host name from ip address.
+    :param timeout: float, timeout in seconds. 10ms is more than enough to get the host name from ip address on local network.
         The problem is that 'socket.gethostbyaddr' doesn't have a built-in timeout, so it takes about 5 seconds
         to finish the process if the host name can't be found. On regular occasion it will take 1-10 ms to
         finish this action. So, we're taking the maximum.

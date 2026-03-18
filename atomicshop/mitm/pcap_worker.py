@@ -35,6 +35,11 @@ def pcap_writer_worker(
     # {engine_dir: {'writer': PcapNgWriter, 'date': str, 'path': str}}
     writers: dict = {}
 
+    # Per-connection TCP sequence tracking so Wireshark sees coherent streams.
+    # Key: frozenset({(ip1, port1), (ip2, port2)})
+    # Value: {(ip, port): seq_counter, ...}  — one seq counter per direction
+    tcp_streams: dict = {}
+
     while True:
         msg = pcap_queue.get()
 
@@ -73,11 +78,22 @@ def pcap_writer_worker(
         chunks = [raw_bytes[i:i + MAX_CHUNK] for i in range(0, len(raw_bytes), MAX_CHUNK)]
         total_chunks = len(chunks)
 
+        # Look up or initialize TCP stream state for this connection.
+        src_ep = (msg['source_ip'], msg['source_port'])
+        dst_ep = (msg['dest_ip'], msg['dest_port'])
+        conn_key = frozenset({src_ep, dst_ep})
+        if conn_key not in tcp_streams:
+            tcp_streams[conn_key] = {src_ep: 1, dst_ep: 1}
+        stream = tcp_streams[conn_key]
+
         for chunk_idx, chunk in enumerate(chunks):
+            current_seq = stream[src_ep]
+            current_ack = stream[dst_ep]
             packet = IP(
                 src=msg['source_ip'], dst=msg['dest_ip']
             ) / TCP(
-                sport=msg['source_port'], dport=msg['dest_port']
+                sport=msg['source_port'], dport=msg['dest_port'],
+                seq=current_seq, ack=current_ack, flags='PA'
             ) / Raw(load=chunk)
             packet.time = msg['timestamp']
 
@@ -89,6 +105,7 @@ def pcap_writer_worker(
             packet.comments = [comment.encode()]
 
             writer_info['writer'].write(packet)
+            stream[src_ep] += len(chunk)
 
         logger.info(f"Appended to pcap file: {writer_info['path']}")
 

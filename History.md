@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.13.6 - 18.03.2026
+  * mitm/pcap_worker - fixes.
 * 3.13.5 - 17.03.2026
   * wrappers/socketw/socket_base - fixes and improvements.
 * 3.13.4 - 17.03.2026
