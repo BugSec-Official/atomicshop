@@ -145,6 +145,7 @@ class SimpleProcessPool:
 
     def _start_main_thread(self, shared_dict_update_queue):
         get_instance = process_create.ProcessCreationSubscriber()
+        get_instance.connect()
         get_instance.start()
 
         while self._running:
@@ -186,6 +187,7 @@ class SimpleProcessPool:
 
     def _thread_process_termination(self):
         process_terminate_instance = process_terminate.ProcessTerminateSubscriber()
+        process_terminate_instance.connect()
         process_terminate_instance.start()
 
         while self._running:
