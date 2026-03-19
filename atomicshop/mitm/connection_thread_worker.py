@@ -425,10 +425,9 @@ def thread_worker_main(
         client_receive_count += 1
 
         network_logger.info(f"Initializing Receiver for Client cycle: {str(client_receive_count)}")
-        client_message.timestamp = datetime.now()
-
         received_raw_data, is_socket_closed, error_message = receiver.Receiver(
             ssl_socket=receiving_socket, logger=network_logger).receive()
+        client_message.timestamp = datetime.now()
 
         process_client_raw_data(received_raw_data, error_message, client_message)
         client_message.action = 'client_receive'
@@ -509,9 +508,9 @@ def thread_worker_main(
         network_logger.info(f"Initializing Receiver for Client cycle: {str(client_receive_count)}")
 
         # Getting message from the client over the socket using specific class.
-        client_message.timestamp = datetime.now()
         received_raw_data, is_socket_closed, error_on_receive = receiver.Receiver(
             ssl_socket=receiving_socket, logger=network_logger).receive()
+        client_message.timestamp = datetime.now()
 
         process_client_raw_data(received_raw_data, error_on_receive, client_message)
         client_message.action = 'client_receive'
@@ -578,9 +577,9 @@ def thread_worker_main(
         network_logger.info(f"Initializing Receiver for Service cycle: {str(server_receive_count)}")
 
         # Getting message from the client over the socket using specific class.
-        client_message.timestamp = datetime.now()
         received_raw_data, is_socket_closed, error_on_receive = receiver.Receiver(
             ssl_socket=receiving_socket, logger=network_logger).receive()
+        client_message.timestamp = datetime.now()
 
         process_server_raw_data(received_raw_data, error_on_receive, client_message)
         client_message.action = 'service_receive'
