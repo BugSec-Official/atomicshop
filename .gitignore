@@ -1,6 +1,7 @@
 atomicshop.egg-info/
 build/
 .idea/
+.claude/
 __pycache__/
 
 Z_Git Upload.cmd
