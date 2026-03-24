@@ -149,6 +149,7 @@ class WebsocketFrameParser:
 
         # Feed the data into the reader
         reader.feed_data(data_bytes)
+        reader.feed_eof()
 
         # Parse and process frames
         frame = parse_frame(masked, deflated)

@@ -76,11 +76,15 @@ def import_config_files(
 
     manipulations_after_import()
 
+    result = check_config()
+    if result != 0:
+        return result
+
     result = import_engines_configs(print_kwargs=print_kwargs or {})
     if result != 0:
         return result
 
-    result = check_configurations()
+    result = check_engines_configs()
     return result
 
 
@@ -142,9 +146,9 @@ def import_engines_configs(print_kwargs: dict) -> int:
     return 0
 
 
-def check_configurations() -> int:
+def check_config() -> int:
     """
-    Check the configurations from the 'config.toml' file.
+    Check the main configurations from the 'config.toml' file.
     If there are any errors, print them and return 1.
     :return: int, status code.
     """
@@ -155,73 +159,6 @@ def check_configurations() -> int:
     if not config_static.DNSServer.is_enabled and not config_static.TCPServer.is_enabled:
         print_api("Both DNS and TCP servers in config ini file, nothing to run. Exiting...", color='red')
         return 1
-
-    # Checking if listening interfaces were set.
-    if not config_static.TCPServer.no_engines_usage_to_listen_addresses_enable:
-        # If no engines were found, check if listening interfaces were set in the main config.
-        if not config_static.ENGINES_LIST:
-            message = (
-                "\n"
-                "No engines found. Create with [create_template.py].\n"
-                "Exiting...")
-            print_api(message, color="red")
-            return 1
-    else:
-        if not config_static.TCPServer.no_engines_listening_address_list:
-            message = (
-                "\n"
-                "No listening interfaces. Set [no_engines_usage_to_listen_addresses] in the main [config.toml].\n"
-                "Exiting...")
-            print_api(message, color="red")
-            return 1
-
-    if not config_static.ENGINES_LIST and config_static.DNSServer.resolve_by_engine:
-        error_message = (
-            f"No engines were found in: [{config_static.MainConfig.ENGINES_DIRECTORY_PATH}]\n"
-            f"But the DNS routing is set to use them for routing.\n"
-            f"Please check your DNS routing configuration in the [config.toml] file or create an engine with [create_template.py].")
-        print_api(error_message, color="red")
-        return 1
-
-    for engine in config_static.ENGINES_LIST:
-        port_list: list[str] = []
-        for domain_port in engine.domain_list:
-            # Check if the domains has port.
-            if ':' not in domain_port:
-                message = (
-                    f"[*] Domain [{domain_port}] doesn't have a port.\n"
-                    f"Please check your engine configuration file.")
-                print_api(message, color="red")
-                return 1
-            else:
-                # Split the domain and port.
-                domain, port = domain_port.split(':')
-                port_list.append(port)
-                # Check if the port is a number.
-                if not port.isdigit():
-                    message = (
-                        f"[*] Port [{port}] is not a number.\n"
-                        f"Please check your engine configuration file.")
-                    print_api(message, color="red")
-                    return 1
-
-        # Check if the ports in on_port_connect are unique.
-        if engine.on_port_connect:
-            ports_on_connect: list[str] = list(engine.on_port_connect.keys())
-            # Check if any of the ports in the on_port_connect are not in the domain list.
-            ports_in_domain_list: list[str] = []
-            for port in ports_on_connect:
-                if port in port_list:
-                    ports_in_domain_list.append(port)
-
-            if ports_in_domain_list:
-                message = (
-                    f"[*] Ports in [on_port_connect] config in engine_config.toml: {ports_in_domain_list}\n"
-                    f"are also in the [domains] field.\n"
-                    f"This is not supported.")
-                print_api(message, color="red")
-                return 1
-
 
     if not config_static.MainConfig.is_localhost and not is_admin:
         # If we're not in localhost mode, this means we need to set virtual IPv4 addresses, which requires admin rights.
@@ -296,6 +233,82 @@ def check_configurations() -> int:
     #         "Need to run the script with administrative rights to install or uninstall CA certificate.\nExiting..."
     #     print_api(message, color='red')
     #     return 1
+
+    return 0
+
+
+def check_engines_configs() -> int:
+    """
+    Check the engine configurations after engines have been imported.
+    If there are any errors, print them and return 1.
+    :return: int, status code.
+    """
+
+    # Checking if listening interfaces were set.
+    if not config_static.TCPServer.no_engines_usage_to_listen_addresses_enable:
+        # If no engines were found, check if listening interfaces were set in the main config.
+        if not config_static.ENGINES_LIST:
+            message = (
+                "\n"
+                "No engines found. Create with [create_template.py].\n"
+                "Exiting...")
+            print_api(message, color="red")
+            return 1
+    else:
+        if not config_static.TCPServer.no_engines_listening_address_list:
+            message = (
+                "\n"
+                "No listening interfaces. Set [no_engines_usage_to_listen_addresses] in the main [config.toml].\n"
+                "Exiting...")
+            print_api(message, color="red")
+            return 1
+
+    if not config_static.ENGINES_LIST and config_static.DNSServer.resolve_by_engine:
+        error_message = (
+            f"No engines were found in: [{config_static.MainConfig.ENGINES_DIRECTORY_PATH}]\n"
+            f"But the DNS routing is set to use them for routing.\n"
+            f"Please check your DNS routing configuration in the [config.toml] file or create an engine with [create_template.py].")
+        print_api(error_message, color="red")
+        return 1
+
+    for engine in config_static.ENGINES_LIST:
+        port_list: list[str] = []
+        for domain_port in engine.domain_list:
+            # Check if the domains has port.
+            if ':' not in domain_port:
+                message = (
+                    f"[*] Domain [{domain_port}] doesn't have a port.\n"
+                    f"Please check your engine configuration file.")
+                print_api(message, color="red")
+                return 1
+            else:
+                # Split the domain and port.
+                domain, port = domain_port.split(':')
+                port_list.append(port)
+                # Check if the port is a number.
+                if not port.isdigit():
+                    message = (
+                        f"[*] Port [{port}] is not a number.\n"
+                        f"Please check your engine configuration file.")
+                    print_api(message, color="red")
+                    return 1
+
+        # Check if the ports in on_port_connect are unique.
+        if engine.on_port_connect:
+            ports_on_connect: list[str] = list(engine.on_port_connect.keys())
+            # Check if any of the ports in the on_port_connect are not in the domain list.
+            ports_in_domain_list: list[str] = []
+            for port in ports_on_connect:
+                if port in port_list:
+                    ports_in_domain_list.append(port)
+
+            if ports_in_domain_list:
+                message = (
+                    f"[*] Ports in [on_port_connect] config in engine_config.toml: {ports_in_domain_list}\n"
+                    f"are also in the [domains] field.\n"
+                    f"This is not supported.")
+                print_api(message, color="red")
+                return 1
 
     return 0
 

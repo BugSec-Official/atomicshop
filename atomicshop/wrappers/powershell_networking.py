@@ -43,7 +43,7 @@ def get_interface_ips(
     except subprocess.CalledProcessError as e:
         # If anything unexpected happens, raise a clearer error
         msg = (e.stderr or e.stdout or "").strip()
-        raise RuntimeError(f"PowerShell Get-NetIPAddress failed: {msg}") from e
+        raise RuntimeError(f"PowerShell Get-NetIPAddress failed (try with admin): {msg}") from e
 
     stdout = result.stdout.strip()
     if not stdout:

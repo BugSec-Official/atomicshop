@@ -170,7 +170,11 @@ def thread_worker_main(
                     network_logger.info(f'Protocol upgraded to Websocket')
 
     def parse_websocket(raw_bytes):
-        return websocket_frame_parser.parse_frame_bytes(raw_bytes)
+        try:
+            return websocket_frame_parser.parse_frame_bytes(raw_bytes)
+        except Exception as e:
+            network_logger.warning(f"Failed to parse websocket frame: {e}")
+            return None
 
     def finish_thread(send_connection_reset: bool = False):
         """
@@ -324,9 +328,9 @@ def thread_worker_main(
         if protocol != '':
             client_message.protocol = protocol
 
-        # Parse websocket frames only if it is not the first protocol upgrade request.
-        if protocol == 'Websocket' and client_receive_count != 1:
-            client_message.request_auto_parsed = parse_websocket(client_message.request_raw_bytes)
+        # # Parse websocket frames only if it is not the first protocol upgrade request.
+        # if protocol == 'Websocket' and client_receive_count != 1:
+        #     client_message.request_auto_parsed = parse_websocket(client_message.request_raw_bytes)
 
         # Custom parser, should parse HTTP body or the whole message if not HTTP.
         parser_instance = parser(client_message)

@@ -3,6 +3,7 @@ from atomicshop.mitm.engines.__parent.responder___parent import ResponderParent
 from atomicshop.mitm.shared_functions import create_custom_logger
 from atomicshop.mitm.message import ClientMessage
 from atomicshop.mitm import config_static
+from atomicshop import websocket_parse
 
 """
 import time
@@ -80,7 +81,45 @@ class ResponderGeneral(ResponderParent):
     #     response_bytes_list: list[bytes] = list()
     #     # response_bytes_list.append(byte_response)
     #     return response_bytes_list
-
+    #
+    # ==================================================================================================================
+    #
+    # WEBSOCKET example.
+    # def create_response(self, class_client_message: ClientMessage):
+    #     # The incoming websocket frame is parsed into a dict with keys:
+    #     #   'is_deflated' (bool), 'is_masked' (bool), 'frame' (str or bytes), 'opcode' (str: TEXT/BINARY/CLOSE/PING/PONG)
+    #     ws_frame = class_client_message.request_auto_parsed
+    #     frame_data = ws_frame['frame']
+    #     frame_opcode = ws_frame['opcode']
+    #
+    #     response_bytes_list: list[bytes] = list()
+    #
+    #     # --- Text frame example (string / dict -> JSON) ---
+    #     # If the incoming frame is TEXT, you can parse it as JSON and build a response dict.
+    #     # import json
+    #     if frame_opcode == 'TEXT':
+    #         # request_dict = json.loads(frame_data)
+    #         response_dict = {'status': 'ok', 'echo': frame_data}
+    #         text_frame_bytes = websocket_parse.create_websocket_frame(
+    #             data=json.dumps(response_dict),   # str -> TEXT frame (opcode determined automatically)
+    #             deflate=False,                     # Set True to apply permessage-deflate compression
+    #             mask=False                         # Server-to-client frames are never masked
+    #         )
+    #         response_bytes_list.append(text_frame_bytes)
+    #
+    #     # --- Binary frame example (raw bytes) ---
+    #     # If the incoming frame is BINARY, respond with binary data.
+    #     elif frame_opcode == 'BINARY':
+    #         response_payload = b'\x01\x02\x03'
+    #         binary_frame_bytes = websocket_parse.create_websocket_frame(
+    #             data=response_payload,             # bytes -> BINARY frame (opcode determined automatically)
+    #             deflate=False,
+    #             mask=False
+    #         )
+    #         response_bytes_list.append(binary_frame_bytes)
+    #
+    #     return response_bytes_list
+    #
     # ==================================================================================================================
     # Uncomment this section in order to begin building custom responder.
     # @staticmethod

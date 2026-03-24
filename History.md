@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.13.12 - 24.03.2026
+  * mitm, websocket_parse - fixes and improvements.
 * 3.13.11 - 22.03.2026
   * Updated dependencies.
 * 3.13.10 - 19.03.2026
