@@ -120,6 +120,9 @@ class SSHRemote:
     ):
         error: str = str()
 
+        if self.is_connected():
+            return error
+
         # Get all local interfaces IPv4 addresses.
         local_interfaces_ipv4 = socket_base.get_local_network_interfaces_ip_address("ipv4", True)
         # Check if the target IP address is in the list of local interfaces.
@@ -147,6 +150,10 @@ class SSHRemote:
 
     def close(self):
         self.ssh_client.close()
+
+    def is_connected(self) -> bool:
+        transport = self.ssh_client.get_transport()
+        return transport is not None and transport.is_active()
 
     @staticmethod
     def check_console_output_for_errors(console_output_string: str):
@@ -323,8 +330,6 @@ class SSHRemote:
 
             execution_output, execution_error = self.remote_execution_python(script_string=script_string, script_arg_values=(str(port),))
 
-            # Closing SSH connection at this stage.
-            self.close()
-            print_api("Acquired. Closed SSH connection.", logger=self.logger, logger_method='info')
+            print_api("Acquired.", logger=self.logger, logger_method='info')
 
         return execution_output, execution_error

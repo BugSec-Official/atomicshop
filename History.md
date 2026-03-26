@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.13.13 - 26.03.2026
+  * ssh_remote, wrappers/socketw/socket_client - fixes.
 * 3.13.12 - 24.03.2026
   * mitm, websocket_parse - fixes and improvements.
 * 3.13.11 - 22.03.2026
