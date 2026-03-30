@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.13.14 - 30.03.2026
+  * a_mains/install_ca_certificate, a_mains/set_default_dns_gateway - improvements.
 * 3.13.13 - 26.03.2026
   * ssh_remote, wrappers/socketw/socket_client - fixes.
 * 3.13.12 - 24.03.2026

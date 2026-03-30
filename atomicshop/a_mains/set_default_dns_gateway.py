@@ -55,15 +55,28 @@ def set_default_gateway_ipv4(gateway_ipv4: str) -> str | None:
     if not interface_name:
         return "Could not determine the default network interface name."
 
-    # Set the default gateway using 'netsh' command.
-    command: str = f'netsh interface ipv4 set dns name="{interface_name}" static {gateway_ipv4} primary'
-    result = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout: str = result.stdout.decode().strip()
-    stderr: str = result.stderr.decode().strip()
+    if sys.platform == 'win32':
+        # Set the default DNS using 'netsh' command.
+        command: str = f'netsh interface ipv4 set dns name="{interface_name}" static {gateway_ipv4} primary'
+        result = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout: str = result.stdout.decode().strip()
+        stderr: str = result.stderr.decode().strip()
 
-    if result.returncode != 0:
-        return (f"stdout: {stdout}\n"
-                f"stderr: {stderr}")
+        if result.returncode != 0:
+            return (f"stdout: {stdout}\n"
+                    f"stderr: {stderr}")
+    elif sys.platform == 'linux':
+        # Set the default DNS using 'resolvectl' command (systemd-resolved, Ubuntu 18.04+).
+        command: str = f'resolvectl dns {interface_name} {gateway_ipv4}'
+        result = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout: str = result.stdout.decode().strip()
+        stderr: str = result.stderr.decode().strip()
+
+        if result.returncode != 0:
+            return (f"stdout: {stdout}\n"
+                    f"stderr: {stderr}")
+    else:
+        return f"Unsupported platform: {sys.platform}"
 
     return None
 
