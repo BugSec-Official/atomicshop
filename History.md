@@ -1,7 +1,7 @@
 <!-- HISTORY -->
 ## History
 
-* 3.13.18 - 02.04.2026
+* 3.13.18-3.13.19 - 02.04.2026
   * dependencies update.
 * 3.13.17 - 30.03.2026
   * a_mains, mitm, wrappers/socketw/process_getter - fixes and improvements.

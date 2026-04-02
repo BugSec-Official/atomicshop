@@ -55,7 +55,7 @@ dependencies = [
     "cryptography==46.0.3",
     "dkarchiver==1.0.6",
     "dkinst",
-    "dkwebmod==1.0.1",
+    "dkwebmod==1.0.2",
     "dnslib==0.9.26",
     "dnspython==2.8.0",
     "docker==7.1.0",
