@@ -2,7 +2,7 @@ import hashlib
 import sys
 from typing import Literal, Union
 
-from . import web
+from dkwebmod import web
 
 
 def hash_bytes(bytes_object: bytes, hash_algo: Union[Literal['sha256', 'md5', 'sha1'], str] = 'sha256') -> str:
@@ -22,7 +22,7 @@ def hash_url(
         get_method: str = 'urllib',
         path: str = None,
         hash_algo: str = 'sha256',
-        print_kwargs: dict = None
+        verbose: bool = True
 ) -> str:
     """
     The function will return hash of the page content from URL with specified algorithm.
@@ -37,13 +37,13 @@ def hash_url(
             'playwright_jpeg': Gets JPEG.
     :param path: string, path to save the downloaded file to. If None, the file will not be saved to disk.
     :param hash_algo: string, file hashing algorithm. Default is 'sha256'.
-    :param print_kwargs: dict, that contains all the arguments for 'print_api' function.
+    :param verbose: If true, the function will output progress to console.
 
     :return: string, hash of the page content.
     """
 
     # Get page content from URL.
-    response = web.get_page_content(url, get_method=get_method, path=path, print_kwargs=print_kwargs)
+    response = web.get_page_content(url, get_method=get_method, path=path, verbose=verbose)
 
     if response:
         # Hash the content.

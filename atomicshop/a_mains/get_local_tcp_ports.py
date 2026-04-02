@@ -71,7 +71,17 @@ def _main_lsof(show_all: bool = False) -> int:
 
     if result.returncode != 0:
         msg = (result.stderr or result.stdout).strip()
-        print(msg if msg else f"Error running lsof (exit code {result.returncode})")
+        if "a password is required" in msg.lower() or "a terminal is required" in msg.lower():
+            print(
+                "sudo: a password is required to run lsof. "
+                "Install lsof and add it to sudoers using scripts from 'tools/lsof/' directory.",
+                file=sys.stderr
+            )
+        else:
+            print(
+                msg if msg else f"Error running lsof (exit code {result.returncode})",
+                file=sys.stderr
+            )
         return 1
 
     current_cmd = ""

@@ -8,7 +8,7 @@
 
 from .wrappers.ffmpegw import FFmpegWrapper
 from .tempfiles import TempFile
-from .web import download
+from dkwebmod.web import download
 from .basics import strings
 
 

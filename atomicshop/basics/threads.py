@@ -62,33 +62,3 @@ def thread_wrap_queue(function_reference, *args, **kwargs):
     thread_object.join()
 
     return queue_object.get()
-
-
-def thread_wrap_var(function_reference, *args, **kwargs):
-    """
-    The function receives function reference and arguments, and executes the function in a thread.
-    "_var" means that a function variable is used to store the result of the function and output it.
-
-    :param function_reference: function reference to execute.
-    :param args: arguments for the function.
-    :param kwargs: keyword arguments for the function.
-    :return: output of the referenced function.
-    """
-
-    # Create variable to store the result of the function.
-    inter_thread_variable = None
-
-    # def threaded_function(function_reference, *args, **kwargs):
-    def threaded_function():
-        nonlocal inter_thread_variable
-        inter_thread_variable = function_reference(*args, **kwargs)
-
-    # Create thread object.
-    thread_object = threading.Thread(target=threaded_function)
-
-    # Start thread.
-    thread_object.start()
-    # Wait for thread to finish.
-    thread_object.join()
-
-    return inter_thread_variable

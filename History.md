@@ -1,7 +1,11 @@
 <!-- HISTORY -->
 ## History
 
-* 3.13.14 - 30.03.2026
+* 3.13.18 - 02.04.2026
+  * dependencies update.
+* 3.13.17 - 30.03.2026
+  * a_mains, mitm, wrappers/socketw/process_getter - fixes and improvements.
+* 3.13.14-3.13.16 - 30.03.2026
   * a_mains/install_ca_certificate, a_mains/set_default_dns_gateway - improvements.
 * 3.13.13 - 26.03.2026
   * ssh_remote, wrappers/socketw/socket_client - fixes.

@@ -109,7 +109,8 @@ def centered_settings_main(config_file_path: str, script_version: str):
 
         if set_default_dns_gateway:
             stdout, stderr = ssh_client.remote_execution_python(
-                script_string=dns_script_string, script_arg_values=(main_ipv4,))
+                script_string=dns_script_string,
+                script_arg_values=(main_ipv4, config_static.ProcessName.ssh_pass))
 
             if stderr:
                 print_api(f"Failed to apply settings on {host}:\n{stderr}", color="red")
@@ -118,7 +119,8 @@ def centered_settings_main(config_file_path: str, script_version: str):
         if install_ca_cert:
             cert_b64 = base64.b64encode(ca_certificate_string.encode("utf-8")).decode("ascii")
             stdout, stderr = ssh_client.remote_execution_python(
-                script_string=ca_script_string, script_arg_values=(config_static.MainConfig.ca_certificate_name, cert_b64,))
+                script_string=ca_script_string,
+                script_arg_values=(config_static.MainConfig.ca_certificate_name, cert_b64, config_static.ProcessName.ssh_pass))
 
             if stderr:
                 print_api(f"Failed to install CA certificate on {host}:\n{stderr}", color="red")

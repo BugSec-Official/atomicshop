@@ -4,8 +4,8 @@ from google import genai
 from google.genai.types import GenerateContentConfig
 
 from . import google_custom_search
-from ..wrappers.playwrightw import scenarios
-from .. import urls
+from dkwebmod.playwrightw import scenarios
+from dkwebmod import urls
 
 
 class GoogleCustomSearchError(Exception):

@@ -60,10 +60,17 @@ class GetCommandLine:
         # If there was known error on localhost / known error on remote or any kind of error on remote, it was
         # already logged, so we'll just put the error into 'process_name'.
         if execution_error:
-            process_name = execution_error
-            print_api(
-                f"Error During Command Execution: {process_name}", error_type=True,
-                logger_method='error', **(print_kwargs or {}))
+            if "a password is required" in execution_error:
+                process_name = ''
+                print_api(
+                    f"sudo requires a password to run lsof. "
+                    f"Install lsof and add it to sudoers using scripts from 'tools/lsof/' directory.",
+                    color='yellow', logger_method='warning', **(print_kwargs or {}))
+            else:
+                process_name = execution_error
+                print_api(
+                    f"Error During Command Execution: {process_name}", error_type=True,
+                    logger_method='error', **(print_kwargs or {}))
         # If there wasn't any error of above types, then we can put the output from either local or remote script
         # execution into 'process_name' and log it / output to console.
         else:

@@ -50,7 +50,14 @@ def test_ssh_main(config: dict) -> int:
         # Execute the TCP ports script remotely via SSH to get the list of open TCP ports.
         tcp_ports_output, tcp_ports_error = ssh_client.remote_execution_python(script_string=tcp_ports_script_string)
         if tcp_ports_error:
-            print_api(f"Error getting TCP ports from host {host}: {tcp_ports_error}", color='red')
+            if "a password is required" in tcp_ports_error:
+                print_api(
+                    f"Host {host}: sudo requires a password to run lsof. "
+                    f"Install lsof and add it to sudoers using scripts from 'tools/lsof/' directory.",
+                    color='yellow'
+                )
+            else:
+                print_api(f"Error getting TCP ports from host {host}: {tcp_ports_error}", color='red')
             continue
 
         tcp_ports_list: list = tcp_ports_output.strip().splitlines()

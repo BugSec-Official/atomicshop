@@ -169,9 +169,11 @@ def _find_cmdline_by_port_ubuntu_lsof(port: int, kind: str = "tcp") -> str | Non
             # But if sudo couldn't authenticate (password/TTY required), treat as an error.
             err = (r.stderr or "").lower()
             if "a password is required" in err or "a terminal is required" in err:
-                if r.stderr:
-                    sys.stderr.write(r.stderr)
-                raise subprocess.CalledProcessError(r.returncode, cmd, output=r.stdout, stderr=r.stderr)
+                sys.stderr.write(
+                    "sudo: a password is required to run lsof. "
+                    "Install lsof and add it to sudoers using scripts from 'tools/lsof/' directory.\n"
+                )
+                return None
             continue
         else:
             if r.stderr:

@@ -50,7 +50,18 @@ def get_default_interface_name() -> str:
     return connection_name
 
 
-def set_default_gateway_ipv4(gateway_ipv4: str) -> str | None:
+def _run_sudo(command: list[str], sudo_password: str, **kwargs) -> subprocess.CompletedProcess:
+    """Run a command with sudo -S, piping the password via stdin."""
+    return subprocess.run(
+        ['sudo', '-S'] + command,
+        input=sudo_password + '\n',
+        capture_output=True,
+        text=True,
+        **kwargs
+    )
+
+
+def set_default_gateway_ipv4(gateway_ipv4: str, sudo_password: str = None) -> str | None:
     interface_name: str = get_default_interface_name()
     if not interface_name:
         return "Could not determine the default network interface name."
@@ -67,14 +78,11 @@ def set_default_gateway_ipv4(gateway_ipv4: str) -> str | None:
                     f"stderr: {stderr}")
     elif sys.platform == 'linux':
         # Set the default DNS using 'resolvectl' command (systemd-resolved, Ubuntu 18.04+).
-        command: str = f'resolvectl dns {interface_name} {gateway_ipv4}'
-        result = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        stdout: str = result.stdout.decode().strip()
-        stderr: str = result.stderr.decode().strip()
+        result = _run_sudo(['resolvectl', 'dns', interface_name, gateway_ipv4], sudo_password)
 
         if result.returncode != 0:
-            return (f"stdout: {stdout}\n"
-                    f"stderr: {stderr}")
+            return (f"stdout: {result.stdout}\n"
+                    f"stderr: {result.stderr}")
     else:
         return f"Unsupported platform: {sys.platform}"
 
@@ -83,7 +91,7 @@ def set_default_gateway_ipv4(gateway_ipv4: str) -> str | None:
 
 def main() -> int:
     if len(sys.argv) < 2:
-        print("Usage: set_default_dns_gateway.py <IPv4>", file=sys.stderr)
+        print("Usage: set_default_dns_gateway.py <IPv4> [sudo_password]", file=sys.stderr)
         return 1
 
     dns_ipv4: str = sys.argv[1]
@@ -91,7 +99,9 @@ def main() -> int:
         print("Invalid IPv4 address", file=sys.stderr)
         return 1
 
-    error_message: str | None = set_default_gateway_ipv4(dns_ipv4)
+    sudo_password: str | None = sys.argv[2] if len(sys.argv) > 2 else None
+
+    error_message: str | None = set_default_gateway_ipv4(dns_ipv4, sudo_password=sudo_password)
     if error_message:
         print(f"Failed to set default DNS gateway:\n{error_message}", file=sys.stderr)
         return 1

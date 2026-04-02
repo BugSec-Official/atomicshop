@@ -14,6 +14,17 @@ def _linux_cert_path(issuer_name: str) -> str:
     return f'{LINUX_CA_DIR}/{issuer_name}.crt'
 
 
+def _run_sudo(command: list[str], sudo_password: str, **kwargs) -> subprocess.CompletedProcess:
+    """Run a command with sudo -S, piping the password via stdin."""
+    return subprocess.run(
+        ['sudo', '-S'] + command,
+        input=sudo_password + '\n',
+        capture_output=True,
+        text=True,
+        **kwargs
+    )
+
+
 def is_ca_installed(issuer_name: str) -> tuple[bool, str]:
     if sys.platform == 'win32':
         result = subprocess.run(
@@ -38,7 +49,7 @@ def is_ca_installed(issuer_name: str) -> tuple[bool, str]:
         return False, f"Unsupported platform: {sys.platform}"
 
 
-def remove_ca_certificate(issuer_name: str) -> int:
+def remove_ca_certificate(issuer_name: str, sudo_password: str = None) -> int:
     if sys.platform == 'win32':
         result = subprocess.run(
             ['certutil', '-delstore', 'Root', issuer_name],
@@ -51,17 +62,12 @@ def remove_ca_certificate(issuer_name: str) -> int:
             return 1
     elif sys.platform == 'linux':
         cert_path: str = _linux_cert_path(issuer_name)
-        try:
-            os.remove(cert_path)
-        except OSError as e:
-            print(f"Error removing certificate: {e}", file=sys.stderr)
+        result = _run_sudo(['rm', '-f', cert_path], sudo_password)
+        if result.returncode != 0:
+            print(f"Error removing certificate: {result.stderr}", file=sys.stderr)
             return 1
 
-        result = subprocess.run(
-            ['update-ca-certificates', '--fresh'],
-            capture_output=True,
-            text=True
-        )
+        result = _run_sudo(['update-ca-certificates', '--fresh'], sudo_password)
         if result.returncode != 0:
             print(f"Error updating CA certificates: {result.stderr}", file=sys.stderr)
             return 1
@@ -72,7 +78,7 @@ def remove_ca_certificate(issuer_name: str) -> int:
     return 0
 
 
-def install_ca_certificate(certificate_string: str, issuer_name: str = None) -> int:
+def install_ca_certificate(certificate_string: str, issuer_name: str = None, sudo_password: str = None) -> int:
     pem = certificate_string or ""
 
     # Extract one or more CERTIFICATE blocks
@@ -166,19 +172,26 @@ def install_ca_certificate(certificate_string: str, issuer_name: str = None) -> 
 
         cert_path: str = _linux_cert_path(issuer_name)
         try:
-            # Concatenate all PEM blocks into a single file.
+            # Concatenate all PEM blocks into a single string.
             normalized_blocks: list[str] = [normalize_pem(block, line_ending="\n") for block in blocks]
-            with open(cert_path, 'w', encoding='ascii') as f:
-                f.write("".join(normalized_blocks))
+            pem_content: str = "".join(normalized_blocks)
+
+            # Use 'sudo tee' to write to the protected directory.
+            # sudo -S reads the password from stdin; we prepend it before the PEM content.
+            result = subprocess.run(
+                ['sudo', '-S', 'tee', cert_path],
+                input=sudo_password + '\n' + pem_content,
+                capture_output=True,
+                text=True
+            )
+            if result.returncode != 0:
+                print(f"Error writing certificate file: {result.stderr}", file=sys.stderr)
+                return 1
         except Exception as e:
             print(f"Error writing certificate file: {e}", file=sys.stderr)
             return 1
 
-        result = subprocess.run(
-            ['update-ca-certificates'],
-            capture_output=True,
-            text=True
-        )
+        result = _run_sudo(['update-ca-certificates'], sudo_password)
         if result.returncode != 0:
             print(
                 "Error installing certificate:\n"
@@ -196,7 +209,7 @@ def install_ca_certificate(certificate_string: str, issuer_name: str = None) -> 
 
 def main() -> int:
     if len(sys.argv) < 3:
-        print("Usage: install_ca_certificate.py <Issuer Name> <crt cert string>", file=sys.stderr)
+        print("Usage: install_ca_certificate.py <Issuer Name> <crt cert string> [sudo_password]", file=sys.stderr)
         return 1
 
     certificate_string_base64: str = sys.argv[2]
@@ -207,17 +220,19 @@ def main() -> int:
         return 1
 
     issuer_name: str = sys.argv[1]
+    sudo_password: str | None = sys.argv[3] if len(sys.argv) > 3 else None
+
     is_installed, message = is_ca_installed(issuer_name)
     if not is_installed and message:
         print(f"Error checking certificate installation: {message}", file=sys.stderr)
         return 1
 
     if is_installed:
-        rc: int = remove_ca_certificate(issuer_name)
+        rc: int = remove_ca_certificate(issuer_name, sudo_password=sudo_password)
         if rc != 0:
             return rc
 
-    rc: int = install_ca_certificate(certificate_string, issuer_name=issuer_name)
+    rc: int = install_ca_certificate(certificate_string, issuer_name=issuer_name, sudo_password=sudo_password)
     if rc != 0:
         return rc
 
