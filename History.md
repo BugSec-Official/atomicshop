@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.13.20 - 06.04.2026
+  * networks - fixes and improvements.
 * 3.13.18-3.13.19 - 02.04.2026
   * dependencies update.
 * 3.13.17 - 30.03.2026

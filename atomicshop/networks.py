@@ -26,6 +26,16 @@ MICROSOFT_LOOPBACK_DEVICE_HARDWARE_ID = "*MSLOOP"
 GUID_DEVCLASS_NET: str = '{4d36e972-e325-11ce-bfc1-08002be10318}'
 
 
+class VlanIPPoolExhaustedError(Exception):
+    pass
+
+
+VMWARE_CONFIG_DIR: str = os.path.join(os.environ.get('PROGRAMDATA', r'C:\ProgramData'), 'VMware')
+VMWARE_DHCP_LEASES_PATH: str = os.path.join(VMWARE_CONFIG_DIR, 'vmnetdhcp.leases')
+VMWARE_DHCP_CONF_PATH: str = os.path.join(VMWARE_CONFIG_DIR, 'vmnetdhcp.conf')
+VMWARE_NAT_CONF_PATH: str = os.path.join(VMWARE_CONFIG_DIR, 'vmnetnat.conf')
+
+
 def is_ip_in_use_ping(ip_address: str, timeout: int = 1) -> bool:
     """
     Returns True if the IP address is pingable, False otherwise.
@@ -113,7 +123,7 @@ def get_default_internet_ipv4(target: str = "8.8.8.8") -> str:
 
 
 def get_default_interface_name() -> str:
-    default_connection_name_dict: dict = psutil_networks.get_default_connection_name()
+    default_connection_name_dict: dict | None = psutil_networks.get_default_connection_name()
     if not default_connection_name_dict:
         return ""
     # Get the first key from the dictionary.
@@ -269,13 +279,13 @@ def get_microsoft_loopback_device_network_configuration(
         wmi_instance, _ = wmi_helpers.get_wmi_instance()
 
     for _ in range(timeout):
-        adapter: CDispatch = win32networkadapter.get_network_adapter_by_device_name(
+        adapter: CDispatch | None = win32networkadapter.get_network_adapter_by_device_name(
             MICROSOFT_LOOPBACK_DEVICE_NAME, wmi_instance)
         if not adapter:
             # noinspection PyTypeChecker
             network_config = None
         else:
-            network_config: CDispatch = win32_networkadapterconfiguration.get_network_configuration_by_adapter(
+            network_config: CDispatch | None = win32_networkadapterconfiguration.get_network_configuration_by_adapter(
                 adapter, wmi_instance=wmi_instance)
 
         if network_config:
@@ -413,10 +423,105 @@ def get_wmi_network_adapter_configuration(
     return wmi_network_config, wmi_network_adapter, adapter_info
 
 
+def _get_vmware_infrastructure_ips(vlan: str) -> set[str]:
+    """
+    Parse VMware's DHCP and NAT config files to get infrastructure IPs (host adapter, gateway, etc.)
+    that match the given VLAN.
+
+    :param vlan: string, VLAN prefix in the format '192.168.16'.
+    :return: set of strings, VMware infrastructure IPv4 addresses matching the VLAN.
+    """
+
+    infrastructure_ips: set[str] = set()
+    vlan_prefix: str = vlan + '.'
+
+    # Parse vmnetdhcp.conf: extract 'fixed-address' and 'option routers' entries.
+    if os.path.isfile(VMWARE_DHCP_CONF_PATH):
+        with open(VMWARE_DHCP_CONF_PATH, 'r') as f:
+            for line in f:
+                stripped: str = line.strip()
+                if stripped.startswith('fixed-address '):
+                    ip: str = stripped.split()[1].rstrip(';')
+                    if ip.startswith(vlan_prefix):
+                        infrastructure_ips.add(ip)
+                elif stripped.startswith('option routers '):
+                    ip = stripped.split()[2].rstrip(';')
+                    if ip.startswith(vlan_prefix) and ip != '0.0.0.0':
+                        infrastructure_ips.add(ip)
+
+    # Parse vmnetnat.conf: extract 'ip' and 'hostIp' from [host] section.
+    if os.path.isfile(VMWARE_NAT_CONF_PATH):
+        with open(VMWARE_NAT_CONF_PATH, 'r') as f:
+            for line in f:
+                stripped: str = line.strip()
+                if stripped.startswith('ip = '):
+                    # 'ip = 192.168.16.2/24' -> '192.168.16.2'
+                    ip = stripped.split('=')[1].strip().split('/')[0]
+                    if ip.startswith(vlan_prefix):
+                        infrastructure_ips.add(ip)
+                elif stripped.startswith('hostIp = '):
+                    ip = stripped.split('=')[1].strip()
+                    if ip.startswith(vlan_prefix):
+                        infrastructure_ips.add(ip)
+
+    return infrastructure_ips
+
+
+def _get_vmware_dhcp_leased_ips(vlan: str) -> set[str]:
+    """
+    Parse VMware's DHCP lease file to get the set of active leased IPs matching the given VLAN.
+
+    The lease file is in ISC DHCP format and is append-only — the last entry per IP wins.
+
+    :param vlan: string, VLAN prefix in the format '192.168.16'.
+    :return: set of strings, active leased IPv4 addresses matching the VLAN.
+    """
+
+    if not os.path.isfile(VMWARE_DHCP_LEASES_PATH):
+        raise FileNotFoundError(
+            f"VMware DHCP lease file not found at '{VMWARE_DHCP_LEASES_PATH}'. "
+            f"Ensure VMware is installed and the DHCP service has run at least once."
+        )
+
+    with open(VMWARE_DHCP_LEASES_PATH, 'r') as f:
+        content: str = f.read()
+
+    # Parse lease blocks. Last entry per IP wins (file is append-only).
+    # Format: lease <IP> { ... binding state <state>; ... }
+    leases: dict[str, str] = {}
+    current_ip: str | None = None
+    current_binding_state: str | None = None
+
+    for line in content.splitlines():
+        stripped: str = line.strip()
+
+        if stripped.startswith('lease ') and stripped.endswith('{'):
+            current_ip = stripped.split()[1]
+            current_binding_state = None
+        elif stripped.startswith('binding state '):
+            # 'binding state active;' -> 'active'
+            current_binding_state = stripped.split()[2].rstrip(';')
+        elif stripped == '}' and current_ip is not None:
+            if current_binding_state:
+                leases[current_ip] = current_binding_state
+            current_ip = None
+            current_binding_state = None
+
+    # Filter: only active leases matching the VLAN prefix.
+    vlan_prefix: str = vlan + '.'
+    used_ips: set[str] = {ip for ip, state in leases.items() if state == 'active' and ip.startswith(vlan_prefix)}
+
+    # Add VMware infrastructure IPs (host adapter, NAT gateway, etc.)
+    used_ips.update(_get_vmware_infrastructure_ips(vlan))
+
+    return used_ips
+
+
 def generate_unused_ipv4_addresses_by_vlan(
         vlan: str,
         number_of_ips: int,
-        skip_ips: list[str] = None
+        skip_ips: list[str] = None,
+        interface_name: str = None
 ) -> list[str]:
     """
     Generate a list of unused IPv4 addresses in the given VLAN.
@@ -424,18 +529,39 @@ def generate_unused_ipv4_addresses_by_vlan(
     :param vlan: string, VLAN in the format '192.168.0'.
     :param number_of_ips: int, number of IPs to generate.
     :param skip_ips: list of strings, IPs to skip.
+    :param interface_name: string, network interface name. If it contains 'vmware' (case-insensitive),
+        the VMware DHCP lease file is used for IP availability checking instead of ARP.
     :return: list of strings, free IPv4 addresses.
     """
+
+    use_vmware_leases: bool = interface_name is not None and 'vmware' in interface_name.lower()
+    vmware_leased_ips: set[str] = set()
+    if use_vmware_leases:
+        vmware_leased_ips = _get_vmware_dhcp_leased_ips(vlan)
 
     generated_ips: list[str] = []
     counter: int = 1
     for i in range(number_of_ips):
         # Create the IP address.
         while True:
+            if counter > 255:
+                missing: int = number_of_ips - len(generated_ips)
+                raise VlanIPPoolExhaustedError(
+                    f"VLAN '{vlan}' IP pool exhausted. "
+                    f"All 255 IPs were tested and still free IPs are missing to fill the result list. "
+                    f"Generated {len(generated_ips)}/{number_of_ips} IPs: {generated_ips}. "
+                    f"Still missing: {missing}."
+                )
             ip_address: str = f"{vlan}.{counter}"
             counter += 1
-            is_ip_in_use, _ = is_ip_in_use_arp(ip_address)
-            if not is_ip_in_use and not ip_address in skip_ips:
+
+            if use_vmware_leases:
+                ip_in_use: bool = ip_address in vmware_leased_ips
+            else:
+                is_ip_in_use, _ = is_ip_in_use_arp(ip_address)
+                ip_in_use = is_ip_in_use is not None
+
+            if not ip_in_use and ip_address not in skip_ips:
                 # print("[+] Found IP to assign: ", ip_address)
                 generated_ips.append(ip_address)
                 break
@@ -450,7 +576,8 @@ def generate_unused_ipv4_addresses_from_ip(
         ip_address: str,
         mask: str,
         number_of_ips: int,
-        skip_ips: list[str] = None
+        skip_ips: list[str] = None,
+        interface_name: str = None
 ) -> tuple[list[str], list[str]]:
     """
     Generate a list of unused IPv4 addresses in the given VLAN.
@@ -460,6 +587,8 @@ def generate_unused_ipv4_addresses_from_ip(
     :param mask: string, subnet mask, example: '255.255.255.0'.
     :param number_of_ips: int, number of IPs to generate.
     :param skip_ips: list of strings, IPs to skip.
+    :param interface_name: string, network interface name. If it contains 'vmware' (case-insensitive),
+        the VMware DHCP lease file is used for IP availability checking instead of ARP.
     :return: list of strings, unused IPv4 addresses.
     """
 
@@ -479,7 +608,7 @@ def generate_unused_ipv4_addresses_from_ip(
 
     # Find IPs to assign.
     generated_ips: list[str] = generate_unused_ipv4_addresses_by_vlan(
-        vlan=default_vlan, number_of_ips=number_of_ips, skip_ips=skip_ips)
+        vlan=default_vlan, number_of_ips=number_of_ips, skip_ips=skip_ips, interface_name=interface_name)
 
     # Add subnet masks to the IPs to assign.
     masks_for_ips: list[str] = []
@@ -614,7 +743,8 @@ def add_virtual_ips_to_network_interface(
             ip_address=current_ipv4s[0],
             mask=current_ipv4_masks[0],
             number_of_ips=number_of_ips,
-            skip_ips=current_ipv4s + adapter_info['default_gateways'] + adapter_info['dns_gateways']
+            skip_ips=current_ipv4s + adapter_info['default_gateways'] + adapter_info['dns_gateways'],
+            interface_name=interface_name
         )
     elif virtual_ipv4s_to_add and virtual_ipv4_masks_to_add:
         ips_to_assign = virtual_ipv4s_to_add
