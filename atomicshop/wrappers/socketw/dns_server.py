@@ -538,6 +538,26 @@ class DnsServer:
                             if self.resolve_regular_pass_thru:
                                 forward_to_tcp_server = False
 
+                        # Block HTTPS (TYPE 65) DNS records for engine domains to prevent browsers
+                        # from auto-upgrading HTTP to HTTPS when only port 80 is configured.
+                        elif qtype_string == "HTTPS" and self.resolve_by_engine_enable:
+                            question_domain_norm = question_domain.strip().lower().rstrip(".")
+                            intercept_hit = any(
+                                question_domain_norm == d or question_domain_norm.endswith("." + d)
+                                for d in self.intercept_domain_dict.keys()
+                            )
+                            excluded_hit = any(rx.search(question_domain_norm) for rx in self._exclude_rx)
+
+                            if intercept_hit and not excluded_hit:
+                                self.logger.info(
+                                    "Blocked HTTPS DNS record for engine domain (preventing browser upgrade)")
+                                dns_built_response = dns_object.reply()
+                                dns_response = dns_built_response.pack()
+                                main_socket_object.sendto(dns_response, client_address)
+                                self.logger.info("DNS Response sent...")
+                                continue
+
+                            forward_to_tcp_server = False
                         # If incoming record is not an "A" record, then it will not be forwarded to our TCP Server.
                         else:
                             forward_to_tcp_server = False

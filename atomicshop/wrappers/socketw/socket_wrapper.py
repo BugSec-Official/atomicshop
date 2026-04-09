@@ -524,7 +524,6 @@ class SocketWrapper:
             source_ip: str = ''
             source_hostname: str = ''
             dest_port: int = 0
-            process_name: str = ''
             domain_from_engine: str = ''
 
             try:
@@ -577,176 +576,31 @@ class SocketWrapper:
                 message: str = f"Accepted connection from [{source_ip}:{source_port}] to [{listening_ip}:{dest_port}] | domain: {domain_from_engine}"
                 print_api(message, logger=self.logger)
 
-                # Not always there will be a hostname resolved by the IP address, so we will leave it empty if it fails.
-                source_hostname = socket_base.get_host_name_from_ip_address_with_timeout(source_ip)
-                source_hostname = source_hostname.lower()
-
-                # This is the earliest stage to ask for process name.
-                # SSH Remote / LOCALHOST script execution to identify process section.
-                # If 'get_process_name' was set to True, then this will be executed.
-                if self.get_process_name:
-                    # Initializing SSHRemote class if not initialized.
-                    if self.ssh_client is None:
-                        self.ssh_client = ssh_remote.SSHRemote(
-                            ip_address=source_ip, username=self.ssh_user, password=self.ssh_pass, logger=self.logger)
-
-                    # Get the process name from the socket.
-                    get_command_instance = process_getter.GetCommandLine(
-                        client_ip=source_ip,
-                        client_port=source_port,
-                        package_processor=self.package_processor,
-                        ssh_client=self.ssh_client,
-                        logger=self.logger)
-                    process_name = get_command_instance.get_process_name(print_kwargs={'logger': self.logger})
-
-                    # from ..pywin32w.win_event_log import fetch
-                    # events = fetch.get_latest_events(
-                    #     server_ip=source_ip,
-                    #     username=self.ssh_user,
-                    #     password=self.ssh_pass,
-                    #     log_name='Security',
-                    #     count=50,
-                    #     event_id_list=[5156]
-                    # )
-                    #
-                    # source_port = client_address[1]
-                    # for event in events:
-                    #     if source_port == event['StringsDict']['Source Port']:
-                    #         process_name = event['StringsDict']['Application Name']
-                    #         break
-                    #
-                    # if process_name == '':
-                    #     raise RuntimeError("Failed to get process name from the remote host via Event Log.")
-
-                # If 'accept()' function worked well, SSL worked well, then 'client_socket' won't be empty.
+                # If 'accept()' function worked well, then 'client_socket' won't be empty.
                 if client_socket:
-                    # Get the protocol type from the socket.
-                    is_tls: bool = False
+                    # Initialize SSH client lazily in the accept loop (single-threaded, safe).
+                    if self.get_process_name and self.ssh_client is None:
+                        self.ssh_client = ssh_remote.SSHRemote(
+                            ip_address=source_ip, username=self.ssh_user, password=self.ssh_pass,
+                            logger=self.logger)
 
-                    try:
-                        tls_properties = ssl_base.is_tls(client_socket, timeout=1)
-                    except TimeoutError:
-                        error: str = "TimeoutError: TLS detection timed out. Dropping accepted socket."
-                        self.logger.error(error)
-
-                        self.statistics_writer.write_accept_error(
-                            engine=engine_name,
-                            source_host=source_hostname,
-                            source_ip=source_ip,
-                            error_message=error,
-                            dest_port=str(dest_port),
-                            host=domain_from_engine,
-                            process_name=process_name)
-
-                        client_socket.close()
-                        continue
-
-                    if tls_properties:
-                        is_tls = True
-                        tls_type, tls_version = tls_properties
-                    else:
-                        tls_type, tls_version = None, None
-
-                    # If 'is_tls' is True.
-                    ssl_client_socket = None
-                    if is_tls:
-                        sni_handler = sni.SNISetup(
-                            default_server_certificate_usage=self.default_server_certificate_usage,
-                            default_server_certificate_name=self.default_server_certificate_name,
-                            default_certificate_domain_list=self.default_certificate_domain_list,
-                            default_server_certificate_directory=self.default_server_certificate_directory,
-                            sni_custom_callback_function=self.sni_custom_callback_function,
-                            sni_use_default_callback_function=self.sni_use_default_callback_function,
-                            sni_use_default_callback_function_extended=self.sni_use_default_callback_function_extended,
-                            sni_add_new_domains_to_default_server_certificate=(
-                                self.sni_add_new_domains_to_default_server_certificate),
-                            sni_server_certificates_cache_directory=self.sni_server_certificates_cache_directory,
-                            sni_create_server_certificate_for_each_domain=(
-                                self.sni_create_server_certificate_for_each_domain),
-                            sni_get_server_certificate_from_server_socket=(
-                                self.sni_get_server_certificate_from_server_socket),
-                            sni_server_certificate_from_server_socket_download_directory=(
-                                self.sni_server_certificate_from_server_socket_download_directory),
-                            skip_extension_id_list=self.skip_extension_id_list,
-                            ca_certificate_name=self.ca_certificate_name,
-                            ca_certificate_filepath=self.ca_certificate_filepath,
-                            custom_server_certificate_usage=self.custom_server_certificate_usage,
-                            custom_server_certificate_path=self.custom_server_certificate_path,
-                            custom_private_key_path=self.custom_private_key_path,
-                            domain_from_dns_server=domain_from_engine,
-                            forwarding_dns_service_ipv4_list___only_for_localhost=(
-                                self.forwarding_dns_service_ipv4_list___only_for_localhost),
-                            tls=is_tls,
-                            exceptions_logger=self.exceptions_logger,
-                            enable_sslkeylogfile_env_to_client_ssl_context=self.enable_sslkeylogfile_env_to_client_ssl_context,
-                            sslkeylog_file_path=self.sslkeylog_file_path
-                        )
-
-                        ssl_client_socket, accept_error_message = \
-                            sni_handler.wrap_socket_with_ssl_context_server_sni_extended(
-                                client_socket,
-                                print_kwargs={'logger': self.logger}
-                            )
-
-                        if ssl_client_socket:
-                            # Handshake is done at this point, so version/cipher are available
-                            self.logger.info(
-                                f"TLS version={ssl_client_socket.version()} cipher={ssl_client_socket.cipher()}"
-                            )
-
-                        if accept_error_message:
-                            # Write statistics after wrap is there was an error.
-                            self.statistics_writer.write_accept_error(
-                                engine=engine_name,
-                                source_host=source_hostname,
-                                source_ip=source_ip,
-                                error_message=accept_error_message,
-                                dest_port=str(dest_port),
-                                host=domain_from_engine,
-                                process_name=process_name)
-
-                            continue
-
-                        # Get the real tls version after connection is wrapped.
-                        tls_version = ssl_client_socket.version()
-
-                        # If the 'domain_from_dns_server' is empty, it means that the 'engine_name' is not set.
-                        # In this case we will set the 'engine_name' to from the SNI.
-                        if engine_name == '':
-                            sni_hostname: str = ssl_client_socket.server_hostname
-                            if sni_hostname:
-                                engine_name = get_engine_name(sni_hostname, [self.engine])
-
-                    # Create new arguments tuple that will be passed, since client socket and process_name
-                    # are gathered from SocketWrapper.
-                    if ssl_client_socket:
-                        # In order to use the same object, it needs to get nullified first, since the old instance
-                        # will not get overwritten. Though it still will show in the memory as SSLSocket, it will not
-                        # be handled as such, but as regular raw socket.
-                        # noinspection PyUnusedLocal
-                        client_socket = None
-                        client_socket = ssl_client_socket
-                    thread_args = (
-                        (client_socket, process_name, is_tls, tls_type, tls_version, domain_from_engine, self.statistics_writer, [self.engine]) +
-                         callable_args)
-
-                    # Creating thread for each socket
+                    # Spawn thread immediately for connection handling — TLS detection,
+                    # SSL wrapping, and callable_function all run in the per-connection thread
+                    # so the accept loop is never blocked by slow clients.
                     thread_current = threading.Thread(
-                        target=before_socket_thread_worker,
-                        args=(callable_function, thread_args, self.exceptions_logger),
+                        target=self._handle_connection,
+                        args=(client_socket, client_address, engine_name, domain_from_engine,
+                              dest_port, callable_function, callable_args),
                         daemon=True
                     )
                     thread_current.start()
-                    # Append to list of threads, so they can be "joined" later
                     self.threads_list.append(thread_current)
 
-                    # 'thread_callable_args[1][0]' is the client socket.
-                    client_address = socket_base.get_source_address_from_socket(client_socket)
-
-                    self.logger.info(f"Accepted connection, thread created {client_address}. Continue listening...")
-                # Else, if no client_socket was opened during, accept, then print the error.
+                    self.logger.info(
+                        f"Accepted connection, thread created [{source_ip}:{source_port}]. "
+                        f"Continue listening...")
+                # Else, if no client_socket was opened during accept, then print the error.
                 else:
-                    # Write statistics after accept.
                     self.statistics_writer.write_accept_error(
                         engine=engine_name,
                         source_host=source_hostname,
@@ -754,11 +608,7 @@ class SocketWrapper:
                         error_message=accept_error_message,
                         dest_port=str(dest_port),
                         host=domain_from_engine,
-                        process_name=process_name)
-            # Sometimes paramiko SSH connection return EOFError on connection reset, so we need to catch it separately.
-            # Basically all these exceptions mean that there was a problem with the connection in some way, besides the
-            # python not being found, but it also can be that there was a problem with the connection and the script
-            # was cut mid-action.
+                        process_name='')
             except (
                 ConnectionResetError, EOFError, TimeoutError,
                 paramiko.ssh_exception.SSHException, paramiko.ssh_exception.NoValidConnectionsError,
@@ -773,12 +623,219 @@ class SocketWrapper:
                     error_message=full_string,
                     dest_port=str(dest_port),
                     host=domain_from_engine,
-                    process_name=process_name)
+                    process_name='')
             except Exception as e:
                 _ = e
                 exception_string: str = tracebacks.get_as_string()
                 full_string: str = f"Engine: [{engine_name}] | {exception_string}"
                 self.exceptions_logger.write(full_string)
+
+
+    def _handle_connection(
+            self,
+            client_socket,
+            client_address: tuple,
+            engine_name: str,
+            domain_from_engine: str,
+            dest_port: int,
+            callable_function: Callable[..., Any],
+            callable_args: tuple
+    ):
+        """
+        Handle an accepted connection in its own thread.
+        Performs hostname resolution, process name detection, TLS detection, SSL wrapping,
+        and invokes the callable_function.
+
+        :param client_socket: socket, client socket that was accepted.
+        :param client_address: tuple, (ip_address, port) of the client.
+        :param engine_name: string, engine name.
+        :param domain_from_engine: string, domain from engine config.
+        :param dest_port: int, destination port.
+        :param callable_function: callable, function to execute for this connection.
+        :param callable_args: tuple, additional arguments for callable_function.
+        """
+
+        source_ip: str = client_address[0]
+        source_port: int = client_address[1]
+        process_name: str = ''
+        source_hostname: str = ''
+
+        try:
+            # Not always there will be a hostname resolved by the IP address,
+            # so we will leave it empty if it fails.
+            source_hostname = socket_base.get_host_name_from_ip_address_with_timeout(source_ip)
+            source_hostname = source_hostname.lower()
+
+            # This is the earliest stage to ask for process name.
+            # SSH Remote / LOCALHOST script execution to identify process section.
+            # If 'get_process_name' was set to True, then this will be executed.
+            if self.get_process_name:
+                # Get the process name from the socket.
+                get_command_instance = process_getter.GetCommandLine(
+                    client_ip=source_ip,
+                    client_port=source_port,
+                    package_processor=self.package_processor,
+                    ssh_client=self.ssh_client,
+                    logger=self.logger)
+                process_name = get_command_instance.get_process_name(print_kwargs={'logger': self.logger})
+
+                # from ..pywin32w.win_event_log import fetch
+                # events = fetch.get_latest_events(
+                #     server_ip=source_ip,
+                #     username=self.ssh_user,
+                #     password=self.ssh_pass,
+                #     log_name='Security',
+                #     count=50,
+                #     event_id_list=[5156]
+                # )
+                #
+                # source_port = client_address[1]
+                # for event in events:
+                #     if source_port == event['StringsDict']['Source Port']:
+                #         process_name = event['StringsDict']['Application Name']
+                #         break
+                #
+                # if process_name == '':
+                #     raise RuntimeError("Failed to get process name from the remote host via Event Log.")
+
+            # Get the protocol type from the socket.
+            is_tls: bool = False
+
+            try:
+                tls_properties = ssl_base.is_tls(client_socket, timeout=10)
+            except TimeoutError:
+                error: str = "TimeoutError: TLS detection timed out. Dropping accepted socket."
+                self.logger.error(error)
+
+                self.statistics_writer.write_accept_error(
+                    engine=engine_name,
+                    source_host=source_hostname,
+                    source_ip=source_ip,
+                    error_message=error,
+                    dest_port=str(dest_port),
+                    host=domain_from_engine,
+                    process_name=process_name)
+
+                client_socket.close()
+                return
+
+            if tls_properties:
+                is_tls = True
+                tls_type, tls_version = tls_properties
+            else:
+                tls_type, tls_version = None, None
+
+            # If 'is_tls' is True.
+            ssl_client_socket = None
+            if is_tls:
+                sni_handler = sni.SNISetup(
+                    default_server_certificate_usage=self.default_server_certificate_usage,
+                    default_server_certificate_name=self.default_server_certificate_name,
+                    default_certificate_domain_list=self.default_certificate_domain_list,
+                    default_server_certificate_directory=self.default_server_certificate_directory,
+                    sni_custom_callback_function=self.sni_custom_callback_function,
+                    sni_use_default_callback_function=self.sni_use_default_callback_function,
+                    sni_use_default_callback_function_extended=self.sni_use_default_callback_function_extended,
+                    sni_add_new_domains_to_default_server_certificate=(
+                        self.sni_add_new_domains_to_default_server_certificate),
+                    sni_server_certificates_cache_directory=self.sni_server_certificates_cache_directory,
+                    sni_create_server_certificate_for_each_domain=(
+                        self.sni_create_server_certificate_for_each_domain),
+                    sni_get_server_certificate_from_server_socket=(
+                        self.sni_get_server_certificate_from_server_socket),
+                    sni_server_certificate_from_server_socket_download_directory=(
+                        self.sni_server_certificate_from_server_socket_download_directory),
+                    skip_extension_id_list=self.skip_extension_id_list,
+                    ca_certificate_name=self.ca_certificate_name,
+                    ca_certificate_filepath=self.ca_certificate_filepath,
+                    custom_server_certificate_usage=self.custom_server_certificate_usage,
+                    custom_server_certificate_path=self.custom_server_certificate_path,
+                    custom_private_key_path=self.custom_private_key_path,
+                    domain_from_dns_server=domain_from_engine,
+                    forwarding_dns_service_ipv4_list___only_for_localhost=(
+                        self.forwarding_dns_service_ipv4_list___only_for_localhost),
+                    tls=is_tls,
+                    exceptions_logger=self.exceptions_logger,
+                    enable_sslkeylogfile_env_to_client_ssl_context=self.enable_sslkeylogfile_env_to_client_ssl_context,
+                    sslkeylog_file_path=self.sslkeylog_file_path
+                )
+
+                ssl_client_socket, accept_error_message = \
+                    sni_handler.wrap_socket_with_ssl_context_server_sni_extended(
+                        client_socket,
+                        print_kwargs={'logger': self.logger}
+                    )
+
+                if ssl_client_socket:
+                    # Handshake is done at this point, so version/cipher are available
+                    self.logger.info(
+                        f"TLS version={ssl_client_socket.version()} cipher={ssl_client_socket.cipher()}"
+                    )
+
+                if accept_error_message:
+                    # Write statistics after wrap if there was an error.
+                    self.statistics_writer.write_accept_error(
+                        engine=engine_name,
+                        source_host=source_hostname,
+                        source_ip=source_ip,
+                        error_message=accept_error_message,
+                        dest_port=str(dest_port),
+                        host=domain_from_engine,
+                        process_name=process_name)
+
+                    return
+
+                # Get the real tls version after connection is wrapped.
+                tls_version = ssl_client_socket.version()
+
+                # If the 'domain_from_dns_server' is empty, it means that the 'engine_name' is not set.
+                # In this case we will set the 'engine_name' to from the SNI.
+                if engine_name == '':
+                    sni_hostname: str = ssl_client_socket.server_hostname
+                    if sni_hostname:
+                        engine_name = get_engine_name(sni_hostname, [self.engine])
+
+            # Swap to SSL socket if available.
+            if ssl_client_socket:
+                # In order to use the same object, it needs to get nullified first, since the old instance
+                # will not get overwritten. Though it still will show in the memory as SSLSocket, it will not
+                # be handled as such, but as regular raw socket.
+                # noinspection PyUnusedLocal
+                client_socket = None
+                client_socket = ssl_client_socket
+
+            # Build args and call the callable_function directly (we're already in a thread).
+            thread_args = (
+                (client_socket, process_name, is_tls, tls_type, tls_version, domain_from_engine,
+                 self.statistics_writer, [self.engine]) + callable_args)
+
+            try:
+                callable_function(*thread_args)
+            except Exception as e:
+                self.exceptions_logger.write(
+                    e, custom_exception_attribute='engine_name',
+                    custom_exception_attribute_placement='before')
+
+        except (
+            ConnectionResetError, EOFError, TimeoutError,
+            paramiko.ssh_exception.SSHException, paramiko.ssh_exception.NoValidConnectionsError,
+            ssh_remote.SSHRemoteWrapperNoPythonFound
+        ) as e:
+            exception_string: str = tracebacks.get_as_string()
+            full_string: str = f"{str(e)} | {exception_string}"
+            self.statistics_writer.write_accept_error(
+                engine=engine_name,
+                source_host=source_hostname,
+                source_ip=source_ip,
+                error_message=full_string,
+                dest_port=str(dest_port),
+                host=domain_from_engine,
+                process_name=process_name)
+        except Exception as e:
+            _ = e
+            exception_string: str = tracebacks.get_as_string()
+            full_string: str = f"Engine: [{engine_name}] | {exception_string}"
+            self.exceptions_logger.write(full_string)
 
 
 def before_socket_thread_worker(

@@ -1,6 +1,14 @@
 <!-- HISTORY -->
 ## History
 
+* 3.14.3 - 09.04.2026
+  * wrappers/socketw/dns_server - fixes and improvements.
+* 3.14.2 - 09.04.2026
+  * mitm/import_config - fixes
+* 3.14.1 - 09.04.2026
+  * wrappers/cryptographyw - fixes
+* 3.14.0 - 09.04.2026
+  * wrappers/socketw/socket_wrapper - fixes and improvements.
 * 3.13.20 - 06.04.2026
   * networks - fixes and improvements.
 * 3.13.18-3.13.19 - 02.04.2026

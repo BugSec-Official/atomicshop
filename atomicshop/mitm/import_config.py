@@ -193,6 +193,7 @@ def check_config() -> int:
                     return 1
 
     if (config_static.MainConfig.set_default_dns_gateway or
+            config_static.MainConfig.set_default_dns_gateway_to_localhost or
             config_static.MainConfig.set_default_dns_gateway_to_network_interface_ipv4):
         # Get current settings of the DNS gateway.
         is_dns_dynamic, current_dns_gateway = dns.get_default_dns_gateway()
@@ -200,6 +201,8 @@ def check_config() -> int:
         if not is_admin:
             if config_static.MainConfig.set_default_dns_gateway:
                 ipv4_address_list = config_static.MainConfig.set_default_dns_gateway
+            elif config_static.MainConfig.set_default_dns_gateway_to_localhost:
+                ipv4_address_list = [config_static.MainConfig.default_localhost_dns_gateway_ipv4]
             elif config_static.MainConfig.set_default_dns_gateway_to_network_interface_ipv4 and config_static.MainConfig.is_localhost:
                 ipv4_address_list = [config_static.MainConfig.default_localhost_dns_gateway_ipv4]
             elif config_static.MainConfig.set_default_dns_gateway_to_network_interface_ipv4 and not config_static.MainConfig.is_localhost:

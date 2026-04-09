@@ -53,8 +53,10 @@ def convert_object_to_x509(
     # in the beginning of the file.
     if (isinstance(certificate, bytes) and certificate.startswith(b'-----BEGIN ') and
             b'-----BEGIN CERTIFICATE-----' in certificate):
-        # Convert the PEM certificate to x509 object.
-        certificate = convert_pem_to_x509_object(certificate)
+        # Extract only the certificate part - file may also contain a private key.
+        cert_start = certificate.find(b'-----BEGIN CERTIFICATE-----')
+        cert_end = certificate.find(b'-----END CERTIFICATE-----') + len(b'-----END CERTIFICATE-----')
+        certificate = convert_pem_to_x509_object(certificate[cert_start:cert_end])
     # Check if 'certificate' is a bytes object and DER format.
     elif isinstance(certificate, bytes) and certificate.startswith(b'\x30'):
         # Convert the DER certificate to x509 object.
@@ -62,8 +64,10 @@ def convert_object_to_x509(
     # Check if 'certificate' is a string object and PEM format.
     elif (isinstance(certificate, str) and certificate.startswith('-----BEGIN ') and
           '-----BEGIN CERTIFICATE-----' in certificate):
-        # Convert the PEM certificate to x509 object.
-        certificate = convert_pem_to_x509_object(certificate)
+        # Extract only the certificate part - string may also contain a private key.
+        cert_start = certificate.find('-----BEGIN CERTIFICATE-----')
+        cert_end = certificate.find('-----END CERTIFICATE-----') + len('-----END CERTIFICATE-----')
+        certificate = convert_pem_to_x509_object(certificate[cert_start:cert_end])
     # Check if 'certificate' is a x509 object.
     elif isinstance(certificate, Certificate):
         pass
