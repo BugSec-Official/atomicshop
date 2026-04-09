@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 3.14.4 - 09.04.2026
+  * dependencies update.
+  * mitm/statistic_analyzer, mitm/statistic_analyzer - fixes.
 * 3.14.3 - 09.04.2026
   * wrappers/socketw/dns_server - fixes and improvements.
 * 3.14.2 - 09.04.2026

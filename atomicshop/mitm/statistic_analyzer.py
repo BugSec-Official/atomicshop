@@ -4,8 +4,10 @@ import json
 from typing import Union, Literal
 import argparse
 
+from dkwebmod import urls
+
 from .statistic_analyzer_helper import analyzer_helper, moving_average_helper
-from .. import filesystem, domains, datetimes, urls
+from .. import filesystem, domains, datetimes
 from ..basics import dicts
 from ..file_io import tomls, xlsxs, jsons, csvs
 from ..wrappers.loggingw import reading
