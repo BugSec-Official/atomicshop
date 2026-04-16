@@ -30,6 +30,7 @@ def thread_worker_main(
         domain_from_dns,
         statistics_writer,
         engines_list: list[initialize_engines.ModuleCategory],
+        client_alpn_offers: list[str] | None,
 
         # These parameters come from the main mitm module.
         config_static: cf
@@ -261,6 +262,9 @@ def thread_worker_main(
                 custom_client_pem_certificate_path = pem_file_path
                 break
 
+        network_logger.info(
+            f"Forwarding ALPN offers to upstream leg: {client_alpn_offers}")
+
         # Check if the destination service is an ip address or a domain name.
         if ip_addresses.is_ip_address(client_message.server_name, ip_type='ipv4'):
             # If it's an ip address, connect to the ip address directly.
@@ -273,7 +277,8 @@ def thread_worker_main(
                 custom_pem_client_certificate_file_path=custom_client_pem_certificate_path,
                 enable_sslkeylogfile_env_to_client_ssl_context=(
                     config_static.Certificates.enable_sslkeylogfile_env_to_client_ssl_context),
-                sslkeylog_file_path=config_static.Certificates.sslkeylog_file_path
+                sslkeylog_file_path=config_static.Certificates.sslkeylog_file_path,
+                alpn_protocols=client_alpn_offers
             )
         # If it's a domain name, then we'll use the DNS to resolve it.
         else:
@@ -289,7 +294,8 @@ def thread_worker_main(
                     custom_pem_client_certificate_file_path=custom_client_pem_certificate_path,
                     enable_sslkeylogfile_env_to_client_ssl_context=(
                         config_static.Certificates.enable_sslkeylogfile_env_to_client_ssl_context),
-                    sslkeylog_file_path=config_static.Certificates.sslkeylog_file_path
+                    sslkeylog_file_path=config_static.Certificates.sslkeylog_file_path,
+                    alpn_protocols=client_alpn_offers
                 )
             # If we're not on localhost, then connect to domain directly.
             else:
@@ -301,7 +307,8 @@ def thread_worker_main(
                     custom_pem_client_certificate_file_path=custom_client_pem_certificate_path,
                     enable_sslkeylogfile_env_to_client_ssl_context=(
                         config_static.Certificates.enable_sslkeylogfile_env_to_client_ssl_context),
-                    sslkeylog_file_path=config_static.Certificates.sslkeylog_file_path
+                    sslkeylog_file_path=config_static.Certificates.sslkeylog_file_path,
+                    alpn_protocols=client_alpn_offers
                 )
 
         return service_client_instance

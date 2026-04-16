@@ -8,8 +8,8 @@ import errno
 from contextlib import contextmanager
 from typing import Literal, Union
 import tempfile
+import subprocess
 
-# noinspection PyPackageRequirements
 import psutil
 
 from .basics import strings, list_of_dicts, list_of_classes
@@ -616,6 +616,53 @@ def move_file(source_file_path: str, target_directory: str, overwrite: bool = Tr
     shutil.move(source_file_path, target_file_path)
 
     return target_file_path
+
+
+def move_file_over_smb(source_file_path: str, target_directory: str, overwrite: bool = True) -> str:
+    """
+    Move a file using robocopy. Robust against SMB hangs, locked files, and flaky networks.
+    :param source_file_path: full path to source file.
+    :param target_directory: full path to target directory.
+    :param overwrite: if False, raise FileExistsError when target exists.
+    :return: target file path as string.
+    """
+    source = Path(source_file_path)
+    target_dir = Path(target_directory)
+    target_file_path = target_dir / source.name
+
+    if not overwrite and target_file_path.exists():
+        raise FileExistsError(f'File already exists: {target_file_path}')
+
+    # robocopy <source_dir> <target_dir> <filename> [flags]
+    #   /MOV : move file (copy then delete source) — use /MOVE if you also want empty source dirs removed
+    #   /R:2 : retry twice on failure (default is 1 million, which is why robocopy can also "hang")
+    #   /W:5 : wait 5 seconds between retries
+    #   /J   : unbuffered I/O — much faster and more stable for large files over SMB
+    #   /NFL /NDL /NJH /NJS /NC /NS /NP : quiet output (no file list, dir list, headers, summary, class, size, progress)
+    result = subprocess.run(
+        [
+            'robocopy',
+            str(source.parent),
+            str(target_dir),
+            source.name,
+            '/MOV', '/R:2', '/W:5', '/J',
+            '/NFL', '/NDL', '/NJH', '/NJS', '/NC', '/NS', '/NP',
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    # Robocopy exit codes are a bitmask. 0–7 are success, 8+ are failures.
+    #   0 = nothing to do, 1 = files copied, 2 = extra files, 3 = 1+2, etc.
+    if result.returncode >= 8:
+        raise RuntimeError(
+            f'robocopy failed (exit {result.returncode}): {result.stdout} {result.stderr}'
+        )
+
+    if not target_file_path.exists():
+        raise RuntimeError(f'robocopy reported success but target missing: {target_file_path}')
+
+    return str(target_file_path)
 
 
 def move_folder(source_directory: str, target_directory: str, overwrite: bool = True) -> None:

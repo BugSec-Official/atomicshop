@@ -28,11 +28,20 @@ def add_reusable_address_option(socket_instance):
 def create_ssl_context_for_server(
         enable_sslkeylogfile_env_to_client_ssl_context: bool = False,
         sslkeylog_file_path: str = None,
-        allow_legacy: bool = False
+        allow_legacy: bool = False,
+        request_client_certificate: bool = False,
+        alpn_protocols: list[str] | None = None
 ) -> ssl.SSLContext:
     """
     This function creates the SSL context for the server.
     Meaning that your script will act like a server, and the client will connect to it.
+
+    :param request_client_certificate: if True, the server will send a TLS CertificateRequest
+        (handshake type 13) to the client and, if the client presents a cert, validate it against
+        the host's default CA store. Leave False to preserve the non-mTLS default behavior.
+    :param alpn_protocols: list of ALPN protocol names (e.g. ['h2', 'http/1.1', 'mqtt']) to
+        advertise on the server context. None/empty means do not call set_alpn_protocols at all,
+        preserving the current "no ALPN" default behavior.
     """
     # Creating context with SSL certificate and the private key before the socket
     # https://docs.python.org/3/library/ssl.html
@@ -52,9 +61,15 @@ def create_ssl_context_for_server(
     # Modern default; relax only if you must
     ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
 
-    # Don't verify client certificates.
-    ssl_context.verify_mode = ssl.CERT_NONE
     ssl_context.check_hostname = False
+    if request_client_certificate:
+        ssl_context.verify_mode = ssl.CERT_OPTIONAL
+        ssl_context.load_default_certs(ssl.Purpose.CLIENT_AUTH)
+    else:
+        ssl_context.verify_mode = ssl.CERT_NONE
+
+    if alpn_protocols:
+        ssl_context.set_alpn_protocols(list(alpn_protocols))
 
     if enable_sslkeylogfile_env_to_client_ssl_context:
         if sslkeylog_file_path is None:
@@ -77,7 +92,8 @@ def create_ssl_context_for_server(
 
 def create_ssl_context_for_client(
         enable_sslkeylogfile_env_to_client_ssl_context: bool = False,
-        sslkeylog_file_path: str = None
+        sslkeylog_file_path: str = None,
+        alpn_protocols: list[str] | None = None
 ) -> ssl.SSLContext:
     """
     This function creates the SSL context for the client.
@@ -108,6 +124,9 @@ def create_ssl_context_for_client(
 
     current_ciphers = 'AES256-GCM-SHA384:' + ssl._DEFAULT_CIPHERS
     ssl_context.set_ciphers(current_ciphers)
+
+    if alpn_protocols:
+        ssl_context.set_alpn_protocols(list(alpn_protocols))
 
     return ssl_context
 
@@ -213,11 +232,14 @@ def create_server_ssl_context___load_certificate_and_key(
         inherit_from: ssl.SSLContext | None = None,
         enable_sslkeylogfile_env_to_client_ssl_context: bool = False,
         sslkeylog_file_path: str = None,
+        request_client_certificate: bool = False,
+        alpn_protocols: list[str] | None = None,
 ) -> ssl.SSLContext:
     # Create and set ssl context for server.
     ssl_context: ssl.SSLContext = create_ssl_context_for_server(
         allow_legacy=True, enable_sslkeylogfile_env_to_client_ssl_context=enable_sslkeylogfile_env_to_client_ssl_context,
-        sslkeylog_file_path=sslkeylog_file_path)
+        sslkeylog_file_path=sslkeylog_file_path, request_client_certificate=request_client_certificate,
+        alpn_protocols=alpn_protocols)
 
     # If you replaced contexts during SNI, copy policy from the old one
     if inherit_from is not None:
@@ -326,7 +348,8 @@ def wrap_socket_with_ssl_context_client___default_certs___ignore_verification(
         server_hostname: str = None,
         custom_pem_client_certificate_file_path: str = None,
         enable_sslkeylogfile_env_to_client_ssl_context: bool = False,
-        sslkeylog_file_path: str = None
+        sslkeylog_file_path: str = None,
+        alpn_protocols: list[str] | None = None
 ) -> ssl.SSLSocket:
     """
     This function is a preset for wrapping the socket with SSL context for the client.
@@ -339,12 +362,16 @@ def wrap_socket_with_ssl_context_client___default_certs___ignore_verification(
     :param enable_sslkeylogfile_env_to_client_ssl_context: boolean, enables the SSLKEYLOGFILE environment variable
         to the SSL context. Default is False.
     :param sslkeylog_file_path: string, full file path for the SSL key log file. Default is None.
+    :param alpn_protocols: list of ALPN protocol names to advertise to the upstream server.
+        None/empty means do not call set_alpn_protocols, preserving the historical "no ALPN"
+        behavior. Used to mirror the client's ALPN offers onto the upstream leg.
 
     :return: ssl.SSLSocket object
     """
     ssl_context: ssl.SSLContext = create_ssl_context_for_client(
-        enable_sslkeylogfile_env_to_client_ssl_context=enable_sslkeylogfile_env_to_client_ssl_context
-        ,sslkeylog_file_path=sslkeylog_file_path)
+        enable_sslkeylogfile_env_to_client_ssl_context=enable_sslkeylogfile_env_to_client_ssl_context,
+        sslkeylog_file_path=sslkeylog_file_path,
+        alpn_protocols=alpn_protocols)
     set_client_ssl_context_ca_default_certs(ssl_context)
     set_client_ssl_context_certificate_verification_ignore(ssl_context)
 

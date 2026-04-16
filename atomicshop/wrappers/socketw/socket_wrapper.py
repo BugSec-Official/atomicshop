@@ -184,40 +184,40 @@ class SocketWrapper:
 
         self.ip_address: str = ip_address
         self.port: int = port
-        self.engine: initialize_engines.ModuleCategory = engine
-        self.ca_certificate_name: str = ca_certificate_name
-        self.ca_certificate_filepath: str = ca_certificate_filepath
-        self.ca_certificate_crt_filepath: str = ca_certificate_crt_filepath
+        self.engine: initialize_engines.ModuleCategory | None = engine
+        self.ca_certificate_name: str | None = ca_certificate_name
+        self.ca_certificate_filepath: str | None = ca_certificate_filepath
+        self.ca_certificate_crt_filepath: str | None = ca_certificate_crt_filepath
         self.install_ca_certificate_to_root_store: bool = install_ca_certificate_to_root_store
         self.uninstall_unused_ca_certificates_with_ca_certificate_name: bool = \
             uninstall_unused_ca_certificates_with_ca_certificate_name
         self.default_server_certificate_usage: bool = default_server_certificate_usage
-        self.default_server_certificate_name: str = default_server_certificate_name
-        self.default_certificate_domain_list: list = default_certificate_domain_list
-        self.default_server_certificate_directory: str = default_server_certificate_directory
-        self.sni_custom_callback_function: Callable[..., Any] = sni_custom_callback_function
+        self.default_server_certificate_name: str | None = default_server_certificate_name
+        self.default_certificate_domain_list: list | None = default_certificate_domain_list
+        self.default_server_certificate_directory: str | None = default_server_certificate_directory
+        self.sni_custom_callback_function: Callable[..., Any] | None = sni_custom_callback_function
         self.sni_use_default_callback_function: bool = sni_use_default_callback_function
         self.sni_use_default_callback_function_extended: bool = sni_use_default_callback_function_extended
         self.sni_add_new_domains_to_default_server_certificate: bool = sni_add_new_domains_to_default_server_certificate
         self.sni_create_server_certificate_for_each_domain: bool = sni_create_server_certificate_for_each_domain
-        self.sni_server_certificates_cache_directory: str = sni_server_certificates_cache_directory
+        self.sni_server_certificates_cache_directory: str | None = sni_server_certificates_cache_directory
         self.sni_get_server_certificate_from_server_socket: bool = sni_get_server_certificate_from_server_socket
-        self.sni_server_certificate_from_server_socket_download_directory: str = \
+        self.sni_server_certificate_from_server_socket_download_directory: str | None = \
             sni_server_certificate_from_server_socket_download_directory
-        self.skip_extension_id_list: list = skip_extension_id_list
+        self.skip_extension_id_list: list | None = skip_extension_id_list
         self.custom_server_certificate_usage: bool = custom_server_certificate_usage
-        self.custom_server_certificate_path: str = custom_server_certificate_path
-        self.custom_private_key_path: str = custom_private_key_path
+        self.custom_server_certificate_path: str | None = custom_server_certificate_path
+        self.custom_private_key_path: str | None = custom_private_key_path
         self.get_process_name: bool = get_process_name
-        self.ssh_user: str = ssh_user
-        self.ssh_pass: str = ssh_pass
+        self.ssh_user: str | None = ssh_user
+        self.ssh_pass: str | None = ssh_pass
         self.ssh_script_to_execute = ssh_script_to_execute
         self.forwarding_dns_service_ipv4_list___only_for_localhost = (
             forwarding_dns_service_ipv4_list___only_for_localhost)
         self.enable_sslkeylogfile_env_to_client_ssl_context: bool = (
             enable_sslkeylogfile_env_to_client_ssl_context)
-        self.sslkeylog_file_path: str = sslkeylog_file_path
-        self.print_kwargs: dict = print_kwargs
+        self.sslkeylog_file_path: str | None = sslkeylog_file_path
+        self.print_kwargs: dict | None = print_kwargs
 
         self.socket_object = None
 
@@ -298,6 +298,15 @@ class SocketWrapper:
         self.test_config()
 
     def test_config(self):
+        if self.ca_certificate_name is None:
+            raise RuntimeError("ca_certificate_name is required")
+        if self.ca_certificate_filepath is None:
+            raise RuntimeError("ca_certificate_filepath is required")
+        if self.ca_certificate_crt_filepath is None:
+            raise RuntimeError("ca_certificate_crt_filepath is required")
+        if self.sni_server_certificates_cache_directory is None:
+            raise RuntimeError("sni_server_certificates_cache_directory is required")
+
         if self.sni_custom_callback_function and (
                 self.sni_use_default_callback_function or self.sni_use_default_callback_function_extended):
             message = "You can't use both custom and default SNI function at the same time."
@@ -345,6 +354,8 @@ class SocketWrapper:
 
         # If 'custom_certificate_usage' was set to 'True'.
         if self.custom_server_certificate_usage:
+            if self.custom_server_certificate_path is None:
+                raise RuntimeError("custom_server_certificate_path is required when custom_server_certificate_usage is True")
             # Check file existence.
             if not filesystem.is_file_exists(file_path=self.custom_server_certificate_path):
                 message = f"File not found: {self.custom_server_certificate_path}"
@@ -517,6 +528,9 @@ class SocketWrapper:
         :return:
         """
 
+        if self.engine is None:
+            raise RuntimeError("engine is required for listening_socket_loop")
+
         listening_sockets: list = [listening_socket_object]
 
         while True:
@@ -547,7 +561,7 @@ class SocketWrapper:
                         if file_or_ip['ip'] == listening_ip:
                             # Get the value from the 'on_port_connect' dictionary.
                             address_or_file_path: str = self.engine.on_port_connect[str(listening_port)]
-                            ip_port_address_from_config: tuple = initialize_engines.get_ipv4_from_engine_on_connect_port(
+                            ip_port_address_from_config = initialize_engines.get_ipv4_from_engine_on_connect_port(
                                 address_or_file_path)
                             if not ip_port_address_from_config:
                                 raise ValueError(
@@ -580,6 +594,10 @@ class SocketWrapper:
                 if client_socket:
                     # Initialize SSH client lazily in the accept loop (single-threaded, safe).
                     if self.get_process_name and self.ssh_client is None:
+                        if self.ssh_user is None:
+                            raise RuntimeError("ssh_user is required when get_process_name is True")
+                        if self.ssh_pass is None:
+                            raise RuntimeError("ssh_pass is required when get_process_name is True")
                         self.ssh_client = ssh_remote.SSHRemote(
                             ip_address=source_ip, username=self.ssh_user, password=self.ssh_pass,
                             logger=self.logger)
@@ -727,7 +745,19 @@ class SocketWrapper:
 
             # If 'is_tls' is True.
             ssl_client_socket = None
+            client_alpn_offers: list[str] | None = None
             if is_tls:
+                # Peek the ClientHello (bytes remain in the socket buffer for the real
+                # handshake) and extract the client's ALPN offers, so the MITM can
+                # faithfully mirror them onto both the inbound server context and the
+                # outbound client context. Required for brokers that only speak
+                # application data over a specific ALPN (e.g. MQTT = "mqtt").
+                try:
+                    client_alpn_offers = ssl_base.peek_alpn_offers(client_socket, timeout=10)
+                except TimeoutError:
+                    client_alpn_offers = None
+                self.logger.info(f"Captured ALPN offers from ClientHello: {client_alpn_offers}")
+
                 sni_handler = sni.SNISetup(
                     default_server_certificate_usage=self.default_server_certificate_usage,
                     default_server_certificate_name=self.default_server_certificate_name,
@@ -757,7 +787,9 @@ class SocketWrapper:
                     tls=is_tls,
                     exceptions_logger=self.exceptions_logger,
                     enable_sslkeylogfile_env_to_client_ssl_context=self.enable_sslkeylogfile_env_to_client_ssl_context,
-                    sslkeylog_file_path=self.sslkeylog_file_path
+                    sslkeylog_file_path=self.sslkeylog_file_path,
+                    mtls_subdomains=self.engine.mtls if self.engine else None,
+                    client_alpn_offers=client_alpn_offers
                 )
 
                 ssl_client_socket, accept_error_message = \
@@ -769,7 +801,8 @@ class SocketWrapper:
                 if ssl_client_socket:
                     # Handshake is done at this point, so version/cipher are available
                     self.logger.info(
-                        f"TLS version={ssl_client_socket.version()} cipher={ssl_client_socket.cipher()}"
+                        f"TLS version={ssl_client_socket.version()} cipher={ssl_client_socket.cipher()} "
+                        f"alpn_selected={ssl_client_socket.selected_alpn_protocol()!r}"
                     )
 
                 if accept_error_message:
@@ -807,7 +840,7 @@ class SocketWrapper:
             # Build args and call the callable_function directly (we're already in a thread).
             thread_args = (
                 (client_socket, process_name, is_tls, tls_type, tls_version, domain_from_engine,
-                 self.statistics_writer, [self.engine]) + callable_args)
+                 self.statistics_writer, [self.engine], client_alpn_offers) + callable_args)
 
             try:
                 callable_function(*thread_args)
