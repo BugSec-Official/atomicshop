@@ -7,7 +7,9 @@ import fnmatch
 from ...print_api import print_api
 from ...wrappers.loggingw import reading, consts
 from ...file_io import csvs
-from ... import urls, filesystem
+from ... import filesystem
+
+from dkwebmod import urls
 
 
 def match_filter(line: Dict[str, Any], filter_settings: Iterable[Dict[str, Any]]) -> bool:

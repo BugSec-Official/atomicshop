@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.14.6 - 19.04.2026
+  * mitm/statistic_analyzer_helper/moving_average_helper - fixes.
 * 3.14.5 - 14.04.2026
   * wrappers/socketw, mitm/connection_thread_worker - fixes.
 * 3.14.4 - 09.04.2026
