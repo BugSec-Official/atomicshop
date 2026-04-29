@@ -1,6 +1,10 @@
 <!-- HISTORY -->
 ## History
 
+* 3.14.8 - 29.04.2026
+  * Reverted POC ALPN from 3.14.5.
+* 3.14.7 - 19.04.2026
+  * mitm - improvements.
 * 3.14.6 - 19.04.2026
   * mitm/statistic_analyzer_helper/moving_average_helper - fixes.
 * 3.14.5 - 14.04.2026

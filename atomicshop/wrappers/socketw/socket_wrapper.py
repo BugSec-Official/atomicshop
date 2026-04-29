@@ -745,19 +745,7 @@ class SocketWrapper:
 
             # If 'is_tls' is True.
             ssl_client_socket = None
-            client_alpn_offers: list[str] | None = None
             if is_tls:
-                # Peek the ClientHello (bytes remain in the socket buffer for the real
-                # handshake) and extract the client's ALPN offers, so the MITM can
-                # faithfully mirror them onto both the inbound server context and the
-                # outbound client context. Required for brokers that only speak
-                # application data over a specific ALPN (e.g. MQTT = "mqtt").
-                try:
-                    client_alpn_offers = ssl_base.peek_alpn_offers(client_socket, timeout=10)
-                except TimeoutError:
-                    client_alpn_offers = None
-                self.logger.info(f"Captured ALPN offers from ClientHello: {client_alpn_offers}")
-
                 sni_handler = sni.SNISetup(
                     default_server_certificate_usage=self.default_server_certificate_usage,
                     default_server_certificate_name=self.default_server_certificate_name,
@@ -787,9 +775,7 @@ class SocketWrapper:
                     tls=is_tls,
                     exceptions_logger=self.exceptions_logger,
                     enable_sslkeylogfile_env_to_client_ssl_context=self.enable_sslkeylogfile_env_to_client_ssl_context,
-                    sslkeylog_file_path=self.sslkeylog_file_path,
-                    mtls_subdomains=self.engine.mtls if self.engine else None,
-                    client_alpn_offers=client_alpn_offers
+                    sslkeylog_file_path=self.sslkeylog_file_path
                 )
 
                 ssl_client_socket, accept_error_message = \
@@ -801,8 +787,7 @@ class SocketWrapper:
                 if ssl_client_socket:
                     # Handshake is done at this point, so version/cipher are available
                     self.logger.info(
-                        f"TLS version={ssl_client_socket.version()} cipher={ssl_client_socket.cipher()} "
-                        f"alpn_selected={ssl_client_socket.selected_alpn_protocol()!r}"
+                        f"TLS version={ssl_client_socket.version()} cipher={ssl_client_socket.cipher()}"
                     )
 
                 if accept_error_message:
@@ -840,7 +825,7 @@ class SocketWrapper:
             # Build args and call the callable_function directly (we're already in a thread).
             thread_args = (
                 (client_socket, process_name, is_tls, tls_type, tls_version, domain_from_engine,
-                 self.statistics_writer, [self.engine], client_alpn_offers) + callable_args)
+                 self.statistics_writer, [self.engine]) + callable_args)
 
             try:
                 callable_function(*thread_args)

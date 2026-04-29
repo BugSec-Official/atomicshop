@@ -22,6 +22,13 @@ class ModuleCategory:
         self.on_port_connect: dict = dict()
         self.mtls: dict = dict()
 
+        # Optional per-engine SSH override for the get_process_name feature.
+        # Both stay None when the engine config has no [process_name] section
+        # or when both keys are commented out -- in that case the global
+        # config.toml ssh_user / ssh_pass are used at runtime.
+        self.ssh_user: str | None = None
+        self.ssh_pass: str | None = None
+
         self.parser_file_path: str = str()
         self.requester_file_path: str = str()
         self.responder_file_path: str = str()
@@ -64,6 +71,23 @@ class ModuleCategory:
 
         if 'mtls' in configuration_data:
             self.mtls = configuration_data['mtls']
+
+        # Optional per-engine SSH override. The whole [process_name] section is
+        # optional so older engine_config.toml files (pre-override) keep loading.
+        # Both keys must be present together; a partial override (only ssh_user
+        # or only ssh_pass) is rejected so we never silently mix an
+        # engine-specific user with the global password (or vice versa).
+        process_name_section = configuration_data.get('process_name', {})
+        engine_ssh_user = process_name_section.get('ssh_user')
+        engine_ssh_pass = process_name_section.get('ssh_pass')
+        if (engine_ssh_user is None) != (engine_ssh_pass is None):
+            raise ValueError(
+                f"Engine [{self.engine_name}] config at {engine_config_file_path} "
+                f"has a partial [process_name] override: ssh_user and ssh_pass "
+                f"must either both be set or both be commented out."
+            )
+        self.ssh_user = engine_ssh_user
+        self.ssh_pass = engine_ssh_pass
 
         # If there's module configuration file, but no domains in it, there's no point to continue.
         # Since, each engine is based on domains.

@@ -636,6 +636,24 @@ def mitm_server(config_file_path: str, script_version: str) -> int:
         # Starting the TCP server multiprocessing processes.
         for interface_dict in listening_interfaces:
             socket_wrapper_kwargs_list: list[dict] = list()
+
+            # Resolve the SSH credentials for this listener once per engine.
+            # Per-engine override (both keys set in engine_config.toml's
+            # [process_name] section) takes precedence over the globals from
+            # the main config.toml. The no-engines listener
+            # (interface_dict['engine'] is None) always uses the globals
+            # because there is no engine TOML to override from.
+            # Note: the get_process_name flag and ssh_script_to_execute are
+            # NOT per-engine -- they remain global so a single engine can't
+            # turn the feature on or off, only swap which credentials are used.
+            engine_for_kwargs = interface_dict['engine']
+            if engine_for_kwargs is not None and engine_for_kwargs.ssh_user is not None:
+                resolved_ssh_user = engine_for_kwargs.ssh_user
+                resolved_ssh_pass = engine_for_kwargs.ssh_pass
+            else:
+                resolved_ssh_user = config_static.ProcessName.ssh_user
+                resolved_ssh_pass = config_static.ProcessName.ssh_pass
+
             for port in interface_dict['ports']:
                 socket_wrapper_kwargs: dict = dict(
                     ip_address=interface_dict['ip'],
@@ -667,8 +685,8 @@ def mitm_server(config_file_path: str, script_version: str) -> int:
                     custom_server_certificate_path=config_static.Certificates.custom_server_certificate_path,
                     custom_private_key_path=config_static.Certificates.custom_private_key_path,
                     get_process_name=config_static.ProcessName.get_process_name,
-                    ssh_user=config_static.ProcessName.ssh_user,
-                    ssh_pass=config_static.ProcessName.ssh_pass,
+                    ssh_user=resolved_ssh_user,
+                    ssh_pass=resolved_ssh_pass,
                     ssh_script_to_execute=config_static.ProcessName.ssh_script_to_execute,
                     logs_directory=config_static.LogRec.logs_path,
                     logger_name=network_logger_name,

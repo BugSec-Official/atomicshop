@@ -26,32 +26,30 @@ class SNISetup:
     """
     def __init__(
             self,
-            ca_certificate_name: str | None,
-            ca_certificate_filepath: str | None,
+            ca_certificate_name: str,
+            ca_certificate_filepath: str,
             default_server_certificate_usage: bool,
-            default_server_certificate_name: str | None,
-            default_server_certificate_directory: str | None,
-            default_certificate_domain_list: list | None,
-            sni_custom_callback_function: Callable[..., Any] | None,
+            default_server_certificate_name: str,
+            default_server_certificate_directory: str,
+            default_certificate_domain_list: list,
+            sni_custom_callback_function: Callable[..., Any],
             sni_use_default_callback_function: bool,
             sni_use_default_callback_function_extended: bool,
             sni_add_new_domains_to_default_server_certificate: bool,
             sni_create_server_certificate_for_each_domain: bool,
-            sni_server_certificates_cache_directory: str | None,
+            sni_server_certificates_cache_directory: str,
             sni_get_server_certificate_from_server_socket: bool,
-            sni_server_certificate_from_server_socket_download_directory: str | None,
+            sni_server_certificate_from_server_socket_download_directory: str,
             custom_server_certificate_usage: bool,
-            custom_server_certificate_path: str | None,
-            custom_private_key_path: str | None,
-            forwarding_dns_service_ipv4_list___only_for_localhost: list | None,
+            custom_server_certificate_path: str,
+            custom_private_key_path: str,
+            forwarding_dns_service_ipv4_list___only_for_localhost: list,
             tls: bool,
             domain_from_dns_server: str = None,
             skip_extension_id_list: list = None,
             exceptions_logger: loggingw.ExceptionCsvLogger = None,
             enable_sslkeylogfile_env_to_client_ssl_context: bool = False,
-            sslkeylog_file_path: str = None,
-            mtls_subdomains: dict | set | None = None,
-            client_alpn_offers: list[str] | None = None
+            sslkeylog_file_path: str = None
     ):
         self.ca_certificate_name = ca_certificate_name
         self.ca_certificate_filepath = ca_certificate_filepath
@@ -59,7 +57,7 @@ class SNISetup:
         self.default_server_certificate_name = default_server_certificate_name
         self.default_server_certificate_directory = default_server_certificate_directory
         self.default_certificate_domain_list = default_certificate_domain_list
-        self.sni_custom_callback_function: Callable[..., Any] | None = sni_custom_callback_function
+        self.sni_custom_callback_function: Callable[..., Any] = sni_custom_callback_function
         self.sni_use_default_callback_function: bool = sni_use_default_callback_function
         self.sni_use_default_callback_function_extended: bool = sni_use_default_callback_function_extended
         self.sni_add_new_domains_to_default_server_certificate = sni_add_new_domains_to_default_server_certificate
@@ -73,18 +71,13 @@ class SNISetup:
         self.custom_private_key_path = custom_private_key_path
         self.forwarding_dns_service_ipv4_list___only_for_localhost = (
             forwarding_dns_service_ipv4_list___only_for_localhost)
-        self.domain_from_dns_server: str | None = domain_from_dns_server
+        self.domain_from_dns_server: str = domain_from_dns_server
         self.skip_extension_id_list = skip_extension_id_list
         self.tls = tls
         self.exceptions_logger = exceptions_logger
         self.certificator_instance = None
         self.enable_sslkeylogfile_env_to_client_ssl_context: bool = enable_sslkeylogfile_env_to_client_ssl_context
-        self.sslkeylog_file_path: str | None = sslkeylog_file_path
-        self.mtls_subdomains = mtls_subdomains
-        # Mirror the client's ALPN offers from the inbound ClientHello onto both
-        # the initial and SNI-swapped server contexts, so the ALPN negotiation
-        # on the inbound leg matches what the client actually asked for.
-        self.client_alpn_offers = client_alpn_offers
+        self.sslkeylog_file_path: str = sslkeylog_file_path
 
     def wrap_socket_with_ssl_context_server_sni_extended(
             self,
@@ -95,8 +88,7 @@ class SNISetup:
         # Create SSL Socket to wrap the raw socket with.
         ssl_context: ssl.SSLContext = creator.create_ssl_context_for_server(
             allow_legacy=True, enable_sslkeylogfile_env_to_client_ssl_context=self.enable_sslkeylogfile_env_to_client_ssl_context,
-            sslkeylog_file_path=self.sslkeylog_file_path,
-            alpn_protocols=self.client_alpn_offers)
+            sslkeylog_file_path=self.sslkeylog_file_path)
 
         self.certificator_instance = certificator.Certificator(
             ca_certificate_name=self.ca_certificate_name,
@@ -117,9 +109,7 @@ class SNISetup:
             skip_extension_id_list=self.skip_extension_id_list,
             tls=self.tls,
             enable_sslkeylogfile_env_to_client_ssl_context=self.enable_sslkeylogfile_env_to_client_ssl_context,
-            sslkeylog_file_path=self.sslkeylog_file_path,
-            mtls_subdomains=self.mtls_subdomains,
-            client_alpn_offers=self.client_alpn_offers
+            sslkeylog_file_path=self.sslkeylog_file_path
         )
 
         # Add SNI callback function to the SSL context.
@@ -181,8 +171,7 @@ class SNISetup:
                 exceptions_logger=self.exceptions_logger,
                 enable_sslkeylogfile_env_to_client_ssl_context=(
                     self.certificator_instance.enable_sslkeylogfile_env_to_client_ssl_context),
-                sslkeylog_file_path=self.certificator_instance.sslkeylog_file_path,
-                client_alpn_offers=self.client_alpn_offers)
+                sslkeylog_file_path=self.certificator_instance.sslkeylog_file_path)
             ssl_context.set_servername_callback(
                 sni_handler_instance.setup_sni_callback(print_kwargs=print_kwargs))
 
@@ -202,8 +191,7 @@ class SNIHandler:
             default_certificate_domain_list: list,
             exceptions_logger: loggingw.ExceptionCsvLogger,
             enable_sslkeylogfile_env_to_client_ssl_context: bool,
-            sslkeylog_file_path: str,
-            client_alpn_offers: list[str] | None = None
+            sslkeylog_file_path: str
     ):
         self.sni_use_default_callback_function_extended = sni_use_default_callback_function_extended
         self.sni_add_new_domains_to_default_server_certificate = sni_add_new_domains_to_default_server_certificate
@@ -214,7 +202,6 @@ class SNIHandler:
         self.exceptions_logger = exceptions_logger
         self.enable_sslkeylogfile_env_to_client_ssl_context: bool = enable_sslkeylogfile_env_to_client_ssl_context
         self.sslkeylog_file_path: str = sslkeylog_file_path
-        self.client_alpn_offers = client_alpn_offers
 
         # noinspection PyTypeChecker
         self.sni_received_parameters: SNIReceivedParameters = None
@@ -355,8 +342,7 @@ class SNIHandler:
                         None,
                         inherit_from=self.sni_received_parameters.ssl_socket.context,
                         enable_sslkeylogfile_env_to_client_ssl_context=self.enable_sslkeylogfile_env_to_client_ssl_context,
-                        sslkeylog_file_path=self.sslkeylog_file_path,
-                        alpn_protocols=self.client_alpn_offers
+                        sslkeylog_file_path=self.sslkeylog_file_path
                     )
                 )
             else:

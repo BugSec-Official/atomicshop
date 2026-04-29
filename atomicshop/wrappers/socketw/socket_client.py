@@ -32,8 +32,7 @@ class SocketClient:
             logger: logging.Logger = None,
             custom_pem_client_certificate_file_path: str = None,
             enable_sslkeylogfile_env_to_client_ssl_context: bool = False,
-            sslkeylog_file_path:str = None,
-            alpn_protocols: list[str] | None = None
+            sslkeylog_file_path:str = None
     ):
         """
         If you have a certificate for domain, but not for the IPv4 address, the SSL Socket context can be created for
@@ -71,10 +70,6 @@ class SocketClient:
         self.custom_pem_client_certificate_file_path: str = custom_pem_client_certificate_file_path
         self.enable_sslkeylogfile_env_to_client_ssl_context: bool = enable_sslkeylogfile_env_to_client_ssl_context
         self.sslkeylog_file_path: str = sslkeylog_file_path
-        # ALPN protocol names to advertise on the outbound (upstream) ClientHello.
-        # Mirrors the inbound client's offers so brokers that gate application data
-        # on a specific ALPN (MQTT, h2, etc.) receive a matching negotiation.
-        self.alpn_protocols = alpn_protocols
 
         if logger:
             # Create child logger for the provided logger with the module's name.
@@ -109,8 +104,7 @@ class SocketClient:
             return creator.wrap_socket_with_ssl_context_client___default_certs___ignore_verification(
                 socket_object, self.service_name, self.custom_pem_client_certificate_file_path,
                 enable_sslkeylogfile_env_to_client_ssl_context=self.enable_sslkeylogfile_env_to_client_ssl_context,
-                sslkeylog_file_path=self.sslkeylog_file_path,
-                alpn_protocols=self.alpn_protocols
+                sslkeylog_file_path=self.sslkeylog_file_path
             )
 
     def service_connection(
