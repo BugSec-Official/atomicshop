@@ -90,6 +90,16 @@ class CreateModuleTemplate:
         config_lines_list.append('# "subdomain.domain.com" = "file_name_in_current_dir.pem"\n')
         # config_lines_list.append(f'\n')
 
+        # [process_name] -- optional per-engine override of the SSH credentials
+        # used by the global get_process_name feature. Both keys must be
+        # uncommented together; if either is omitted the global ssh_user /
+        # ssh_pass from the main config.toml are used at runtime instead.
+        # The enable flag (get_process_name) itself lives only in the main
+        # config and is NOT overridable here.
+        config_lines_list.append('[process_name]')
+        config_lines_list.append("#ssh_user = 'Bond'")
+        config_lines_list.append("#ssh_pass = '1234'\n")
+
         config_file_path = self.new_engine_directory + os.sep + CONFIG_FILE_NAME
 
         with open(config_file_path, 'w') as output_file:

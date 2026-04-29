@@ -32,9 +32,7 @@ class Certificator:
             skip_extension_id_list: list,
             tls: bool,
             enable_sslkeylogfile_env_to_client_ssl_context: bool,
-            sslkeylog_file_path: str,
-            mtls_subdomains: dict | set | None = None,
-            client_alpn_offers: list[str] | None = None
+            sslkeylog_file_path: str
     ):
         self.ca_certificate_name = ca_certificate_name
         self.ca_certificate_filepath = ca_certificate_filepath
@@ -56,13 +54,6 @@ class Certificator:
         self.enable_sslkeylogfile_env_to_client_ssl_context: bool = (
             enable_sslkeylogfile_env_to_client_ssl_context)
         self.sslkeylog_file_path: str = sslkeylog_file_path
-        # Engine's [mtls] table — only its keys matter here (subdomains that require mTLS).
-        # Kept as the original dict (or a set) so `in` checks are cheap.
-        self.mtls_subdomains = mtls_subdomains or ()
-        # ALPN offers captured from the inbound ClientHello, to mirror onto the
-        # server-side context so clients that require a specific protocol
-        # (e.g. MQTT brokers expecting alpn=mqtt) get an ALPN-negotiated handshake.
-        self.client_alpn_offers = client_alpn_offers
 
         # noinspection PyTypeChecker
         self.certauth_wrapper: CertAuthWrapper = None
@@ -235,21 +226,10 @@ class Certificator:
 
         # You need to build new context and exchange the context that being inherited from the main socket,
         # or else the context will receive previous certificate each time.
-        request_client_certificate: bool = (
-            sni_received_parameters.destination_name in self.mtls_subdomains)
-        mtls_subdomains_repr = (
-            list(self.mtls_subdomains) if self.mtls_subdomains else self.mtls_subdomains)
-        print_api(
-            f"mTLS decision for SNI={sni_received_parameters.destination_name!r}: "
-            f"request_client_certificate={request_client_certificate} "
-            f"mtls_subdomains={mtls_subdomains_repr!r}",
-            **(print_kwargs or {}))
         sni_received_parameters.ssl_socket.context = (
             creator.create_server_ssl_context___load_certificate_and_key(
                 certificate_file_path=sni_server_certificate_file_path, key_file_path=None,
                 enable_sslkeylogfile_env_to_client_ssl_context=self.enable_sslkeylogfile_env_to_client_ssl_context,
-                sslkeylog_file_path=self.sslkeylog_file_path,
-                request_client_certificate=request_client_certificate,
-                alpn_protocols=self.client_alpn_offers
+                sslkeylog_file_path=self.sslkeylog_file_path
             )
         )
