@@ -94,8 +94,8 @@ def generate_certificate_signing_request(domain=None, certificate=None, key=None
     csr_request = crypto.X509Req()
 
     if not certificate:
-        # Set the domain name.
-        csr_request.get_subject().CN = domain
+        # X.520 ub-common-name caps CN at 64 octets; long FQDNs overflow the ASN.1 encoder. Full host stays in SAN.
+        csr_request.get_subject().CN = domain[:64]
     else:
         # Set the domain name from provided certificate.
         csr_request.get_subject().CN = certificate.get_subject().CN
@@ -129,7 +129,8 @@ def generate_server_certificate_empty(
     if current_serial <= 0:
         raise RuntimeError(f"Refusing to create a certificate with non-positive serial: {str(current_serial)}")
 
-    cert.get_subject().CN = certname
+    # X.520 ub-common-name (see generate_certificate_signing_request).
+    cert.get_subject().CN = certname[:64]
 
     cert.set_version(2)
     cert.gmtime_adj_notBefore(seconds_not_before)

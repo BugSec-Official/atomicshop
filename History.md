@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.14.9 - 07.05.2026
+  * wrappers/pyopensslw - fixes.
 * 3.14.8 - 29.04.2026
   * Reverted POC ALPN from 3.14.5.
 * 3.14.7 - 19.04.2026
