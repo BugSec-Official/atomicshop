@@ -221,7 +221,8 @@ def thread_worker_main(
         nonlocal protocol
         nonlocal protocol3
 
-        if protocol == 'HTTP':
+        # HTTP/1.x carries the Upgrade header; HTTP/2 has its own branch above.
+        if protocol.startswith('HTTP/1'):
             if auto_parsed and hasattr(auto_parsed, 'headers') and 'Upgrade' in auto_parsed.headers:
                 if auto_parsed.headers['Upgrade'] == 'websocket':
                     protocol = 'Websocket'
@@ -404,7 +405,8 @@ def thread_worker_main(
 
         # FIFO the request method to the response framer for HEAD body elision.
         # Framer install is handled by the Receiver's ProtocolSniffer before this point.
-        if client_message.request_auto_parsed is not None and protocol == 'HTTP':
+        # HTTP/1.x only — HEAD elision rules don't apply to HTTP/2 (own branch above).
+        if client_message.request_auto_parsed is not None and protocol.startswith('HTTP/1'):
             method = getattr(client_message.request_auto_parsed, 'command', None)
             _push_request_method_fifo(method)
 
