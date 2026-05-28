@@ -14,7 +14,9 @@ Three problems with the current responder surface:
 
 1. **Boilerplate.** Every HTTP/2 response synthesis writes `stream_id=class_client_message.request_auto_parsed.stream_id`. Every MQTT broker reply writes `protocol_version=v, packet_identifier=mp.packet_identifier`. The framework already has these values; repeating them at every call site is friction without value.
 2. **Silent fidelity drift.** Today's WebSocket example writes `deflate=False` regardless of whether `permessage-deflate` was negotiated during the 101 handshake. A connection with negotiated compression silently receives uncompressed frames from the proxy. This is invisible to the engine author and to anyone reading the engine code.
-3. **HPACK statelessness.** `wrappers/protocol_parsers/http2.py:_encode_header_block` instantiates a fresh `hpack.Encoder` per response. This works only because the encoder never references the dynamic table — every response is sent with literal-without-indexing headers. Not a correctness bug today, but it forecloses future HPACK compression and means the proxy's HPACK state doesn't track what the client believes it has.
+3. **Hardcoded `MAX_FRAME_SIZE`.** `wrappers/protocol_parsers/http2.py:_serialize_data_frames` fragments DATA frames at the SETTINGS default (16384). If the client advertised a larger `SETTINGS_MAX_FRAME_SIZE`, the proxy still chops at 16384 — correct but not faithful. Observing the client's SETTINGS lets the proxy send fewer, larger frames when permitted.
+
+   **(Note on HPACK):** `_encode_header_block` already correctly uses `hpack.Encoder` per-call with every header flagged `sensitive=True`. This is deliberate — see the docstring at `http2.py:193-200`: a connection-scoped encoder with a real dynamic table would pollute the client's decoder state on proxies that mix synthesised and forwarded responses. **This design preserves that behavior unchanged.** No connection-scoped HPACK state.
 
 ## Goals
 
@@ -76,12 +78,16 @@ Three lightweight state objects, all owned by `ResponderParent` and shared with 
 ```python
 # wrappers/protocol_parsers/http2.py — new
 class Http2ConnectionState:
-    """Connection-scoped HTTP/2 encoder state and observed client SETTINGS."""
+    """Observed client SETTINGS used by the response encoder for faithful framing.
+
+    HPACK encoder state is intentionally NOT tracked here — _encode_header_block
+    uses a per-call encoder with sensitive=True (see its docstring at
+    http2.py:193-200), which is deliberate to keep synthesized responses from
+    polluting the client's HPACK dynamic table. Don't add an encoder field.
+    """
     def __init__(self):
-        self.encoder = hpack.Encoder()           # lifetime = connection (HPACK dynamic table)
         self.max_frame_size: int = 16_384        # RFC 7540 §6.5.2 default
         self.max_header_list_size: int | None = None
-        self.header_table_size: int = 4_096      # RFC 7540 §6.5.2 default
 
 # wrappers/protocol_parsers/websocket.py — new
 class WebSocketConnectionState:
@@ -121,7 +127,6 @@ def add_args(
 | `mqtt_state.protocol_version` | `MqttDirectionParser` (already does this) | Parsing c2s CONNECT |
 | `h2_state.max_frame_size` | `Http2DirectionParser` (new hook in `feed()`) | c2s `SETTINGS` frame with `SETTINGS_MAX_FRAME_SIZE` |
 | `h2_state.max_header_list_size` | same | `SETTINGS_MAX_HEADER_LIST_SIZE` |
-| `h2_state.header_table_size` + `h2_state.encoder.header_table_size` | same | `SETTINGS_HEADER_TABLE_SIZE` (encoder told via `hpack.Encoder.header_table_size` setter) |
 | `ws_state.permessage_deflate_negotiated` | new helper called from the 101 swap at `connection_thread_worker.py:449-464` | `Sec-WebSocket-Extensions: permessage-deflate` in s2c 101 |
 | `ws_state.subprotocol` | same | `Sec-WebSocket-Protocol` in s2c 101 |
 
@@ -179,10 +184,11 @@ def build_byte_http2_response(
 | Auto-filled | Source |
 |---|---|
 | `stream_id` | `class_client_message.request_auto_parsed.stream_id` |
-| HPACK encoder dynamic table | `self._h2_state.encoder` (connection-scoped `hpack.Encoder`) |
 | DATA frame fragmentation | `self._h2_state.max_frame_size` (from client `SETTINGS`) |
 | Header block size enforcement | `self._h2_state.max_header_list_size` (refuses to encode if exceeded) |
 | `content-length` regular header | `len(body)` — only if not in `headers` |
+
+HPACK encoding stays per-call with `sensitive=True` (preserves existing correctness for mixed synthesised/forwarded traffic).
 
 **Retired:** the explicit `stream_id` parameter.
 
@@ -230,9 +236,9 @@ The reference engine `responder___reference_general.py` is rewritten so every he
 #     # 1. JSON response: synthesise a 200 OK on the same stream the client opened.
 #     # Auto-filled by build_byte_http2_response:
 #     #   stream_id            <- class_client_message.request_auto_parsed.stream_id
-#     #   HPACK encoder state  <- self._h2_state.encoder (connection-scoped hpack.Encoder)
 #     #   DATA fragmentation   <- self._h2_state.max_frame_size (from client SETTINGS)
 #     #   content-length       <- len(body), only when absent from headers
+#     # (HPACK encoding stays per-call with sensitive=True; not connection-scoped.)
 #     body: bytes = b'{"ok": true}'
 #     headers = {'content-type': 'application/json'}
 #     response_bytes_list.append(self.build_byte_http2_response(
@@ -418,7 +424,7 @@ For each protocol, exercise auto-fill behavior in isolation. Mock `ClientMessage
 | Helper | Test cases |
 |---|---|
 | `build_byte_response` | (a) `http_version` pulled from request when omitted; (b) explicit `http_version=...` passed but silently discarded (regression for backwards-compat); (c) `Content-Length` auto-added when absent; (d) `Content-Length` left untouched when caller provided it; (e) raises `ValueError` on out-of-range `status_code` |
-| `build_byte_http2_response` | (a) `stream_id` pulled from request; (b) HPACK encoder reused across calls (dynamic table grows, not reset); (c) DATA fragmentation respects `_h2_state.max_frame_size`; (d) raises when header block exceeds `_h2_state.max_header_list_size`; (e) raises when `_h2_state` is `None` |
+| `build_byte_http2_response` | (a) `stream_id` pulled from request; (b) HPACK headers still emitted with `sensitive=True` (regression test for the no-pollution invariant); (c) DATA fragmentation respects `_h2_state.max_frame_size`; (d) raises when header block exceeds `_h2_state.max_header_list_size`; (e) raises when `_h2_state` is `None` |
 | `build_byte_mqtt_puback` / `pubrec` / `pubcomp` | (a) `packet_identifier` pulled from request; (b) `protocol_version` pulled from `_mqtt_state`; (c) raises when `_mqtt_state.protocol_version` is `None` |
 | `build_byte_mqtt_connack` / `suback` / `unsuback` / `publish` / `disconnect` | One test per packet type; engine-supplied fields override correctly |
 | `build_byte_websocket_frame` | (a) `mask=False` always; (b) opcode inferred from `str` vs `bytes`; (c) `deflate` from `_ws_state.permessage_deflate_negotiated`; (d) fragmentation above frame-size limit |
@@ -428,8 +434,8 @@ For each protocol, exercise auto-fill behavior in isolation. Mock `ClientMessage
 
 | Test | Setup | Assertion |
 |---|---|---|
-| HTTP/2 SETTINGS before first response | Feed `Http2DirectionParser` preface → SETTINGS(MAX_FRAME_SIZE=8192) → HEADERS | `h2_state.max_frame_size == 8192` before HEADERS yields a parsed object |
-| HTTP/2 SETTINGS update mid-connection | Second SETTINGS frame mid-stream | `h2_state` reflects latest values; HPACK encoder dynamic table NOT reset |
+| HTTP/2 SETTINGS before first response | Feed `Http2DirectionParser` preface → SETTINGS(MAX_FRAME_SIZE=32768) → HEADERS | `h2_state.max_frame_size == 32768` before HEADERS yields a parsed object |
+| HTTP/2 SETTINGS update mid-connection | Second SETTINGS frame mid-stream | `h2_state` reflects latest values |
 | MQTT protocol_version from CONNECT | Feed c2s CONNECT(v5) | `mqtt_state.protocol_version == 5` before CONNACK built |
 | WS extensions from 101 | s2c 101 with `Sec-WebSocket-Extensions: permessage-deflate` | `ws_state.permessage_deflate_negotiated is True` |
 | WS no extension negotiated | 101 without extensions header | `ws_state.permessage_deflate_negotiated is False` |
