@@ -14,8 +14,10 @@ from ..wrappers.socketw.framers import (
 from .. import ip_addresses
 from ..wrappers.protocol_parsers import websocket
 from ..wrappers.protocol_parsers.http import HTTPRequestParse, HTTPResponseParse
-from ..wrappers.protocol_parsers.http2 import Http2DirectionParser, Http2RequestParse, Http2ResponseParse
+from ..wrappers.protocol_parsers.http2 import (
+    Http2ConnectionState, Http2DirectionParser, Http2RequestParse, Http2ResponseParse)
 from ..wrappers.protocol_parsers.mqtt import MqttConnectionState, MqttDirectionParser
+from ..wrappers.protocol_parsers.websocket import WebSocketConnectionState
 from ..basics import threads, tracebacks
 from ..print_api import print_api
 
@@ -804,7 +806,7 @@ def thread_worker_main(
     ) -> tuple[Framer | None, ProtocolSniffer | None]:
         """Pick the initial framer (and parsers) for one direction from ALPN; sniffer if unknown."""
         nonlocal h2_request_parser, h2_response_parser
-        nonlocal mqtt_state, mqtt_request_parser, mqtt_response_parser
+        nonlocal mqtt_request_parser, mqtt_response_parser
 
         is_client = (side == 'Client')
         alpn = _read_alpn(receiving_socket)
@@ -813,17 +815,17 @@ def thread_worker_main(
         if alpn == 'h2':
             framer: Framer | None = Http2Framer(direction=direction)
             # h2 framer chunks at END_STREAM; autoparser owns H2Connection + HPACK.
+            # c2s parser gets h2_state so observed SETTINGS land on the shared object
+            # the responder will read when synthesising responses.
             if is_client:
-                h2_request_parser = Http2DirectionParser(is_request_side=True)
+                h2_request_parser = Http2DirectionParser(is_request_side=True, state=h2_state)
             else:
                 h2_response_parser = Http2DirectionParser(is_request_side=False)
         elif alpn == 'http/1.1':
             framer = Http11Framer(direction=direction)
         elif alpn == 'mqtt':
             framer = MqttFramer(direction=direction)
-            # Shared state so c2s CONNECT version applies to s2c CONNACK.
-            if mqtt_state is None:
-                mqtt_state = MqttConnectionState()
+            # mqtt_state is pre-allocated at thread_worker_main scope; shared with the responder.
             if is_client:
                 mqtt_request_parser = MqttDirectionParser(is_request_side=True, state=mqtt_state)
             else:
@@ -1013,10 +1015,16 @@ def thread_worker_main(
     h2_request_parser: Http2DirectionParser | None = None
     h2_response_parser: Http2DirectionParser | None = None
 
-    # MQTT autoparsers, one per direction with a shared MqttConnectionState so
-    # the protocol version seen on the c2s CONNECT applies to the s2c CONNACK
-    # and beyond. Initialised when ALPN selects 'mqtt'.
-    mqtt_state: MqttConnectionState | None = None
+    # Connection-scoped protocol state shared between framers/parsers and the responder.
+    # Eagerly allocated even when the corresponding protocol isn't used (cheap; lets
+    # responder.add_args wire all three unconditionally).
+    h2_state: Http2ConnectionState = Http2ConnectionState()
+    mqtt_state: MqttConnectionState = MqttConnectionState()
+    ws_state: WebSocketConnectionState = WebSocketConnectionState()
+
+    # MQTT autoparsers, one per direction. mqtt_state above is shared with the c2s
+    # parser when ALPN selects 'mqtt' so the protocol version seen on CONNECT applies
+    # to subsequent packets.
     mqtt_request_parser: MqttDirectionParser | None = None
     mqtt_response_parser: MqttDirectionParser | None = None
 
@@ -1036,7 +1044,7 @@ def thread_worker_main(
 
     for engine in engines_list:
         if engine.engine_name == engine_name:
-            responder.add_args(engine=engine)
+            responder.add_args(engine=engine, h2_state=h2_state, mqtt_state=mqtt_state, ws_state=ws_state)
             break
 
     network_logger.info(f"Assigned Modules for [{server_name}]: "

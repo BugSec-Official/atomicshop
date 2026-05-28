@@ -8,7 +8,13 @@ from urllib.parse import urlparse
 from urllib.parse import parse_qs
 
 from ...message import ClientMessage
-from ....http_parse import HTTPResponseParse
+from ....wrappers.protocol_parsers.http import HTTPResponseParse
+from ....wrappers.protocol_parsers import http2
+from ....wrappers.protocol_parsers import mqtt
+from ....wrappers.protocol_parsers import websocket
+from ....wrappers.protocol_parsers.http2 import Http2ConnectionState
+from ....wrappers.protocol_parsers.mqtt import MqttConnectionState
+from ....wrappers.protocol_parsers.websocket import WebSocketConnectionState
 from ....print_api import print_api
 
 from atomicshop.mitm.shared_functions import create_custom_logger
@@ -20,18 +26,24 @@ class ResponderParent:
         self.logger = create_custom_logger()
         # engine: initialize_engines.ModuleCategory
         self.engine = None
+        # Connection-scoped state for build_byte_* helpers; wired via add_args.
+        self._h2_state: Http2ConnectionState | None = None
+        self._mqtt_state: MqttConnectionState | None = None
+        self._ws_state: WebSocketConnectionState | None = None
 
     def add_args(
             self,
             # engine: initialize_engines.ModuleCategory
-            engine = None
+            engine = None,
+            h2_state: Http2ConnectionState | None = None,
+            mqtt_state: MqttConnectionState | None = None,
+            ws_state: WebSocketConnectionState | None = None,
     ):
-        """
-        Add more arguments to the class.
-        This is needed to be backwards compatible and not to change the child class apis.
-        """
-
+        """Backward-compatible state injection. Adds connection-scoped state for build_byte_* helpers."""
         self.engine = engine
+        self._h2_state = h2_state
+        self._mqtt_state = mqtt_state
+        self._ws_state = ws_state
 
     @staticmethod
     def get_path_parts(path: str):
@@ -204,6 +216,38 @@ class ResponderParent:
             self.logger.info("Created Valid Byte Response.")
 
         return response_raw_bytes
+
+    def build_byte_http2_response(
+            self,
+            status_code: int,
+            headers: dict,
+            body: bytes = b'',
+            stream_id: int = 0,
+            trailers: dict | None = None,
+    ) -> bytes:
+        """Create HTTP/2 response wire bytes for one stream.
+
+        Mirror of `build_byte_response` for HTTP/2: takes the same structured
+        shape (status_code + headers dict + body bytes) plus the stream_id
+        the client opened the request on. Delegates to the encoder in
+        atomicshop.wrappers.protocol_parsers.http2, which uses hpack + hyperframe to emit a
+        HEADERS frame followed by DATA frame(s) (and optional trailers
+        HEADERS frame).
+
+        :param status_code: HTTP status code (becomes ':status' pseudo-header).
+        :param headers: dict of regular response headers (lowercase keys; h2 is case-insensitive).
+        :param body: response body bytes; split into multiple DATA frames if larger than MAX_FRAME_SIZE.
+        :param stream_id: the request's stream_id (`request_auto_parsed.stream_id`). Required.
+        :param trailers: optional dict of trailing headers (e.g. {'grpc-status': '0'}).
+        :return: bytes ready to send back to the client.
+        """
+        return http2.encode_http2_response(
+            status_code=status_code,
+            headers=headers,
+            body=body,
+            stream_id=stream_id,
+            trailers=trailers,
+        )
 
     @staticmethod
     def create_connect_response(class_client_message: ClientMessage):
