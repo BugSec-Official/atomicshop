@@ -228,8 +228,10 @@ def _encode_header_block(headers) -> bytes:
     return encoder.encode([(k, v, True) for k, v in headers])
 
 
-def _serialize_data_frames(stream_id: int, body: bytes, end_stream: bool) -> bytes:
-    """Split body across DATA frames at MAX_FRAME_SIZE; END_STREAM on the last."""
+def _serialize_data_frames(
+        stream_id: int, body: bytes, end_stream: bool,
+        max_frame_size: int = _DEFAULT_MAX_FRAME_SIZE) -> bytes:
+    """Split body across DATA frames at max_frame_size; END_STREAM on the last."""
     if not body:
         if not end_stream:
             return b''
@@ -238,11 +240,11 @@ def _serialize_data_frames(stream_id: int, body: bytes, end_stream: bool) -> byt
         return df.serialize()
     out = bytearray()
     n = len(body)
-    for i in range(0, n, _DEFAULT_MAX_FRAME_SIZE):
-        chunk = body[i:i + _DEFAULT_MAX_FRAME_SIZE]
+    for i in range(0, n, max_frame_size):
+        chunk = body[i:i + max_frame_size]
         df = hyperframe.frame.DataFrame(stream_id=stream_id)
         df.data = chunk
-        if end_stream and (i + _DEFAULT_MAX_FRAME_SIZE) >= n:
+        if end_stream and (i + max_frame_size) >= n:
             df.flags.add('END_STREAM')
         out.extend(df.serialize())
     return bytes(out)
@@ -254,6 +256,7 @@ def encode_http2_message(
         body: bytes,
         stream_id: int,
         trailers: dict[str, str] | None = None,
+        max_frame_size: int = _DEFAULT_MAX_FRAME_SIZE,
 ) -> bytes:
     """Encode an HTTP/2 message (request or response) as wire bytes.
 
@@ -265,6 +268,8 @@ def encode_http2_message(
     :param body: raw body bytes.
     :param stream_id: HTTP/2 stream id (use the request's stream_id when replying).
     :param trailers: optional dict of trailing headers (emitted as a second HEADERS frame).
+    :param max_frame_size: DATA frame size limit; pass the client's negotiated
+        SETTINGS_MAX_FRAME_SIZE for faithful framing. Defaults to the SETTINGS default (16384).
     :return: wire bytes ready to send over the client TLS socket.
     """
     regular = list(regular_headers.items()) if isinstance(regular_headers, dict) else list(regular_headers)
@@ -282,7 +287,8 @@ def encode_http2_message(
     out.extend(hf.serialize())
 
     if has_body:
-        out.extend(_serialize_data_frames(stream_id, body, end_stream=not has_trailers))
+        out.extend(_serialize_data_frames(
+            stream_id, body, end_stream=not has_trailers, max_frame_size=max_frame_size))
 
     if has_trailers:
         tf = hyperframe.frame.HeadersFrame(stream_id=stream_id)
@@ -299,12 +305,13 @@ def encode_http2_response(
         body: bytes = b'',
         stream_id: int = 0,
         trailers: dict[str, str] | None = None,
+        max_frame_size: int = _DEFAULT_MAX_FRAME_SIZE,
 ) -> bytes:
     """Encode an HTTP/2 response (:status + regular headers + body + optional trailers)."""
     return encode_http2_message(
         [(':status', str(status_code))],
         headers or {},
-        body, stream_id, trailers,
+        body, stream_id, trailers, max_frame_size,
     )
 
 
@@ -317,11 +324,12 @@ def encode_http2_request(
         body: bytes = b'',
         stream_id: int = 1,
         trailers: dict[str, str] | None = None,
+        max_frame_size: int = _DEFAULT_MAX_FRAME_SIZE,
 ) -> bytes:
     """Encode an HTTP/2 request (:method / :scheme / :authority / :path + body + optional trailers)."""
     return encode_http2_message(
         [(':method', method.upper()), (':scheme', scheme),
          (':authority', authority), (':path', path)],
         headers or {},
-        body, stream_id, trailers,
+        body, stream_id, trailers, max_frame_size,
     )
