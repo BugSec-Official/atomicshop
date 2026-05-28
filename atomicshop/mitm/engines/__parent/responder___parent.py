@@ -226,6 +226,119 @@ class ResponderParent:
             max_frame_size=self._h2_state.max_frame_size,
         )
 
+    # ------------------------------------------------------------------
+    # MQTT broker-side response builders. All auto-fill protocol_version
+    # from self._mqtt_state; acknowledgements also auto-fill
+    # packet_identifier from class_client_message.request_auto_parsed.
+    # ------------------------------------------------------------------
+
+    def _require_mqtt_state(self, helper_name: str) -> MqttConnectionState:
+        if self._mqtt_state is None:
+            raise RuntimeError(
+                f"{helper_name}: MqttConnectionState not wired; check add_args call in framework")
+        return self._mqtt_state
+
+    def _require_mqtt_packet_id(self, class_client_message: ClientMessage, helper_name: str) -> int:
+        pid = getattr(class_client_message.request_auto_parsed, 'packet_identifier', None)
+        if pid is None:
+            raise ValueError(f"{helper_name}: request_auto_parsed.packet_identifier required")
+        return pid
+
+    def build_byte_mqtt_connack(
+            self,
+            class_client_message: ClientMessage,
+            session_present: bool = False,
+            return_code: int = 0,
+    ) -> bytes:
+        """CONNACK accepting the session. Auto-fills protocol_version."""
+        st = self._require_mqtt_state('build_byte_mqtt_connack')
+        _ = class_client_message  # accepted for API consistency
+        return mqtt.encode_connack(
+            session_present=session_present,
+            return_code=return_code,
+            protocol_version=st.protocol_version,
+        )
+
+    def build_byte_mqtt_puback(self, class_client_message: ClientMessage) -> bytes:
+        """PUBACK for inbound PUBLISH QoS=1. Auto-fills packet_identifier and protocol_version."""
+        st = self._require_mqtt_state('build_byte_mqtt_puback')
+        pid = self._require_mqtt_packet_id(class_client_message, 'build_byte_mqtt_puback')
+        return mqtt.encode_puback(packet_identifier=pid, protocol_version=st.protocol_version)
+
+    def build_byte_mqtt_pubrec(self, class_client_message: ClientMessage) -> bytes:
+        """PUBREC for inbound PUBLISH QoS=2 (first of four). Auto-fills pid + version."""
+        st = self._require_mqtt_state('build_byte_mqtt_pubrec')
+        pid = self._require_mqtt_packet_id(class_client_message, 'build_byte_mqtt_pubrec')
+        return mqtt.encode_pubrec(packet_identifier=pid, protocol_version=st.protocol_version)
+
+    def build_byte_mqtt_pubcomp(self, class_client_message: ClientMessage) -> bytes:
+        """PUBCOMP completing QoS=2 handshake. Auto-fills pid + version."""
+        st = self._require_mqtt_state('build_byte_mqtt_pubcomp')
+        pid = self._require_mqtt_packet_id(class_client_message, 'build_byte_mqtt_pubcomp')
+        return mqtt.encode_pubcomp(packet_identifier=pid, protocol_version=st.protocol_version)
+
+    def build_byte_mqtt_suback(
+            self,
+            class_client_message: ClientMessage,
+            return_codes: list[int],
+    ) -> bytes:
+        """SUBACK granting per-topic QoS. Auto-fills pid + version. Engine supplies return_codes."""
+        st = self._require_mqtt_state('build_byte_mqtt_suback')
+        pid = self._require_mqtt_packet_id(class_client_message, 'build_byte_mqtt_suback')
+        return mqtt.encode_suback(
+            packet_identifier=pid, return_codes=return_codes, protocol_version=st.protocol_version)
+
+    def build_byte_mqtt_unsuback(
+            self,
+            class_client_message: ClientMessage,
+            return_codes: list[int] | None = None,
+    ) -> bytes:
+        """UNSUBACK. Auto-fills pid + version. v5 carries return_codes; v3 ignores."""
+        st = self._require_mqtt_state('build_byte_mqtt_unsuback')
+        pid = self._require_mqtt_packet_id(class_client_message, 'build_byte_mqtt_unsuback')
+        return mqtt.encode_unsuback(
+            packet_identifier=pid, return_codes=return_codes, protocol_version=st.protocol_version)
+
+    def build_byte_mqtt_pingresp(self, class_client_message: ClientMessage) -> bytes:
+        """PINGRESP: fixed 0xD0 0x00, no session state used."""
+        _ = class_client_message  # API consistency
+        return mqtt.encode_pingresp()
+
+    def build_byte_mqtt_publish(
+            self,
+            class_client_message: ClientMessage,
+            topic: str,
+            payload: bytes = b'',
+            qos: int = 0,
+            retain: bool = False,
+            packet_identifier: int | None = None,
+    ) -> bytes:
+        """Broker-initiated PUBLISH. Auto-fills protocol_version.
+
+        At qos>0, packet_identifier is required (broker chooses one for outbound PUBLISH;
+        the framework doesn't track outbound pid counters).
+        """
+        st = self._require_mqtt_state('build_byte_mqtt_publish')
+        _ = class_client_message  # API consistency
+        if qos > 0 and packet_identifier is None:
+            raise ValueError(
+                f"build_byte_mqtt_publish: packet_identifier required when qos>0 (got qos={qos})")
+        return mqtt.encode_publish(
+            topic=topic, payload=payload, qos=qos, retain=retain,
+            protocol_version=st.protocol_version,
+            packet_identifier=packet_identifier,
+        )
+
+    def build_byte_mqtt_disconnect(
+            self,
+            class_client_message: ClientMessage,
+            reason_code: int = 0,
+    ) -> bytes:
+        """DISCONNECT (broker-initiated). v5 carries reason_code; v3 ignores."""
+        st = self._require_mqtt_state('build_byte_mqtt_disconnect')
+        _ = class_client_message
+        return mqtt.encode_disconnect(reason_code=reason_code, protocol_version=st.protocol_version)
+
     @staticmethod
     def create_connect_response(class_client_message: ClientMessage):
         """ This function should be overridden in the child class. """
