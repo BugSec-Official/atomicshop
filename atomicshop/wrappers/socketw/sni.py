@@ -1,6 +1,7 @@
+import socket
 import ssl
-from dataclasses import dataclass
-from typing import Callable, Any
+from dataclasses import dataclass, field
+from typing import Callable, Any, Optional
 
 from ..loggingw import loggingw
 from ...domains import get_domain_without_first_subdomain_if_no_subdomain_return_as_is
@@ -11,9 +12,22 @@ from . import certificator, creator
 
 @dataclass
 class SNIReceivedParameters:
-    ssl_socket: ssl.SSLSocket
+    # Under the sans-io consume+MemoryBIO accept path, ``ssl_socket`` is
+    # actually an ``ssl.SSLObject`` (not an ``ssl.SSLSocket``) during the
+    # SNI callback — ``SSLContext.wrap_bio`` produces an SSLObject, which
+    # has no socket affinity. Properties we read/write on it
+    # (``server_hostname``, ``context``) work identically on both types,
+    # but addressing calls (``getsockname``, ``getpeername``) do NOT
+    # exist on SSLObject, which is why ``raw_socket`` is carried
+    # alongside.
+    ssl_socket: ssl.SSLObject
     destination_name: str
     ssl_context: ssl.SSLContext
+    # The underlying raw TCP socket that the TLS session is riding on.
+    # Carried here so ``certificator`` and ``set_socket_server_hostname``
+    # can resolve client/server addresses via ``socket_base`` helpers,
+    # since ``ssl.SSLObject`` itself has no ``getsockname``/``getpeername``.
+    raw_socket: Optional[socket.socket] = field(default=None)
 
 
 class SNIDefaultCertificateCreationError(Exception):
@@ -26,30 +40,32 @@ class SNISetup:
     """
     def __init__(
             self,
-            ca_certificate_name: str,
-            ca_certificate_filepath: str,
+            ca_certificate_name: str | None,
+            ca_certificate_filepath: str | None,
             default_server_certificate_usage: bool,
-            default_server_certificate_name: str,
-            default_server_certificate_directory: str,
-            default_certificate_domain_list: list,
-            sni_custom_callback_function: Callable[..., Any],
+            default_server_certificate_name: str | None,
+            default_server_certificate_directory: str | None,
+            default_certificate_domain_list: list | None,
+            sni_custom_callback_function: Callable[..., Any] | None,
             sni_use_default_callback_function: bool,
             sni_use_default_callback_function_extended: bool,
             sni_add_new_domains_to_default_server_certificate: bool,
             sni_create_server_certificate_for_each_domain: bool,
-            sni_server_certificates_cache_directory: str,
+            sni_server_certificates_cache_directory: str | None,
             sni_get_server_certificate_from_server_socket: bool,
-            sni_server_certificate_from_server_socket_download_directory: str,
+            sni_server_certificate_from_server_socket_download_directory: str | None,
             custom_server_certificate_usage: bool,
-            custom_server_certificate_path: str,
-            custom_private_key_path: str,
-            forwarding_dns_service_ipv4_list___only_for_localhost: list,
+            custom_server_certificate_path: str | None,
+            custom_private_key_path: str | None,
+            forwarding_dns_service_ipv4_list___only_for_localhost: list | None,
             tls: bool,
             domain_from_dns_server: str = None,
             skip_extension_id_list: list = None,
             exceptions_logger: loggingw.ExceptionCsvLogger = None,
             enable_sslkeylogfile_env_to_client_ssl_context: bool = False,
-            sslkeylog_file_path: str = None
+            sslkeylog_file_path: str = None,
+            mtls_subdomains: dict | set | None = None,
+            client_alpn_offers: list[str] | None = None
     ):
         self.ca_certificate_name = ca_certificate_name
         self.ca_certificate_filepath = ca_certificate_filepath
@@ -57,7 +73,7 @@ class SNISetup:
         self.default_server_certificate_name = default_server_certificate_name
         self.default_server_certificate_directory = default_server_certificate_directory
         self.default_certificate_domain_list = default_certificate_domain_list
-        self.sni_custom_callback_function: Callable[..., Any] = sni_custom_callback_function
+        self.sni_custom_callback_function: Callable[..., Any] | None = sni_custom_callback_function
         self.sni_use_default_callback_function: bool = sni_use_default_callback_function
         self.sni_use_default_callback_function_extended: bool = sni_use_default_callback_function_extended
         self.sni_add_new_domains_to_default_server_certificate = sni_add_new_domains_to_default_server_certificate
@@ -71,24 +87,68 @@ class SNISetup:
         self.custom_private_key_path = custom_private_key_path
         self.forwarding_dns_service_ipv4_list___only_for_localhost = (
             forwarding_dns_service_ipv4_list___only_for_localhost)
-        self.domain_from_dns_server: str = domain_from_dns_server
+        self.domain_from_dns_server: str | None = domain_from_dns_server
         self.skip_extension_id_list = skip_extension_id_list
         self.tls = tls
         self.exceptions_logger = exceptions_logger
         self.certificator_instance = None
         self.enable_sslkeylogfile_env_to_client_ssl_context: bool = enable_sslkeylogfile_env_to_client_ssl_context
-        self.sslkeylog_file_path: str = sslkeylog_file_path
+        self.sslkeylog_file_path: str | None = sslkeylog_file_path
+        self.mtls_subdomains = mtls_subdomains
+        # Mirror the client's ALPN offers from the inbound ClientHello onto both
+        # the initial and SNI-swapped server contexts, so the ALPN negotiation
+        # on the inbound leg matches what the client actually asked for.
+        self.client_alpn_offers = client_alpn_offers
 
     def wrap_socket_with_ssl_context_server_sni_extended(
             self,
             socket_object,
+            prefetched: bytes = b'',
             print_kwargs: dict = None
     ):
+        """
+        Build the server SSL context (with SNI callback + certs + ALPN),
+        then run the TLS handshake via the sans-io BIO path.
+
+        Why ``prefetched`` is now a parameter
+        -------------------------------------
+        The caller (``SocketWrapper._connected_socket_thread_worker``) has
+        already consumed the first bytes off the socket to parse the
+        ClientHello (``ssl_base.consume_client_hello``). OpenSSL would
+        deadlock if we let it read from an empty socket buffer while
+        waiting for the ClientHello — so the bytes are re-injected into
+        the ``MemoryBIO`` by ``creator.wrap_bio_server_with_error_message``.
+        Empty bytes are allowed (defensive default) but will result in a
+        handshake that has to read the full ClientHello from scratch —
+        not an error, just an unnecessary round trip.
+
+        :param socket_object: raw accepted TCP socket. We hand this to
+            the BIO pump for ciphertext I/O; we also stash it so the SNI
+            callback / certificator can resolve addresses on it (since
+            ``SSLObject`` doesn't support ``getsockname``/``getpeername``).
+        :param prefetched: bytes already consumed from the socket —
+            typically the full ClientHello record parsed by
+            ``consume_client_hello``.
+        :param print_kwargs: forwarded to ``print_api`` for logging.
+
+        :return: ``(adapter_or_None, error_message_or_None)``. On
+            success ``adapter`` is a ``BIOSocketAdapter`` that downstream
+            code can use as if it were an ``ssl.SSLSocket``.
+        """
+
+        # ---- Stash the raw socket for the SNI callback path ----
+        # The SNI callback is invoked mid-handshake with the ``SSLObject``
+        # as its first arg, not the adapter (the adapter doesn't exist
+        # until handshake completes). Callback code that needs addressing
+        # info reads ``self._raw_socket_for_sni`` rather than calling
+        # ``getsockname`` on the SSLObject (which would AttributeError).
+        self._raw_socket_for_sni: socket.socket = socket_object
 
         # Create SSL Socket to wrap the raw socket with.
         ssl_context: ssl.SSLContext = creator.create_ssl_context_for_server(
             allow_legacy=True, enable_sslkeylogfile_env_to_client_ssl_context=self.enable_sslkeylogfile_env_to_client_ssl_context,
-            sslkeylog_file_path=self.sslkeylog_file_path)
+            sslkeylog_file_path=self.sslkeylog_file_path,
+            alpn_protocols=self.client_alpn_offers)
 
         self.certificator_instance = certificator.Certificator(
             ca_certificate_name=self.ca_certificate_name,
@@ -109,7 +169,9 @@ class SNISetup:
             skip_extension_id_list=self.skip_extension_id_list,
             tls=self.tls,
             enable_sslkeylogfile_env_to_client_ssl_context=self.enable_sslkeylogfile_env_to_client_ssl_context,
-            sslkeylog_file_path=self.sslkeylog_file_path
+            sslkeylog_file_path=self.sslkeylog_file_path,
+            mtls_subdomains=self.mtls_subdomains,
+            client_alpn_offers=self.client_alpn_offers
         )
 
         # Add SNI callback function to the SSL context.
@@ -126,9 +188,17 @@ class SNISetup:
                 ssl_context, server_certificate_file_path, server_private_key_file_path,
                 print_kwargs=print_kwargs)
 
-        ssl_socket, error_message = creator.wrap_socket_with_ssl_context_server_with_error_message(
-            socket_object=socket_object, ssl_context=ssl_context, domain_from_dns_server=self.domain_from_dns_server,
-            print_kwargs=print_kwargs)
+        # ---- Hand off to the BIO-pumped handshake ----
+        # ``wrap_bio_server_with_error_message`` re-injects ``prefetched``
+        # into the MemoryBIO, drives the handshake to completion, and
+        # returns a ``BIOSocketAdapter`` that duck-types as SSLSocket.
+        ssl_socket, error_message = creator.wrap_bio_server_with_error_message(
+            raw_socket=socket_object,
+            ssl_context=ssl_context,
+            prefetched=prefetched,
+            domain_from_dns_server=self.domain_from_dns_server,
+            print_kwargs=print_kwargs
+        )
 
         return ssl_socket, error_message
 
@@ -171,7 +241,13 @@ class SNISetup:
                 exceptions_logger=self.exceptions_logger,
                 enable_sslkeylogfile_env_to_client_ssl_context=(
                     self.certificator_instance.enable_sslkeylogfile_env_to_client_ssl_context),
-                sslkeylog_file_path=self.certificator_instance.sslkeylog_file_path)
+                sslkeylog_file_path=self.certificator_instance.sslkeylog_file_path,
+                client_alpn_offers=self.client_alpn_offers,
+                # Pass the raw TCP socket through so the SNI handler /
+                # certificator can resolve peer/local addresses on it.
+                # ``getattr`` fallback keeps the legacy ``wrap_socket``-based
+                # callers working if they haven't set ``_raw_socket_for_sni``.
+                raw_socket=getattr(self, '_raw_socket_for_sni', None))
             ssl_context.set_servername_callback(
                 sni_handler_instance.setup_sni_callback(print_kwargs=print_kwargs))
 
@@ -191,7 +267,9 @@ class SNIHandler:
             default_certificate_domain_list: list,
             exceptions_logger: loggingw.ExceptionCsvLogger,
             enable_sslkeylogfile_env_to_client_ssl_context: bool,
-            sslkeylog_file_path: str
+            sslkeylog_file_path: str,
+            client_alpn_offers: list[str] | None = None,
+            raw_socket: Optional[socket.socket] = None
     ):
         self.sni_use_default_callback_function_extended = sni_use_default_callback_function_extended
         self.sni_add_new_domains_to_default_server_certificate = sni_add_new_domains_to_default_server_certificate
@@ -202,6 +280,12 @@ class SNIHandler:
         self.exceptions_logger = exceptions_logger
         self.enable_sslkeylogfile_env_to_client_ssl_context: bool = enable_sslkeylogfile_env_to_client_ssl_context
         self.sslkeylog_file_path: str = sslkeylog_file_path
+        self.client_alpn_offers = client_alpn_offers
+        # Raw TCP socket the handshake is riding on. Needed because the SNI
+        # callback receives an ``ssl.SSLObject`` (from ``wrap_bio``) which
+        # has no ``getsockname``/``getpeername`` — address lookups go
+        # through this raw socket instead.
+        self.raw_socket: Optional[socket.socket] = raw_socket
 
         # noinspection PyTypeChecker
         self.sni_received_parameters: SNIReceivedParameters = None
@@ -221,20 +305,28 @@ class SNIHandler:
         """
 
         def sni_handle(
-                sni_ssl_socket: ssl.SSLSocket,
+                sni_ssl_socket,
                 sni_destination_name: str,
                 sni_ssl_context: ssl.SSLContext):
+            # Note: ``sni_ssl_socket`` is typed as ``ssl.SSLObject`` here
+            # (not ``ssl.SSLSocket``) — ``ssl.SSLContext.wrap_bio`` yields
+            # an SSLObject, which is what the BIO-pumped accept path now
+            # uses. ``server_hostname`` is read-only on SSLObject (Python
+            # populates it from the ClientHello SNI extension before
+            # invoking this callback); ``context`` is read/write on both.
 
             try:
-                # Set 'server_hostname' for the socket.
-                sni_ssl_socket.server_hostname = sni_destination_name
-
                 # If 'sni_execute_extended' was set to True.
                 if self.sni_use_default_callback_function_extended:
                     self.sni_received_parameters = SNIReceivedParameters(
                         ssl_socket=sni_ssl_socket,
                         destination_name=sni_destination_name,
-                        ssl_context=sni_ssl_context
+                        ssl_context=sni_ssl_context,
+                        # Propagate the raw TCP socket through to
+                        # ``certificator`` etc. so they can resolve local
+                        # and peer addresses without going through the
+                        # SSLObject (which doesn't support those calls).
+                        raw_socket=self.raw_socket,
                     )
 
                     self.sni_handle_extended(print_kwargs=print_kwargs)
@@ -286,12 +378,21 @@ class SNIHandler:
                         f"SNI Handler: No SNI was passed, No domain passed from DNS Server. Service name will be 'None'.")
                     print_api(message, color="yellow", **(print_kwargs or {}))
 
-            # Setting "server_hostname" as a domain.
-            self.sni_received_parameters.ssl_socket.server_hostname = self.sni_received_parameters.destination_name
             print_api("SNI Passed: True", **(print_kwargs or {}))
+            # Resolve the local port via the raw socket. The ``ssl_socket``
+            # field is an ``SSLObject`` under the BIO accept path and does
+            # not expose ``getsockname``. The raw socket is always carried
+            # on ``sni_received_parameters.raw_socket`` for this purpose.
+            local_port_str = "?"
+            if self.sni_received_parameters.raw_socket is not None:
+                try:
+                    local_port_str = str(
+                        self.sni_received_parameters.raw_socket.getsockname()[1])
+                except OSError:
+                    pass
             message = (
-                f"SNI Handler: port {self.sni_received_parameters.ssl_socket.getsockname()[1]}: "
-                f"Incoming connection for [{self.sni_received_parameters.ssl_socket.server_hostname}]")
+                f"SNI Handler: port {local_port_str}: "
+                f"Incoming connection for [{self.sni_received_parameters.destination_name}]")
             print_api(message, **(print_kwargs or {}))
         except Exception as exception_object:
             message = f"SNI Handler: Undocumented exception general settings section: {exception_object}"
@@ -304,7 +405,7 @@ class SNIHandler:
             print_kwargs: dict = None
     ):
         # Check if incoming domain is already in the parent domains of 'domains_all_times' list.
-        if not any(x in self.sni_received_parameters.ssl_socket.server_hostname for x in
+        if not any(x in self.sni_received_parameters.destination_name for x in
                    self.default_certificate_domain_list):
             message = f"SNI Handler: Current domain is not in known domains list. Adding."
             print_api(message, **(print_kwargs or {}))
@@ -317,7 +418,7 @@ class SNIHandler:
 
             # Extract parent domain from the current SNI domain.
             parent_domain = get_domain_without_first_subdomain_if_no_subdomain_return_as_is(
-                self.sni_received_parameters.ssl_socket.server_hostname)
+                self.sni_received_parameters.destination_name)
             # Add the parent domain to the known domains list.
             self.default_certificate_domain_list.append(parent_domain)
 
@@ -342,7 +443,8 @@ class SNIHandler:
                         None,
                         inherit_from=self.sni_received_parameters.ssl_socket.context,
                         enable_sslkeylogfile_env_to_client_ssl_context=self.enable_sslkeylogfile_env_to_client_ssl_context,
-                        sslkeylog_file_path=self.sslkeylog_file_path
+                        sslkeylog_file_path=self.sslkeylog_file_path,
+                        alpn_protocols=self.client_alpn_offers
                     )
                 )
             else:

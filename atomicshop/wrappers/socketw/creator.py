@@ -1,9 +1,21 @@
 import os
 import socket
 import ssl
+import time
 
-from . import socket_base, exception_wrapper
+from . import socket_base, exception_wrapper, bio_adapter
 from ...print_api import print_api
+
+
+# Default overall handshake deadline for the BIO-pumped wrap path. Matches
+# the 10 s used by the legacy ``wrap_socket`` accept path before the
+# consume+MemoryBIO refactor, so timing behavior is unchanged.
+_BIO_HANDSHAKE_DEADLINE_SECONDS: float = 10.0
+
+# Chunk size when pumping ciphertext from the raw socket into ``incoming``
+# during the handshake. 16384 is the TLS record ceiling, so a single recv
+# is guaranteed sufficient for a single record.
+_BIO_HANDSHAKE_RECV_CHUNK: int = 16384
 
 
 def create_socket_ipv4_tcp():
@@ -269,6 +281,247 @@ def wrap_socket_with_ssl_context_server_with_error_message(
     error_message = wrap_socket_with_ssl_context_server.message
 
     return ssl_socket, error_message
+
+
+def _pump_handshake(
+        raw_socket: socket.socket,
+        ssl_object: ssl.SSLObject,
+        incoming: ssl.MemoryBIO,
+        outgoing: ssl.MemoryBIO,
+        deadline_seconds: float = _BIO_HANDSHAKE_DEADLINE_SECONDS
+) -> None:
+    """
+    Drive an ``SSLObject`` through its handshake by pumping bytes between
+    the two ``MemoryBIO`` instances and a raw TCP socket.
+
+    Why this exists
+    ---------------
+    Unlike ``SSLSocket.wrap_socket()`` (which owns a socket fd and runs
+    the handshake itself transparently), ``SSLContext.wrap_bio()`` hands
+    back an ``ssl.SSLObject`` that has no socket affinity. It can't read
+    or write on its own — it tells *us* what it needs via
+    ``SSLWantReadError`` / ``SSLWantWriteError`` and we shuttle bytes
+    between the BIOs and the real socket until the handshake completes.
+
+    The accept path uses ``wrap_bio`` (not ``wrap_socket``) because the
+    ClientHello has already been consumed into a Python buffer by
+    ``ssl_base.consume_client_hello`` and re-injected into ``incoming``.
+    OpenSSL can only meet that injection if we drive it manually.
+
+    :param raw_socket: the already-accepted TCP socket that the peer is
+        communicating on. We read ciphertext from it and write ciphertext
+        to it on behalf of OpenSSL.
+    :param ssl_object: ``SSLObject`` produced by
+        ``ssl_context.wrap_bio(incoming, outgoing, server_side=True)``.
+        Must have had the ClientHello (from
+        ``ssl_base.consume_client_hello``) already written to
+        ``incoming`` before this function is called, or else the
+        handshake will deadlock on the first ``SSLWantReadError``.
+    :param incoming: ``MemoryBIO`` that OpenSSL reads ciphertext from.
+    :param outgoing: ``MemoryBIO`` that OpenSSL writes ciphertext to.
+    :param deadline_seconds: overall handshake deadline. Once exceeded,
+        we raise ``TimeoutError`` regardless of which direction is
+        pending. This prevents a malicious or slow peer from holding a
+        worker thread forever on a stuck handshake.
+
+    :raises TimeoutError: if the handshake hasn't completed by
+        ``deadline_seconds``.
+    :raises ssl.SSLError: any real TLS protocol error from OpenSSL
+        (bad_record_mac, handshake_failure, etc.). Caller catches this.
+    :raises ConnectionError: peer closed the socket before the handshake
+        could complete.
+    """
+
+    # ---- Compute absolute deadline once ----
+    # ``time.monotonic()`` is the right clock here — immune to wall-clock
+    # adjustments — and we convert the relative deadline to an absolute
+    # one so the per-loop comparison is a single subtraction.
+    deadline = time.monotonic() + deadline_seconds
+
+    # ---- Enforce the deadline at the socket layer too ----
+    # We also set the socket's own timeout, so a blocked recv() can't
+    # block past the deadline even if OpenSSL keeps asking for more.
+    # Save/restore to avoid mutating caller-visible state.
+    prior_timeout = raw_socket.gettimeout()
+    raw_socket.settimeout(deadline_seconds)
+
+    try:
+        # ---- Main pump loop ----
+        # Each iteration does one of three things and loops:
+        #   * handshake completes -> return
+        #   * SSLWantReadError -> drain outgoing to wire (in case we
+        #     owe the peer something), then read more ciphertext in.
+        #   * SSLWantWriteError -> drain outgoing to wire; no read.
+        while True:
+            # ---- Hard timeout check every iteration ----
+            # Catches the pathological case where OpenSSL oscillates
+            # between want-read and want-write without real progress.
+            if time.monotonic() >= deadline:
+                raise TimeoutError(
+                    f"_pump_handshake: TLS handshake exceeded "
+                    f"{deadline_seconds}s deadline")
+
+            try:
+                ssl_object.do_handshake()
+                # ---- Success: drain any final ciphertext ----
+                # OpenSSL may have queued a last record (ServerFinished
+                # under TLS 1.2, or NewSessionTicket under TLS 1.3)
+                # into outgoing just before returning. If we don't flush
+                # it the peer never sees it and the first real recv()
+                # will hang.
+                while outgoing.pending:
+                    raw_socket.sendall(outgoing.read())
+                return
+            except ssl.SSLWantReadError:
+                # ---- Flush any pending write first ----
+                # In TLS 1.3 the server's first flight (EE / CERT /
+                # CERT_VERIFY / FINISHED) is written into outgoing while
+                # the state machine is simultaneously waiting for the
+                # client's FINISHED. If we only pumped reads we'd
+                # deadlock; the peer can't send its reply until it sees
+                # our bytes on the wire.
+                while outgoing.pending:
+                    raw_socket.sendall(outgoing.read())
+
+                # ---- Now read more ciphertext into incoming ----
+                try:
+                    chunk = raw_socket.recv(_BIO_HANDSHAKE_RECV_CHUNK)
+                except socket.timeout:
+                    # Normalize to stdlib TimeoutError so callers can
+                    # use a single except clause.
+                    raise TimeoutError(
+                        f"_pump_handshake: recv timed out during handshake")
+
+                if not chunk:
+                    # Clean EOF mid-handshake is not recoverable.
+                    raise ConnectionError(
+                        "_pump_handshake: peer closed during TLS handshake")
+                incoming.write(chunk)
+            except ssl.SSLWantWriteError:
+                # ---- Outgoing BIO full (practically: never) ----
+                # ``MemoryBIO`` is unbounded, so this branch mostly
+                # exists for symmetry. Drain what we have and retry.
+                while outgoing.pending:
+                    raw_socket.sendall(outgoing.read())
+    finally:
+        # ---- Restore caller's socket timeout ----
+        # The accept path may rely on a different timeout for the
+        # steady-state I/O phase. Make sure our handshake-only deadline
+        # doesn't leak out.
+        raw_socket.settimeout(prior_timeout)
+
+
+def wrap_bio_server_with_error_message(
+        raw_socket: socket.socket,
+        ssl_context: ssl.SSLContext,
+        prefetched: bytes,
+        domain_from_dns_server: str = None,
+        print_kwargs: dict = None,
+        deadline_seconds: float = _BIO_HANDSHAKE_DEADLINE_SECONDS
+):
+    """
+    Sans-io server TLS wrap: re-inject an already-consumed ClientHello
+    into a ``MemoryBIO``, pump the handshake, return a
+    ``BIOSocketAdapter`` that downstream code can use as if it were an
+    ``ssl.SSLSocket``.
+
+    Why this exists (the whole point of the refactor)
+    -------------------------------------------------
+    The old accept path called ``SSLContext.wrap_socket(raw)`` and let
+    OpenSSL read the ClientHello off the kernel socket directly. That
+    meant the ClientHello was invisible to Python — we couldn't parse
+    the ALPN offers, sniff the version, or even decide TLS-vs-not
+    *before* committing to a full ``wrap_socket`` call. Our workaround
+    was ``MSG_PEEK`` on the raw socket (``is_tls`` + ``peek_alpn_offers``,
+    now retired), which broke whenever the ClientHello spanned multiple
+    TCP segments.
+
+    The sans-io pattern reverses the ownership: Python reads the
+    ClientHello bytes (``ssl_base.consume_client_hello``), parses them,
+    then hands them back to OpenSSL via a ``MemoryBIO``. OpenSSL runs
+    the real handshake against the re-injected bytes; we get faithful
+    ALPN/version/SNI information out of the pre-parse *and* a working
+    TLS session. Same general approach used by other L7 TLS proxies.
+
+    :param raw_socket: the just-accepted TCP socket.
+    :param ssl_context: the server ``SSLContext`` (already configured
+        with certs, SNI callback, ALPN protocols, etc.) — produced by
+        ``SNISetup.wrap_socket_with_ssl_context_server_sni_extended``.
+    :param prefetched: the bytes we already consumed off the socket to
+        sniff/parse the ClientHello. Must include at least the full
+        ClientHello record — if it doesn't, OpenSSL will ask for more
+        via ``SSLWantReadError`` and the pump will satisfy it from the
+        real socket, but the extra hop is unnecessary.
+    :param domain_from_dns_server: passed through purely for logging /
+        error reporting symmetry with
+        ``wrap_socket_with_ssl_context_server_with_error_message``.
+        Not used structurally.
+    :param print_kwargs: forwarded to ``print_api`` for error logging.
+    :param deadline_seconds: overall handshake deadline; matches the
+        10 s default of the legacy accept path.
+
+    :return: ``(BIOSocketAdapter | None, error_message | None)``.
+        On success the adapter is returned and error_message is None.
+        On handshake failure the adapter is None and error_message
+        contains a short human-readable reason — matches the existing
+        error-reporting convention used by
+        ``wrap_socket_with_ssl_context_server_with_error_message`` so
+        callers don't need a branch for the BIO variant.
+    """
+
+    _ = domain_from_dns_server  # Kept for signature parity; not used.
+
+    # ---- Build the BIO pair + SSLObject ----
+    # ``MemoryBIO`` instances are one-way: ``incoming`` is the pipe
+    # *into* OpenSSL, ``outgoing`` is the pipe *out of* OpenSSL. The
+    # SSLObject doesn't own the BIOs; we write/read on them directly.
+    incoming = ssl.MemoryBIO()
+    outgoing = ssl.MemoryBIO()
+    ssl_object = ssl_context.wrap_bio(incoming, outgoing, server_side=True)
+
+    # ---- Re-inject the consumed ClientHello ----
+    # This is the whole reason for the wrap_bio detour. The bytes in
+    # ``prefetched`` came off the same socket we're now about to read
+    # from (``raw_socket``), so to OpenSSL it looks identical to having
+    # read them itself.
+    if prefetched:
+        incoming.write(prefetched)
+
+    # ---- Drive the handshake ----
+    # Any protocol-level failure (cert problem, alert, bad_record_mac,
+    # etc.) is reported as an ``SSLError`` whose string we pass back to
+    # the caller. ``OSError`` covers socket-level failures during the
+    # pump. ``TimeoutError`` covers our own deadline enforcement.
+    try:
+        _pump_handshake(raw_socket, ssl_object, incoming, outgoing,
+                        deadline_seconds=deadline_seconds)
+    except ssl.SSLError as exc:
+        error_message = f"TLS handshake failed (SSL error): {exc}"
+        print_api(error_message, error_type=True, logger_method="error",
+                  **(print_kwargs or {}))
+        return None, error_message
+    except TimeoutError as exc:
+        error_message = f"TLS handshake timed out: {exc}"
+        print_api(error_message, error_type=True, logger_method="error",
+                  **(print_kwargs or {}))
+        return None, error_message
+    except (ConnectionError, OSError) as exc:
+        error_message = f"TLS handshake failed (socket error): {exc}"
+        print_api(error_message, error_type=True, logger_method="error",
+                  **(print_kwargs or {}))
+        return None, error_message
+
+    # ---- Wrap everything in an SSLSocket-shaped facade ----
+    # The downstream pipeline ( connection_thread_worker, engines,
+    # recorders) expects SSLSocket duck-typing. See ``bio_adapter.py``
+    # for the implemented surface.
+    adapter = bio_adapter.BIOSocketAdapter(
+        raw_socket=raw_socket,
+        ssl_object=ssl_object,
+        incoming=incoming,
+        outgoing=outgoing,
+    )
+    return adapter, None
 
 
 def wrap_socket_with_ssl_context_client(socket_object, ssl_context, server_hostname: str = None):

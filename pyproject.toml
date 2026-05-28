@@ -61,6 +61,8 @@ dependencies = [
     "docker==7.1.0",
     "google-api-python-client==2.187.0",
     "google-genai==1.53.0",
+    "h11>=0.16",
+    "hyperframe>=6",
     "icmplib==3.0.4",
     "olefile==0.47",
     "openpyxl==3.1.5",

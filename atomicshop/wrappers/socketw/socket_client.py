@@ -29,7 +29,7 @@ class SocketClient:
             tls: bool = False,
             connection_ip=None,
             dns_servers_list: list[str] = None,
-            logger: logging.Logger = None,
+            logger: logging.Logger | None = None,
             custom_pem_client_certificate_file_path: str = None,
             enable_sslkeylogfile_env_to_client_ssl_context: bool = False,
             sslkeylog_file_path:str = None
@@ -71,11 +71,11 @@ class SocketClient:
         self.enable_sslkeylogfile_env_to_client_ssl_context: bool = enable_sslkeylogfile_env_to_client_ssl_context
         self.sslkeylog_file_path: str = sslkeylog_file_path
 
-        if logger:
+        if logger is not None:
             # Create child logger for the provided logger with the module's name.
             self.logger: logging.Logger = loggingw.get_logger_with_level(f'{logger.name}.{Path(__file__).stem}')
         else:
-            self.logger: logging.Logger = logger
+            self.logger = logging.getLogger(__name__)
 
         self.socket_instance = None
 
@@ -269,12 +269,21 @@ class SocketClient:
 
             # Else if send was successful
             if not error_on_send:
-                origin_data, is_socket_closed, error_message = Receiver(
-                    ssl_socket=self.socket_instance, logger=self.logger).receive()
+                # Receive returns bytes (b'' on clean EOF) or raises stdlib
+                # socket/TLS exceptions tagged with partial bytes as
+                # ``exc.received``, so a truncated reply isn't silently
+                # discarded.
+                try:
+                    origin_data = Receiver(
+                        ssl_socket=self.socket_instance, logger=self.logger).receive()
+                except (ConnectionError, ssl.SSLError, TimeoutError, InterruptedError) as exc:
+                    origin_data = getattr(exc, 'received', b'')
+                    error_message = f"{type(exc).__name__}: {exc}"
 
                 # If data received is empty meaning the socket was closed on the other side
                 if not origin_data:
-                    error_message = "Service server closed the connection on receive"
+                    if not error_message:
+                        error_message = "Service server closed the connection on receive"
 
                     # We'll close the socket and nullify the object
                     self.close_socket()

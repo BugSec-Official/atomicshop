@@ -8,8 +8,14 @@ from typing import Literal
 import struct
 
 from ..wrappers.socketw import receiver, sender, socket_client, socket_base
-from .. import websocket_parse, ip_addresses
-from ..http_parse import HTTPRequestParse, HTTPResponseParse
+from ..wrappers.socketw.framers import (
+    Framer, Http11Framer, Http2Framer, MqttFramer, ProtocolSniffer,
+    SharedProtocolState, WebSocketFramer)
+from .. import ip_addresses
+from ..wrappers.protocol_parsers import websocket
+from ..wrappers.protocol_parsers.http import HTTPRequestParse, HTTPResponseParse
+from ..wrappers.protocol_parsers.http2 import Http2DirectionParser, Http2RequestParse, Http2ResponseParse
+from ..wrappers.protocol_parsers.mqtt import MqttConnectionState, MqttDirectionParser
 from ..basics import threads, tracebacks
 from ..print_api import print_api
 
@@ -30,6 +36,7 @@ def thread_worker_main(
         domain_from_dns,
         statistics_writer,
         engines_list: list[initialize_engines.ModuleCategory],
+        client_alpn_offers: list[str] | None,
 
         # These parameters come from the main mitm module.
         config_static: cf
@@ -114,8 +121,60 @@ def thread_worker_main(
 
     def parse_http(
             raw_bytes: bytes,
-            client_message: ClientMessage):
+            client_message: ClientMessage,
+            side: str = 'Client'):
         nonlocal protocol
+        nonlocal h2_request_parser
+        nonlocal h2_response_parser
+        nonlocal mqtt_request_parser
+        nonlocal mqtt_response_parser
+
+        # MQTT short-circuit: ALPN='mqtt' selects MqttFramer which yields one
+        # control packet at a time. Skip HTTP parsing entirely on this leg.
+        mqtt_parser = mqtt_request_parser if side == 'Client' else mqtt_response_parser
+        if mqtt_parser is not None:
+            if protocol == '':
+                protocol = 'MQTT'
+            auto_parsed = None
+            for msg in mqtt_parser.feed(raw_bytes):
+                auto_parsed = msg
+                if msg.error:
+                    network_logger.warning(
+                        f"MQTT {msg.packet_type or 'parse'} error: {msg.error}")
+                else:
+                    network_logger.info(
+                        f"MQTT {msg.packet_type} parsed: "
+                        f"qos={msg.qos} topic={msg.topic!r} "
+                        f"client_id={msg.client_id!r} pid={msg.packet_identifier} "
+                        f"(v{msg.protocol_version})")
+            return auto_parsed
+
+        # HTTP/2 short-circuit: per-direction h2 state lives in this closure.
+        # The framer hands over raw bytes; the autoparser feeds them through
+        # h2.H2Connection and yields one parsed object per StreamEnded.
+        h2_parser = h2_request_parser if side == 'Client' else h2_response_parser
+        if h2_parser is not None:
+            if protocol == '':
+                protocol = 'HTTP/2'
+            auto_parsed = None
+            for msg in h2_parser.feed(raw_bytes):
+                auto_parsed = msg
+                if isinstance(msg, Http2RequestParse):
+                    http_path_queue.put(msg.path)
+                    network_logger.info(
+                        f"HTTP/2 Request Parsed: Method: {msg.command} | Path: {msg.path} "
+                        f"(stream {msg.stream_id})")
+                else:
+                    # Only correlate path for final responses; 1xx interims share the stream
+                    # with the final response and shouldn't consume the path queue entry.
+                    if msg.code >= 200:
+                        try:
+                            msg.path = http_path_queue.get_nowait()
+                        except queue.Empty:
+                            pass
+                    network_logger.info(
+                        f"HTTP/2 Response Parsed: Status: {msg.code} (stream {msg.stream_id})")
+            return auto_parsed
 
         # Parsing the raw bytes as HTTP.
         request_http_parsed, is_http_request, request_parsing_error = (
@@ -126,7 +185,7 @@ def thread_worker_main(
 
         if is_http_request:
             if protocol == '':
-                protocol = 'HTTP'
+                protocol = request_http_parsed.request_version  # 'HTTP/1.0' | 'HTTP/1.1' from h11
 
             auto_parsed = request_http_parsed
             network_logger.info(
@@ -140,8 +199,12 @@ def thread_worker_main(
             network_logger.info(
                 f"HTTP Response Parsed: Status: {response_http_parsed.code}")
 
-            auto_parsed.path = http_path_queue.get()
-            network_logger.info(f"HTTP Response Parsed: Got PATH from queue: [{auto_parsed.path}]")
+            # 1xx interims (100/101/103) don't complete the request/response cycle —
+            # the next final response (>=200) pops the path. Without this guard, a 1xx
+            # would steal the path and the final response would block on .get().
+            if response_http_parsed.code >= 200:
+                auto_parsed.path = http_path_queue.get()
+                network_logger.info(f"HTTP Response Parsed: Got PATH from queue: [{auto_parsed.path}]")
         elif protocol == 'Websocket':
             client_message.protocol2 = 'Frame'
             auto_parsed = parse_websocket(raw_bytes)
@@ -175,6 +238,17 @@ def thread_worker_main(
         except Exception as e:
             network_logger.warning(f"Failed to parse websocket frame: {e}")
             return None
+
+    def _push_request_method_fifo(method: str):
+        """FIFO the request method to the service's response framer for HEAD elision."""
+        if not method:
+            return
+        service_recv = side_receivers.get('Service')
+        framer = service_recv._framer if service_recv is not None else None
+        # Http11Framer + HttpFramer (wrapping s2c Http11Framer) accept this; other
+        # framers (Http2/MQTT/WebSocket) don't and are skipped by the hasattr guard.
+        if framer is not None and hasattr(framer, 'set_pending_request_method'):
+            framer.set_pending_request_method(method)
 
     def finish_thread(send_connection_reset: bool = False):
         """
@@ -235,7 +309,7 @@ def thread_worker_main(
             if config_static.MainConfig.is_offline and protocol == 'Websocket' and client_receive_count == 1:
                 responses: list = list()
                 responses.append(
-                    websocket_parse.create_byte_http_response(client_message.request_raw_bytes))
+                    websocket.create_byte_http_response(client_message.request_raw_bytes))
                 responder.logger.info(f"Generated automatic WebSocket response in Offline Mode.")
             else:
                 # Creating response for parsed message and printing
@@ -253,13 +327,9 @@ def thread_worker_main(
             return responses
 
     def create_client_socket(client_message: ClientMessage):
-        # If there is a custom certificate for the client for this domain, then we'll use it.
-        # noinspection PyTypeChecker
-        custom_client_pem_certificate_path: str = None
-        for subdomain, pem_file_path in found_domain_module.mtls.items():
-            if subdomain == client_message.server_name:
-                custom_client_pem_certificate_path = pem_file_path
-                break
+        # Per-subdomain mTLS client cert (None when not configured).
+        custom_client_pem_certificate_path: str | None = socket_client.lookup_mtls_client_pem(
+            found_domain_module.mtls, client_message.server_name)
 
         # Check if the destination service is an ip address or a domain name.
         if ip_addresses.is_ip_address(client_message.server_name, ip_type='ipv4'):
@@ -273,7 +343,8 @@ def thread_worker_main(
                 custom_pem_client_certificate_file_path=custom_client_pem_certificate_path,
                 enable_sslkeylogfile_env_to_client_ssl_context=(
                     config_static.Certificates.enable_sslkeylogfile_env_to_client_ssl_context),
-                sslkeylog_file_path=config_static.Certificates.sslkeylog_file_path
+                sslkeylog_file_path=config_static.Certificates.sslkeylog_file_path,
+                client_alpn_offers=client_alpn_offers,
             )
         # If it's a domain name, then we'll use the DNS to resolve it.
         else:
@@ -289,7 +360,8 @@ def thread_worker_main(
                     custom_pem_client_certificate_file_path=custom_client_pem_certificate_path,
                     enable_sslkeylogfile_env_to_client_ssl_context=(
                         config_static.Certificates.enable_sslkeylogfile_env_to_client_ssl_context),
-                    sslkeylog_file_path=config_static.Certificates.sslkeylog_file_path
+                    sslkeylog_file_path=config_static.Certificates.sslkeylog_file_path,
+                    client_alpn_offers=client_alpn_offers,
                 )
             # If we're not on localhost, then connect to domain directly.
             else:
@@ -301,7 +373,8 @@ def thread_worker_main(
                     custom_pem_client_certificate_file_path=custom_client_pem_certificate_path,
                     enable_sslkeylogfile_env_to_client_ssl_context=(
                         config_static.Certificates.enable_sslkeylogfile_env_to_client_ssl_context),
-                    sslkeylog_file_path=config_static.Certificates.sslkeylog_file_path
+                    sslkeylog_file_path=config_static.Certificates.sslkeylog_file_path,
+                    client_alpn_offers=client_alpn_offers,
                 )
 
         return service_client_instance
@@ -323,10 +396,17 @@ def thread_worker_main(
         if client_received_raw_data == b'' or client_received_raw_data is None:
             return
 
-        client_message.request_auto_parsed = parse_http(client_message.request_raw_bytes, client_message)
+        client_message.request_auto_parsed = parse_http(
+            client_message.request_raw_bytes, client_message, side='Client')
         # This is needed for each cycle that is not HTTP, but its protocol maybe set by HTTP, like websocket.
         if protocol != '':
             client_message.protocol = protocol
+
+        # FIFO the request method to the response framer for HEAD body elision.
+        # Framer install is handled by the Receiver's ProtocolSniffer before this point.
+        if client_message.request_auto_parsed is not None and protocol == 'HTTP':
+            method = getattr(client_message.request_auto_parsed, 'command', None)
+            _push_request_method_fifo(method)
 
         # # Parse websocket frames only if it is not the first protocol upgrade request.
         # if protocol == 'Websocket' and client_receive_count != 1:
@@ -354,9 +434,32 @@ def thread_worker_main(
         if service_received_raw_data == b'' or service_received_raw_data is None:
             return
 
-        client_message.response_auto_parsed = parse_http(client_message.response_raw_bytes, client_message)
+        client_message.response_auto_parsed = parse_http(
+            client_message.response_raw_bytes, client_message, side='Service')
         if protocol != '':
             client_message.protocol = protocol
+
+        # Detect WebSocket upgrade response (101 Switching Protocols + Upgrade: websocket)
+        # and swap framers on BOTH sides simultaneously. The 101 response is the
+        # framing fence: bytes after it on either socket are WebSocket frames.
+        parsed = client_message.response_auto_parsed
+        status = getattr(parsed, 'code', None) if parsed is not None else None
+        if status == 101:
+            headers = getattr(parsed, 'headers', None)
+            upgrade = ''
+            if headers is not None:
+                try:
+                    upgrade = (headers.get('Upgrade') or '').lower()
+                except Exception:
+                    upgrade = ''
+            if upgrade == 'websocket':
+                client_recv = side_receivers.get('Client')
+                service_recv = side_receivers.get('Service')
+                if client_recv is not None:
+                    client_recv.set_framer(WebSocketFramer(direction='client_to_server'))
+                if service_recv is not None:
+                    service_recv.set_framer(WebSocketFramer(direction='server_to_client'))
+                network_logger.info("Framers swapped to WebSocket on 101 Switching Protocols.")
 
     def client_message_first_start() -> ClientMessage:
         client_message: ClientMessage = ClientMessage()
@@ -378,7 +481,6 @@ def thread_worker_main(
             sending_socket: ssl.SSLSocket | socket.socket
     ) -> Literal['continue', 'return'] | None:
 
-        nonlocal exception_or_close_in_receiving_thread
 
         client_message = client_connection_message
 
@@ -412,7 +514,7 @@ def thread_worker_main(
                 record_and_statistics_write(client_message)
 
         if error_on_send:
-            exception_or_close_in_receiving_thread = True
+            exception_or_close_in_receiving_thread.set()
             finish_thread()
             return 'return'
 
@@ -421,16 +523,29 @@ def thread_worker_main(
     def receive_send_client_offline(
             client_message: ClientMessage,
             receiving_socket: ssl.SSLSocket | socket.socket,
-            sending_socket: ssl.SSLSocket | socket.socket
+            sending_socket: ssl.SSLSocket | socket.socket,
+            side_receiver: receiver.Receiver
     ) -> Literal['return'] | None:
-        nonlocal exception_or_close_in_receiving_thread
         nonlocal client_receive_count
 
         client_receive_count += 1
 
-        network_logger.info(f"Initializing Receiver for Client cycle: {str(client_receive_count)}")
-        received_raw_data, is_socket_closed, error_message = receiver.Receiver(
-            ssl_socket=receiving_socket, logger=network_logger).receive()
+        # The Receiver is created once in receive_send_start and reused across
+        # all receive cycles for this direction — see Receiver class docstring.
+        network_logger.info(f"Receiving Client cycle: {str(client_receive_count)}")
+        # receive() returns raw bytes (b'' is a clean EOF) or raises stdlib
+        # socket/TLS exceptions tagged with partial bytes as 'received'.
+        try:
+            received_raw_data: bytes = side_receiver.receive()
+            error_cause: BaseException | None = None
+        except (ConnectionError, ssl.SSLError, TimeoutError, InterruptedError) as exc:
+            received_raw_data = getattr(exc, 'received', b'')
+            error_cause = exc
+        # is_socket_closed acts as the stop signal for the receive loop —
+        # set on clean EOF (b'') or any receive error.
+        is_socket_closed: bool = (received_raw_data == b'') or (error_cause is not None)
+        error_message: str | None = (
+            f"{type(error_cause).__name__}: {error_cause}" if error_cause else None)
         client_message.timestamp = datetime.now()
 
         process_client_raw_data(received_raw_data, error_message, client_message)
@@ -441,7 +556,7 @@ def thread_worker_main(
 
         # If there was an exception in the service thread, then receiving empty bytes doesn't mean that
         # the socket was closed by the other side, it means that the service thread closed the socket.
-        if (received_raw_data == b'' or error_message) and exception_or_close_in_receiving_thread:
+        if (received_raw_data == b'' or error_message) and exception_or_close_in_receiving_thread.is_set():
             print_api("Both sockets are closed, breaking the loop", logger=network_logger,
                       logger_method='info')
             return 'return'
@@ -449,7 +564,7 @@ def thread_worker_main(
         # If the socket was closed on receive, and we're in offline mode, then we'll finish the thread right away.
         # Since nothing more can be done, like responding to service or using requester.
         if is_socket_closed:
-            exception_or_close_in_receiving_thread = True
+            exception_or_close_in_receiving_thread.set()
             finish_thread()
             return 'return'
 
@@ -492,7 +607,7 @@ def thread_worker_main(
 
         # If the socket was closed on message receive, then we'll break the loop only after send.
         if is_socket_closed or error_on_send:
-            exception_or_close_in_receiving_thread = True
+            exception_or_close_in_receiving_thread.set()
             finish_thread()
             return 'return'
 
@@ -501,19 +616,30 @@ def thread_worker_main(
     def receive_send_client(
             client_message: ClientMessage,
             receiving_socket: ssl.SSLSocket | socket.socket,
-            sending_socket: ssl.SSLSocket | socket.socket
+            sending_socket: ssl.SSLSocket | socket.socket,
+            side_receiver: receiver.Receiver
     ) -> Literal['return'] | None:
 
-        nonlocal exception_or_close_in_receiving_thread
         nonlocal client_receive_count
 
         client_receive_count += 1
 
-        network_logger.info(f"Initializing Receiver for Client cycle: {str(client_receive_count)}")
+        # Reusing the Receiver created in receive_send_start (one per direction,
+        # for the connection's lifetime).
+        network_logger.info(f"Receiving Client cycle: {str(client_receive_count)}")
 
         # Getting message from the client over the socket using specific class.
-        received_raw_data, is_socket_closed, error_on_receive = receiver.Receiver(
-            ssl_socket=receiving_socket, logger=network_logger).receive()
+        # receive() returns raw bytes (b'' is a clean EOF) or raises stdlib
+        # socket/TLS exceptions tagged with partial bytes as 'received'.
+        try:
+            received_raw_data: bytes = side_receiver.receive()
+            error_cause: BaseException | None = None
+        except (ConnectionError, ssl.SSLError, TimeoutError, InterruptedError) as exc:
+            received_raw_data = getattr(exc, 'received', b'')
+            error_cause = exc
+        is_socket_closed: bool = (received_raw_data == b'') or (error_cause is not None)
+        error_on_receive: str | None = (
+            f"{type(error_cause).__name__}: {error_cause}" if error_cause else None)
         client_message.timestamp = datetime.now()
 
         process_client_raw_data(received_raw_data, error_on_receive, client_message)
@@ -521,13 +647,13 @@ def thread_worker_main(
 
         # If there was an exception in the service thread, then receiving empty bytes doesn't mean that
         # the socket was closed by the other side, it means that the service thread closed the socket.
-        if (received_raw_data == b'' or error_on_receive) and exception_or_close_in_receiving_thread:
+        if (received_raw_data == b'' or error_on_receive) and exception_or_close_in_receiving_thread.is_set():
             print_api("Both sockets are closed, breaking the loop", logger=network_logger,
                       logger_method='info')
             return 'return'
 
         # We don't need to record aborted socket receives if the socket was closed on receive on the second socket.
-        # Meaning 'exception_or_close_in_receiving_thread=True'.
+        # Meaning 'exception_or_close_in_receiving_thread.is_set()'.
         record_and_statistics_write(client_message)
         if error_on_receive:
             print_api(error_on_receive, logger=network_logger, logger_method='critical')
@@ -561,7 +687,7 @@ def thread_worker_main(
 
         # If the socket was closed on message receive, then we'll break the loop only after send.
         if is_socket_closed or error_on_send:
-            exception_or_close_in_receiving_thread = True
+            exception_or_close_in_receiving_thread.set()
             finish_thread()
             return 'return'
 
@@ -570,19 +696,30 @@ def thread_worker_main(
     def receive_send_service(
             client_message: ClientMessage,
             receiving_socket: ssl.SSLSocket | socket.socket,
-            sending_socket: ssl.SSLSocket | socket.socket
+            sending_socket: ssl.SSLSocket | socket.socket,
+            side_receiver: receiver.Receiver
     ) -> Literal['return'] | None:
 
-        nonlocal exception_or_close_in_receiving_thread
         nonlocal server_receive_count
 
         server_receive_count += 1
 
-        network_logger.info(f"Initializing Receiver for Service cycle: {str(server_receive_count)}")
+        # Reusing the Receiver created in receive_send_start (one per direction,
+        # for the connection's lifetime).
+        network_logger.info(f"Receiving Service cycle: {str(server_receive_count)}")
 
         # Getting message from the client over the socket using specific class.
-        received_raw_data, is_socket_closed, error_on_receive = receiver.Receiver(
-            ssl_socket=receiving_socket, logger=network_logger).receive()
+        # receive() returns raw bytes (b'' is a clean EOF) or raises stdlib
+        # socket/TLS exceptions tagged with partial bytes as 'received'.
+        try:
+            received_raw_data: bytes = side_receiver.receive()
+            error_cause: BaseException | None = None
+        except (ConnectionError, ssl.SSLError, TimeoutError, InterruptedError) as exc:
+            received_raw_data = getattr(exc, 'received', b'')
+            error_cause = exc
+        is_socket_closed: bool = (received_raw_data == b'') or (error_cause is not None)
+        error_on_receive: str | None = (
+            f"{type(error_cause).__name__}: {error_cause}" if error_cause else None)
         client_message.timestamp = datetime.now()
 
         process_server_raw_data(received_raw_data, error_on_receive, client_message)
@@ -590,13 +727,13 @@ def thread_worker_main(
 
         # If there was an exception in the service thread, then receiving empty bytes doesn't mean that
         # the socket was closed by the other side, it means that the service thread closed the socket.
-        if (received_raw_data == b'' or error_on_receive) and exception_or_close_in_receiving_thread:
+        if (received_raw_data == b'' or error_on_receive) and exception_or_close_in_receiving_thread.is_set():
             print_api("Both sockets are closed, breaking the loop", logger=network_logger,
                       logger_method='info')
             return 'return'
 
         # We don't need to record aborted socket receives if the socket was closed on receive on the second socket.
-        # Meaning 'exception_or_close_in_receiving_thread=True'.
+        # Meaning 'exception_or_close_in_receiving_thread.is_set()'.
         record_and_statistics_write(client_message)
         if error_on_receive:
             print_api(error_on_receive, logger=network_logger, logger_method='critical')
@@ -637,11 +774,10 @@ def thread_worker_main(
 
         # If the socket was closed on message receive, then we'll break the loop only after send.
         if is_socket_closed or error_on_send:
-            exception_or_close_in_receiving_thread = True
+            exception_or_close_in_receiving_thread.set()
 
-            if error_on_receive and 'Connection' in error_on_receive and 'Error' in error_on_receive:
-                # If there was a connection error on receive from client, and we're closing the socket to the client,
-                # then we'll send TCP RST flag to simulate ConnectionResetError on the client side.
+            # Forward TCP reset-style receive failures to the peer on close.
+            if isinstance(error_cause, (ConnectionResetError, ConnectionAbortedError)):
                 finish_thread(send_connection_reset=True)
             else:
                 finish_thread()
@@ -649,6 +785,58 @@ def thread_worker_main(
             return 'return'
 
         return None
+
+
+    def _read_alpn(sock) -> str | None:
+        if not hasattr(sock, 'selected_alpn_protocol'):
+            return None
+        try:
+            return sock.selected_alpn_protocol()
+        except Exception:
+            return None
+
+
+    def init_framer_for_side(
+            receiving_socket,
+            side: str,
+    ) -> tuple[Framer | None, ProtocolSniffer | None]:
+        """Pick the initial framer (and parsers) for one direction from ALPN; sniffer if unknown."""
+        nonlocal h2_request_parser, h2_response_parser
+        nonlocal mqtt_state, mqtt_request_parser, mqtt_response_parser
+
+        is_client = (side == 'Client')
+        alpn = _read_alpn(receiving_socket)
+        direction = 'client_to_server' if is_client else 'server_to_client'
+
+        if alpn == 'h2':
+            framer: Framer | None = Http2Framer(direction=direction)
+            # h2 framer chunks at END_STREAM; autoparser owns H2Connection + HPACK.
+            if is_client:
+                h2_request_parser = Http2DirectionParser(is_request_side=True)
+            else:
+                h2_response_parser = Http2DirectionParser(is_request_side=False)
+        elif alpn == 'http/1.1':
+            framer = Http11Framer(direction=direction)
+        elif alpn == 'mqtt':
+            framer = MqttFramer(direction=direction)
+            # Shared state so c2s CONNECT version applies to s2c CONNACK.
+            if mqtt_state is None:
+                mqtt_state = MqttConnectionState()
+            if is_client:
+                mqtt_request_parser = MqttDirectionParser(is_request_side=True, state=mqtt_state)
+            else:
+                mqtt_response_parser = MqttDirectionParser(is_request_side=False, state=mqtt_state)
+        else:
+            framer = None  # time-based mode
+
+        # No ALPN → per-direction sniffer; shared state short-circuits s2c after c2s detection.
+        sniffer = None
+        if framer is None:
+            sniffer = ProtocolSniffer(direction=direction, shared=shared_protocol_state)
+
+        framer_name = type(framer).__name__ if framer is not None else 'sniffer'
+        network_logger.info(f"Initial framer for {side}: {framer_name} (ALPN={alpn!r})")
+        return framer, sniffer
 
 
     def receive_send_start(
@@ -659,7 +847,11 @@ def thread_worker_main(
     ):
         nonlocal client_receive_count
         nonlocal server_receive_count
-        nonlocal exception_or_close_in_receiving_thread
+        nonlocal h2_request_parser
+        nonlocal h2_response_parser
+        nonlocal mqtt_state
+        nonlocal mqtt_request_parser
+        nonlocal mqtt_response_parser
 
         # Set the thread name to the custom name for logging
         # threading.current_thread().name = thread_name
@@ -675,6 +867,27 @@ def thread_worker_main(
             else:
                 raise ValueError(f"Unknown side of the socket: {receiving_socket}")
 
+            side_framer, side_protocol_detector = init_framer_for_side(receiving_socket, side)
+
+            # ---- One Receiver per direction, for the connection's lifetime ----
+            # Built once here, before the reception loop, instead of allocating a
+            # fresh Receiver every cycle. Creating one per cycle had three problems:
+            #   1. ``loggingw.get_logger_with_level`` scans the global logger
+            #      registry under a lock — calling it on every cycle caused lock
+            #      contention with the other direction's logger setup.
+            #   2. ``getpeername()`` was called twice on every receive() just to
+            #      log a "waiting for data" line; a long-lived Receiver captures
+            #      the peer address once at __init__.
+            #   3. Creating and discarding an object every cycle added unnecessary
+            #      garbage collector work.
+            # See the Receiver class docstring for the lifetime contract.
+            side_receiver: receiver.Receiver = receiver.Receiver(
+                ssl_socket=receiving_socket, logger=network_logger, framer=side_framer,
+                protocol_detector=side_protocol_detector)
+            # Surface this side's receiver so the other side's flow can swap framers
+            # (WebSocket upgrade) and FIFO request methods (HTTP/1.1 HEAD elision).
+            side_receivers[side] = side_receiver
+
             while True:
                 client_message.reinitialize_dynamic_vars()
 
@@ -685,11 +898,14 @@ def thread_worker_main(
                     if result == 'continue':
                         continue
                 elif side == 'Client' and config_static.MainConfig.is_offline:
-                    result: Literal['return'] | None = receive_send_client_offline(client_message, receiving_socket, sending_socket)
+                    result: Literal['return'] | None = receive_send_client_offline(
+                        client_message, receiving_socket, sending_socket, side_receiver)
                 elif side == 'Client':
-                    result: Literal['return'] | None = receive_send_client(client_message, receiving_socket, sending_socket)
+                    result: Literal['return'] | None = receive_send_client(
+                        client_message, receiving_socket, sending_socket, side_receiver)
                 elif side == 'Service':
-                    result: Literal['return'] | None = receive_send_service(client_message, receiving_socket, sending_socket)
+                    result: Literal['return'] | None = receive_send_service(
+                        client_message, receiving_socket, sending_socket, side_receiver)
                 else:
                     raise ValueError(f"Unknown side [{side}] of the socket: {receiving_socket}")
 
@@ -709,9 +925,8 @@ def thread_worker_main(
             exception_queue: queue.Queue,
             exc: Exception
     ):
-        nonlocal exception_or_close_in_receiving_thread
 
-        exception_or_close_in_receiving_thread = True
+        exception_or_close_in_receiving_thread.set()
         # handle_exceptions(exc, client_message, recorded)
         exception_message = tracebacks.get_as_string(one_line=True)
 
@@ -773,10 +988,35 @@ def thread_worker_main(
     # This is the secondary protocol in the websocket.
     protocol3: str = str()
     # # This is Client Masked Frame Parser.
-    # websocket_masked_frame_parser = websocket_parse.WebsocketFrameParser()
+    # websocket_masked_frame_parser = websocket.WebsocketFrameParser()
     # # This is Server UnMasked Frame Parser.
-    # websocket_unmasked_frame_parser = websocket_parse.WebsocketFrameParser()
-    websocket_frame_parser = websocket_parse.WebsocketFrameParser()
+    # websocket_unmasked_frame_parser = websocket.WebsocketFrameParser()
+    websocket_frame_parser = websocket.WebsocketFrameParser()
+
+    # Both directions' Receivers, indexed by side. Populated in receive_send_start.
+    # Shared across the two parallel threads so process_server_raw_data can swap
+    # framers symmetrically on a 101 Switching Protocols response, and so the
+    # client thread can FIFO request methods to the service thread's response framer.
+    side_receivers: dict = {'Client': None, 'Service': None}
+
+    # Connection-scoped protocol identification shared between the c2s and s2c
+    # sniffers. First leg to identify sets it; the other leg short-circuits
+    # detection and installs the matching framer immediately.
+    shared_protocol_state: SharedProtocolState = SharedProtocolState()
+
+    # HTTP/2 autoparsers, one per direction. Initialised in receive_send_start
+    # when ALPN selects 'h2'. HPACK state is connection-scoped, so each lives
+    # for the lifetime of the leg; framers stay raw-byte chunkers and feed
+    # bytes into these via parse_http's HTTP/2 short-circuit.
+    h2_request_parser: Http2DirectionParser | None = None
+    h2_response_parser: Http2DirectionParser | None = None
+
+    # MQTT autoparsers, one per direction with a shared MqttConnectionState so
+    # the protocol version seen on the c2s CONNECT applies to the s2c CONNACK
+    # and beyond. Initialised when ALPN selects 'mqtt'.
+    mqtt_state: MqttConnectionState | None = None
+    mqtt_request_parser: MqttDirectionParser | None = None
+    mqtt_response_parser: MqttDirectionParser | None = None
 
     # Loading parser by domain, if there is no parser for current domain - general reference parser is loaded.
     # These should be outside any loop and initialized only once entering the thread.
@@ -806,9 +1046,40 @@ def thread_worker_main(
     # Initializing the client message object with current thread's data.
     # This is needed only to skip error alerts after 'try'.
     client_message_connection: ClientMessage = ClientMessage()
-    # This is needed to indicate if there was an exception or socket was closed in any of the receiving thread.
-    exception_or_close_in_receiving_thread: bool = False
-    # Queue for http request URI paths.
+    # ---- Cross-thread close signal ----
+    # Signals that one of the receiving threads (client side or service side)
+    # has either hit a connection error or seen the peer close. The other
+    # thread checks this on each iteration: if its own ``recv`` returns no
+    # data while this is set, "no data" means "the other thread is bringing
+    # the connection down" rather than "the peer closed our side cleanly",
+    # so it exits without writing a misleading close event to the log.
+    #
+    # ``threading.Event`` rather than a bare ``bool`` because:
+    #   - both threads read and write this signal; a plain bool has no
+    #     thread-safety guarantees (the GIL makes simple bool access safe
+    #     in practice, but there is no API contract for it);
+    #   - ``Event`` has the right semantic: one-shot transition from
+    #     unset to set (this signal is never cleared mid-connection);
+    #   - using Event makes the cross-thread signaling intent obvious
+    #     from the type alone.
+    exception_or_close_in_receiving_thread: threading.Event = threading.Event()
+    # ---- Queue for HTTP request URI paths ----
+    # The parser pushes a request's path here when it parses an HTTP
+    # request, and pops it when the matching response is parsed, so
+    # the response's path field can be filled in for stats output.
+    #
+    # Pipelining assumption: this queue assumes **one HTTP/1.1 request
+    # in flight per direction at a time**. If a client sends two
+    # pipelined requests before the service has responded, two paths
+    # will be enqueued and the responses will pop them in arrival
+    # order — which is correct as long as the service responds in
+    # the same order (HTTP/1.1 requires this). In practice, almost
+    # no modern client pipelines, so this works.
+    #
+    # If pipelining is needed, path tracking can be moved into the
+    # framer's per-message metadata (the framer knows where each
+    # request begins and can carry the path with the message bytes),
+    # removing this assumption.
     http_path_queue: queue.Queue = queue.Queue()
 
     try:

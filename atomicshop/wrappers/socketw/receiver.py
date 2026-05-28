@@ -3,213 +3,199 @@ import socket
 import ssl
 
 import select
+from collections import deque
 from pathlib import Path
 
-from ...print_api import print_api
-from ...basics import tracebacks
 from ..loggingw import loggingw
+from .framers.base import Framer
 
 
-def peek_first_bytes(
+# === Receive-path exceptions ===
+# Stdlib socket / TLS exceptions flow through unchanged. Receive-path failures
+# carry partial bytes via exc.received. PeerClosedMidMessage is the only custom
+# one — represents framer-level truncation with no stdlib equivalent.
+class PeerClosedMidMessage(ConnectionError):
+    """Peer closed while a framer had a partial (truncated) message."""
+
+
+def recv_exact(
         client_socket,
-        bytes_amount: int = 1,
+        bytes_amount: int,
         timeout: float = None
 ) -> bytes:
     """
-    Peek first byte from the socket without removing it from the buffer.
+    Read exactly bytes_amount bytes, looping over short recv() returns.
 
-    :param client_socket: Socket object.
-    :param bytes_amount: Amount of bytes to peek.
-    :param timeout: float, Timeout in seconds.
-
-    :return: the first X bytes from the socket buffer.
+    Used by the sans-IO accept path: ClientHello bytes are consumed into a
+    buffer for inspection and re-injected via MemoryBIO during the real TLS
+    handshake. recv(N) is allowed to return fewer than N bytes (common for
+    fragmented ClientHellos under TLS 1.3 with PQ key shares), so a loop is
+    required. Per-recv timeout via settimeout(); EOF mid-read raises
+    ConnectionError because a half-record is unusable downstream.
     """
+    if bytes_amount < 1:
+        raise ValueError(f"recv_exact: bytes_amount must be >= 1, got {bytes_amount}")
 
-    error: bool = False
+    previous_timeout = client_socket.gettimeout()
     client_socket.settimeout(timeout)
-
+    buffer = bytearray()
     try:
-        peek_a_bytes: bytes = client_socket.recv(bytes_amount, socket.MSG_PEEK)
-    except socket.timeout:
-        error = True
+        while len(buffer) < bytes_amount:
+            try:
+                chunk = client_socket.recv(bytes_amount - len(buffer))
+            except socket.timeout:
+                # Normalize to stdlib TimeoutError.
+                raise TimeoutError(
+                    f"recv_exact: timed out after {len(buffer)}/{bytes_amount} bytes")
+            if chunk == b'':
+                raise ConnectionError(
+                    f"recv_exact: peer closed after {len(buffer)}/{bytes_amount} bytes")
+            buffer.extend(chunk)
     finally:
-        client_socket.settimeout(None)
-
-    if error:
-        raise TimeoutError
-
-    return peek_a_bytes
+        client_socket.settimeout(previous_timeout)
+    return bytes(buffer)
 
 
 def is_socket_ready_for_read(socket_instance, timeout: float = 0) -> bool:
-    """
-    Check if socket is ready for read.
-
-    :param socket_instance: Socket object.
-    :param timeout: Timeout in seconds. The default is no timeout.
-
-    :return: True if socket is ready for read, False otherwise.
-    """
-
-    # Check if the socket is closed.
+    """Return True if the socket has bytes ready (or buffered TLS plaintext)."""
     if socket_instance.fileno() == -1:
         return False
-
-    # Use select to check if the socket is ready for reading.
-    # 'readable' returns a list of sockets that are ready for reading.
-    # Since we use only one socket, it will return a list with one element if the socket is ready for reading,
-    # or an empty list if the socket is not ready for reading.
+    # pending() first: select() only sees the OS buffer, but TLS plaintext
+    # can sit in OpenSSL's user-space buffer after a multi-record recv.
+    if hasattr(socket_instance, 'pending') and socket_instance.pending() > 0:
+        return True
     readable, _, _ = select.select([socket_instance], [], [], timeout)
     return bool(readable)
 
 
 class Receiver:
-    """ Receiver Class is responsible for receiving the message from socket and populate the message class """
+    """
+    Receive bytes from one direction of a TLS / TCP socket; report EOF / errors.
+
+    Two modes:
+      * framer is not None  -> protocol mode: block on recv, feed framer, emit
+        when framer reports a complete message.
+      * framer is None      -> time-based mode: poll with select, accumulate
+        bytes, emit on the first quiet tick (idle_seconds) or on EOF.
+
+    Construct once per direction per connection and reuse across receive cycles —
+    re-creating per cycle creates child loggers under a global lock. Peer address
+    is cached at construction so the recv path is the only thing that can fail.
+    """
     def __init__(
             self,
             ssl_socket: ssl.SSLSocket,
-            logger: logging.Logger = None
+            logger: logging.Logger | None = None,
+            framer: Framer | None = None,
+            idle_seconds: float = 0.5,
     ):
         self.ssl_socket: ssl.SSLSocket = ssl_socket
         self.buffer_size_receive: int = 16384
-        # Timeout of 2 is enough for regular HTTP sessions`.
-        # Timeout on send to service servers dropped after 120 seconds
-        # 60 seconds * 60 = minute * 60 = 1 hour
-        # self.socket_timeout: int = 60*60
-        # For current debugging purposes we'll set short timeout
-        self.socket_timeout: int = 60
-        # Optional return socket timeout to default
-        # function_socket_object.settimeout(None)
+        self._framer = framer
+        self._idle_seconds: float = idle_seconds
+        self._idle_buffer: bytearray = bytearray()  # time-based mode only
+        self._pending: deque[bytes] = deque()       # protocol mode: pipelined messages from prior consume()
 
-        # Will get client address from the socket
-        self.class_client_address: str = str()
-        # Will get client Local port from the socket
-        self.class_client_local_port: int = int()
+        peer = ssl_socket.getpeername()  # Cache once; recv path is the only failure surface.
+        self.peer_address: str = peer[0]
+        self.peer_port: int = peer[1]
 
-        if logger:
-            # Create child logger for the provided logger with the module's name.
+        if logger is not None:
             self.logger: logging.Logger = loggingw.get_logger_with_level(f'{logger.name}.{Path(__file__).stem}')
         else:
-            self.logger: logging.Logger = logger
+            self.logger = logging.getLogger(__name__)
 
-    # Function to receive only the buffer, with error handling
-    def chunk_from_buffer(self) -> tuple[bytes, str]:
+    def set_framer(self, framer: Framer | None) -> None:
+        """Swap framer mid-connection (e.g., HTTP/1.1 Upgrade -> WebSocket). None resets to time-based mode."""
+        self._framer = framer
+        self._idle_buffer.clear()
+        self._pending.clear()
+
+    def receive(self) -> bytes:
         """
-        Receive a chunk from the socket buffer.
+        Receive one complete logical message.
 
-        :return: Tuple(received chunk binary bytes data, error message string).
+        Returns bytes (b'' = clean peer EOF). Raises stdlib ConnectionError,
+        ssl.SSLError, TimeoutError, InterruptedError, or PeerClosedMidMessage
+        on failure. Receive-path failures carry any partial bytes as
+        exc.received.
         """
-        # Defining the data variable
-        # noinspection PyTypeChecker
-        received_data: bytes = None
-        # noinspection PyTypeChecker
-        error_message: str = None
+        self.logger.info(f"Waiting for data from {self.peer_address}:{self.peer_port}")
+        if self._framer is None:
+            data = self._recv_message_idle()
+        else:
+            data = self._recv_message_protocol()
+        if data:
+            self.logger.info(f"Received: {data[0:100]}...")  # Full message logged elsewhere.
+        return data
 
-        # All excepts will be treated as empty message, indicate that socket was closed and will be handled properly.
-        try:
-            # "recv(byte buffer size)" to read the server's response.
-            # A signal to close connection will be empty bytes string: b''.
-            received_data = self.ssl_socket.recv(self.buffer_size_receive)
-        except ConnectionAbortedError:
-            error_message = "ConnectionAbortedError: Connection was aborted by local TCP stack (not remote close)..."
-        except ConnectionResetError:
-            error_message = "ConnectionResetError: Connection was forcibly closed by the other side..."
-        except InterruptedError as e:
-            if e.errno == 10004:
-                error_message = "InterruptedError: [WinError 10004] A blocking operation was interrupted by a call to WSACancelBlockingCall..."
-            else:
-                raise e
-        except TimeoutError as e:
-            if e.errno == 10060:
-                error_message = "TimeoutError: [WinError 10060] Socket receive operation timed out..."
-            else:
-                raise e
-        except ssl.SSLError:
-            error_message = f"ssl.SSLError: Encountered SSL error on receive...\n{tracebacks.get_as_string()}"
+    # === Protocol mode ===
 
-        if received_data == b'':
-            self.logger.info("Empty message received, socket closed on the other side.")
-
-        return received_data, error_message
-
-    def socket_receive_message_full(self) -> tuple[bytes, bool, str]:
-        """
-        Receive the full message from the socket.
-
-        :return: Tuple(full data binary bytes, is socket closed boolean, error message string).
-        """
-        # Define the variable that is going to aggregate the whole data received
-        full_data: bytes = bytes()
-        # noinspection PyTypeChecker
-        error_message: str = None
-
-        # Infinite loop to accept data from the client
-        # We'll skip the 'is_socket_ready_for_read' check on the first run, since we want to read the data anyway,
-        # to leave the socket in the blocking mode.
-        first_run: bool = True
+    def _recv_message_protocol(self) -> bytes:
+        """Block on recv, consume bytes, return one complete message or b'' on clean EOF."""
         while True:
-            # Check if there is data to be read from the socket.
-            is_there_data: bool = is_socket_ready_for_read(self.ssl_socket, timeout=0.5)
+            if self._pending:
+                msg = self._pending.popleft()
+                self.logger.info(f"Received total: [{len(msg)}] bytes")
+                return msg
+            chunk = self._safe_recv_chunk()
+            if chunk == b'':
+                return self._handle_protocol_eof()
+            self._pending.extend(self._framer.consume(chunk))
 
-            # noinspection PyTypeChecker
-            if is_there_data or first_run:
-                first_run = False
-                # Receive the data from the socket.
-                received_chunk, error_message = self.chunk_from_buffer()
-                received_chunk: bytes
-                error_message: str
+    def _handle_protocol_eof(self) -> bytes:
+        """On peer EOF: emit final message (body-until-close), raise on truncation, or return b''."""
+        self._pending.extend(self._framer.finish())
+        if self._pending:
+            msg = self._pending.popleft()
+            self.logger.info(f"Received total: [{len(msg)}] bytes")
+            return msg
+        if self._framer.buffered:
+            exc = PeerClosedMidMessage("Peer closed mid-message (truncated).")
+            exc.received = self._framer.buffered
+            raise exc
+        self.logger.info("Peer closed connection (clean EOF).")
+        return b''
 
-                # And if the message received is not empty then aggregate it to the main "data received" variable
-                if received_chunk != b'' and received_chunk is not None:
-                    full_data += received_chunk
+    # === Time-based mode (no protocol framer) ===
 
-                    self.logger.info(f"Received packet bytes: [{len(received_chunk)}] | "
-                                     f"Total aggregated bytes: [{len(full_data)}]")
+    def _recv_message_idle(self) -> bytes:
+        """Poll with select; emit buffered bytes on first quiet tick or on EOF."""
+        while True:
+            if is_socket_ready_for_read(self.ssl_socket, timeout=self._idle_seconds):
+                chunk = self._safe_recv_chunk()
+                if chunk == b'':
+                    # EOF: flush any buffered bytes, else clean close.
+                    if self._idle_buffer:
+                        return self._flush_idle_buffer()
+                    self.logger.info("Peer closed connection (clean EOF).")
+                    return b''
+                self._idle_buffer.extend(chunk)
+            elif self._idle_buffer:
+                # Quiet with buffered bytes -> message boundary.
+                return self._flush_idle_buffer()
+            # else: quiet with empty buffer; keep polling.
 
-                elif received_chunk == b'' or received_chunk is None:
-                    # If there received_chunk is None, this means that the socket was closed,
-                    # since it is a connection error.
-                    # Same goes for the empty message.
-                    is_socket_closed = True
-                    break
-            else:
-                # If there is no data to be read from the socket, it doesn't mean that the socket is closed.
-                is_socket_closed = False
-                received_chunk = None
-                break
+    def _flush_idle_buffer(self) -> bytes:
+        msg = bytes(self._idle_buffer)
+        self._idle_buffer.clear()
+        self.logger.info(f"Received total: [{len(msg)}] bytes")
+        return msg
 
-        if full_data:
-            self.logger.info(f"Received total: [{len(full_data)}] bytes")
+    # === Shared ===
 
-        # In case the full data is empty, and the received chunk is None, it doesn't mean that the socket is closed.
-        # But it means that there was no data to be read from the socket, because of error or timeout.
-        if full_data == b'' and received_chunk is None:
-            full_data = None
+    def _safe_recv_chunk(self) -> bytes:
+        """recv() once; on failure, attach any partial bytes via exc.received."""
+        try:
+            return self.ssl_socket.recv(self.buffer_size_receive)
+        except (ConnectionError, ssl.SSLError, TimeoutError, InterruptedError) as exc:
+            exc.received = self._drain_partial_bytes()
+            raise
 
-        return full_data, is_socket_closed, error_message
-
-    def receive(self) -> tuple[bytes, bool, str]:
-        """
-        Receive the message from the socket.
-
-        :return: Tuple(
-            data binary bytes,
-            is socket closed boolean,
-            error message string if there was a connection exception).
-        """
-        # Getting client address and Local port from the socket
-        self.class_client_address = self.ssl_socket.getpeername()[0]
-        self.class_client_local_port = self.ssl_socket.getpeername()[1]
-
-        # Receiving data from the socket and closing the socket if send is finished.
-        self.logger.info(f"Waiting for data from {self.class_client_address}:{self.class_client_local_port}")
-        socket_data_bytes, is_socket_closed, error_message = self.socket_receive_message_full()
-        socket_data_bytes: bytes
-        is_socket_closed: bool
-        error_message: str
-
-        if socket_data_bytes:
-            # Put only 100 characters to the log, since we record the message any way in full - later.
-            self.logger.info(f"Received: {socket_data_bytes[0: 100]}...")
-
-        return socket_data_bytes, is_socket_closed, error_message
+    def _drain_partial_bytes(self) -> bytes:
+        """Return partial bytes from whichever buffer is active (read-only on framer; clears idle buffer)."""
+        if self._framer is not None:
+            return self._framer.buffered
+        out = bytes(self._idle_buffer)
+        self._idle_buffer.clear()
+        return out

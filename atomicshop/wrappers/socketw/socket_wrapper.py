@@ -20,7 +20,10 @@ from ...basics import booleans, tracebacks
 from ...print_api import print_api
 from ...import ssh_remote
 
-from . import socket_base, creator, process_getter, accepter, statistics_csv, ssl_base, sni
+from . import (
+    socket_base, creator, process_getter, accepter, statistics_csv, ssl_base,
+    sni, buffered_socket,
+)
 
 
 class SocketWrapperPortInUseError(Exception):
@@ -697,32 +700,48 @@ class SocketWrapper:
                     logger=self.logger)
                 process_name = get_command_instance.get_process_name(print_kwargs={'logger': self.logger})
 
-                # from ..pywin32w.win_event_log import fetch
-                # events = fetch.get_latest_events(
-                #     server_ip=source_ip,
-                #     username=self.ssh_user,
-                #     password=self.ssh_pass,
-                #     log_name='Security',
-                #     count=50,
-                #     event_id_list=[5156]
-                # )
-                #
-                # source_port = client_address[1]
-                # for event in events:
-                #     if source_port == event['StringsDict']['Source Port']:
-                #         process_name = event['StringsDict']['Application Name']
-                #         break
-                #
-                # if process_name == '':
-                #     raise RuntimeError("Failed to get process name from the remote host via Event Log.")
-
-            # Get the protocol type from the socket.
+            # ---- Consume the ClientHello up front (sans-io pattern) ----
+            # https://github.com/brettcannon/sans-io
+            # https://sans-io.readthedocs.io/
+            #
+            # History — why we stopped peeking
+            # --------------------------------
+            # The previous accept flow called three separate ``MSG_PEEK``
+            # helpers on the raw socket before letting OpenSSL take over:
+            #   * ``ssl_base.__is_tls``          — peek 3 B to decide TLS-or-not
+            #   * ``ssl_base.__peek_alpn_offers`` — peek 5 B header, then peek
+            #                                      the declared record length
+            #                                      and parse ALPN out of it
+            #   * ``receiver.__peek_first_bytes`` — the underlying peek primitive
+            # (All three are retired in place at the bottom of their modules
+            # with the ``__`` prefix, for historical reference.)
+            #
+            # ``MSG_PEEK`` returns only whatever is *already sitting in the
+            # kernel receive buffer at the instant of the syscall*. A
+            # ClientHello that spans multiple TCP segments (multiple packets) — extremely
+            # common under TLS 1.3 + post-quantum key_share, which pushes
+            # the record to ~1500–2500 B — came back as a short peek on
+            # the first call. The ALPN parser then either bailed with
+            # ``None`` (silently losing upstream ALPN mirroring) or, if
+            # the caller retried, hit the per-peek socket timeout.
+            # In production, we saw this as frequent "TLS detection timed
+            # out" drops on otherwise healthy connections.
+            #
+            # Sans-io best practice
+            # ---------------------
+            # Read the first bytes into a buffer, inspect them, then replay
+            # them into the real handshake — TLS path via MemoryBIO,
+            # non-TLS path via BufferedSocket. No bytes are lost.
             is_tls: bool = False
+            client_alpn_offers: list[str] | None = None
+            prefetched_bytes: bytes = b''
+            tls_properties = None
 
             try:
-                tls_properties = ssl_base.is_tls(client_socket, timeout=10)
+                is_tls, client_alpn_offers, prefetched_bytes, tls_properties = \
+                    ssl_base.consume_client_hello(client_socket, timeout=10)
             except TimeoutError:
-                error: str = "TimeoutError: TLS detection timed out. Dropping accepted socket."
+                error: str = "TimeoutError: ClientHello consumption timed out. Dropping accepted socket."
                 self.logger.error(error)
 
                 self.statistics_writer.write_accept_error(
@@ -736,16 +755,38 @@ class SocketWrapper:
 
                 client_socket.close()
                 return
+            except ConnectionError as exc:
+                # Peer closed before we got a full sniff — nothing to
+                # process. Same drop-the-socket path as a timeout.
+                error = f"ConnectionError: peer closed before ClientHello completed: {exc}"
+                self.logger.error(error)
+                self.statistics_writer.write_accept_error(
+                    engine=engine_name,
+                    source_host=source_hostname,
+                    source_ip=source_ip,
+                    error_message=error,
+                    dest_port=str(dest_port),
+                    host=domain_from_engine,
+                    process_name=process_name)
+                client_socket.close()
+                return
 
-            if tls_properties:
-                is_tls = True
+            # Preserve the log-friendly tls_type/tls_version fields even
+            # when the record-layer version byte can't distinguish 1.2
+            # from 1.3 — ``consume_client_hello`` returns
+            # ``"TLSv1.2/1.3"`` for the ambiguous (0x03, 0x03) case, and
+            # the real version is filled in after the handshake
+            # completes below (``ssl_client_socket.version()``).
+            if tls_properties is not None:
                 tls_type, tls_version = tls_properties
             else:
                 tls_type, tls_version = None, None
 
-            # If 'is_tls' is True.
+            # ---- TLS path: hand the consumed bytes to the BIO pump ----
             ssl_client_socket = None
             if is_tls:
+                self.logger.info(f"Captured ALPN offers from ClientHello: {client_alpn_offers}")
+
                 sni_handler = sni.SNISetup(
                     default_server_certificate_usage=self.default_server_certificate_usage,
                     default_server_certificate_name=self.default_server_certificate_name,
@@ -775,19 +816,30 @@ class SocketWrapper:
                     tls=is_tls,
                     exceptions_logger=self.exceptions_logger,
                     enable_sslkeylogfile_env_to_client_ssl_context=self.enable_sslkeylogfile_env_to_client_ssl_context,
-                    sslkeylog_file_path=self.sslkeylog_file_path
+                    sslkeylog_file_path=self.sslkeylog_file_path,
+                    mtls_subdomains=self.engine.mtls if self.engine else None,
+                    client_alpn_offers=client_alpn_offers
                 )
 
+                # ``prefetched=prefetched_bytes`` is the whole point of the
+                # consume+MemoryBIO refactor: the consumed ClientHello bytes
+                # are re-injected into a ``MemoryBIO`` inside
+                # ``wrap_bio_server_with_error_message`` so OpenSSL sees the
+                # same record that ``consume_client_hello`` parsed. Without
+                # this, OpenSSL would read an empty socket and deadlock on
+                # the first ``SSLWantReadError``.
                 ssl_client_socket, accept_error_message = \
                     sni_handler.wrap_socket_with_ssl_context_server_sni_extended(
                         client_socket,
+                        prefetched=prefetched_bytes,
                         print_kwargs={'logger': self.logger}
                     )
 
                 if ssl_client_socket:
                     # Handshake is done at this point, so version/cipher are available
                     self.logger.info(
-                        f"TLS version={ssl_client_socket.version()} cipher={ssl_client_socket.cipher()}"
+                        f"TLS version={ssl_client_socket.version()} cipher={ssl_client_socket.cipher()} "
+                        f"alpn_selected={ssl_client_socket.selected_alpn_protocol()!r}"
                     )
 
                 if accept_error_message:
@@ -821,11 +873,25 @@ class SocketWrapper:
                 # noinspection PyUnusedLocal
                 client_socket = None
                 client_socket = ssl_client_socket
+            elif not is_tls and prefetched_bytes:
+                # ---- Non-TLS path: replay the sniff bytes ----
+                # ``consume_client_hello`` already pulled bytes off the
+                # kernel socket; downstream protocol parsers (HTTP, plain
+                # MQTT, etc.) expect to see those same bytes at the head
+                # of the stream. ``BufferedSocket`` replays them
+                # transparently: its ``recv`` drains the prefetched
+                # buffer first, then falls through to the raw socket.
+                # Without this wrap, the first ``recv()`` on the worker
+                # thread would skip past the ClientHello-shaped bytes we
+                # just consumed and start reading from wherever the
+                # kernel buffer now sits.
+                client_socket = buffered_socket.BufferedSocket(
+                    client_socket, prefetched_bytes)
 
             # Build args and call the callable_function directly (we're already in a thread).
             thread_args = (
                 (client_socket, process_name, is_tls, tls_type, tls_version, domain_from_engine,
-                 self.statistics_writer, [self.engine]) + callable_args)
+                 self.statistics_writer, [self.engine], client_alpn_offers) + callable_args)
 
             try:
                 callable_function(*thread_args)

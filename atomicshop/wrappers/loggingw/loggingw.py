@@ -1062,7 +1062,9 @@ class ExceptionCsvLogger(CsvLogger):
         """
 
         if message is None or isinstance(message, Exception):
-            custom_attribute: str | None = getattr(message, custom_exception_attribute, None)
+            custom_attribute: str | None = (
+                getattr(message, custom_exception_attribute, None) if custom_exception_attribute else None
+            )
             traceback_string: str = tracebacks.get_as_string()
             if custom_attribute:
                 if custom_exception_attribute_placement == 'before':

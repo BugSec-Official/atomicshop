@@ -151,13 +151,19 @@ class Certificator:
                 self.sni_server_certificate_from_server_socket_download_directory + \
                 os.sep + sni_received_parameters.destination_name + ".pem"
             # Get client ip.
-            client_ip = socket_base.get_source_address_from_socket(sni_received_parameters.ssl_socket)[0]
+            # Under the sans-io consume+MemoryBIO accept path,
+            # ``ssl_socket`` is an ``ssl.SSLObject`` which does NOT
+            # implement ``getpeername`` / ``getsockname``. ``raw_socket``
+            # is the underlying TCP socket and is always populated on
+            # ``sni_received_parameters`` for exactly these addressing
+            # calls.
+            client_ip = socket_base.get_source_address_from_socket(sni_received_parameters.raw_socket)[0]
 
             # If we're on localhost, then use external services list in order to resolve the domain:
             if client_ip in socket_base.THIS_DEVICE_IP_LIST:
                 service_client = socket_client.SocketClient(
                     service_name=sni_received_parameters.destination_name,
-                    service_port=socket_base.get_destination_address_from_socket(sni_received_parameters.ssl_socket)[1],
+                    service_port=socket_base.get_destination_address_from_socket(sni_received_parameters.raw_socket)[1],
                     tls=self.tls,
                     dns_servers_list=self.forwarding_dns_service_ipv4_list___only_for_localhost,
                     logger=print_kwargs.get('logger') if print_kwargs else None
@@ -166,7 +172,7 @@ class Certificator:
             else:
                 service_client = socket_client.SocketClient(
                     service_name=sni_received_parameters.destination_name,
-                    service_port=socket_base.get_destination_address_from_socket(sni_received_parameters.ssl_socket)[1],
+                    service_port=socket_base.get_destination_address_from_socket(sni_received_parameters.raw_socket)[1],
                     tls=self.tls,
                     logger=print_kwargs.get('logger') if print_kwargs else None
                 )
@@ -219,8 +225,11 @@ class Certificator:
         sni_server_certificate_file_path = self.certauth_wrapper.create_read_server_certificate_ca_signed(
             sni_received_parameters.destination_name, certificate_from_socket_x509)
 
+        # ``raw_socket`` is used here rather than ``ssl_socket`` because the
+        # BIO accept path's ``ssl_socket`` is an ``SSLObject`` with no
+        # ``getsockname`` — the raw TCP socket is the source of address info.
         message = f"SNI Handler: port " \
-                  f"{socket_base.get_destination_address_from_socket(sni_received_parameters.ssl_socket)[1]}: " \
+                  f"{socket_base.get_destination_address_from_socket(sni_received_parameters.raw_socket)[1]}: " \
                   f"Using certificate: {sni_server_certificate_file_path}"
         print_api(message, **print_kwargs)
 

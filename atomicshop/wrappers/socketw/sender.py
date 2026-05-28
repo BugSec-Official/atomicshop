@@ -79,7 +79,12 @@ class Sender:
             exception_error = tracebacks.get_as_string(one_line=True)
 
             if 'ssl' in error_class_type.lower():
-                if error_class_type in ['ssl.SSLEOFError', 'ssl.SSLZeroReturnError', 'ssl.SSLWantWriteError']:
+                # ``type(e).__name__`` yields the bare class name
+                # (e.g. ``'SSLEOFError'``), not a module-qualified
+                # ``'ssl.SSLEOFError'``. The expected list must use bare
+                # names — otherwise every documented SSL subtype falls
+                # through into the "UNDOCUMENTED" branch silently.
+                if error_class_type in ['SSLEOFError', 'SSLZeroReturnError', 'SSLWantWriteError']:
                     error_message = f"Socket Send: {destination}: {error_class_type}: {exception_error}"
                 else:
                     error_message = (f"Socket Send: {destination}: "
