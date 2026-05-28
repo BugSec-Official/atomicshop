@@ -457,6 +457,23 @@ def thread_worker_main(
                 except Exception:
                     upgrade = ''
             if upgrade == 'websocket':
+                # Capture negotiated extensions and subprotocol from the 101 so the
+                # responder's build_byte_websocket_* helpers know whether to compress
+                # frames (permessage-deflate) and which subprotocol is in play.
+                ext_header = ''
+                subproto_header = ''
+                if headers is not None:
+                    try:
+                        ext_header = (headers.get('Sec-WebSocket-Extensions') or '').lower()
+                        subproto_header = headers.get('Sec-WebSocket-Protocol') or ''
+                    except Exception:
+                        pass
+                ws_state.permessage_deflate_negotiated = 'permessage-deflate' in ext_header
+                ws_state.subprotocol = subproto_header or None
+                network_logger.info(
+                    f"WebSocket negotiation: permessage_deflate="
+                    f"{ws_state.permessage_deflate_negotiated} subprotocol={ws_state.subprotocol!r}")
+
                 client_recv = side_receivers.get('Client')
                 service_recv = side_receivers.get('Service')
                 if client_recv is not None:
