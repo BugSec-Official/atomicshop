@@ -3,7 +3,9 @@ from atomicshop.mitm.engines.__parent.responder___parent import ResponderParent
 from atomicshop.mitm.shared_functions import create_custom_logger
 from atomicshop.mitm.message import ClientMessage
 from atomicshop.mitm import config_static
-from atomicshop import websocket_parse
+from atomicshop.wrappers.protocol_parsers import websocket
+from atomicshop.wrappers.protocol_parsers import http2
+from atomicshop.wrappers.protocol_parsers import mqtt
 
 """
 import time
@@ -35,13 +37,17 @@ class ResponderGeneral(ResponderParent):
     #     -----------------------------------
     #
     #     # Example of creating list of bytes using 'build_byte_response' function:
+    #     # Auto-filled by build_byte_response:
+    #     #   http_version    <- class_client_message.request_auto_parsed.request_version
+    #     #   Reason phrase   <- HTTPStatus(status_code).phrase
+    #     #   Content-Length  <- len(body), only when absent from headers
     #     result_list: list[bytes] = list()
     #     result_list.append(
     #         self.build_byte_response(
-    #             http_version=class_client_message.request_raw_decoded.request_version,
+    #             class_client_message,
     #             status_code=200,
     #             headers=response_headers,
-    #             body=b''
+    #             body=b'',
     #         )
     #     )
     #
@@ -87,36 +93,151 @@ class ResponderGeneral(ResponderParent):
     # WEBSOCKET example.
     # def create_response(self, class_client_message: ClientMessage):
     #     # The incoming websocket frame is parsed into a dict with keys:
-    #     #   'is_deflated' (bool), 'is_masked' (bool), 'frame' (str or bytes), 'opcode' (str: TEXT/BINARY/CLOSE/PING/PONG)
+    #     #   'is_deflated' (bool), 'is_masked' (bool), 'frame' (str or bytes),
+    #     #   'opcode' (str: TEXT/BINARY/CLOSE/PING/PONG)
     #     ws_frame = class_client_message.request_auto_parsed
     #     frame_data = ws_frame['frame']
     #     frame_opcode = ws_frame['opcode']
     #
     #     response_bytes_list: list[bytes] = list()
     #
-    #     # --- Text frame example (string / dict -> JSON) ---
-    #     # If the incoming frame is TEXT, you can parse it as JSON and build a response dict.
+    #     # Auto-filled by build_byte_websocket_frame:
+    #     #   mask=False (RFC 6455 §5.1 — server-side frames are never masked)
+    #     #   opcode    <- inferred from data type (str -> TEXT, bytes -> BINARY)
+    #     #   deflate   <- self._ws_state.permessage_deflate_negotiated (from 101 handshake)
     #     # import json
     #     if frame_opcode == 'TEXT':
     #         # request_dict = json.loads(frame_data)
     #         response_dict = {'status': 'ok', 'echo': frame_data}
-    #         text_frame_bytes = websocket_parse.create_websocket_frame(
-    #             data=json.dumps(response_dict),   # str -> TEXT frame (opcode determined automatically)
-    #             deflate=False,                     # Set True to apply permessage-deflate compression
-    #             mask=False                         # Server-to-client frames are never masked
-    #         )
-    #         response_bytes_list.append(text_frame_bytes)
-    #
-    #     # --- Binary frame example (raw bytes) ---
-    #     # If the incoming frame is BINARY, respond with binary data.
+    #         response_bytes_list.append(self.build_byte_websocket_frame(
+    #             class_client_message, data=json.dumps(response_dict)))
     #     elif frame_opcode == 'BINARY':
-    #         response_payload = b'\x01\x02\x03'
-    #         binary_frame_bytes = websocket_parse.create_websocket_frame(
-    #             data=response_payload,             # bytes -> BINARY frame (opcode determined automatically)
-    #             deflate=False,
-    #             mask=False
-    #         )
-    #         response_bytes_list.append(binary_frame_bytes)
+    #         response_bytes_list.append(self.build_byte_websocket_frame(
+    #             class_client_message, data=b'\x01\x02\x03'))
+    #
+    #     # Close frame example.
+    #     # Auto-filled by build_byte_websocket_close:
+    #     #   mask=False, opcode=CLOSE, payload = 2-byte big-endian code + reason.encode()
+    #     # response_bytes_list.append(self.build_byte_websocket_close(
+    #     #     class_client_message, code=1000, reason='normal closure'))
+    #
+    #     return response_bytes_list
+    #
+    # ==================================================================================================================
+    # HTTP/2 response synthesis example.
+    # def create_response(self, class_client_message: ClientMessage):
+    #     ar = class_client_message.request_auto_parsed
+    #     # Only handle HTTP/2 here; pass-through otherwise.
+    #     if not isinstance(ar, http2.Http2RequestParse):
+    #         return None
+    #
+    #     response_bytes_list: list[bytes] = list()
+    #
+    #     # 1. JSON response: synthesise a 200 OK on the same stream the client opened.
+    #     # Auto-filled by build_byte_http2_response:
+    #     #   stream_id            <- class_client_message.request_auto_parsed.stream_id
+    #     #   DATA fragmentation   <- self._h2_state.max_frame_size (from client SETTINGS)
+    #     #   content-length       <- len(body), only when absent from headers
+    #     # (HPACK encoding stays per-call with sensitive=True; not connection-scoped.)
+    #     # import json
+    #     # body: bytes = json.dumps({'ok': True, 'echo_path': ar.path}).encode()
+    #     body: bytes = b'{"ok": true}'
+    #     headers = {'content-type': 'application/json'}
+    #     response_bytes_list.append(self.build_byte_http2_response(
+    #         class_client_message, status_code=200, headers=headers, body=body))
+    #
+    #     # 2. Empty-body response (e.g. 204 No Content): same auto-fills.
+    #     # response_bytes_list.append(self.build_byte_http2_response(
+    #     #     class_client_message, status_code=204, headers={}, body=b''))
+    #
+    #     # 3. gRPC-style response with trailers (HEADERS-DATA-HEADERS): same auto-fills.
+    #     # response_bytes_list.append(self.build_byte_http2_response(
+    #     #     class_client_message,
+    #     #     status_code=200,
+    #     #     headers={'content-type': 'application/grpc'},
+    #     #     body=b'\x00\x00\x00\x00\x05hello',
+    #     #     trailers={'grpc-status': '0', 'grpc-message': 'OK'}))
+    #
+    #     # 4. Route by method + path (mirrors the HTTP/1.1 example):
+    #     # if ar.command == 'POST' and ar.path.startswith('/api/v1/echo'):
+    #     #     body = ar.body or b'<empty>'
+    #     #     response_bytes_list.append(self.build_byte_http2_response(
+    #     #         class_client_message, status_code=200,
+    #     #         headers={'content-type': 'application/octet-stream'}, body=body))
+    #
+    #     return response_bytes_list
+    #
+    # ==================================================================================================================
+    # MQTT response synthesis example (broker-side).
+    # The incoming MqttPacketParse exposes: .packet_type ('CONNECT'/'PUBLISH'/...),
+    # .qos / .retain / .dup, .topic, .payload, .packet_identifier, .client_id,
+    # .subscriptions ([(filter, requested_qos), ...]), .protocol_version (4=v3.1.1, 5=v5).
+    # def create_response(self, class_client_message: ClientMessage):
+    #     mp = class_client_message.request_auto_parsed
+    #     if not isinstance(mp, mqtt.MqttPacketParse):
+    #         return None
+    #
+    #     response_bytes_list: list[bytes] = list()
+    #
+    #     # CONNACK — accept the session.
+    #     # Auto-filled by build_byte_mqtt_connack:
+    #     #   protocol_version  <- self._mqtt_state.protocol_version (set from c2s CONNECT)
+    #     if mp.packet_type == 'CONNECT':
+    #         response_bytes_list.append(self.build_byte_mqtt_connack(
+    #             class_client_message, session_present=False, return_code=0))
+    #
+    #     # SUBACK — grant each topic at the requested QoS.
+    #     # Auto-filled by build_byte_mqtt_suback:
+    #     #   packet_identifier <- class_client_message.request_auto_parsed.packet_identifier
+    #     #   protocol_version  <- self._mqtt_state.protocol_version
+    #     elif mp.packet_type == 'SUBSCRIBE':
+    #         granted = [requested_qos for _topic, requested_qos in (mp.subscriptions or [])]
+    #         response_bytes_list.append(self.build_byte_mqtt_suback(
+    #             class_client_message, return_codes=granted))
+    #
+    #     # PUBACK / PUBREC for inbound PUBLISH at QoS>0; broker-initiated downstream PUBLISH.
+    #     elif mp.packet_type == 'PUBLISH':
+    #         # Auto-filled by build_byte_mqtt_puback / build_byte_mqtt_pubrec:
+    #         #   packet_identifier <- class_client_message.request_auto_parsed.packet_identifier
+    #         #   protocol_version  <- self._mqtt_state.protocol_version
+    #         if mp.qos == 1:
+    #             response_bytes_list.append(self.build_byte_mqtt_puback(class_client_message))
+    #         elif mp.qos == 2:
+    #             response_bytes_list.append(self.build_byte_mqtt_pubrec(class_client_message))
+    #
+    #         # Broker-initiated downstream PUBLISH (e.g. echo to subscribers).
+    #         # Auto-filled by build_byte_mqtt_publish:
+    #         #   protocol_version   <- self._mqtt_state.protocol_version
+    #         # Engine-supplied:
+    #         #   packet_identifier  <- required for qos>0 (omit at qos=0)
+    #         response_bytes_list.append(self.build_byte_mqtt_publish(
+    #             class_client_message, topic=mp.topic, payload=mp.payload or b'',
+    #             qos=0, retain=False))
+    #         # If echoing at qos>0, pass packet_identifier explicitly:
+    #         # response_bytes_list.append(self.build_byte_mqtt_publish(
+    #         #     class_client_message, topic=mp.topic, payload=mp.payload or b'',
+    #         #     qos=1, retain=False, packet_identifier=12345))
+    #
+    #     # PUBCOMP — completes a QoS 2 handshake after the client's PUBREL.
+    #     # Auto-filled: packet_identifier, protocol_version (same as puback).
+    #     elif mp.packet_type == 'PUBREL':
+    #         response_bytes_list.append(self.build_byte_mqtt_pubcomp(class_client_message))
+    #
+    #     # PINGRESP — fixed 2 bytes (0xD0 0x00); no session state used.
+    #     elif mp.packet_type == 'PINGREQ':
+    #         response_bytes_list.append(self.build_byte_mqtt_pingresp(class_client_message))
+    #
+    #     # UNSUBACK after UNSUBSCRIBE.
+    #     # Auto-filled: packet_identifier, protocol_version. v5 carries return_codes; v3 ignores.
+    #     elif mp.packet_type == 'UNSUBSCRIBE':
+    #         filters = mp.topic_filters or []
+    #         response_bytes_list.append(self.build_byte_mqtt_unsuback(
+    #             class_client_message, return_codes=[0] * len(filters)))
+    #
+    #     # Tear-down: broker-initiated DISCONNECT (v5 carries reason_code).
+    #     # Auto-filled: protocol_version.
+    #     # response_bytes_list.append(self.build_byte_mqtt_disconnect(
+    #     #     class_client_message, reason_code=0x8E))  # 0x8E = Session taken over (v5)
     #
     #     return response_bytes_list
     #
@@ -242,11 +363,15 @@ class ResponderGeneral(ResponderParent):
     #
     #     # ==============================================================================
     #     # === Building byte response. ==================================================
+    #     # Auto-filled by build_byte_response:
+    #     #   http_version    <- class_client_message.request_auto_parsed.request_version
+    #     #   Reason phrase   <- HTTPStatus(status_code).phrase
+    #     #   Content-Length  <- len(body), only when absent from headers
     #     byte_response = self.build_byte_response(
-    #         http_version=class_client_message.request_auto_parsed.request_version,
+    #         class_client_message,
     #         status_code=resp_status_code,
     #         headers=resp_headers,
-    #         body=resp_body_bytes
+    #         body=resp_body_bytes,
     #     )
     #
     #     result_response_list: list[bytes] = [byte_response]
@@ -255,20 +380,17 @@ class ResponderGeneral(ResponderParent):
     # ==================================================================================================================
     # TEST RESPONSE.
     # def create_response(self, class_client_message: ClientMessage):
-    #     resp_body_text: bytes = b"<html><body>TEST OK!</body></html>\n"
-    #     resp_status_code: int = 200
-    #     resp_headers: dict = {
-    #         # Tell the browser it’s plain text (could be “text/html” if you wrap it in HTML).
-    #         "Content-Type": "text/html; charset=utf-8"}
+    #     resp_body: bytes = b"<html><body>TEST OK!</body></html>\n"
+    #     resp_headers: dict = {"Content-Type": "text/html; charset=utf-8"}
     #
-    #     # Build the raw bytes to send.
+    #     # Auto-filled by build_byte_response:
+    #     #   http_version    <- class_client_message.request_auto_parsed.request_version
+    #     #   Reason phrase   <- HTTPStatus(status_code).phrase
+    #     #   Content-Length  <- len(body), only when absent from headers
     #     byte_response = self.build_byte_response(
-    #         http_version="HTTP/1.1",
-    #         status_code=resp_status_code,
+    #         class_client_message,
+    #         status_code=200,
     #         headers=resp_headers,
-    #         body=resp_body_text
-    #
+    #         body=resp_body,
     #     )
-    #
-    #     result_response_list: list[bytes] = [byte_response]
-    #     return result_response_list
+    #     return [byte_response]
