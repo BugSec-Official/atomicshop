@@ -131,91 +131,42 @@ class ResponderParent:
 
     def build_byte_response(
             self,
-            http_version: str,
+            class_client_message: ClientMessage,
             status_code: int,
-            headers: dict,
-            body: bytes
+            headers: dict | None = None,
+            body: bytes = b'',
+            http_version: str | None = None,
     ) -> bytes:
-        # noinspection GrazieInspection
+        """Build HTTP/1.x response wire bytes.
+
+        Auto-filled from class_client_message:
+          - http_version    <- request_auto_parsed.request_version
+          - Reason phrase   <- HTTPStatus(status_code).phrase
+          - Content-Length  <- len(body), only when absent from headers and body is non-empty
+
+        :param class_client_message: supplies request_version from request_auto_parsed.
+        :param status_code: HTTP status code (reason phrase derived from HTTPStatus).
+        :param headers: response headers; Content-Length auto-added when absent.
+        :param body: response body bytes.
+        :param http_version: BACKWARDS-COMPAT NO-OP. The wire version is always read
+            from class_client_message.request_auto_parsed.request_version. Any value
+            passed here is silently discarded. Kept in the signature so existing
+            engines passing `http_version=...` as a kwarg don't break with TypeError;
+            new code should omit it.
+        :return: HTTP/1.x response bytes.
         """
-                Create genuine response from input parameters.
-                ---------------
-                The response is built from:
-                HTTP-Version HTTP-Status HTTP-Status-String\r\n
-                Headers1: Value\r\n
-                Headers2: Value\r\n
-                \r\n                        # This is meant to end the headers' section
-                Body\r\n\r\n                # In most cases Body is ended with '\r\n\r\n'
-                ---------------
-                Example for 200 response:
-                HTTP/1.1 200 OK\r\n
-                Cache-Control: max-age=86400\r\n
-                Content-Type: application/json; charset=utf-8\r\n
-                \r\n
-                {"id":1,"name":"something"}
-                ---------------
-                The final response will look like oneline string:
-                HTTP/1.1 200 OK\r\nCache-Control: max-age=86400\r\n
-                Content-Type: application/json; charset=utf-8\r\n\r\n{"id":1,"name":"something"}
-                ---------------
-                You can create response as:
+        _ = http_version  # discarded; auto-filled from request below
+        http_version_to_use = class_client_message.request_auto_parsed.request_version
+        headers = dict(headers or {})
+        # Auto-fill Content-Length when absent and body is non-empty so the response
+        # is wire-valid without engine-side bookkeeping.
+        has_length_header = any(k.lower() == 'content-length' for k in headers)
+        if body and not has_length_header:
+            headers['Content-Length'] = str(len(body))
 
-                ...HTTP/1.1 200 OK
-                header1: value
-                header2: value
-
-                {data: value}...
-
-                Change 3 dots ("...") to 3 double quotes before "HTTP" and after "value}".
-                This way there will be "\n" added automatically after each line.
-                While, the HTTP Client does the parsing of the text and not raw data, most probably it will be parsed well,
-                but genuine responses from HTTP sources come with "\r\n" at the end of the line, so better use these for
-                better compatibility.
-                ---------------
-
-                :param http_version: HTTP Version of Response in HTTP Status line.
-                :param status_code: HTTP Status Code of Response in HTTP Status line.
-                :param headers: HTTP Headers of Response.
-                :param body: HTTP body data of Response, bytes.
-                :return: bytes of the response.
-                """
-
-        try:
-            # Building full status string line and the "\r\n" to the end of the status line
-            status_full: str = http_version + " " + str(status_code) + " " + HTTPStatus(status_code).phrase + "\r\n"
-
-            # Defining headers string.
-            headers_string: str = str()
-            # Adding all the headers to the full response
-            for keys, values in headers.items():
-                headers_string = headers_string + str(keys) + ": " + str(values) + "\r\n"
-
-            # Building full string response.
-            # 1. Adding full status lines.
-            # 2. Adding headers string.
-            # 3. Adding a line that end headers (with "\r\n").
-            # 4. Adding body as byte string.
-            response_full_no_body: str = status_full + headers_string + "\r\n"
-
-            # Converting the HTTP Response string to bytes and adding 'body' bytes.
-            response_raw_bytes = response_full_no_body.encode() + body
-        except ValueError as exception_object:
-            message = \
-                f'Create Byte response function error, of the of values provided is not standard: {exception_object}'
-            print_api(message, error_type=True, logger=self.logger, logger_method='error', color='red')
-
-            response_raw_bytes = b''
-
-        # Parsing the response we created.
-        response_parse_test = HTTPResponseParse(response_raw_bytes)
-        # If there were errors during parsing, it means that something is wrong with response created.
-        if response_parse_test.error:
-            self.logger.error(response_parse_test.error)
-            response_raw_bytes = b''
-        else:
-            self.logger.info("Created Valid Byte Response.")
-
-        return response_raw_bytes
+        status_full = f"{http_version_to_use} {status_code} {HTTPStatus(status_code).phrase}\r\n"
+        headers_string = ''.join(f"{k}: {v}\r\n" for k, v in headers.items())
+        return (status_full + headers_string + "\r\n").encode() + body
 
     def build_byte_http2_response(
             self,
