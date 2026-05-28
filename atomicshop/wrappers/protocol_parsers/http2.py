@@ -94,8 +94,9 @@ class Http2DirectionParser:
     forwards the peer's own frames on the opposite socket.
     """
 
-    def __init__(self, is_request_side: bool):
+    def __init__(self, is_request_side: bool, state: 'Http2ConnectionState | None' = None):
         self._is_request_side = is_request_side
+        self._state = state  # observed client SETTINGS land here when state is provided
         self._decoder = hpack.Decoder()
         self._buf = bytearray()
         # Connection preface is only sent by the client (request side).
@@ -153,8 +154,19 @@ class Http2DirectionParser:
             accum.body.extend(frame.data)
             if 'END_STREAM' in flags:
                 accum.end_stream = True
+        elif isinstance(frame, hyperframe.frame.SettingsFrame):
+            # Observe client SETTINGS so the response encoder can frame DATA at the
+            # negotiated MAX_FRAME_SIZE and refuse oversized header blocks. SETTINGS
+            # flow client->server in the autoparser's view (request side); ACK frames
+            # carry no settings and are ignored. 0x05 = MAX_FRAME_SIZE, 0x06 = MAX_HEADER_LIST_SIZE.
+            if self._is_request_side and self._state is not None and 'ACK' not in flags:
+                if 0x05 in frame.settings:
+                    self._state.max_frame_size = frame.settings[0x05]
+                if 0x06 in frame.settings:
+                    self._state.max_header_list_size = frame.settings[0x06]
+            return
         else:
-            # SETTINGS / WINDOW_UPDATE / PING / GOAWAY / PRIORITY / PUSH_PROMISE: ignored.
+            # WINDOW_UPDATE / PING / GOAWAY / PRIORITY / PUSH_PROMISE: ignored.
             return
 
         accum = self._streams.get(sid)
