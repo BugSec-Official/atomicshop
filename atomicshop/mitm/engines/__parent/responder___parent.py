@@ -339,6 +339,65 @@ class ResponderParent:
         _ = class_client_message
         return mqtt.encode_disconnect(reason_code=reason_code, protocol_version=st.protocol_version)
 
+    # ------------------------------------------------------------------
+    # WebSocket server->client frame builders. All auto-fill mask=False
+    # (RFC 6455 §5.1) and deflate from self._ws_state.permessage_deflate_negotiated.
+    # ------------------------------------------------------------------
+
+    # RFC 6455 §5.2 control-frame opcodes.
+    _WS_OPCODE_CLOSE = 0x8
+    _WS_OPCODE_PING = 0x9
+    _WS_OPCODE_PONG = 0xA
+
+    def _ws_deflate(self) -> bool:
+        return bool(self._ws_state and self._ws_state.permessage_deflate_negotiated)
+
+    def build_byte_websocket_frame(
+            self,
+            class_client_message: ClientMessage,
+            data: str | bytes,
+    ) -> bytes:
+        """Build a WebSocket data frame. Auto-fills mask=False, opcode (from data type),
+        deflate (from negotiated extensions).
+        """
+        _ = class_client_message
+        if not isinstance(data, (str, bytes, bytearray)):
+            raise TypeError(
+                f"build_byte_websocket_frame: data must be str or bytes, got {type(data).__name__}")
+        return websocket.create_websocket_frame(data=data, deflate=self._ws_deflate(), mask=False)
+
+    def build_byte_websocket_close(
+            self,
+            class_client_message: ClientMessage,
+            code: int = 1000,
+            reason: str = '',
+    ) -> bytes:
+        """Build a WebSocket CLOSE frame. Payload = 2-byte big-endian code + reason.encode()."""
+        _ = class_client_message
+        payload = code.to_bytes(2, 'big') + reason.encode()
+        return websocket.create_websocket_frame(
+            data=payload, deflate=False, mask=False, opcode=self._WS_OPCODE_CLOSE)
+
+    def build_byte_websocket_ping(
+            self,
+            class_client_message: ClientMessage,
+            data: bytes = b'',
+    ) -> bytes:
+        """Build a WebSocket PING frame."""
+        _ = class_client_message
+        return websocket.create_websocket_frame(
+            data=data, deflate=False, mask=False, opcode=self._WS_OPCODE_PING)
+
+    def build_byte_websocket_pong(
+            self,
+            class_client_message: ClientMessage,
+            data: bytes = b'',
+    ) -> bytes:
+        """Build a WebSocket PONG frame."""
+        _ = class_client_message
+        return websocket.create_websocket_frame(
+            data=data, deflate=False, mask=False, opcode=self._WS_OPCODE_PONG)
+
     @staticmethod
     def create_connect_response(class_client_message: ClientMessage):
         """ This function should be overridden in the child class. """
