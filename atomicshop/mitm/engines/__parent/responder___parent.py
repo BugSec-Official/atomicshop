@@ -170,34 +170,60 @@ class ResponderParent:
 
     def build_byte_http2_response(
             self,
+            class_client_message: ClientMessage,
             status_code: int,
-            headers: dict,
+            headers: dict | None = None,
             body: bytes = b'',
-            stream_id: int = 0,
             trailers: dict | None = None,
     ) -> bytes:
-        """Create HTTP/2 response wire bytes for one stream.
+        """Build HTTP/2 response wire bytes on the request's stream.
 
-        Mirror of `build_byte_response` for HTTP/2: takes the same structured
-        shape (status_code + headers dict + body bytes) plus the stream_id
-        the client opened the request on. Delegates to the encoder in
-        atomicshop.wrappers.protocol_parsers.http2, which uses hpack + hyperframe to emit a
-        HEADERS frame followed by DATA frame(s) (and optional trailers
-        HEADERS frame).
+        Auto-filled from class_client_message + self._h2_state:
+          - stream_id        <- request_auto_parsed.stream_id
+          - DATA framing     <- self._h2_state.max_frame_size (client SETTINGS)
+          - content-length   <- len(body) when absent from headers
 
-        :param status_code: HTTP status code (becomes ':status' pseudo-header).
-        :param headers: dict of regular response headers (lowercase keys; h2 is case-insensitive).
-        :param body: response body bytes; split into multiple DATA frames if larger than MAX_FRAME_SIZE.
-        :param stream_id: the request's stream_id (`request_auto_parsed.stream_id`). Required.
-        :param trailers: optional dict of trailing headers (e.g. {'grpc-status': '0'}).
-        :return: bytes ready to send back to the client.
+        HPACK encoding uses sensitive=True per http2._encode_header_block docstring;
+        the dynamic table is intentionally NOT shared across calls — this prevents
+        synthesised responses from polluting the client's HPACK decoder state on
+        proxies that mix synthesised and forwarded traffic.
+
+        :raises ValueError: stream_id missing/zero on the request, or header block
+            exceeds the client's MAX_HEADER_LIST_SIZE SETTING.
+        :raises RuntimeError: Http2ConnectionState not wired (add_args missing h2_state).
         """
+        if self._h2_state is None:
+            raise RuntimeError(
+                "build_byte_http2_response: Http2ConnectionState not wired; "
+                "check add_args call in the framework")
+
+        ar = class_client_message.request_auto_parsed
+        stream_id = getattr(ar, 'stream_id', None)
+        if not stream_id:
+            raise ValueError(
+                f"build_byte_http2_response: request_auto_parsed.stream_id required (got {stream_id!r})")
+
+        headers = dict(headers or {})
+        has_length_header = any(k.lower() == 'content-length' for k in headers)
+        if body and not has_length_header:
+            headers['content-length'] = str(len(body))
+
+        # MAX_HEADER_LIST_SIZE enforcement per RFC 7541 §4.1 (name + value + 32 bytes).
+        all_headers = [(':status', str(status_code))] + list(headers.items())
+        header_size = sum(len(k) + len(v) + 32 for k, v in all_headers)
+        limit = self._h2_state.max_header_list_size
+        if limit is not None and header_size > limit:
+            raise ValueError(
+                f"build_byte_http2_response: header list size {header_size} exceeds "
+                f"client SETTINGS_MAX_HEADER_LIST_SIZE {limit}")
+
         return http2.encode_http2_response(
             status_code=status_code,
             headers=headers,
             body=body,
             stream_id=stream_id,
             trailers=trailers,
+            max_frame_size=self._h2_state.max_frame_size,
         )
 
     @staticmethod
