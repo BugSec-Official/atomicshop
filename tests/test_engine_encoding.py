@@ -92,3 +92,18 @@ def test_scan_directory_flags_py_and_config_only(tmp_path):
 def test_scan_directory_clean_returns_empty(tmp_path):
     _write(tmp_path, "parser.py", b"class P:\n    pass\n")
     assert encoding.scan_engine_directory(str(tmp_path)) == []
+
+
+# --- format_findings --------------------------------------------------------
+
+def test_format_findings_groups_and_marks(tmp_path):
+    eng = tmp_path / "argentinall"
+    eng.mkdir()
+    bom = _write(eng, "responder.py", b"\xef\xbb\xbfx = 1  # it\x92s\nclass R:\n    pass\n")
+    findings = [encoding.scan_engine_file(bom)]
+    report = encoding.format_findings(findings)
+    assert "Engine 'argentinall'" in report
+    assert "responder.py" in report
+    assert "(auto-fixable)" in report          # the BOM
+    assert "manual" in report                  # the stray byte
+    assert "python tools/fix_engine_encoding.py" in report

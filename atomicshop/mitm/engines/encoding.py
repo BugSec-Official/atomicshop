@@ -123,3 +123,25 @@ def scan_engine_directory(engine_dir: str, config_file_name: str = "engine_confi
             if finding is not None:
                 findings.append(finding)
     return findings
+
+
+def format_findings(findings: list[Finding]) -> str:
+    """Human-readable report grouped by engine directory, shared by server and tool."""
+    by_engine: dict[str, list[Finding]] = {}
+    for finding in findings:
+        engine = os.path.basename(os.path.dirname(finding.path))
+        by_engine.setdefault(engine, []).append(finding)
+
+    lines: list[str] = []
+    for engine in sorted(by_engine):
+        lines.append(f"Engine '{engine}': files are not valid UTF-8.")
+        lines.append("")
+        for finding in by_engine[engine]:
+            lines.append(f"  {os.path.basename(finding.path)}")
+            for issue in finding.issues:
+                tag = "(auto-fixable)" if issue.auto_fixable else "(manual: retype as UTF-8 in your editor)"
+                lines.append(f"    - {issue.detail}  {tag}")
+            lines.append("")
+    lines.append("Fix auto-fixable issues:  python tools/fix_engine_encoding.py")
+    lines.append('Correct any "manual" items in your editor, then restart the server.')
+    return "\n".join(lines)
