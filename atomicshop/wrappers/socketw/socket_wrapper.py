@@ -1,4 +1,5 @@
 import multiprocessing
+import multiprocessing.queues  # multiprocessing.Queue is a factory method; the real class lives here
 import threading
 import select
 from typing import Literal, Union, Callable, Any
@@ -44,46 +45,46 @@ class SocketWrapper:
             self,
             ip_address: str,
             port: int,
-            engine: initialize_engines.ModuleCategory = None,
-            forwarding_dns_service_ipv4_list___only_for_localhost: list = None,
-            ca_certificate_name: str = None,
-            ca_certificate_filepath: str = None,
-            ca_certificate_crt_filepath: str = None,
+            engine: initialize_engines.ModuleCategory | None = None,
+            forwarding_dns_service_ipv4_list___only_for_localhost: list | None = None,
+            ca_certificate_name: str | None = None,
+            ca_certificate_filepath: str | None = None,
+            ca_certificate_crt_filepath: str | None = None,
             install_ca_certificate_to_root_store: bool = False,
             uninstall_unused_ca_certificates_with_ca_certificate_name: bool = False,
             default_server_certificate_usage: bool = False,
-            default_server_certificate_name: str = None,
-            default_certificate_domain_list: list = None,
-            default_server_certificate_directory: str = None,
-            sni_custom_callback_function: Callable[..., Any] = None,
+            default_server_certificate_name: str | None = None,
+            default_certificate_domain_list: list | None = None,
+            default_server_certificate_directory: str | None = None,
+            sni_custom_callback_function: Callable[..., Any] | None = None,
             sni_use_default_callback_function: bool = False,
             sni_use_default_callback_function_extended: bool = False,
             sni_add_new_domains_to_default_server_certificate: bool = False,
             sni_create_server_certificate_for_each_domain: bool = False,
-            sni_server_certificates_cache_directory: str = None,
+            sni_server_certificates_cache_directory: str | None = None,
             sni_get_server_certificate_from_server_socket: bool = False,
-            sni_server_certificate_from_server_socket_download_directory: str = None,
-            skip_extension_id_list: list = None,
+            sni_server_certificate_from_server_socket_download_directory: str | None = None,
+            skip_extension_id_list: list | None = None,
             custom_server_certificate_usage: bool = False,
-            custom_server_certificate_path: str = None,
-            custom_private_key_path: str = None,
+            custom_server_certificate_path: str | None = None,
+            custom_private_key_path: str | None = None,
             get_process_name: bool = False,
-            ssh_user: str = None,
-            ssh_pass: str = None,
+            ssh_user: str | None = None,
+            ssh_pass: str | None = None,
             ssh_script_to_execute: Union[
                 Literal['process_from_port'],
                 None
             ] = None,
-            logs_directory: str = None,
+            logs_directory: str | None = None,
             logger_name: str = 'SocketWrapper',
-            logger_queue: multiprocessing.Queue = None,
+            logger_queue: multiprocessing.queues.Queue | None = None,
             statistics_logger_name: str = 'statistics',
-            statistics_logger_queue: multiprocessing.Queue = None,
+            statistics_logger_queue: multiprocessing.queues.Queue | None = None,
             exceptions_logger_name: str = 'SocketWrapperExceptions',
-            exceptions_logger_queue: multiprocessing.Queue = None,
+            exceptions_logger_queue: multiprocessing.queues.Queue | None = None,
             enable_sslkeylogfile_env_to_client_ssl_context: bool = False,
-            sslkeylog_file_path: str = None,
-            print_kwargs: dict = None,
+            sslkeylog_file_path: str | None = None,
+            print_kwargs: dict | None = None,
     ):
         """
         Socket Wrapper class that will be used to create sockets, listen on them, accept connections and send them to
@@ -534,14 +535,14 @@ class SocketWrapper:
         if self.engine is None:
             raise RuntimeError("engine is required for listening_socket_loop")
 
-        listening_sockets: list = [listening_socket_object]
+        listening_sockets: list[socket.socket] = [listening_socket_object]
 
         while True:
             engine_name: str = ''
             source_ip: str = ''
             source_hostname: str = ''
             dest_port: int = 0
-            domain_from_engine: str = ''
+            destination_domain: str = ''
 
             try:
                 # Using "select.select" which is currently the only API function that works on all
@@ -549,48 +550,23 @@ class SocketWrapper:
                 # To accept connection, we don't need "writable" and "exceptional", since "readable" holds the currently
                 # connected socket.
                 readable, writable, exceptional = select.select(listening_sockets, [], [])
-                listening_socket_object = readable[0]
+                listening_socket_object: socket.socket = readable[0]
 
                 listening_ip, listening_port = listening_socket_object.getsockname()
-
-                # Get the domain to connect on this process in case on no SNI provided.
-                for domain, ip_port_dict in self.engine.domain_target_dict.items():
-                    if ip_port_dict['ip'] == listening_ip:
-                        domain_from_engine = domain
-                        break
-                # If there was no domain found, try to find the IP address for port.
-                if not domain_from_engine:
-                    for port, file_or_ip in self.engine.port_target_dict.items():
-                        if file_or_ip['ip'] == listening_ip:
-                            # Get the value from the 'on_port_connect' dictionary.
-                            address_or_file_path: str = self.engine.on_port_connect[str(listening_port)]
-                            ip_port_address_from_config = initialize_engines.get_ipv4_from_engine_on_connect_port(
-                                address_or_file_path)
-                            if not ip_port_address_from_config:
-                                raise ValueError(
-                                    f"Invalid IP address or file path in 'on_port_connect' for port "
-                                    f"{listening_port}: {address_or_file_path}"
-                                )
-
-                            domain_from_engine = ip_port_address_from_config[0]
-
-                            break
-
-                self.logger.info(f"Requested domain setting: {domain_from_engine}")
-
-                engine_name = get_engine_name(domain_from_engine, [self.engine])
+                destination_domain = self._resolve_domain_for_listening_socket(listening_ip, listening_port)
+                engine_name = get_engine_name(destination_domain, [self.engine])
 
                 # Wait from any connection on "accept()".
                 # 'client_socket' is socket or ssl socket, 'client_address' is a tuple (ip_address, port).
-                client_socket, client_address, accept_error_message = accepter.accept_connection_with_error(
-                    listening_socket_object, domain_from_dns_server=domain_from_engine,
+                client_socket, client_address, accept_error_message = accepter.accept_connection(
+                    listening_socket_object, domain_from_dns_server=destination_domain,
                     print_kwargs={'logger': self.logger})
 
                 source_ip: str = client_address[0]
                 source_port: int = client_address[1]
-                dest_port: int = listening_socket_object.getsockname()[1]
+                dest_port: int = listening_port
 
-                message: str = f"Accepted connection from [{source_ip}:{source_port}] to [{listening_ip}:{dest_port}] | domain: {domain_from_engine}"
+                message: str = f"Accepted connection from [{source_ip}:{source_port}] to [{listening_ip}:{dest_port}] | domain: {destination_domain}"
                 print_api(message, logger=self.logger)
 
                 # If 'accept()' function worked well, then 'client_socket' won't be empty.
@@ -609,8 +585,8 @@ class SocketWrapper:
                     # SSL wrapping, and callable_function all run in the per-connection thread
                     # so the accept loop is never blocked by slow clients.
                     thread_current = threading.Thread(
-                        target=self._handle_connection,
-                        args=(client_socket, client_address, engine_name, domain_from_engine,
+                        target=self._serve_connection,
+                        args=(client_socket, client_address, engine_name, destination_domain,
                               dest_port, callable_function, callable_args),
                         daemon=True
                     )
@@ -628,7 +604,7 @@ class SocketWrapper:
                         source_ip=source_ip,
                         error_message=accept_error_message,
                         dest_port=str(dest_port),
-                        host=domain_from_engine,
+                        host=destination_domain,
                         process_name='')
             except (
                 ConnectionResetError, EOFError, TimeoutError,
@@ -643,7 +619,7 @@ class SocketWrapper:
                     source_ip=source_ip,
                     error_message=full_string,
                     dest_port=str(dest_port),
-                    host=domain_from_engine,
+                    host=destination_domain,
                     process_name='')
             except Exception as e:
                 _ = e
@@ -651,13 +627,45 @@ class SocketWrapper:
                 full_string: str = f"Engine: [{engine_name}] | {exception_string}"
                 self.exceptions_logger.write(full_string)
 
+    def _resolve_domain_for_listening_socket(self, listening_ip: str, listening_port: int) -> str:
+        """Resolve the connection's target domain from engine config when no SNI is provided."""
 
-    def _handle_connection(
+        if self.engine is None:
+            raise RuntimeError("engine is required for _resolve_domain_for_listening_socket")
+
+        destination_domain: str = ''
+
+        # Match the listening IP against the engine's domain targets.
+        for domain, ip_port_dict in self.engine.domain_target_dict.items():
+            if ip_port_dict['ip'] == listening_ip:
+                destination_domain = domain
+                break
+
+        # No domain match: resolve the IP for the port via 'on_port_connect'.
+        if not destination_domain:
+            for port, file_or_ip in self.engine.port_target_dict.items():
+                if file_or_ip['ip'] == listening_ip:
+                    address_or_file_path: str = self.engine.on_port_connect[str(listening_port)]
+                    ip_port_address_from_config = initialize_engines.get_ipv4_from_engine_on_connect_port(
+                        address_or_file_path)
+                    if not ip_port_address_from_config:
+                        raise ValueError(
+                            f"Invalid IP address or file path in 'on_port_connect' for port "
+                            f"{listening_port}: {address_or_file_path}"
+                        )
+
+                    destination_domain = ip_port_address_from_config[0]
+                    break
+
+        self.logger.info(f"Requested domain setting: {destination_domain}")
+        return destination_domain
+
+    def _serve_connection(
             self,
             client_socket,
             client_address: tuple,
             engine_name: str,
-            domain_from_engine: str,
+            destination_domain: str,
             dest_port: int,
             callable_function: Callable[..., Any],
             callable_args: tuple
@@ -670,7 +678,7 @@ class SocketWrapper:
         :param client_socket: socket, client socket that was accepted.
         :param client_address: tuple, (ip_address, port) of the client.
         :param engine_name: string, engine name.
-        :param domain_from_engine: string, domain from engine config.
+        :param destination_domain: string, domain from engine config.
         :param dest_port: int, destination port.
         :param callable_function: callable, function to execute for this connection.
         :param callable_args: tuple, additional arguments for callable_function.
@@ -740,25 +748,14 @@ class SocketWrapper:
             try:
                 is_tls, client_alpn_offers, prefetched_bytes, tls_properties = \
                     ssl_base.consume_client_hello(client_socket, timeout=10)
-            except TimeoutError:
-                error: str = "TimeoutError: ClientHello consumption timed out. Dropping accepted socket."
-                self.logger.error(error)
+            except (TimeoutError, ConnectionError) as exc:
+                # ClientHello sniff aborted — timed out or peer hung up. Drop the socket either way.
+                error: str
+                if isinstance(exc, TimeoutError):
+                    error = "TimeoutError: ClientHello consumption timed out. Dropping accepted socket."
+                else:
+                    error = f"ConnectionError: peer closed before ClientHello completed: {exc}"
 
-                self.statistics_writer.write_accept_error(
-                    engine=engine_name,
-                    source_host=source_hostname,
-                    source_ip=source_ip,
-                    error_message=error,
-                    dest_port=str(dest_port),
-                    host=domain_from_engine,
-                    process_name=process_name)
-
-                client_socket.close()
-                return
-            except ConnectionError as exc:
-                # Peer closed before we got a full sniff — nothing to
-                # process. Same drop-the-socket path as a timeout.
-                error = f"ConnectionError: peer closed before ClientHello completed: {exc}"
                 self.logger.error(error)
                 self.statistics_writer.write_accept_error(
                     engine=engine_name,
@@ -766,17 +763,11 @@ class SocketWrapper:
                     source_ip=source_ip,
                     error_message=error,
                     dest_port=str(dest_port),
-                    host=domain_from_engine,
+                    host=destination_domain,
                     process_name=process_name)
                 client_socket.close()
                 return
 
-            # Preserve the log-friendly tls_type/tls_version fields even
-            # when the record-layer version byte can't distinguish 1.2
-            # from 1.3 — ``consume_client_hello`` returns
-            # ``"TLSv1.2/1.3"`` for the ambiguous (0x03, 0x03) case, and
-            # the real version is filled in after the handshake
-            # completes below (``ssl_client_socket.version()``).
             if tls_properties is not None:
                 tls_type, tls_version = tls_properties
             else:
@@ -810,7 +801,7 @@ class SocketWrapper:
                     custom_server_certificate_usage=self.custom_server_certificate_usage,
                     custom_server_certificate_path=self.custom_server_certificate_path,
                     custom_private_key_path=self.custom_private_key_path,
-                    domain_from_dns_server=domain_from_engine,
+                    domain_from_dns_server=destination_domain,
                     forwarding_dns_service_ipv4_list___only_for_localhost=(
                         self.forwarding_dns_service_ipv4_list___only_for_localhost),
                     tls=is_tls,
@@ -850,7 +841,7 @@ class SocketWrapper:
                         source_ip=source_ip,
                         error_message=accept_error_message,
                         dest_port=str(dest_port),
-                        host=domain_from_engine,
+                        host=destination_domain,
                         process_name=process_name)
 
                     return
@@ -858,8 +849,7 @@ class SocketWrapper:
                 # Get the real tls version after connection is wrapped.
                 tls_version = ssl_client_socket.version()
 
-                # If the 'domain_from_dns_server' is empty, it means that the 'engine_name' is not set.
-                # In this case we will set the 'engine_name' to from the SNI.
+                # No engine matched the destination domain, so engine_name is empty — fall back to the SNI.
                 if engine_name == '':
                     sni_hostname: str = ssl_client_socket.server_hostname
                     if sni_hostname:
@@ -890,7 +880,7 @@ class SocketWrapper:
 
             # Build args and call the callable_function directly (we're already in a thread).
             thread_args = (
-                (client_socket, process_name, is_tls, tls_type, tls_version, domain_from_engine,
+                (client_socket, process_name, is_tls, tls_type, tls_version, destination_domain,
                  self.statistics_writer, [self.engine], client_alpn_offers) + callable_args)
 
             try:
@@ -913,7 +903,7 @@ class SocketWrapper:
                 source_ip=source_ip,
                 error_message=full_string,
                 dest_port=str(dest_port),
-                host=domain_from_engine,
+                host=destination_domain,
                 process_name=process_name)
         except Exception as e:
             _ = e

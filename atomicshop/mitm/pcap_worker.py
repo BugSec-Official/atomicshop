@@ -1,4 +1,5 @@
 import os
+import faulthandler
 import multiprocessing
 from datetime import datetime
 
@@ -15,6 +16,15 @@ def pcap_writer_worker(
     Multiprocessing worker that receives pcap data from a queue and writes
     to per-engine daily pcapng files with thread_id comments.
     """
+    # Dump every thread's Python stack to a per-PID file on a native fault before the OS kills us.
+    # 'spawn' = fresh interpreter, so enable per-process; write direct (the queue listener may be dead).
+    try:
+        _faulthandler_file = open(
+            f'{recordings_path}{os.sep}faulthandler_pcap_{os.getpid()}.log', 'a', buffering=1)
+        faulthandler.enable(file=_faulthandler_file, all_threads=True)
+    except OSError:
+        pass
+
     from ..wrappers.loggingw import loggingw
 
     # Set up logging with QueueHandler (same pattern as _create_tcp_server_process).

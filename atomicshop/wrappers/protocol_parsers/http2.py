@@ -68,6 +68,9 @@ class Http2RequestParse:
         self.body: bytes = bytes(body)
         self.trailers: dict[str, str] = {k: v for k, v in trailers}
         self.stream_id: int = stream_id
+        # Ordered, case-preserving wire view for semantic validation (dicts above lose both).
+        self.raw_headers: list[tuple[str, str]] = list(headers)
+        self.raw_trailers: list[tuple[str, str]] = list(trailers)
 
 
 class Http2ResponseParse:
@@ -83,6 +86,9 @@ class Http2ResponseParse:
         self.trailers: dict[str, str] = {k: v for k, v in trailers}
         self.stream_id: int = stream_id
         self.path: str = ''  # filled by parse_http from the request-side FIFO
+        # Ordered, case-preserving wire view for semantic validation (dicts above lose both).
+        self.raw_headers: list[tuple[str, str]] = list(headers)
+        self.raw_trailers: list[tuple[str, str]] = list(trailers)
 
 
 class Http2DirectionParser:
@@ -191,6 +197,63 @@ class Http2DirectionParser:
                 yield Http2ResponseParse(decoded, b'', [], sid)
                 return
         accum.headers = decoded
+
+
+# ============================================================================
+# Response semantic validation (RFC 9113 §8.1.2/§8.2): rules the permissive
+# parser skips, enforced for the responder gate to match h11 on HTTP/1.x.
+# ============================================================================
+
+# Connection-specific fields are forbidden on the wire in HTTP/2 (§8.2.2).
+_H2_FORBIDDEN_HEADERS = frozenset({
+    'connection', 'proxy-connection', 'keep-alive', 'transfer-encoding', 'upgrade'})
+
+
+def validate_response_headers(raw_headers) -> str | None:
+    """Defect string if raw_headers isn't a valid HTTP/2 response header block, else None.
+
+    raw_headers: ordered decoded (name, value) tuples as they arrived on the wire.
+    """
+    status_count = 0
+    seen_regular = False
+    for name, value in raw_headers:
+        if not name:
+            return "empty header field name"
+        if name != name.lower():
+            return f"field name not lowercase: {name!r}"
+        if name[0] == ':':
+            if seen_regular:
+                return f"pseudo-header {name!r} after a regular header"
+            if name != ':status':
+                return f"invalid response pseudo-header: {name!r}"
+            status_count += 1
+            if not (len(value) == 3 and value.isdigit() and 100 <= int(value) <= 599):
+                return f"invalid :status value: {value!r}"
+        else:
+            seen_regular = True
+            if name in _H2_FORBIDDEN_HEADERS:
+                return f"connection-specific header forbidden in HTTP/2: {name!r}"
+            if name == 'te' and value.lower() != 'trailers':
+                return f"te header must be 'trailers' in HTTP/2: {value!r}"
+    if status_count == 0:
+        return "missing :status pseudo-header"
+    if status_count > 1:
+        return "multiple :status pseudo-headers"
+    return None
+
+
+def validate_response_trailers(raw_trailers) -> str | None:
+    """Defect string if raw_trailers carries anything illegal for a trailer block, else None."""
+    for name, value in raw_trailers:
+        if not name:
+            return "empty trailer field name"
+        if name != name.lower():
+            return f"trailer field name not lowercase: {name!r}"
+        if name[0] == ':':
+            return f"pseudo-header {name!r} not allowed in trailers"
+        if name in _H2_FORBIDDEN_HEADERS:
+            return f"connection-specific header forbidden in trailers: {name!r}"
+    return None
 
 
 # ============================================================================

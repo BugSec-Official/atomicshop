@@ -3,7 +3,7 @@ import socket
 import ssl
 import time
 
-from . import socket_base, exception_wrapper, bio_adapter
+from . import socket_base, bio_adapter
 from ...print_api import print_api
 
 
@@ -40,7 +40,8 @@ def add_reusable_address_option(socket_instance):
 def create_ssl_context_for_server(
         enable_sslkeylogfile_env_to_client_ssl_context: bool = False,
         sslkeylog_file_path: str = None,
-        allow_legacy: bool = False
+        allow_legacy: bool = False,
+        alpn_protocols: list[str] | None = None
 ) -> ssl.SSLContext:
     """
     This function creates the SSL context for the server.
@@ -84,12 +85,17 @@ def create_ssl_context_for_server(
         # If you truly have TLS 1.0/1.1 clients, uncomment the next line (not recommended):
         ssl_context.minimum_version = ssl.TLSVersion.TLSv1
 
+    # Mirror caller-supplied ALPN. None / empty list = don't advertise ALPN.
+    if alpn_protocols:
+        ssl_context.set_alpn_protocols(alpn_protocols)
+
     return ssl_context
 
 
 def create_ssl_context_for_client(
         enable_sslkeylogfile_env_to_client_ssl_context: bool = False,
-        sslkeylog_file_path: str = None
+        sslkeylog_file_path: str = None,
+        alpn_protocols: list[str] | None = None
 ) -> ssl.SSLContext:
     """
     This function creates the SSL context for the client.
@@ -120,6 +126,10 @@ def create_ssl_context_for_client(
 
     current_ciphers = 'AES256-GCM-SHA384:' + ssl._DEFAULT_CIPHERS
     ssl_context.set_ciphers(current_ciphers)
+
+    # Mirror caller-supplied ALPN. None / empty list = don't advertise ALPN.
+    if alpn_protocols:
+        ssl_context.set_alpn_protocols(alpn_protocols)
 
     return ssl_context
 
@@ -225,11 +235,12 @@ def create_server_ssl_context___load_certificate_and_key(
         inherit_from: ssl.SSLContext | None = None,
         enable_sslkeylogfile_env_to_client_ssl_context: bool = False,
         sslkeylog_file_path: str = None,
+        alpn_protocols: list[str] | None = None,
 ) -> ssl.SSLContext:
     # Create and set ssl context for server.
     ssl_context: ssl.SSLContext = create_ssl_context_for_server(
         allow_legacy=True, enable_sslkeylogfile_env_to_client_ssl_context=enable_sslkeylogfile_env_to_client_ssl_context,
-        sslkeylog_file_path=sslkeylog_file_path)
+        sslkeylog_file_path=sslkeylog_file_path, alpn_protocols=alpn_protocols)
 
     # If you replaced contexts during SNI, copy policy from the old one
     if inherit_from is not None:
@@ -239,48 +250,6 @@ def create_server_ssl_context___load_certificate_and_key(
     load_certificate_and_key_into_server_ssl_context(ssl_context, certificate_file_path, key_file_path)
     # Return ssl context only.
     return ssl_context
-
-
-@exception_wrapper.connection_exception_decorator
-def wrap_socket_with_ssl_context_server(
-        socket_object,
-        ssl_context,
-        domain_from_dns_server: str = None,
-        print_kwargs: dict = None
-):
-    """
-    This function is wrapped with exception wrapper.
-    After you execute the function, you can get the error message if there was any with:
-        error_message = wrap_socket_with_ssl_context_server.message
-
-    :param socket_object: The socket object to accept the connection on.
-    :param ssl_context: The SSL context to wrap the socket with.
-    :param domain_from_dns_server: The domain that will be printed to console on logger, needed for the decorator.
-        If not provided, the TCP data will be used.
-    :param print_kwargs: Additional arguments for the print_api function, needed for the decorator.
-    """
-
-    # Wrapping the server socket with SSL context. This should happen right after setting up the raw socket.
-    # ssl_socket = ssl_context.wrap_socket(socket_object, server_side=True, do_handshake_on_connect=False)
-    # ssl_socket.do_handshake()
-    ssl_socket = ssl_context.wrap_socket(socket_object, server_side=True)
-    return ssl_socket
-
-
-def wrap_socket_with_ssl_context_server_with_error_message(
-        socket_object,
-        ssl_context,
-        domain_from_dns_server,
-        print_kwargs: dict = None
-):
-
-    ssl_socket = wrap_socket_with_ssl_context_server(
-        socket_object=socket_object, ssl_context=ssl_context, domain_from_dns_server=domain_from_dns_server,
-        print_kwargs=print_kwargs)
-
-    error_message = wrap_socket_with_ssl_context_server.message
-
-    return ssl_socket, error_message
 
 
 def _pump_handshake(
@@ -452,10 +421,8 @@ def wrap_bio_server_with_error_message(
         ClientHello record — if it doesn't, OpenSSL will ask for more
         via ``SSLWantReadError`` and the pump will satisfy it from the
         real socket, but the extra hop is unnecessary.
-    :param domain_from_dns_server: passed through purely for logging /
-        error reporting symmetry with
-        ``wrap_socket_with_ssl_context_server_with_error_message``.
-        Not used structurally.
+    :param domain_from_dns_server: accepted for signature parity with the
+        accept-path helpers; not used structurally.
     :param print_kwargs: forwarded to ``print_api`` for error logging.
     :param deadline_seconds: overall handshake deadline; matches the
         10 s default of the legacy accept path.
@@ -463,10 +430,8 @@ def wrap_bio_server_with_error_message(
     :return: ``(BIOSocketAdapter | None, error_message | None)``.
         On success the adapter is returned and error_message is None.
         On handshake failure the adapter is None and error_message
-        contains a short human-readable reason — matches the existing
-        error-reporting convention used by
-        ``wrap_socket_with_ssl_context_server_with_error_message`` so
-        callers don't need a branch for the BIO variant.
+        contains a short human-readable reason, so callers branch on a
+        plain return value instead of catching exceptions.
     """
 
     _ = domain_from_dns_server  # Kept for signature parity; not used.
@@ -579,7 +544,8 @@ def wrap_socket_with_ssl_context_client___default_certs___ignore_verification(
         server_hostname: str = None,
         custom_pem_client_certificate_file_path: str = None,
         enable_sslkeylogfile_env_to_client_ssl_context: bool = False,
-        sslkeylog_file_path: str = None
+        sslkeylog_file_path: str = None,
+        alpn_protocols: list[str] | None = None
 ) -> ssl.SSLSocket:
     """
     This function is a preset for wrapping the socket with SSL context for the client.
@@ -596,8 +562,9 @@ def wrap_socket_with_ssl_context_client___default_certs___ignore_verification(
     :return: ssl.SSLSocket object
     """
     ssl_context: ssl.SSLContext = create_ssl_context_for_client(
-        enable_sslkeylogfile_env_to_client_ssl_context=enable_sslkeylogfile_env_to_client_ssl_context
-        ,sslkeylog_file_path=sslkeylog_file_path)
+        enable_sslkeylogfile_env_to_client_ssl_context=enable_sslkeylogfile_env_to_client_ssl_context,
+        sslkeylog_file_path=sslkeylog_file_path,
+        alpn_protocols=alpn_protocols)
     set_client_ssl_context_ca_default_certs(ssl_context)
     set_client_ssl_context_certificate_verification_ignore(ssl_context)
 

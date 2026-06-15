@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 from urllib.parse import parse_qs
 
 from ...message import ClientMessage
-from .... import http_parse
+from ....wrappers.protocol_parsers import http
 from ....print_api import print_api
 
 from atomicshop.mitm.shared_functions import create_custom_logger
@@ -70,7 +70,7 @@ class RequesterParent:
 
         try:
             # CHeck if the HTTP method is valid.
-            if http_method not in http_parse.get_request_methods():
+            if http_method not in http.get_request_methods():
                 raise ValueError(f"Invalid HTTP Method: {http_method}")
 
             # Building the full method endpoint string line and the "\r\n" in the end.
@@ -99,7 +99,7 @@ class RequesterParent:
             request_raw_bytes = b''
 
         # Parsing the request we created.
-        request_parse_test = http_parse.HTTPRequestParse(request_raw_bytes)
+        request_parse_test = http.HTTPRequestParse(request_raw_bytes)
         # If there were errors during parsing, it means that something is wrong with response created.
         if request_parse_test.error_message:
             self.logger.error(request_parse_test.error_message)

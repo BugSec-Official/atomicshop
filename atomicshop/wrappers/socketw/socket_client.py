@@ -21,6 +21,16 @@ from ...file_io import file_io
 from ...basics import tracebacks
 
 
+def lookup_mtls_client_pem(
+        mtls_subdomains: dict | set | None,
+        subdomain: str
+) -> str | None:
+    """Per-subdomain mTLS client cert pem path for ``custom_pem_client_certificate_file_path``, or ``None``."""
+    if isinstance(mtls_subdomains, dict):
+        return mtls_subdomains.get(subdomain)
+    return None
+
+
 class SocketClient:
     def __init__(
             self,
@@ -32,7 +42,8 @@ class SocketClient:
             logger: logging.Logger | None = None,
             custom_pem_client_certificate_file_path: str = None,
             enable_sslkeylogfile_env_to_client_ssl_context: bool = False,
-            sslkeylog_file_path:str = None
+            sslkeylog_file_path:str = None,
+            client_alpn_offers: list[str] | None = None
     ):
         """
         If you have a certificate for domain, but not for the IPv4 address, the SSL Socket context can be created for
@@ -70,6 +81,9 @@ class SocketClient:
         self.custom_pem_client_certificate_file_path: str = custom_pem_client_certificate_file_path
         self.enable_sslkeylogfile_env_to_client_ssl_context: bool = enable_sslkeylogfile_env_to_client_ssl_context
         self.sslkeylog_file_path: str = sslkeylog_file_path
+        # Mirror of the inbound ClientHello ALPN offers, so the upstream handshake
+        # negotiates the same protocol the real client asked for.
+        self.client_alpn_offers: list[str] | None = client_alpn_offers
 
         if logger is not None:
             # Create child logger for the provided logger with the module's name.
@@ -104,7 +118,8 @@ class SocketClient:
             return creator.wrap_socket_with_ssl_context_client___default_certs___ignore_verification(
                 socket_object, self.service_name, self.custom_pem_client_certificate_file_path,
                 enable_sslkeylogfile_env_to_client_ssl_context=self.enable_sslkeylogfile_env_to_client_ssl_context,
-                sslkeylog_file_path=self.sslkeylog_file_path
+                sslkeylog_file_path=self.sslkeylog_file_path,
+                alpn_protocols=self.client_alpn_offers,
             )
 
     def service_connection(

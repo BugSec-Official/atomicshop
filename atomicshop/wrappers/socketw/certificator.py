@@ -32,7 +32,9 @@ class Certificator:
             skip_extension_id_list: list,
             tls: bool,
             enable_sslkeylogfile_env_to_client_ssl_context: bool,
-            sslkeylog_file_path: str
+            sslkeylog_file_path: str,
+            mtls_subdomains: dict | set | None = None,
+            client_alpn_offers: list[str] | None = None
     ):
         self.ca_certificate_name = ca_certificate_name
         self.ca_certificate_filepath = ca_certificate_filepath
@@ -54,6 +56,8 @@ class Certificator:
         self.enable_sslkeylogfile_env_to_client_ssl_context: bool = (
             enable_sslkeylogfile_env_to_client_ssl_context)
         self.sslkeylog_file_path: str = sslkeylog_file_path
+        self.mtls_subdomains = mtls_subdomains
+        self.client_alpn_offers = client_alpn_offers
 
         # noinspection PyTypeChecker
         self.certauth_wrapper: CertAuthWrapper = None
@@ -159,6 +163,12 @@ class Certificator:
             # calls.
             client_ip = socket_base.get_source_address_from_socket(sni_received_parameters.raw_socket)[0]
 
+            # Per-subdomain mTLS client cert for the cert-fetch leg — same lookup the
+            # data-path leg uses, so upstreams that require mTLS will hand us their
+            # real server cert for cloning.
+            mtls_client_pem_path = socket_client.lookup_mtls_client_pem(
+                self.mtls_subdomains, sni_received_parameters.destination_name)
+
             # If we're on localhost, then use external services list in order to resolve the domain:
             if client_ip in socket_base.THIS_DEVICE_IP_LIST:
                 service_client = socket_client.SocketClient(
@@ -166,7 +176,9 @@ class Certificator:
                     service_port=socket_base.get_destination_address_from_socket(sni_received_parameters.raw_socket)[1],
                     tls=self.tls,
                     dns_servers_list=self.forwarding_dns_service_ipv4_list___only_for_localhost,
-                    logger=print_kwargs.get('logger') if print_kwargs else None
+                    logger=print_kwargs.get('logger') if print_kwargs else None,
+                    custom_pem_client_certificate_file_path=mtls_client_pem_path,
+                    client_alpn_offers=self.client_alpn_offers,
                 )
             # If we're not on localhost, then connect to domain directly.
             else:
@@ -174,7 +186,9 @@ class Certificator:
                     service_name=sni_received_parameters.destination_name,
                     service_port=socket_base.get_destination_address_from_socket(sni_received_parameters.raw_socket)[1],
                     tls=self.tls,
-                    logger=print_kwargs.get('logger') if print_kwargs else None
+                    logger=print_kwargs.get('logger') if print_kwargs else None,
+                    custom_pem_client_certificate_file_path=mtls_client_pem_path,
+                    client_alpn_offers=self.client_alpn_offers,
                 )
 
             # If certificate from socket exists, then we don't need to get it from the socket and write to file.
@@ -235,10 +249,15 @@ class Certificator:
 
         # You need to build new context and exchange the context that being inherited from the main socket,
         # or else the context will receive previous certificate each time.
+        # ``alpn_protocols`` must be re-asserted on the swapped context — ``set_alpn_protocols``
+        # is write-only with no inheritance, so omitting it here drops ALPN from ServerHello.
+        # ``inherit_from`` carries cipher policy across the swap (see ``copy_server_ctx_settings``).
         sni_received_parameters.ssl_socket.context = (
             creator.create_server_ssl_context___load_certificate_and_key(
                 certificate_file_path=sni_server_certificate_file_path, key_file_path=None,
+                inherit_from=sni_received_parameters.ssl_socket.context,
                 enable_sslkeylogfile_env_to_client_ssl_context=self.enable_sslkeylogfile_env_to_client_ssl_context,
-                sslkeylog_file_path=self.sslkeylog_file_path
+                sslkeylog_file_path=self.sslkeylog_file_path,
+                alpn_protocols=self.client_alpn_offers,
             )
         )

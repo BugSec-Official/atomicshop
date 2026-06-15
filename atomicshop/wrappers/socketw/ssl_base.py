@@ -2,6 +2,9 @@ import ssl
 import struct
 from typing import Tuple, Optional
 
+from tlslite.messages import ClientHello as _TlsLiteClientHello
+from tlslite.utils.codec import Parser as _TlsLiteParser
+
 from . import receiver
 
 
@@ -163,214 +166,34 @@ def consume_client_hello(
     buffered += receiver.recv_exact(client_socket, record_length, timeout=timeout)
 
     # ---- Step 6: parse ALPN from the ClientHello ----
-    # Any parsing failure (malformed record, missing ALPN extension, unknown
-    # extension structure) degrades to "no ALPN mirroring" rather than
-    # aborting the TLS path — the real handshake can still proceed from the
-    # bytes we've buffered.
-    try:
-        alpn_offers = _parse_alpn_from_client_hello_record(buffered)
-    except (struct.error, IndexError, ValueError):
-        alpn_offers = None
+    # Returns None on any failure (malformed record, missing ALPN extension,
+    # unparseable ClientHello) — the TLS path still proceeds from the buffered
+    # bytes, just without faithful upstream ALPN mirroring.
+    alpn_offers = _parse_alpn_from_client_hello_record(buffered)
 
     return True, alpn_offers, buffered, tls_properties
 
 
 def _parse_alpn_from_client_hello_record(record: bytes) -> Optional[list[str]]:
+    """Extract the client's ALPN offers (in client order) from a full ClientHello
+    record, or None when the record isn't a ClientHello, carries no ALPN extension,
+    or won't parse. Never raises — the caller reads None as "no ALPN mirroring".
+
+    ClientHello dissection is delegated to tlslite-ng; we only strip the record +
+    handshake framing (already validated by the accept path) and read the ALPN
+    protocol list back out.
     """
-    Parse a full TLS record containing a ClientHello and extract the ALPN
-    extension's protocol list. Returns None if the record is not a ClientHello
-    or the ALPN extension is absent. Raises on malformed input.
-    """
-    # TLS record header: [content_type(1) version(2) length(2)]
-    # We already know content_type == 0x16 at this point.
-    body = record[5:]
-
-    # Handshake header: [handshake_type(1) length(3)]
-    if len(body) < 4:
+    body = record[5:]                          # drop the 5-byte TLS record header
+    if len(body) < 4 or body[0] != 0x01:       # handshake header; 0x01 == ClientHello
         return None
-    handshake_type = body[0]
-    if handshake_type != 0x01:  # ClientHello
+    try:
+        parser = _TlsLiteParser(body)
+        parser.get(1)                          # consume handshake type; parse() reads its own 3-byte length
+        client_hello = _TlsLiteClientHello().parse(parser)
+        for extension in (client_hello.extensions or []):
+            names = getattr(extension, "protocol_names", None)  # only ALPNExtension has this
+            if names is not None:
+                return [bytes(name).decode("ascii") for name in names] or None
+    except Exception:                          # malformed ClientHello -> degrade to no ALPN mirroring
         return None
-
-    # Skip handshake header.
-    ch = body[4:]
-    # legacy_version(2) + random(32)
-    offset = 2 + 32
-    # session_id: 1-byte length prefix.
-    sid_len = ch[offset]
-    offset += 1 + sid_len
-    # cipher_suites: 2-byte length prefix.
-    cs_len = (ch[offset] << 8) | ch[offset + 1]
-    offset += 2 + cs_len
-    # compression_methods: 1-byte length prefix.
-    cm_len = ch[offset]
-    offset += 1 + cm_len
-    # extensions: 2-byte length prefix, then a sequence of [type(2) length(2) data].
-    if offset + 2 > len(ch):
-        return None
-    ext_total = (ch[offset] << 8) | ch[offset + 1]
-    offset += 2
-    ext_end = offset + ext_total
-    if ext_end > len(ch):
-        return None
-
-    while offset + 4 <= ext_end:
-        ext_type = (ch[offset] << 8) | ch[offset + 1]
-        ext_len = (ch[offset + 2] << 8) | ch[offset + 3]
-        ext_data_start = offset + 4
-        ext_data_end = ext_data_start + ext_len
-        if ext_data_end > ext_end:
-            return None
-
-        # 0x0010 = application_layer_protocol_negotiation
-        if ext_type == 0x0010:
-            return _parse_alpn_extension_body(ch[ext_data_start:ext_data_end])
-
-        offset = ext_data_end
-
     return None
-
-
-def _parse_alpn_extension_body(data: bytes) -> Optional[list[str]]:
-    """
-    Parse the inner list of the ALPN extension: [list_length(2)] then a
-    sequence of length-prefixed (1 byte) protocol names.
-    """
-    if len(data) < 2:
-        return None
-    list_length = (data[0] << 8) | data[1]
-    if 2 + list_length != len(data):
-        return None
-
-    offset = 2
-    offers: list[str] = []
-    while offset < len(data):
-        name_length = data[offset]
-        offset += 1
-        if offset + name_length > len(data):
-            return None
-        name_bytes = data[offset:offset + name_length]
-        try:
-            offers.append(name_bytes.decode("ascii"))
-        except UnicodeDecodeError:
-            return None
-        offset += name_length
-
-    return offers or None
-
-
-# ======================================================================================
-# Retired implementations — kept for historical reference only.
-# Do NOT call these from new code. See ``consume_client_hello`` above for the live
-# function used by the sans-io consume+MemoryBIO accept path.
-# ======================================================================================
-
-
-def __is_tls(client_socket, timeout: float = None) -> Tuple[bool, Optional[Tuple[str, Optional[str]]]]:
-    # THIS IS NO LONGER USED, FOR REFERENCE ONLY.
-    """
-    Peek-based TLS sniff — superseded by ``consume_client_hello``.
-
-    Why this was retired
-    --------------------
-    Used ``MSG_PEEK`` on the raw socket to look at the first 3 bytes without
-    consuming them, then decided TLS-or-not from the content_type and version
-    byte. Two problems drove replacement:
-
-    * The peek returns only what's already in the kernel receive buffer. A
-      slow peer can arrive byte-by-byte and the peek comes back short.
-    * The downstream ``peek_alpn_offers`` peek was a *separate* syscall on
-      kernel buffer state that isn't stable between calls — by the time we
-      asked for more bytes, the buffer contents could have shifted.
-
-    The replacement (``consume_client_hello``) reads bytes into a Python
-    buffer once, inspects them in Python, and re-injects them into OpenSSL
-    via a ``MemoryBIO`` so the real handshake still sees a faithful record.
-
-    :param client_socket: Socket object.
-    :param timeout: float, Timeout in seconds for the peek.
-
-    :return: tuple (is_tls: bool, tls_properties: (content_type_str, version_str) | None).
-    """
-    peek_bytes = receiver.__peek_first_bytes(client_socket, 3, timeout=timeout)
-
-    content_type = peek_bytes[0]
-    version_major = peek_bytes[1]
-    version_minor = peek_bytes[2]
-
-    if content_type != 0x16 or version_major != 0x03:
-        return False, None
-
-    content_type_map = {
-        0x14: "Change Cipher Spec",
-        0x15: "Alert",
-        0x16: "Handshake",
-        0x17: "Application Data",
-        0x18: "Heartbeat",
-    }
-    version_map = {
-        (0x03, 0x00): "SSLv3.0",
-        (0x03, 0x01): "TLSv1.0",
-        (0x03, 0x02): "TLSv1.1",
-        (0x03, 0x03): "TLSv1.2/1.3",
-    }
-    tls_properties = (
-        content_type_map.get(content_type, "Handshake"),
-        version_map.get((version_major, version_minor)),
-    )
-    return True, tls_properties
-
-
-def __peek_alpn_offers(client_socket, timeout: float = None) -> Optional[list[str]]:
-    # THIS IS NO LONGER USED, FOR REFERENCE ONLY.
-    """
-    Peek-based ClientHello ALPN extractor — superseded by ``consume_client_hello``.
-
-    Why this was retired
-    --------------------
-    Peeked the 5-byte record header, read the declared record length out of
-    bytes 3-4, then peeked that many bytes again and handed them to
-    ``_parse_alpn_from_client_hello_record``. Failed whenever the ClientHello
-    spanned multiple TCP segments (common under TLS 1.3 + post-quantum
-    key_share, ~1500-2500 B) because ``MSG_PEEK`` only returns what's
-    currently sitting in the kernel receive buffer. Short peek → short
-    parse → ALPN offers lost → upstream leg can't mirror client ALPN
-    faithfully.
-
-    Consumed approach (``consume_client_hello``) loops ``recv()`` until the
-    full record has arrived, so fragmentation doesn't drop ALPN info on
-    the floor.
-
-    :param client_socket: Socket object.
-    :param timeout: float, per-peek timeout in seconds.
-
-    :return: list of ALPN offer strings in client order, or ``None`` if the
-        ALPN extension is absent, the peek came up short, or parsing failed.
-    """
-    try:
-        header = receiver.__peek_first_bytes(client_socket, 5, timeout=timeout)
-    except TimeoutError:
-        return None
-
-    if len(header) < 5:
-        return None
-
-    record_length = (header[3] << 8) | header[4]
-    total_needed = 5 + record_length
-
-    # Cap to avoid a runaway peek — the record spec tops out at 16384.
-    if total_needed > 4096:
-        return None
-
-    try:
-        record = receiver.__peek_first_bytes(client_socket, total_needed, timeout=timeout)
-    except TimeoutError:
-        return None
-
-    if len(record) < total_needed:
-        return None
-
-    try:
-        return _parse_alpn_from_client_hello_record(record)
-    except (struct.error, IndexError, ValueError):
-        return None

@@ -5,6 +5,7 @@ import datetime
 import os
 import sys
 import logging
+import faulthandler
 import signal
 from pathlib import Path
 
@@ -785,8 +786,33 @@ def mitm_server(config_file_path: str, script_version: str) -> int:
             result, process_name = multiprocesses.is_process_crashed(multiprocess_list)
             # If result is None, all processes are still alive.
             if result is not None:
-                # If result is 0 or 1, we can exit the loop.
-                print(f"Process [{process_name}] finished with exit code {result}.")
+                # Decode the worker exit code. A native crash (e.g. 0xC0000374 STATUS_HEAP_CORRUPTION
+                # on Windows, or a POSIX signal) kills the worker with no Python traceback, so this
+                # parent-side record is the only trace we get of it.
+                if result < 0:  # POSIX: terminated by signal -result.
+                    detail = f'signal {-result}'
+                    is_native_crash = True
+                else:
+                    code = result & 0xFFFFFFFF
+                    ntstatus_name = {
+                        0xC0000005: 'STATUS_ACCESS_VIOLATION',
+                        0xC0000374: 'STATUS_HEAP_CORRUPTION',
+                        0xC0000409: 'STATUS_STACK_BUFFER_OVERRUN',
+                        0xC00000FD: 'STATUS_STACK_OVERFLOW',
+                    }.get(code, '')
+                    detail = f'0x{code:08X}{f" {ntstatus_name}" if ntstatus_name else ""}'
+                    is_native_crash = code >= 0xC0000000  # Windows NTSTATUS error range.
+                message = (f"Process [{process_name}] finished with exit code {result} ({detail})"
+                           f"{'  <-- NATIVE CRASH' if is_native_crash else ''}.")
+                print(message)
+                # is_process_crashed() just killed the log-queue listeners, so write straight to file.
+                if is_native_crash:
+                    try:
+                        with open(f'{config_static.LogRec.logs_path}{os.sep}native_crashes.log', 'a',
+                                  encoding='utf-8') as crash_file:
+                            crash_file.write(f'{datetime.datetime.now().isoformat()} {message}\n')
+                    except OSError:
+                        pass
                 break
 
             time.sleep(1)
@@ -805,6 +831,15 @@ def _create_tcp_server_process(
 ):
     # Load config_static per process, since it is not shared between processes.
     config_static.load_config(config_file_path, print_kwargs=dict(stdout=False))
+
+    # Dump every thread's Python stack to a per-PID file on a native fault before the OS kills us.
+    # 'spawn' = fresh interpreter, so enable per-process; write direct (the queue listener may be dead).
+    try:
+        _faulthandler_file = open(
+            f'{config_static.LogRec.logs_path}{os.sep}faulthandler_{os.getpid()}.log', 'a', buffering=1)
+        faulthandler.enable(file=_faulthandler_file, all_threads=True)
+    except OSError:
+        pass
 
     # Make pcap queue available to recorder workers in this process.
     from .engines.__parent import recorder___parent

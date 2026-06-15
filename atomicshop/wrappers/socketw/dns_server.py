@@ -1,4 +1,5 @@
 import os
+import faulthandler
 import datetime
 import time
 import threading
@@ -1007,6 +1008,15 @@ def start_dns_server_multiprocessing_worker(
     # Setting the current thread name to the current process name.
     current_process_name = multiprocessing.current_process().name
     threading.current_thread().name = current_process_name
+
+    # Dump every thread's Python stack to a per-PID file on a native fault before the OS kills us.
+    # 'spawn' = fresh interpreter, so enable per-process; write direct (the queue listener may be dead).
+    try:
+        _faulthandler_file = open(
+            f'{log_directory_path}{os.sep}faulthandler_dns_{os.getpid()}.log', 'a', buffering=1)
+        faulthandler.enable(file=_faulthandler_file, all_threads=True)
+    except OSError:
+        pass
 
     try:
         dns_server_instance = DnsServer(

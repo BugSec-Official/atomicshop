@@ -169,14 +169,26 @@ def test_fix_mixed_strips_bom_but_still_needs_manual(tmp_path):
 
 def test_fix_preserves_crlf_newlines(tmp_path):
     path = _write(tmp_path, "parser.py", b"\xef\xbb\xbfa = 1\r\nb = 2\r\n")
-    encoding.fix_file_lossless(path)
+    assert encoding.fix_file_lossless(path) is encoding.FixOutcome.FIXED
     with open(path, "rb") as f:
         assert f.read() == b"a = 1\r\nb = 2\r\n"          # CRLF intact, not doubled
 
 
+def test_fix_coding_cookie_preserves_crlf(tmp_path):
+    # cp1255-declared file with CRLF newlines: cookie rewritten, CRLFs neither lost nor doubled.
+    body = b"# -*- coding: cp1255 -*-\r\nx = 1  # \x93q\x94\r\nclass P:\r\n    pass\r\n"
+    path = _write(tmp_path, "parser.py", body)
+    assert encoding.fix_file_lossless(path) is encoding.FixOutcome.FIXED
+    with open(path, "rb") as f:
+        new = f.read()
+    new.decode("utf-8")                                  # valid UTF-8
+    assert b"coding: utf-8" in new
+    assert new.count(b"\r\n") == 4 and b"\r\r\n" not in new   # all 4 CRLFs preserved
+
+
 # --- server hook: import_engines_configs refuses bad encodings --------------
 
-def test_import_engines_configs_returns_nonzero_on_bad_encoding(tmp_path, capsys):
+def test_import_engines_configs_returns_nonzero_on_bad_encoding(tmp_path, capsys, monkeypatch):
     from atomicshop.mitm import config_static, import_config
 
     engines_dir = tmp_path / "engines"
@@ -185,8 +197,9 @@ def test_import_engines_configs_returns_nonzero_on_bad_encoding(tmp_path, capsys
     (eng / "engine_config.toml").write_bytes(b"[engine]\ndomains = ['x.com:443']\n")
     (eng / "responder.py").write_bytes(b"\xef\xbb\xbfclass R:\n    pass\n")  # UTF-8 BOM
 
-    config_static.MainConfig.SCRIPT_DIRECTORY = str(tmp_path)
-    config_static.MainConfig.ENGINES_DIRECTORY_PATH = str(engines_dir)
+    # monkeypatch restores these module-level singletons after the test (no leakage).
+    monkeypatch.setattr(config_static.MainConfig, "SCRIPT_DIRECTORY", str(tmp_path))
+    monkeypatch.setattr(config_static.MainConfig, "ENGINES_DIRECTORY_PATH", str(engines_dir))
 
     rc = import_config.import_engines_configs({})
 

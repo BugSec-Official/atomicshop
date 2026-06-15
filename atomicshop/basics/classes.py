@@ -1,12 +1,11 @@
 import os
 import sys
 import ast
+import tokenize
 from pathlib import Path
 import pkgutil
 import importlib
 import inspect
-
-from ..file_io.file_io import read_file
 
 
 """
@@ -218,8 +217,10 @@ def get_class_names_from_file(file_path: str, **kwargs) -> list:
     :return: list of class names inside the module.
     """
 
-    # Read the string contents of the module file.
-    file_contents: str = read_file(file_path=file_path, file_mode='r', **kwargs)
+    # Read the source like the interpreter does: tokenize.open honors a PEP 263 coding cookie and
+    # strips a BOM, so ast.parse never chokes on an encoding declaration or BOM artifact.
+    with tokenize.open(file_path) as source_file:
+        file_contents: str = source_file.read()
 
     # Parsing the string contents by ast module.
     ast_parse = ast.parse(file_contents)

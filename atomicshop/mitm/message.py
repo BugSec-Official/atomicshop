@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Union, Any
 
-from .. import http_parse
+from ..wrappers.protocol_parsers import http, http2
 from ..basics import dicts
 
 
@@ -13,7 +13,7 @@ class ClientMessage:
         self.engine_name: str = str()
         # noinspection PyTypeChecker
         self.request_raw_bytes: bytes = None
-        self.request_auto_parsed: Union[http_parse.HTTPRequestParse, any] = None
+        self.request_auto_parsed: Union[http.HTTPRequestParse, any] = None
         self.request_custom_parsed: Any = None
         self.request_raw_hex: hex = None
         # noinspection PyTypeChecker
@@ -21,6 +21,9 @@ class ClientMessage:
         self.response_auto_parsed: Any = None
         self.response_custom_parsed: Any = None
         self.response_raw_hex: hex = None
+        # Receive-side parse verdict for forwarded responses; the validation gate
+        # reuses it instead of re-parsing. None = no verdict (treated as pass).
+        self.response_parse_ok: bool | None = None
         self.server_name: str = str()
         self.server_ip: str = str()
         self.client_name: str = str()
@@ -51,6 +54,7 @@ class ClientMessage:
         self.response_auto_parsed = None
         self.response_custom_parsed = None
         self.response_raw_hex = None
+        self.response_parse_ok = None
         self.action = None
         self.info = str()
         self.errors = list()
@@ -67,7 +71,7 @@ class ClientMessage:
             elif key == 'timestamp':
                 value = value.strftime('%Y-%m-%d-%H:%M:%S.%f')
             elif key == 'request_auto_parsed':
-                if isinstance(value, http_parse.HTTPRequestParse):
+                if isinstance(value, (http.HTTPRequestParse, http2.Http2RequestParse)):
                     value = dicts.convert_complex_object_to_dict(value)
                 else:
                     value = str(value)
