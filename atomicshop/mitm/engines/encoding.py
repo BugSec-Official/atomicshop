@@ -109,3 +109,17 @@ def scan_engine_file(path: str) -> Finding | None:
               f"{_context_snippet(raw, file_off)}")
     issues.append(Issue("non_utf8_bytes", detail, False))
     return Finding(path, issues)
+
+
+def scan_engine_directory(engine_dir: str, config_file_name: str = "engine_config.toml") -> list[Finding]:
+    """Scan every *.py file and the engine config in one engine directory."""
+    findings: list[Finding] = []
+    for name in sorted(os.listdir(engine_dir)):
+        full = os.path.join(engine_dir, name)
+        if not os.path.isfile(full):
+            continue
+        if name.endswith(".py") or name == config_file_name:
+            finding = scan_engine_file(full)
+            if finding is not None:
+                findings.append(finding)
+    return findings

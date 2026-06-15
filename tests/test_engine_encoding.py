@@ -75,3 +75,20 @@ def test_mixed_bom_and_stray_bytes(tmp_path):
     finding = encoding.scan_engine_file(path)
     assert [i.kind for i in finding.issues] == ["utf8_bom", "non_utf8_bytes"]
     assert finding.needs_manual is True
+
+
+# --- scan_engine_directory --------------------------------------------------
+
+def test_scan_directory_flags_py_and_config_only(tmp_path):
+    _write(tmp_path, "parser.py", b"class P:\n    pass\n")                 # clean
+    _write(tmp_path, "responder.py", b"\xef\xbb\xbfclass R:\n    pass\n")  # utf8 bom
+    _write(tmp_path, "engine_config.toml", b"\xef\xbb\xbf[engine]\n")      # utf8 bom
+    _write(tmp_path, "notes.txt", b"\xef\xbb\xbfignored\n")                # out of scope
+    findings = encoding.scan_engine_directory(str(tmp_path))
+    flagged = sorted(__import__("os").path.basename(f.path) for f in findings)
+    assert flagged == ["engine_config.toml", "responder.py"]
+
+
+def test_scan_directory_clean_returns_empty(tmp_path):
+    _write(tmp_path, "parser.py", b"class P:\n    pass\n")
+    assert encoding.scan_engine_directory(str(tmp_path)) == []
