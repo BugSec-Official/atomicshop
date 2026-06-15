@@ -172,3 +172,20 @@ def test_fix_preserves_crlf_newlines(tmp_path):
     encoding.fix_file_lossless(path)
     with open(path, "rb") as f:
         assert f.read() == b"a = 1\r\nb = 2\r\n"          # CRLF intact, not doubled
+
+
+# --- server hook: import_engines_configs refuses bad encodings --------------
+
+def test_import_engines_configs_returns_nonzero_on_bad_encoding(tmp_path):
+    from atomicshop.mitm import config_static, import_config
+
+    engines_dir = tmp_path / "engines"
+    eng = engines_dir / "eng1"
+    eng.mkdir(parents=True)
+    (eng / "engine_config.toml").write_bytes(b"[engine]\ndomains = ['x.com:443']\n")
+    (eng / "responder.py").write_bytes(b"\xef\xbb\xbfclass R:\n    pass\n")  # UTF-8 BOM
+
+    config_static.MainConfig.SCRIPT_DIRECTORY = str(tmp_path)
+    config_static.MainConfig.ENGINES_DIRECTORY_PATH = str(engines_dir)
+
+    assert import_config.import_engines_configs({}) != 0
