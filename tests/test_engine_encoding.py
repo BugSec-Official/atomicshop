@@ -176,7 +176,7 @@ def test_fix_preserves_crlf_newlines(tmp_path):
 
 # --- server hook: import_engines_configs refuses bad encodings --------------
 
-def test_import_engines_configs_returns_nonzero_on_bad_encoding(tmp_path):
+def test_import_engines_configs_returns_nonzero_on_bad_encoding(tmp_path, capsys):
     from atomicshop.mitm import config_static, import_config
 
     engines_dir = tmp_path / "engines"
@@ -188,4 +188,12 @@ def test_import_engines_configs_returns_nonzero_on_bad_encoding(tmp_path):
     config_static.MainConfig.SCRIPT_DIRECTORY = str(tmp_path)
     config_static.MainConfig.ENGINES_DIRECTORY_PATH = str(engines_dir)
 
-    assert import_config.import_engines_configs({}) != 0
+    rc = import_config.import_engines_configs({})
+
+    # Non-zero AND for the right reason: the encoding validator must fire FIRST and
+    # print its report. Engine import is never reached (it would otherwise fail with an
+    # unrelated "No module named ..." and mask whether our hook actually ran).
+    assert rc != 0
+    out = capsys.readouterr().out
+    assert "not valid UTF-8" in out and "UTF-8 BOM" in out   # our validator reported it
+    assert "No module named" not in out                      # exited before engine init
