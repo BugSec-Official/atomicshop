@@ -145,3 +145,50 @@ def format_findings(findings: list[Finding]) -> str:
     lines.append("Fix auto-fixable issues:  python tools/fix_engine_encoding.py")
     lines.append('Correct any "manual" items in your editor, then restart the server.')
     return "\n".join(lines)
+
+
+def _rewrite_cookie_to_utf8(raw_decoded: str) -> str:
+    """Rewrite the PEP 263 cookie's codec token to utf-8 (line 1 or 2), preserving lines."""
+    lines = raw_decoded.split("\n", 2)
+    for idx in range(min(2, len(lines))):
+        if _CODING_RE.search(lines[idx]):
+            lines[idx] = _CODING_RE.sub("coding: utf-8", lines[idx], count=1)
+            break
+    return "\n".join(lines)
+
+
+def _backup_and_write(path: str, new_bytes: bytes) -> None:
+    shutil.copyfile(path, path + ".bak")
+    with open(path, "wb") as f:          # binary write -> newlines preserved exactly
+        f.write(new_bytes)
+
+
+def _clear_pycache(path: str) -> None:
+    shutil.rmtree(os.path.join(os.path.dirname(path), "__pycache__"), ignore_errors=True)
+
+
+def fix_file_lossless(path: str) -> FixOutcome:
+    """Apply only the provable conversions; report stray bytes for manual editing."""
+    finding = scan_engine_file(path)
+    if finding is None:
+        return FixOutcome.ALREADY_CLEAN
+
+    with open(path, "rb") as f:
+        raw = f.read()
+    kinds = {issue.kind for issue in finding.issues}
+
+    new_bytes: bytes | None = None
+    if "utf16_bom" in kinds:
+        new_bytes = raw.decode("utf-16").encode("utf-8")
+    elif "coding_cookie" in kinds:
+        declared = _declared_codec(raw)
+        new_bytes = _rewrite_cookie_to_utf8(raw.decode(declared)).encode("utf-8")
+    elif "utf8_bom" in kinds:
+        new_bytes = raw[len(BOM_UTF8):]          # byte-level strip; safe even with stray bytes
+
+    if new_bytes is None:                        # only stray bytes -> nothing safe to change
+        return FixOutcome.NEEDS_MANUAL
+
+    _backup_and_write(path, new_bytes)
+    _clear_pycache(path)
+    return FixOutcome.NEEDS_MANUAL if finding.needs_manual else FixOutcome.FIXED

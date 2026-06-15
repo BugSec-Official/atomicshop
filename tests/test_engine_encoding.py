@@ -107,3 +107,68 @@ def test_format_findings_groups_and_marks(tmp_path):
     assert "(auto-fixable)" in report          # the BOM
     assert "manual" in report                  # the stray byte
     assert "python tools/fix_engine_encoding.py" in report
+
+
+# --- fix_file_lossless ------------------------------------------------------
+
+def test_fix_already_clean(tmp_path):
+    path = _write(tmp_path, "parser.py", b"class P:\n    pass\n")
+    assert encoding.fix_file_lossless(path) is encoding.FixOutcome.ALREADY_CLEAN
+
+
+def test_fix_strips_utf8_bom_and_backs_up_and_clears_pycache(tmp_path):
+    pycache = tmp_path / "__pycache__"
+    pycache.mkdir()
+    (pycache / "parser.cpython-313.pyc").write_bytes(b"stale")
+    path = _write(tmp_path, "parser.py", b"\xef\xbb\xbfclass P:\n    pass\n")
+    outcome = encoding.fix_file_lossless(path)
+    assert outcome is encoding.FixOutcome.FIXED
+    with open(path, "rb") as f:
+        new = f.read()
+    assert new == b"class P:\n    pass\n"               # BOM gone, body intact
+    assert (tmp_path / "parser.py.bak").read_bytes().startswith(b"\xef\xbb\xbf")
+    assert not pycache.exists()                          # stale bytecode cleared
+    assert encoding.scan_engine_file(path) is None       # now clean
+
+
+def test_fix_transcodes_utf16(tmp_path):
+    path = _write(tmp_path, "parser.py", "class P:\n    pass\n".encode("utf-16"))
+    assert encoding.fix_file_lossless(path) is encoding.FixOutcome.FIXED
+    with open(path, "rb") as f:
+        assert f.read() == b"class P:\n    pass\n"
+
+
+def test_fix_rewrites_coding_cookie_to_utf8(tmp_path):
+    body = b"# -*- coding: cp1255 -*-\nx = 1  # \x93q\x94\nclass P:\n    pass\n"
+    path = _write(tmp_path, "parser.py", body)
+    assert encoding.fix_file_lossless(path) is encoding.FixOutcome.FIXED
+    with open(path, "rb") as f:
+        new = f.read()
+    new.decode("utf-8")                                  # now valid UTF-8
+    assert b"coding: utf-8" in new
+    assert "“" in new.decode("utf-8")               # cp1255 0x93 -> left double quote
+
+
+def test_fix_stray_bytes_is_needs_manual_and_untouched(tmp_path):
+    original = b"x = 1  # it\x92s\nclass P:\n    pass\n"
+    path = _write(tmp_path, "parser.py", original)
+    assert encoding.fix_file_lossless(path) is encoding.FixOutcome.NEEDS_MANUAL
+    with open(path, "rb") as f:
+        assert f.read() == original                      # not modified
+    assert not (tmp_path / "parser.py.bak").exists()     # no backup written
+
+
+def test_fix_mixed_strips_bom_but_still_needs_manual(tmp_path):
+    path = _write(tmp_path, "parser.py", b"\xef\xbb\xbfx = 1  # it\x92s\nclass P:\n    pass\n")
+    assert encoding.fix_file_lossless(path) is encoding.FixOutcome.NEEDS_MANUAL
+    with open(path, "rb") as f:
+        new = f.read()
+    assert not new.startswith(b"\xef\xbb\xbf")           # BOM stripped (lossless)
+    assert new == b"x = 1  # it\x92s\nclass P:\n    pass\n"  # stray byte preserved
+
+
+def test_fix_preserves_crlf_newlines(tmp_path):
+    path = _write(tmp_path, "parser.py", b"\xef\xbb\xbfa = 1\r\nb = 2\r\n")
+    encoding.fix_file_lossless(path)
+    with open(path, "rb") as f:
+        assert f.read() == b"a = 1\r\nb = 2\r\n"          # CRLF intact, not doubled
