@@ -3,5 +3,8 @@ build/
 .idea/
 .claude/
 __pycache__/
+docs/
+tests/
+.pytest_cache/
 
 Z_Git Upload.cmd
