@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.14.10 - 16.06.2026
+  * mitm/initialize_engines.py, wrappers/socketw/dns_server - fixes and improvements.
 * 3.14.9 - 07.05.2026
   * wrappers/pyopensslw - fixes.
 * 3.14.8 - 29.04.2026

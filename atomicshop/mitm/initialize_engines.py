@@ -115,6 +115,9 @@ class ModuleCategory:
                 error_string: str = f"No [domain:port] pair found in: {domain_port_string}"
                 return 1, error_string
 
+            # DNS names are case-insensitive (RFC 4343); normalize keys for case-safe matching.
+            domain = domain.strip().lower().rstrip(".")
+
             if domain not in self.domain_target_dict:
                 self.domain_target_dict[domain] = {'ip': None, 'ports': [int(port)]}
             else:
@@ -212,6 +215,8 @@ def assign_class_by_domain(
     # In case SNI came empty in the request from client, then there's no point in iterating through engine domains.
     module = None
     if message_domain_name:
+        # DNS names are case-insensitive (RFC 4343); normalize before matching engine domains.
+        message_domain_name = message_domain_name.strip().lower().rstrip(".")
         # If engine/s exit, the engines_list will not be empty, then we'll iterate through the list of engines
         # to find the domain in the list of domains of the engine.
         if engines_list:

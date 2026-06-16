@@ -564,15 +564,23 @@ class DnsServer:
 
                         # If 'forward_to_tcp_server' is 'True' we'll resolve the record with our TCP Server IP address.
                         if forward_to_tcp_server:
+                            resolved_target_ipv4 = None
                             if self.resolve_by_engine_enable:
                                 for engine in self.engine_list:
-                                    resolved_target_ipv4 = get_target_ip_from_engine(question_domain, engine.domain_target_dict)
+                                    # Match on the normalized name; config domains are normalized too.
+                                    resolved_target_ipv4 = get_target_ip_from_engine(question_domain_norm, engine.domain_target_dict)
                                     # If the domain was found in the current engine's domain list, we can stop the loop.
                                     if resolved_target_ipv4:
                                         break
                             elif self.resolve_all_domains_to_ipv4_enable:
                                 # Assign the target IPv4 address to the resolved target IPv4 variable.
                                 resolved_target_ipv4 = self.resolve_all_domains_target
+
+                            # No target IP resolved: don't build an A record with a None address.
+                            if not resolved_target_ipv4:
+                                self.logger.warning(f"Marked to forward but no target IP resolved for: {question_domain}")
+                                forward_to_tcp_server = False
+                                continue
 
                             # Make DNS response that will refer TCP traffic to our server
                             dns_built_response = DNSRecord(
