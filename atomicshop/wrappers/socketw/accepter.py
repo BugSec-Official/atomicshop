@@ -1,54 +1,40 @@
-from . import exception_wrapper
+from ...print_api import print_api
 
 
-@exception_wrapper.connection_exception_decorator
 def accept_connection(
         socket_object,
-        domain_from_dns_server: str = None,
-        print_kwargs: dict = None
+        domain_from_dns_server: str | None = None,
+        print_kwargs: dict | None = None
 ):
+    # noinspection GrazieInspection
     """
-    Accept connection from client.
-    This function is wrapped with exception wrapper.
-    After you execute the function, you can get the error message if there was any with:
-        error_message = accept_connection.message
+        Block on accept() and return (client_socket, client_address, error_message).
 
-    :param socket_object: The socket object to accept the connection on.
-    :param domain_from_dns_server: The domain that will be printed to console on logger, needed for the decorator.
-        If not provided, the TCP data will be used.
-    :param print_kwargs: Additional arguments for the print_api function, needed for the decorator.
-    """
+        error_message is None on success. On a dropped/failed accept the socket and
+        address are None and error_message holds a one-line reason. accept() never
+        raises out of this function, so one bad client can't kill the accept loop.
 
-    client_socket = None
-    client_address_tuple: tuple = tuple()
-    message = str()
+        :param socket_object: listening socket to accept on.
+        :param domain_from_dns_server: domain to show in the error line; falls back
+            to the listening IP when not provided.
+        :param print_kwargs: keyword arguments forwarded to 'print_api'.
+        """
+    print_kwargs = print_kwargs or {}
+    listen_ipv4, port = socket_object.getsockname()
+    # If 'domain_from_dns_server' is provided, use it first.
+    host = domain_from_dns_server or listen_ipv4
 
-    # "accept()" bloc script I/O calls until receives network connection. When client connects "accept()"
-    # returns client socket and client address. Non-blocking mode is supported with "setblocking()", but you
-    # need to change your application accordingly to handle this.
-    # The client socket will contain the address and the port.
-    # Since the client socket is thrown each time to a thread function, it can be overwritten in the main loop
-    # and thrown to the function again. Accept creates new socket each time it is being called on the main
-    # socket.
-    # "accept()" method of the "ssl.SSLSocket" object returns another "ssl.SSLSocket" object and not the
-    # regular socket
-    client_socket, client_address_tuple = socket_object.accept()
+    try:
+        # accept() blocks until a client connects, then returns a fresh per-client
+        # socket and its (ip, port). On a ssl.SSLSocket it returns another SSLSocket.
+        client_socket, client_address = socket_object.accept()
+        return client_socket, client_address, None
+    except ConnectionAbortedError:
+        error_message = f"Socket Accept: {host}:{port}: connection aborted by host software."
+    except ConnectionResetError:
+        error_message = f"Socket Accept: {host}:{port}: connection reset by remote host."
+    except Exception as e:
+        error_message = f"Socket Accept: {host}:{port}: {e}"
 
-    return client_socket, client_address_tuple
-
-
-def accept_connection_with_error(
-        socket_object,
-        domain_from_dns_server,
-        print_kwargs: dict = None
-):
-    """
-    :param socket_object: The socket object to accept the connection on.
-    :param domain_from_dns_server: The domain that will be printed to console on logger.
-    :param print_kwargs: Additional arguments for the print_api function.
-    """
-    client_socket, client_address_tuple = accept_connection(
-        socket_object, domain_from_dns_server, print_kwargs=print_kwargs)
-    error_message = accept_connection.message
-
-    return client_socket, client_address_tuple, error_message
+    print_api(error_message, logger_method='error', traceback_string=True, oneline=True, **print_kwargs)
+    return None, None, error_message

@@ -23,6 +23,7 @@ from ..print_api import print_api
 
 from .message import ClientMessage
 from . import initialize_engines
+from . import responder_validation
 from ..wrappers.loggingw import loggingw
 # This is needed only for the data typing.
 from . import config_static as cf
@@ -195,6 +196,12 @@ def thread_worker_main(
             http_path_queue.put(request_http_parsed.path)
             network_logger.info(f"HTTP Request Parsed: Putting PATH to queue.")
 
+            # Prime the response-reader framer with the request method (HEAD/204/304
+            # body-elision). The response leg is the opposite of the leg this request
+            # arrived on — holds for normal and reversed orientation alike.
+            _push_request_method_fifo(
+                request_http_parsed.command, 'Service' if side == 'Client' else 'Client')
+
             is_http_request_a_websocket(auto_parsed, client_message)
         elif is_http_response:
             auto_parsed = response_http_parsed
@@ -242,16 +249,16 @@ def thread_worker_main(
             network_logger.warning(f"Failed to parse websocket frame: {e}")
             return None
 
-    def _push_request_method_fifo(method: str):
-        """FIFO the request method to the service's response framer for HEAD elision."""
+    def _push_request_method_fifo(method: str, to_side: str):
+        """FIFO the request method to the response-reader for HEAD/204/304 body-elision.
+        to_side is the leg reading responses (opposite the leg the request arrived on).
+        The Receiver holds the method if its framer isn't built yet (reversed
+        orientation) and ignores it for framers that don't track methods."""
         if not method:
             return
-        service_recv = side_receivers.get('Service')
-        framer = service_recv._framer if service_recv is not None else None
-        # Http11Framer + HttpFramer (wrapping s2c Http11Framer) accept this; other
-        # framers (Http2/MQTT/WebSocket) don't and are skipped by the hasattr guard.
-        if framer is not None and hasattr(framer, 'set_pending_request_method'):
-            framer.set_pending_request_method(method)
+        recv = side_receivers.get(to_side)
+        if recv is not None:
+            recv.set_pending_request_method(method)
 
     def finish_thread(send_connection_reset: bool = False):
         """
@@ -303,31 +310,83 @@ def thread_worker_main(
 
         return request_custom_raw, is_requester_worked
 
-    def create_responder_response(client_message: ClientMessage) -> list[bytes]:
+    def _validate_and_filter(
+            client_message: ClientMessage,
+            responses: list[bytes],
+            is_synthesized: bool,
+    ) -> tuple[list[bytes], str | None]:
+        """Validate each outgoing response. Return (sendable_prefix, blocking_defect).
+
+        Blocking stops at the first invalid message — it and everything after are
+        withheld and the caller resets the connection. Record-only defects
+        (deflated WebSocket frames) are logged but still sent.
+        """
+        if not responses:
+            return responses, None
+        sendable: list[bytes] = []
+        for response_bytes in responses:
+            if response_bytes is None:
+                sendable.append(response_bytes)
+                continue
+            result = responder_validation.validate_response(
+                response_bytes,
+                protocol=client_message.protocol,
+                protocol2=client_message.protocol2,
+                is_synthesized=is_synthesized,
+                receive_parse_ok=client_message.response_parse_ok,
+                ws_validator=response_validation_ws_parser,
+            )
+            if result.defect and result.should_send:
+                # Record-only (e.g. deflated WS frame): surface but don't block.
+                print_api(f"Response validation warning ({client_message.protocol or 'unknown'}): "
+                          f"{result.defect}", logger=network_logger, logger_method='warning')
+            if not result.should_send:
+                return sendable, result.defect
+            sendable.append(response_bytes)
+        return sendable, None
+
+    def create_responder_response(client_message: ClientMessage) -> tuple[list[bytes], str | None]:
+        """Produce the validated response bytes to send. Returns (sendable_prefix, blocking_defect)."""
         if client_message.action == 'service_connect':
-            return responder.create_connect_response(client_message)
+            return _validate_and_filter(
+                client_message, responder.create_connect_response(client_message), is_synthesized=True)
+
+        # If we're in offline mode, and it's the first cycle and the protocol is Websocket, then we'll create the
+        # HTTP Handshake response automatically.
+        if config_static.MainConfig.is_offline and protocol == 'Websocket' and client_receive_count == 1:
+            responses: list = [websocket.create_byte_http_response(client_message.request_raw_bytes)]
+            is_synthesized: bool = True
+            responder.logger.info(f"Generated automatic WebSocket response in Offline Mode.")
         else:
-            # If we're in offline mode, and it's the first cycle and the protocol is Websocket, then we'll create the HTTP Handshake
-            # response automatically.
-            if config_static.MainConfig.is_offline and protocol == 'Websocket' and client_receive_count == 1:
-                responses: list = list()
-                responses.append(
-                    websocket.create_byte_http_response(client_message.request_raw_bytes))
-                responder.logger.info(f"Generated automatic WebSocket response in Offline Mode.")
+            # Creating response for parsed message and printing
+            responder_responses: list = responder.create_response(client_message)
+            if responder_responses is None:
+                responses: list = [client_message.response_raw_bytes]
+                is_synthesized: bool = False
             else:
-                # Creating response for parsed message and printing
-                responder_responses: list = responder.create_response(client_message)
-                if responder_responses is None:
-                    responses: list = [client_message.response_raw_bytes]
-                else:
-                    responses: list = responder_responses
-                    responder.logger.info(f"Generated {len(responses)} responses from responder.")
+                responses: list = responder_responses
+                is_synthesized: bool = True
+                responder.logger.info(f"Generated {len(responses)} responses from responder.")
 
-            # Output first 100 characters of all the responses in the list.
-            for response_raw_bytes_single in responses:
-                responder.logger.info(f"{response_raw_bytes_single[0: 100]}...")
+        # Output first 100 characters of all the responses in the list.
+        for response_raw_bytes_single in responses:
+            responder.logger.info(f"{response_raw_bytes_single[0: 100]}...")
 
-            return responses
+        return _validate_and_filter(client_message, responses, is_synthesized)
+
+    def _block_and_reset(client_message: ClientMessage, defect: str) -> Literal['return']:
+        """Record a blocked invalid response, reset the connection, stop the receive loop."""
+        client_message.reinitialize_dynamic_vars()
+        client_message.timestamp = datetime.now()
+        client_message.protocol = protocol
+        client_message.action = 'response_validation_blocked'
+        client_message.errors.append(f"Response validation blocked ({protocol or 'unknown'}): {defect}")
+        record_and_statistics_write(client_message)
+        print_api(f"Blocked invalid outgoing response, resetting connection: {defect}",
+                  logger=network_logger, logger_method='critical')
+        exception_or_close_in_receiving_thread.set()
+        finish_thread(send_connection_reset=True)
+        return 'return'
 
     def create_client_socket(client_message: ClientMessage):
         # Per-subdomain mTLS client cert (None when not configured).
@@ -405,13 +464,6 @@ def thread_worker_main(
         if protocol != '':
             client_message.protocol = protocol
 
-        # FIFO the request method to the response framer for HEAD body elision.
-        # Framer install is handled by the Receiver's ProtocolSniffer before this point.
-        # HTTP/1.x only — HEAD elision rules don't apply to HTTP/2 (own branch above).
-        if client_message.request_auto_parsed is not None and protocol.startswith('HTTP/1'):
-            method = getattr(client_message.request_auto_parsed, 'command', None)
-            _push_request_method_fifo(method)
-
         # # Parse websocket frames only if it is not the first protocol upgrade request.
         # if protocol == 'Websocket' and client_receive_count != 1:
         #     client_message.request_auto_parsed = parse_websocket(client_message.request_raw_bytes)
@@ -442,6 +494,10 @@ def thread_worker_main(
             client_message.response_raw_bytes, client_message, side='Service')
         if protocol != '':
             client_message.protocol = protocol
+
+        # Receive-side parse verdict for the validation gate to reuse on the forwarded path.
+        client_message.response_parse_ok = responder_validation.receive_parse_verdict(
+            client_message.response_auto_parsed, protocol)
 
         # Detect WebSocket upgrade response (101 Switching Protocols + Upgrade: websocket)
         # and swap framers on BOTH sides simultaneously. The 101 response is the
@@ -499,18 +555,19 @@ def thread_worker_main(
 
     def receive_send_service_connect(
             client_connection_message: ClientMessage,
-            sending_socket: ssl.SSLSocket | socket.socket
+            sending_socket: ssl.SSLSocket | socket.socket,
+            prime_request_correlation: bool = False
     ) -> Literal['continue', 'return'] | None:
 
 
         client_message = client_connection_message
 
-        bytes_to_send_list: list[bytes] = create_responder_response(client_message)
+        bytes_to_send_list, block_defect = create_responder_response(client_message)
         print_api(f"Got responses from connect responder, count: [{len(bytes_to_send_list)}]",
                   logger=network_logger, logger_method='info')
 
-        # If the client message is the connection message, then we'll skip to the next iteration.
-        if not bytes_to_send_list:
+        # If the client message is the connection message and there's nothing to send, skip ahead.
+        if not bytes_to_send_list and not block_defect:
             return 'continue'
 
         # is_socket_closed: bool = False
@@ -520,6 +577,10 @@ def thread_worker_main(
             client_message.timestamp = datetime.now()
             client_message.response_raw_bytes = bytes_to_send_single
             client_message.action = 'service_responder'
+            # Offline server-speaks-first: parse the synthesized request so its path enters
+            # http_path_queue — else the client's matching 2xx blocks forever in parse_http.
+            if prime_request_correlation:
+                process_server_raw_data(bytes_to_send_single, '', client_message)
             record_and_statistics_write(client_message)
 
             # Send the bytes back to the client socket.
@@ -538,6 +599,9 @@ def thread_worker_main(
             exception_or_close_in_receiving_thread.set()
             finish_thread()
             return 'return'
+
+        if block_defect:
+            return _block_and_reset(client_message, block_defect)
 
         return None
 
@@ -603,7 +667,7 @@ def thread_worker_main(
 
         print_api("Offline Mode, sending to responder directly.", logger=network_logger,
                   logger_method='info')
-        bytes_to_send_list: list[bytes] = create_responder_response(client_message)
+        bytes_to_send_list, block_defect = create_responder_response(client_message)
 
         error_on_send: str = str()
         for bytes_to_send_single in bytes_to_send_list:
@@ -631,6 +695,9 @@ def thread_worker_main(
             exception_or_close_in_receiving_thread.set()
             finish_thread()
             return 'return'
+
+        if block_defect:
+            return _block_and_reset(client_message, block_defect)
 
         return None
 
@@ -765,9 +832,10 @@ def thread_worker_main(
         # Close both sockets and finish the threads.
         # But if the data was received and then the socket was closed, we first send the data and then close the socket.
         error_on_send: str = str()
+        block_defect: str | None = None
         if received_raw_data != b'' and received_raw_data is not None:
             # Now send it to requester/responder.
-            bytes_to_send_list: list[bytes] = create_responder_response(client_message)
+            bytes_to_send_list, block_defect = create_responder_response(client_message)
 
             # is_socket_closed: bool = False
             for bytes_to_send_single in bytes_to_send_list:
@@ -805,6 +873,9 @@ def thread_worker_main(
 
             return 'return'
 
+        if block_defect:
+            return _block_and_reset(client_message, block_defect)
+
         return None
 
 
@@ -831,16 +902,16 @@ def thread_worker_main(
 
         if alpn == 'h2':
             framer: Framer | None = Http2Framer(direction=direction)
-            # h2 framer chunks at END_STREAM; autoparser owns H2Connection + HPACK.
+            # h2 framer chunks at END_STREAM; auto-parser owns H2Connection + HPACK.
             # c2s parser gets h2_state so observed SETTINGS land on the shared object
-            # the responder will read when synthesising responses.
+            # the responder will read when synthesizing responses.
             if is_client:
                 h2_request_parser = Http2DirectionParser(is_request_side=True, state=h2_state)
             else:
                 h2_response_parser = Http2DirectionParser(is_request_side=False)
         elif alpn == 'http/1.1':
-            framer = Http11Framer(direction=direction)
-        elif alpn == 'mqtt':
+            framer = Http11Framer(role='request' if direction == 'client_to_server' else 'response')
+        elif alpn and 'mqtt' in alpn:
             framer = MqttFramer(direction=direction)
             # mqtt_state is pre-allocated at thread_worker_main scope; shared with the responder.
             if is_client:
@@ -848,7 +919,7 @@ def thread_worker_main(
             else:
                 mqtt_response_parser = MqttDirectionParser(is_request_side=False, state=mqtt_state)
         else:
-            framer = None  # time-based mode
+            framer = None  # unframed mode
 
         # No ALPN → per-direction sniffer; shared state short-circuits s2c after c2s detection.
         sniffer = None
@@ -915,6 +986,15 @@ def thread_worker_main(
                 if side == 'Service' and client_connection_message:
                     result: Literal['continue', 'return'] | None = (
                         receive_send_service_connect(client_connection_message, sending_socket))
+                    client_connection_message = None
+                    if result == 'continue':
+                        continue
+                # Offline server-speaks-first: no service leg, so emit create_connect_response
+                # to the client socket once before the first receive. Empty banner -> fall through.
+                elif side == 'Client' and config_static.MainConfig.is_offline and client_connection_message:
+                    result: Literal['continue', 'return'] | None = (
+                        receive_send_service_connect(
+                            client_connection_message, receiving_socket, prime_request_correlation=True))
                     client_connection_message = None
                     if result == 'continue':
                         continue
@@ -1013,6 +1093,9 @@ def thread_worker_main(
     # # This is Server UnMasked Frame Parser.
     # websocket_unmasked_frame_parser = websocket.WebsocketFrameParser()
     websocket_frame_parser = websocket.WebsocketFrameParser()
+    # Separate parser for validating OUTGOING frames in the validation gate, so
+    # validation never pollutes the receive-side deflate context above.
+    response_validation_ws_parser = websocket.WebsocketFrameParser()
 
     # Both directions' Receivers, indexed by side. Populated in receive_send_start.
     # Shared across the two parallel threads so process_server_raw_data can swap
@@ -1167,7 +1250,10 @@ def thread_worker_main(
             client_exception_queue: queue.Queue = queue.Queue()
             client_thread = threading.Thread(
                 target=receive_send_start,
-                args=(client_socket, service_socket_instance, client_exception_queue, None),
+                # Offline has no service leg: the client thread carries the connect message and
+                # emits the server-speaks-first response itself. Online keeps None (service does it).
+                args=(client_socket, service_socket_instance, client_exception_queue,
+                      client_message_connection if config_static.MainConfig.is_offline else None),
                 name=f"{process_name} | Thread-{thread_id}-{destination_port_str}-Client",
                 daemon=True)
             client_thread.start()

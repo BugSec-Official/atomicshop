@@ -204,6 +204,11 @@ class ResponderParent:
                 f"build_byte_http2_response: request_auto_parsed.stream_id required (got {stream_id!r})")
 
         headers = dict(headers or {})
+        # Coerce non-str/bytes header values (e.g. int content-length) to str so len()/HPACK
+        # accept them; bytes are left as-is because str() would corrupt them (b'x' -> "b'x'").
+        for header_name, value in headers.items():
+            if not isinstance(value, (str, bytes)):
+                headers[header_name] = str(value)
         has_length_header = any(k.lower() == 'content-length' for k in headers)
         if body and not has_length_header:
             headers['content-length'] = str(len(body))

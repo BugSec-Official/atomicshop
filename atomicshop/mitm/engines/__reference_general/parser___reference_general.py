@@ -62,3 +62,37 @@ class ParserGeneral(ParserParent):
     #         self.logger.info(f"Parsed: {str(self.class_client_message.request_body_parsed[0: 100])}...")
     #     except Exception as exception_object:
     #         pass
+
+    # ==================================================================================================================
+    # HTTP/2 (Http2RequestParse) — fields available on self.class_client_message.request_auto_parsed when ALPN=h2:
+    #   .command         -> ':method' uppercased ('GET', 'POST', ...)
+    #   .path            -> ':path' (full path + query, e.g. '/api/v1/foo?bar=baz')
+    #   .authority       -> ':authority' (Host equivalent)
+    #   .scheme          -> ':scheme' ('https' / 'http')
+    #   .headers         -> dict[str, str] regular headers (lowercase keys, h2 wire-native)
+    #   .pseudo_headers  -> dict[str, str] of all ':...' fields (':method', ':path', ':authority', ':scheme')
+    #   .body            -> bytes, joined from DATA frames
+    #   .trailers        -> dict[str, str] (e.g. gRPC sets 'grpc-status' here)
+    #   .stream_id       -> int; pass to build_byte_http2_response to reply on the same stream
+    #
+    # def parse(self):
+    #     ar = self.class_client_message.request_auto_parsed
+    #
+    #     # 1. Route by method + path prefix
+    #     if ar.command == 'POST' and ar.path.startswith('/api/v1/parse'):
+    #         self.parse_example_request()
+    #
+    #     # 2. Read a regular header — keys are always lowercase in HTTP/2
+    #     user_agent: str = ar.headers.get('user-agent', '')
+    #
+    #     # 3. Read a pseudo-header explicitly (':authority' is the Host equivalent)
+    #     authority: str = ar.pseudo_headers.get(':authority', '')
+    #
+    #     # 4. Stash stream_id so the responder can answer on the same stream
+    #     self.class_client_message.request_custom_parsed = {
+    #         'method': ar.command, 'path': ar.path,
+    #         'stream_id': ar.stream_id, 'body_len': len(ar.body),
+    #     }
+    #
+    #     # 5. gRPC-style trailers (HEADERS frame after DATA frames; usually empty)
+    #     grpc_status: str = ar.trailers.get('grpc-status', '')

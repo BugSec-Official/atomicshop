@@ -1,19 +1,26 @@
-from collections.abc import Iterator
+from typing import Literal
+
+
+Direction = Literal['client_to_server', 'server_to_client']
 
 
 # === Framer protocol ===
 # Stateful protocol parser; auto-selected at runtime.
 
 class Framer:
-    """Stateful framer: consume bytes, yield complete messages."""
+    """Stateful framer: consume bytes, emit complete messages.
 
-    def consume(self, chunk: bytes) -> Iterator[bytes]:
-        """Push chunk; yield zero or more complete messages."""
+    Contract: consume() never returns partial messages; finish() is called
+    once on peer EOF; buffered is truthy iff a partial message is in flight.
+    """
+
+    def consume(self, chunk: bytes) -> list[bytes]:
+        """Push chunk; return zero or more complete messages."""
         raise NotImplementedError
 
-    def finish(self) -> Iterator[bytes]:
-        """Drain on peer EOF; yield any final messages (e.g., body-until-close)."""
-        return iter(())
+    def finish(self) -> list[bytes]:
+        """Drain on peer EOF; return any final messages (e.g., body-until-close)."""
+        return []
 
     @property
     def buffered(self) -> bytes:

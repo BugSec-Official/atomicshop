@@ -56,7 +56,7 @@ class SSHRemote:
             global address_to_ssh_dictionary
 
             # Wait from any connection on "accept()"
-            client_socket, client_address = accept_connection(main_ssl_socket_object)
+            client_socket, client_address, _ = accept_connection(main_ssl_socket_object)
             if client_socket:
                 client_socket: ssl.SSLSocket
                 client_address: tuple

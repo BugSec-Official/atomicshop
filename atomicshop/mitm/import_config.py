@@ -9,6 +9,7 @@ from ..wrappers.socketw import socket_base
 from ..basics import booleans
 
 from . import config_static, initialize_engines
+from .engines import encoding as engine_encoding
 
 
 def import_config_files(
@@ -100,6 +101,17 @@ def import_engines_configs(print_kwargs: dict) -> int:
         directory_path=config_static.MainConfig.ENGINES_DIRECTORY_PATH,
         get_file=True,
         file_name_check_pattern=config_static.MainConfig.ENGINE_CONFIG_FILE_NAME)
+
+    # Validate engine-file encodings up front and collect ALL findings, so the user
+    # sees every problem at once instead of one-per-restart under the watchdog.
+    encoding_findings: list = []
+    for engine_config_path in engine_config_path_list:
+        engine_directory = str(Path(engine_config_path.path).parent)
+        encoding_findings.extend(engine_encoding.scan_engine_directory(
+            engine_directory, config_static.MainConfig.ENGINE_CONFIG_FILE_NAME))
+    if encoding_findings:
+        print_api(engine_encoding.format_findings(encoding_findings), color='red')
+        return 1
 
     # Iterate through all the 'engine_config.ini' file paths.
     domains_engine_list_full: list = list()
