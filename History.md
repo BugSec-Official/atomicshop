@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.14.11 - 21.06.2026
+  * dependencies - pyopenssl, cryptography version alignment.
 * 3.14.10 - 16.06.2026
   * mitm/initialize_engines.py, wrappers/socketw/dns_server - fixes and improvements.
 * 3.14.9 - 07.05.2026
