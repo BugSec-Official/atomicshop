@@ -10,7 +10,7 @@ See docs/superpowers/specs/2026-06-03-responder-validation-gate-design.md.
 
 from dataclasses import dataclass
 
-from ..wrappers.protocol_parsers.http import HTTPResponseParse
+from ..wrappers.protocol_parsers.http import HTTPRequestParse, HTTPResponseParse
 from ..wrappers.protocol_parsers.http2 import (
     Http2DirectionParser, validate_response_headers, validate_response_trailers)
 from ..wrappers.protocol_parsers.mqtt import MqttDirectionParser
@@ -77,10 +77,18 @@ def validate_response(
 
 
 def _validate_http1(raw_bytes: bytes) -> ValidationResult:
-    _parsed, is_http, error = HTTPResponseParse(raw_bytes).parse()
-    if not is_http:
-        return ValidationResult(False, f"HTTP/1.x parse failed: {error}")
-    return ValidationResult(True)
+    # A responder synthesizes responses (normal) or requests (server-speaks-first
+    # engines, e.g. reverse HTTP). Accept either wire-valid HTTP/1.x shape — the gate
+    # blocks malformed bytes, not a particular orientation.
+    _resp, is_response, response_error = HTTPResponseParse(raw_bytes).parse()
+    if is_response:
+        return ValidationResult(True)
+    _req, is_request, request_error = HTTPRequestParse(raw_bytes).parse()
+    if is_request:
+        return ValidationResult(True)
+    return ValidationResult(
+        False, f"HTTP/1.x parse failed (not a valid response or request): "
+               f"{response_error} / {request_error}")
 
 
 def _validate_http2(raw_bytes: bytes) -> ValidationResult:

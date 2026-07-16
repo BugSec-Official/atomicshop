@@ -352,8 +352,8 @@ def thread_worker_main(
     def create_responder_response(client_message: ClientMessage) -> tuple[list[bytes], str | None]:
         """Produce the validated response bytes to send. Returns (sendable_prefix, blocking_defect)."""
         if client_message.action == 'service_connect':
-            return _validate_and_filter(
-                client_message, responder.create_connect_response(client_message), is_synthesized=True)
+            response_bytes_list: list[bytes] = responder.create_connect_response(client_message)
+            return _validate_and_filter(client_message, response_bytes_list, is_synthesized=True)
 
         # If we're in offline mode, and it's the first cycle and the protocol is Websocket, then we'll create the
         # HTTP Handshake response automatically.
@@ -958,6 +958,12 @@ def thread_worker_main(
                     client_connection_message = None
                     if result == 'continue':
                         continue
+                    # Server-spoke-first: we just sent request-shaped bytes, so the client now
+                    # answers with responses. Re-orient this leg to read responses (mirrors the
+                    # 101 WebSocket framer swap) — the init request-role framer (h11.SERVER) would
+                    # raise on the client's status line. Empty connect banner returned 'continue' above.
+                    if result is None and protocol.startswith('HTTP/1'):
+                        side_receiver.set_framer(Http11Framer(role='response'))
                 elif side == 'Client' and config_static.MainConfig.is_offline:
                     result: Literal['return'] | None = receive_send_client_offline(
                         client_message, receiving_socket, sending_socket, side_receiver)
