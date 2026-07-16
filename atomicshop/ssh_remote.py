@@ -14,6 +14,12 @@ from .wrappers.loggingw import loggingw
 from .wrappers.socketw import socket_base
 
 
+# Hard ceiling on reading a remote command's output. exec_command(timeout=...) only bounds
+# channel setup, not the read, so without this a wedged or desynced peer blocks the calling
+# thread forever (in the MITM path that thread also serves the connection, so it freezes).
+SSH_READ_TIMEOUT: int = 30
+
+
 class SSHRemoteWrapperNoPythonFound(Exception):
     """Raised when no usable Python 3 interpreter found on remote host."""
     pass
@@ -208,16 +214,24 @@ class SSHRemote:
 
         # Execute the command over SSH remotely.
         stdin, stdout, stderr = self.ssh_client.exec_command(command=command, timeout=30)
+        # Bound the read too, not just channel setup, so a stalled peer can't block forever.
+        stdout.channel.settimeout(SSH_READ_TIMEOUT)
 
         # Writing the script string into stdin buffer.
         if script_string:
             stdin.write(script_string)
             stdin.channel.shutdown_write()
 
-        # Reading the buffer of stdout.
-        output_lines: list = stdout.readlines()
-        # Reading the buffer of stderr.
-        error_lines: list = stderr.readlines()
+        try:
+            # Reading the buffer of stdout.
+            output_lines: list = stdout.readlines()
+            # Reading the buffer of stderr.
+            error_lines: list = stderr.readlines()
+        except TimeoutError as e:
+            stdin.close()
+            stdout.close()
+            stderr.close()
+            return str(), f"SSH read timed out after {SSH_READ_TIMEOUT}s: {e}"
 
         # Joining error lines list to string if not empty.
         if error_lines:
@@ -242,9 +256,16 @@ class SSHRemote:
             # Use a simple version check that works on both Windows and Linux
             cmd = f'{candidate} -c "import sys; print(sys.version_info[0])"'
             stdin, stdout, stderr = self.ssh_client.exec_command(cmd, timeout=5)
+            stdout.channel.settimeout(SSH_READ_TIMEOUT)
 
-            out = stdout.read().decode().strip()
-            exit_status = stdout.channel.recv_exit_status()
+            try:
+                out = stdout.read().decode().strip()
+                exit_status = stdout.channel.recv_exit_status()
+            except TimeoutError as e:
+                print_api(
+                    f"Remote Python detection timed out for '{candidate}' after {SSH_READ_TIMEOUT}s: {e}",
+                    logger=self.logger, logger_method='warning')
+                continue
 
             if exit_status == 0 and out == "3":
                 print_api(f"Detected remote Python 3 interpreter (once per client port): {candidate}", logger=self.logger)
