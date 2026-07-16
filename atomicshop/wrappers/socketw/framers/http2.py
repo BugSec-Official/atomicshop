@@ -44,8 +44,12 @@ class Http2Framer(Framer):
                 return
             del self._parse_buf[:total]
             self._wire_cursor += total
-            # END_STREAM on HEADERS or DATA closes the stream — cut wire slice here.
-            if isinstance(frame, (HeadersFrame, DataFrame)) and 'END_STREAM' in frame.flags:
+            # Cut a wire slice at END_STREAM (a stream's last frame) OR at any stream-0
+            # connection-level frame (SETTINGS/PING/GOAWAY/connection WINDOW_UPDATE), so
+            # control frames relay promptly instead of buffering until the next END_STREAM
+            # (the peer then ACKs SETTINGS itself — no proxy-generated frames needed).
+            end_of_stream = isinstance(frame, (HeadersFrame, DataFrame)) and 'END_STREAM' in frame.flags
+            if end_of_stream or frame.stream_id == 0:
                 wire_slice = bytes(self._wire_buf[:self._wire_cursor])
                 del self._wire_buf[:self._wire_cursor]
                 self._wire_cursor = 0

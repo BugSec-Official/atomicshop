@@ -15,7 +15,8 @@ from .. import ip_addresses
 from ..wrappers.protocol_parsers import websocket
 from ..wrappers.protocol_parsers.http import HTTPRequestParse, HTTPResponseParse
 from ..wrappers.protocol_parsers.http2 import (
-    Http2ConnectionState, Http2DirectionParser, Http2RequestParse, Http2ResponseParse)
+    Http2ConnectionState, Http2DirectionParser, Http2RequestParse, Http2ResponseParse,
+    offline_client_output)
 from ..wrappers.protocol_parsers.mqtt import MqttConnectionState, MqttDirectionParser
 from ..wrappers.protocol_parsers.websocket import WebSocketConnectionState
 from ..basics import threads, tracebacks
@@ -566,7 +567,7 @@ def thread_worker_main(
         client_receive_count += 1
 
         # The Receiver is created once in receive_send_start and reused across
-        # all receive cycles for this direction — see Receiver class docstring.
+        # all receive cycles for this direction; do not recreate it per cycle.
         network_logger.info(f"Receiving Client cycle: {str(client_receive_count)}")
         # receive() returns raw bytes (b'' is a clean EOF) or raises stdlib
         # socket/TLS exceptions tagged with partial bytes as 'received'.
@@ -618,6 +619,17 @@ def thread_worker_main(
         print_api("Offline Mode, sending to responder directly.", logger=network_logger,
                   logger_method='info')
         bytes_to_send_list, block_defect = create_responder_response(client_message)
+        # HTTP/2 offline has no origin to relay, so the proxy itself owes the client a
+        # server preface (its first frame must be SETTINGS) and an ACK for the client's
+        # SETTINGS. Prepend those owed stream-0 frames ahead of the responder's reply.
+        acks_owed = h2_state.settings_acks_owed                         # read before drain
+        preface_pending = h2_request_parser is not None and not h2_state.preface_sent
+        bytes_to_send_list = offline_client_output(
+            h2_state, bytes_to_send_list, is_http2=h2_request_parser is not None)
+        if h2_request_parser is not None and (acks_owed or preface_pending):
+            print_api(f"HTTP/2: sending SETTINGS handshake to offline client "
+                      f"(preface={preface_pending}, acks={acks_owed})",
+                      logger=network_logger, logger_method='info')
 
         error_on_send: str = str()
         for bytes_to_send_single in bytes_to_send_list:
@@ -712,6 +724,9 @@ def thread_worker_main(
                 process_client_raw_data(request_custom_raw, error_on_receive, client_message)
                 record_and_statistics_write(client_message)
 
+            # HTTP/2 stream-0 (SETTINGS/ACKs) is relayed verbatim: the framer surfaces those
+            # frames as their own messages, so the client and origin complete the SETTINGS
+            # handshake with each other — the proxy generates no stream-0 frames online.
             error_on_send: str = sender.Sender(
                 ssl_socket=sending_socket, bytes_to_send=client_message.request_raw_bytes,
                 logger=network_logger).send()
@@ -799,6 +814,8 @@ def thread_worker_main(
                     client_message.action = 'service_responder'
                     record_and_statistics_write(client_message)
 
+                # HTTP/2 stream-0 (SETTINGS/ACKs) is relayed verbatim: the origin and client
+                # complete the SETTINGS handshake with each other; the proxy generates none.
                 error_on_send: str = sender.Sender(
                     ssl_socket=sending_socket, bytes_to_send=bytes_to_send_single,
                     logger=network_logger).send()
@@ -858,7 +875,7 @@ def thread_worker_main(
             if is_client:
                 h2_request_parser = Http2DirectionParser(is_request_side=True, state=h2_state)
             else:
-                h2_response_parser = Http2DirectionParser(is_request_side=False)
+                h2_response_parser = Http2DirectionParser(is_request_side=False, state=h2_response_state)
         elif alpn == 'http/1.1':
             framer = Http11Framer(role='request' if direction == 'client_to_server' else 'response')
         elif alpn and 'mqtt' in alpn:
@@ -911,18 +928,11 @@ def thread_worker_main(
 
             side_framer, side_protocol_detector = init_framer_for_side(receiving_socket, side)
 
-            # ---- One Receiver per direction, for the connection's lifetime ----
-            # Built once here, before the reception loop, instead of allocating a
-            # fresh Receiver every cycle. Creating one per cycle had three problems:
-            #   1. ``loggingw.get_logger_with_level`` scans the global logger
-            #      registry under a lock — calling it on every cycle caused lock
-            #      contention with the other direction's logger setup.
-            #   2. ``getpeername()`` was called twice on every receive() just to
-            #      log a "waiting for data" line; a long-lived Receiver captures
-            #      the peer address once at __init__.
-            #   3. Creating and discarding an object every cycle added unnecessary
-            #      garbage collector work.
-            # See the Receiver class docstring for the lifetime contract.
+            # Build once per direction. Receiver owns framer/protocol state,
+            # queued messages, and cross-thread handoff queues: WebSocket framer
+            # swaps after HTTP 101, plus HTTP/1.1 request-method hints for
+            # response body framing. Keep it outside the receive loop; Receiver
+            # applies queued swaps on its owning thread.
             side_receiver: receiver.Receiver = receiver.Receiver(
                 ssl_socket=receiving_socket, logger=network_logger, framer=side_framer,
                 protocol_detector=side_protocol_detector)
@@ -1069,6 +1079,9 @@ def thread_worker_main(
     # Eagerly allocated even when the corresponding protocol isn't used (cheap; lets
     # responder.add_args wire all three unconditionally).
     h2_state: Http2ConnectionState = Http2ConnectionState()
+    # Separate per-leg state: the response parser counts the origin's SETTINGS into its
+    # own ACK debt, kept distinct from the client leg's.
+    h2_response_state: Http2ConnectionState = Http2ConnectionState()
     mqtt_state: MqttConnectionState = MqttConnectionState()
     ws_state: WebSocketConnectionState = WebSocketConnectionState()
 

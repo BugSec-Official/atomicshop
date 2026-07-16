@@ -161,15 +161,18 @@ class Http2DirectionParser:
             if 'END_STREAM' in flags:
                 accum.end_stream = True
         elif isinstance(frame, hyperframe.frame.SettingsFrame):
-            # Observe client SETTINGS so the response encoder can frame DATA at the
-            # negotiated MAX_FRAME_SIZE and refuse oversized header blocks. SETTINGS
-            # flow client->server in the autoparser's view (request side); ACK frames
-            # carry no settings and are ignored. 0x05 = MAX_FRAME_SIZE, 0x06 = MAX_HEADER_LIST_SIZE.
-            if self._is_request_side and self._state is not None and 'ACK' not in flags:
-                if 0x05 in frame.settings:
-                    self._state.max_frame_size = frame.settings[0x05]
-                if 0x06 in frame.settings:
-                    self._state.max_header_list_size = frame.settings[0x06]
+            # A peer's non-ACK SETTINGS (either leg) owes an ACK we must send back; the
+            # worker drains settings_acks_owed. ACK frames carry no settings, need no reply.
+            # Record the client's framing limits (request side) so the response encoder
+            # sizes DATA / refuses oversized header blocks.
+            # 0x05 = MAX_FRAME_SIZE, 0x06 = MAX_HEADER_LIST_SIZE.
+            if self._state is not None and 'ACK' not in flags:
+                self._state.settings_acks_owed += 1
+                if self._is_request_side:
+                    if 0x05 in frame.settings:
+                        self._state.max_frame_size = frame.settings[0x05]
+                    if 0x06 in frame.settings:
+                        self._state.max_header_list_size = frame.settings[0x06]
             return
         else:
             # WINDOW_UPDATE / PING / GOAWAY / PRIORITY / PUSH_PROMISE: ignored.
@@ -266,17 +269,21 @@ _DEFAULT_MAX_FRAME_SIZE = 16384  # HTTP/2 SETTINGS_MAX_FRAME_SIZE default
 
 
 class Http2ConnectionState:
-    """Observed client SETTINGS, populated by Http2DirectionParser.
+    """Observed peer SETTINGS + handshake debt, populated by Http2DirectionParser.
 
-    HPACK encoder state is intentionally NOT tracked here — _encode_header_block
+    settings_acks_owed counts received non-ACK SETTINGS awaiting our ACK; preface_sent
+    tracks whether we've sent our own SETTINGS preface on this leg. The worker drains
+    both. HPACK encoder state is intentionally NOT tracked here — _encode_header_block
     uses a per-call encoder with sensitive=True (see its docstring) to keep
     synthesised responses from polluting the client's HPACK dynamic table.
     """
-    __slots__ = ('max_frame_size', 'max_header_list_size')
+    __slots__ = ('max_frame_size', 'max_header_list_size', 'settings_acks_owed', 'preface_sent')
 
     def __init__(self):
         self.max_frame_size: int = _DEFAULT_MAX_FRAME_SIZE  # 16384, RFC 7540 §6.5.2
         self.max_header_list_size: int | None = None
+        self.settings_acks_owed: int = 0
+        self.preface_sent: bool = False
 
 
 def _encode_header_block(headers) -> bytes:
@@ -289,6 +296,48 @@ def _encode_header_block(headers) -> bytes:
     """
     encoder = hpack.Encoder()
     return encoder.encode([(k, v, True) for k, v in headers])
+
+
+# === Stream-0 control frames: the proxy terminates the SETTINGS handshake per leg ===
+
+def encode_http2_settings(settings: dict[int, int] | None = None) -> bytes:
+    """Serialize a non-ACK SETTINGS frame (stream 0) — the proxy's own preface/update."""
+    sf = hyperframe.frame.SettingsFrame(stream_id=0)
+    sf.settings = dict(settings or {})
+    return sf.serialize()
+
+
+def encode_http2_settings_ack() -> bytes:
+    """Serialize an empty SETTINGS frame with ACK set — acknowledges a peer's SETTINGS."""
+    sf = hyperframe.frame.SettingsFrame(stream_id=0)
+    sf.flags.add('ACK')
+    return sf.serialize()
+
+
+def settings_handshake_output(
+        state: Http2ConnectionState, *,
+        include_preface: bool, local_settings: dict[int, int] | None = None) -> bytes:
+    """Stream-0 bytes the proxy owes on a leg: its own preface SETTINGS once (when
+    include_preface), then one ACK per received non-ACK SETTINGS. Drains the state."""
+    out = bytearray()
+    if include_preface and not state.preface_sent:
+        out += encode_http2_settings(local_settings)
+        state.preface_sent = True
+    for _ in range(state.settings_acks_owed):
+        out += encode_http2_settings_ack()
+    state.settings_acks_owed = 0
+    return bytes(out)
+
+
+def offline_client_output(
+        state: Http2ConnectionState, responder_messages, *, is_http2: bool) -> list:
+    """Offline send list for the client: prefix the owed stream-0 handshake (preface
+    once + ACKs) ahead of the responder's HTTP/2 reply, so the client gets a server
+    preface and its SETTINGS is ACKed. Non-HTTP/2 connections pass through unchanged."""
+    if not is_http2:
+        return list(responder_messages)
+    handshake = settings_handshake_output(state, include_preface=True)
+    return ([handshake] if handshake else []) + list(responder_messages)
 
 
 def _serialize_data_frames(
