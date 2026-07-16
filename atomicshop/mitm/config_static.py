@@ -75,6 +75,12 @@ class DNSServer:
 
     # Static variables.
     forwarding_dns_service_port: int = 53
+    # Upstream forwarding resilience (defined here, not in config.toml): seconds to wait
+    # per upstream reply, attempts per upstream, and fallback resolvers tried in order
+    # when the primary is unreachable (failover).
+    forwarding_dns_service_timeout: float = 2.0
+    dns_service_retries: int = 2
+    forwarding_dns_service_fallback_ipv4_list = ['1.1.1.1']
 
 
 @dataclass

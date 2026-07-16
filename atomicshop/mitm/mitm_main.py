@@ -805,6 +805,9 @@ def mitm_server(config_file_path: str, script_version: str) -> int:
             backupCount_log_files_x_days=config_static.LogRec.store_logs_for_x_days,
             forwarding_dns_service_ipv4=config_static.DNSServer.forwarding_dns_service_ipv4,
             forwarding_dns_service_port=config_static.DNSServer.forwarding_dns_service_port,
+            forwarding_dns_service_fallback_ipv4_list=config_static.DNSServer.forwarding_dns_service_fallback_ipv4_list,
+            forwarding_dns_service_timeout=config_static.DNSServer.forwarding_dns_service_timeout,
+            dns_service_retries=config_static.DNSServer.dns_service_retries,
             resolve_by_engine=(
                 config_static.DNSServer.resolve_by_engine, config_static.ENGINES_LIST),
             resolve_regular_pass_thru=config_static.DNSServer.resolve_regular_pass_thru,

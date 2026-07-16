@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Literal, Optional
 import multiprocessing
 import re
+from concurrent.futures import ThreadPoolExecutor
 
 from ...print_api import print_api
 from ..loggingw import loggingw
@@ -21,6 +22,39 @@ from ... import networks
 import dnslib
 # noinspection PyPackageRequirements
 from dnslib import DNSRecord, DNSHeader, RR, A
+
+
+def forward_dns_query_to_upstreams(
+        query_bytes: bytes,
+        upstreams: list[tuple[str, int]],
+        timeout: float,
+        retries: int,
+        buffer_size: int,
+        logger: logging.Logger = None,
+) -> Optional[bytes]:
+    """Forward a raw DNS query to each upstream ``(ip, port)`` in order (failover),
+    trying each upstream up to ``retries`` times with ``timeout`` seconds per attempt.
+    Returns the first response received, or None if every upstream/attempt failed.
+
+    A dead/slow upstream costs at most ``timeout * retries`` before failing over to the
+    next, so a single unreachable resolver can never block resolution indefinitely.
+    """
+    for upstream_ip, upstream_port in upstreams:
+        for attempt in range(1, retries + 1):
+            upstream_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            upstream_socket.settimeout(timeout)
+            try:
+                upstream_socket.sendto(query_bytes, (upstream_ip, upstream_port))
+                response_bytes, _ = upstream_socket.recvfrom(buffer_size)
+                return response_bytes
+            except (TimeoutError, OSError) as forward_exception:
+                if logger:
+                    logger.error(
+                        f"DNS forward to {upstream_ip}:{upstream_port} "
+                        f"attempt {attempt}/{retries} failed: {forward_exception}")
+            finally:
+                upstream_socket.close()
+    return None
 
 
 class DnsPortInUseError(Exception):
@@ -163,13 +197,15 @@ class DnsServer:
             backupCount_log_files_x_days: int = 0,
             forwarding_dns_service_ipv4: str = '8.8.8.8',
             forwarding_dns_service_port: int = 53,
+            forwarding_dns_service_timeout: float = 2.0,
+            forwarding_dns_service_fallback_ipv4_list: list = None,
             resolve_by_engine: tuple[bool, list] = (False, None),
             resolve_regular_pass_thru: bool = False,
             resolve_all_domains_to_ipv4: tuple[bool, str] = (False, '127.0.0.1'),
             offline_mode: bool = False,
             buffer_size_receive: int = 8192,
             response_ttl: int = 60,
-            dns_service_retries: int = 5,
+            dns_service_retries: int = 2,
             cache_timeout_minutes: int = 60,
             logger: logging.Logger = None,
             logging_queue: multiprocessing.Queue = None,
@@ -216,6 +252,19 @@ class DnsServer:
         self.backupCount_log_files_x_days: int = backupCount_log_files_x_days
         self.forwarding_dns_service_ipv4: str = forwarding_dns_service_ipv4
         self.forwarding_dns_service_port: int = forwarding_dns_service_port
+        self.forwarding_dns_service_timeout: float = forwarding_dns_service_timeout
+
+        # Upstreams tried in order (failover): the configured primary, then any fallbacks
+        # the caller passes (the fallback list is defined in config_static, not here). If the
+        # primary goes unreachable the next resolver answers, so resolution keeps working
+        # instead of stalling on a single dead upstream.
+        if forwarding_dns_service_fallback_ipv4_list is None:
+            forwarding_dns_service_fallback_ipv4_list = []
+        self.forwarding_upstreams: list[tuple[str, int]] = []
+        for upstream_ipv4 in [forwarding_dns_service_ipv4, *forwarding_dns_service_fallback_ipv4_list]:
+            upstream = (upstream_ipv4, forwarding_dns_service_port)
+            if upstream not in self.forwarding_upstreams:
+                self.forwarding_upstreams.append(upstream)
         self.resolve_by_engine: tuple[bool, list] = resolve_by_engine
         self.resolve_regular_pass_thru: bool = resolve_regular_pass_thru
         self.resolve_all_domains_to_ipv4: tuple[bool, str] = resolve_all_domains_to_ipv4
@@ -356,6 +405,48 @@ class DnsServer:
             self.dns_questions_to_answers_cache = dict()
             self.logger.info("*** DNS cache cleared")
 
+    def _forward_query_and_reply(self, client_data: bytes, client_address: tuple, reply_socket: socket.socket):
+        """Worker (runs on the forward pool): forward one query upstream with failover +
+        retries, then send the reply to the client and cache it. Runs off the receive loop
+        so a slow/unreachable upstream can't head-of-line-block other resolution."""
+        self.logger.info(
+            f"Forwarding request to upstreams {self.forwarding_upstreams} "
+            f"(timeout={self.forwarding_dns_service_timeout}s, retries={self.dns_service_retries})")
+        dns_response = forward_dns_query_to_upstreams(
+            client_data,
+            self.forwarding_upstreams,
+            self.forwarding_dns_service_timeout,
+            self.dns_service_retries,
+            self.buffer_size_receive,
+            logger=self.logger,
+        )
+
+        if dns_response is None:
+            self.logger.info(
+                f"Couldn't forward DNS request to any upstream {self.forwarding_upstreams}. "
+                f"Dropping request.")
+            return
+
+        # Cache and log the returned addresses (same observability as the inline path).
+        self.dns_questions_to_answers_cache.update({client_data: dns_response})
+        try:
+            dns_response_parsed: dnslib.dns.DNSRecord = DNSRecord.parse(dns_response)
+            if dns_response_parsed.rr:
+                for rr in dns_response_parsed.rr:
+                    if isinstance(rr.rdata, A):
+                        self.dns_statistics_csv_writer.write_row(
+                            client_address=client_address, dns_response=dns_response_parsed, engined=False)
+                        self.logger.info(f"Response IP: {rr.rdata}")
+        except Exception as parse_exception:
+            self.logger.error(f"Failed to parse forwarded DNS response for logging: {parse_exception}")
+
+        # Best-effort send: on shutdown the receive socket may already be closed.
+        try:
+            reply_socket.sendto(dns_response, client_address)
+            self.logger.info("DNS Response sent...")
+        except OSError as send_exception:
+            self.logger.error(f"Failed to send forwarded DNS response to {client_address}: {send_exception}")
+
     def start(
             self,
             is_ready_multiprocessing: multiprocessing.Event = None
@@ -417,6 +508,12 @@ class DnsServer:
             # receiving connections.
             main_socket_object.bind((self.listening_interface, self.listening_port))
 
+            # Bounded pool of forward workers: upstream forwards run here, off the single
+            # receive loop, so a slow/unreachable resolver never head-of-line-blocks it. The
+            # cap bounds concurrent upstream sockets under a query flood.
+            self._forward_executor = ThreadPoolExecutor(
+                max_workers=50, thread_name_prefix='dns_forward')
+
             if is_ready_multiprocessing:
                 # If the DNS Server is running in a separate process, signal that the DNS Server is ready.
                 is_ready_multiprocessing.set()
@@ -446,7 +543,9 @@ class DnsServer:
                     # message = "KeyboardInterrupt: Stopping DNS Server..."
                     # print_api(message, logger=self.logger, logger_method='info')
                     # self.logger.info(message)
-                    # Stop the server
+                    # Stop the server. Don't wait on in-flight forwards (their sockets carry
+                    # their own timeout, so they can't hang shutdown).
+                    self._forward_executor.shutdown(wait=False)
                     break
                 except Exception as e:
                     message = f"Unknown Exception to receive DNS request: {str(e)}"
@@ -682,77 +781,15 @@ class DnsServer:
                                 dns_response = dns_built_response.pack()
                             # If we're in online mode
                             else:
-                                counter = 0
-                                retried = False
-                                # If counter isn't equal to number of retries that were set in
-                                # 'dns_service_retries' - we'll loop.
-                                while counter != self.dns_service_retries + 1:
-                                    # If counter is bigger than 0 it means that we're retrying.
-                                    # No need to print it if it's 0.
-                                    # Since, it's probably going to succeed.
-                                    if counter > 0:
-                                        self.logger.info(f"Retry #: {counter}/{self.dns_service_retries}")
-                                    self.logger.info(
-                                        f"Forwarding request. Creating UDP socket to: "
-                                        f"{self.forwarding_dns_service_ipv4}:"
-                                        f"{self.forwarding_dns_service_port}")
-                                    try:
-                                        google_dns_ipv4_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                                        google_dns_ipv4_socket.settimeout(5)
-
-                                        message = "Socket created, Forwarding..."
-                                        # self.logger.info(message)
-                                        self.logger.info(message)
-
-                                        google_dns_ipv4_socket.sendto(client_data, (
-                                            self.forwarding_dns_service_ipv4,
-                                            self.forwarding_dns_service_port
-                                        ))
-                                        # The script needs to wait a second or receive can hang
-                                        message = "Request sent to the forwarding DNS, Receiving the answer..."
-                                        # self.logger.info(message)
-                                        self.logger.info(message)
-
-                                        dns_response, google_address = \
-                                            google_dns_ipv4_socket.recvfrom(self.buffer_size_receive)
-                                    except TimeoutError as function_exception_object:
-                                        print_api(function_exception_object, logger=self.logger, logger_method='error',
-                                                  traceback_string=True, oneline=True)
-                                        google_dns_ipv4_socket.close()
-                                        counter += 1
-                                        # Pass the exception.
-                                        pass
-
-                                        # If counter reached the maximum retries set, we'll wait for amount of time
-                                        # that was set to wait before continuing to the next retry cycle.
-                                        if counter == self.dns_service_retries + 1:
-                                            retried = True
-                                            self.logger.info(
-                                                f"Retried {self.dns_service_retries} times. "
-                                                f"Couldn't forward DNS request to: "
-                                                f"[{self.forwarding_dns_service_ipv4}]. "
-                                                f"Continuing to next request.")
-
-                                        # From here continue to the next iteration of While loop.
-                                        continue
-
-                                    # At this point the connection was successful, we can break the loop.
-                                    break
-
-                                # If retried connecting to Live DNS Service and failed,
-                                # then continue to next iteration (request).
-                                if retried:
-                                    continue
-
-                                self.logger.info(
-                                    f"Answer received from: {self.forwarding_dns_service_ipv4}")
-
-                                # Closing the socket to forwarding service
-                                google_dns_ipv4_socket.close()
-                                self.logger.info("Closed socket to forwarding service")
-
-                                # Appending current DNS Request and DNS Answer to the Cache
-                                self.dns_questions_to_answers_cache.update({client_data: dns_response})
+                                # Offload the upstream forward to a worker thread so a slow or
+                                # unreachable resolver can't head-of-line-block the single receive
+                                # loop — engine/cache/offline answers keep flowing. The worker forwards
+                                # (with failover + retries), sends the reply to the client, and caches
+                                # it; this loop moves on to the next request immediately.
+                                self._forward_executor.submit(
+                                    self._forward_query_and_reply,
+                                    client_data, client_address, main_socket_object)
+                                continue
 
                     # If 'forward_to_tcp_server' it means that we built the response, and we don't need to reparse it,
                     # since we already have all the data.
@@ -1004,6 +1041,9 @@ def start_dns_server_multiprocessing_worker(
         backupCount_log_files_x_days: int,
         forwarding_dns_service_ipv4: str,
         forwarding_dns_service_port: int,
+        forwarding_dns_service_fallback_ipv4_list: list,
+        forwarding_dns_service_timeout: float,
+        dns_service_retries: int,
         resolve_by_engine: tuple[bool, list],
         resolve_regular_pass_thru: bool,
         resolve_all_domains_to_ipv4: tuple[bool, str],
@@ -1035,6 +1075,9 @@ def start_dns_server_multiprocessing_worker(
             backupCount_log_files_x_days=backupCount_log_files_x_days,
             forwarding_dns_service_ipv4=forwarding_dns_service_ipv4,
             forwarding_dns_service_port=forwarding_dns_service_port,
+            forwarding_dns_service_fallback_ipv4_list=forwarding_dns_service_fallback_ipv4_list,
+            forwarding_dns_service_timeout=forwarding_dns_service_timeout,
+            dns_service_retries=dns_service_retries,
             resolve_by_engine=resolve_by_engine,
             resolve_regular_pass_thru=resolve_regular_pass_thru,
             resolve_all_domains_to_ipv4=resolve_all_domains_to_ipv4,
