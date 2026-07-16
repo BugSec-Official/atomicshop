@@ -1,10 +1,12 @@
 atomicshop.egg-info/
 build/
+dist/
 .idea/
 .claude/
 __pycache__/
 tests/
 .pytest_cache/
 docs/
+.superpowers/
 
 Z_Git Upload.cmd
