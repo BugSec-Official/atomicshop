@@ -13,7 +13,6 @@ from ...mitm import initialize_engines
 from ..psutilw import psutil_networks
 from ..certauthw import certauthw
 from ..loggingw import loggingw
-from ... import package_mains_processor
 from ...permissions import permissions
 from ... import filesystem, certificates
 from ...basics import booleans, tracebacks
@@ -235,17 +234,15 @@ class SocketWrapper:
         # Defining listening sockets list, which will be used with "select" library in 'loop_for_incoming_sockets'.
         self.listening_sockets: list = list()
 
-        # Defining 'ssh_script_string' variable, which will be used to process SSH scripts.
-        self.ssh_script_processor = None
         if self.get_process_name:
-            # noinspection PyTypeChecker
-            self.package_processor: package_mains_processor.PackageMainsProcessor | None = package_mains_processor.PackageMainsProcessor(script_file_stem=self.ssh_script_to_execute)
+            if self.ssh_user is None:
+                raise SocketWrapperConfigurationValuesError("ssh_user is required when get_process_name is True")
+            if self.ssh_pass is None:
+                raise SocketWrapperConfigurationValuesError("ssh_pass is required when get_process_name is True")
 
-        else:
-            self.package_processor = None
-
-        # We will initialize it during the first 'get_process_name' function call.
-        self.ssh_client: ssh_remote.SSHRemote | None = None
+        # Per-process SSH lookup handle (talks to the central broker). Assigned by the
+        # TCP server process after construction; None when get_process_name is off.
+        self.ssh_lookup_client = None
 
         # If logs directory was not set, we will use the working directory.
         if not logs_directory:
@@ -592,16 +589,6 @@ class SocketWrapper:
 
                 # If 'accept()' function worked well, then 'client_socket' won't be empty.
                 if client_socket:
-                    # Initialize SSH client lazily in the accept loop (single-threaded, safe).
-                    if self.get_process_name and self.ssh_client is None:
-                        if self.ssh_user is None:
-                            raise RuntimeError("ssh_user is required when get_process_name is True")
-                        if self.ssh_pass is None:
-                            raise RuntimeError("ssh_pass is required when get_process_name is True")
-                        self.ssh_client = ssh_remote.SSHRemote(
-                            ip_address=source_ip, username=self.ssh_user, password=self.ssh_pass,
-                            logger=self.logger)
-
                     # Spawn thread immediately for connection handling — TLS detection,
                     # SSL wrapping, and callable_function all run in the per-connection thread
                     # so the accept loop is never blocked by slow clients.
@@ -688,14 +675,12 @@ class SocketWrapper:
             # SSH Remote / LOCALHOST script execution to identify process section.
             # If 'get_process_name' was set to True, then this will be executed.
             if self.get_process_name:
-                # Get the process name from the socket.
-                get_command_instance = process_getter.GetCommandLine(
-                    client_ip=source_ip,
-                    client_port=source_port,
-                    package_processor=self.package_processor,
-                    ssh_client=self.ssh_client,
-                    logger=self.logger)
-                process_name = get_command_instance.get_process_name(print_kwargs={'logger': self.logger})
+                # Ask the central SSH broker to resolve this connection's source port to the
+                # owning process command line. The broker owns one SSH connection per target
+                # computer; lookup() returns a command-line string (or an error string) and
+                # never raises, so a slow/failed lookup can't stall this connection.
+                process_name = self.ssh_lookup_client.lookup(
+                    source_ip, source_port, self.ssh_user, self.ssh_pass)
 
                 # from ..pywin32w.win_event_log import fetch
                 # events = fetch.get_latest_events(

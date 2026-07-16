@@ -20,7 +20,7 @@ from ..wrappers import netshw
 from ..basics import multiprocesses
 
 from .connection_thread_worker import thread_worker_main
-from . import config_static, recs_files
+from . import config_static, recs_files, ssh_broker
 
 
 # If you have 'pip-system-certs' package installed, this section overrides this behavior, since it injects
@@ -92,6 +92,9 @@ FINALIZE_RECS_ARCHIVE_QUEUE: multiprocessing.Queue = multiprocessing.Queue()
 
 PCAP_WRITER_QUEUE: multiprocessing.Queue = None  # Created only if record_pcap is enabled
 
+# Request queue to the SSH broker; created only if get_process_name is enabled.
+SSH_REQUEST_QUEUE: multiprocessing.Queue = None
+
 
 try:
     win_console.disable_quick_edit()
@@ -139,6 +142,13 @@ def exit_cleanup():
     # Send stop signal to pcap writer process before terminating children.
     if PCAP_WRITER_QUEUE is not None:
         PCAP_WRITER_QUEUE.put(None)
+
+    # Send stop sentinel to the SSH broker before terminating children.
+    if SSH_REQUEST_QUEUE is not None:
+        try:
+            SSH_REQUEST_QUEUE.put(None)
+        except Exception:
+            pass
 
     # Before terminating multiprocessing child processes, we need to put None to all the QueueListeners' queues,
     # so they will stop waiting for new logs and will be able to terminate.
@@ -633,8 +643,40 @@ def mitm_server(config_file_path: str, script_version: str) -> int:
             pcap_process.start()
             multiprocess_list.append(pcap_process)
 
+        # Start the SSH broker process if process-name attribution is enabled.
+        # One request queue is shared by all listeners; each listener gets its own
+        # response queue (indexed by worker_id) so replies route back to the caller.
+        global SSH_REQUEST_QUEUE
+        ssh_request_queue: multiprocessing.Queue | None = None
+        ssh_response_queues: list = list()
+        if config_static.ProcessName.get_process_name:
+            ssh_request_queue = multiprocessing.Queue()
+            SSH_REQUEST_QUEUE = ssh_request_queue
+            for _ in listening_interfaces:
+                ssh_response_queues.append(multiprocessing.Queue())
+
+            # noinspection PyTypeHints
+            is_broker_ready: multiprocessing.Event = multiprocessing.Event()
+            is_ready_multiprocessing_event_list.append(is_broker_ready)
+            broker_process = multiprocessing.Process(
+                target=ssh_broker.ssh_broker_worker,
+                args=(
+                    ssh_request_queue,
+                    ssh_response_queues,
+                    config_file_path,
+                    config_static.ProcessName.ssh_script_to_execute,
+                    is_broker_ready,
+                    network_logger_name,
+                    NETWORK_LOGGER_QUEUE
+                ),
+                name="ssh_broker",
+                daemon=True
+            )
+            broker_process.start()
+            multiprocess_list.append(broker_process)
+
         # Starting the TCP server multiprocessing processes.
-        for interface_dict in listening_interfaces:
+        for worker_id, interface_dict in enumerate(listening_interfaces):
             socket_wrapper_kwargs_list: list[dict] = list()
 
             # Resolve the SSH credentials for this listener once per engine.
@@ -708,6 +750,9 @@ def mitm_server(config_file_path: str, script_version: str) -> int:
             is_tcp_process_ready: multiprocessing.Event = multiprocessing.Event()
             is_ready_multiprocessing_event_list.append(is_tcp_process_ready)
 
+            # This listener's SSH response queue (None when the feature is off).
+            ssh_response_queue = ssh_response_queues[worker_id] if config_static.ProcessName.get_process_name else None
+
             tcp_process: multiprocessing.Process = multiprocessing.Process(
                 target=_create_tcp_server_process,
                 name=interface_dict['process_name'],
@@ -717,7 +762,10 @@ def mitm_server(config_file_path: str, script_version: str) -> int:
                     network_logger_name,
                     NETWORK_LOGGER_QUEUE,
                     is_tcp_process_ready,
-                    PCAP_WRITER_QUEUE
+                    PCAP_WRITER_QUEUE,
+                    ssh_request_queue,
+                    ssh_response_queue,
+                    worker_id
                 ),
                 daemon=True
             )
@@ -801,7 +849,10 @@ def _create_tcp_server_process(
         network_logger_name: str,
         network_logger_queue: multiprocessing.Queue,
         is_tcp_process_ready: multiprocessing.Event,
-        pcap_writer_queue: multiprocessing.Queue = None
+        pcap_writer_queue: multiprocessing.Queue = None,
+        ssh_request_queue: multiprocessing.Queue = None,
+        ssh_response_queue: multiprocessing.Queue = None,
+        worker_id: int = None
 ):
     # Load config_static per process, since it is not shared between processes.
     config_static.load_config(config_file_path, print_kwargs=dict(stdout=False))
@@ -822,6 +873,11 @@ def _create_tcp_server_process(
     # If the listener logger is available in current process, the SocketWrapper will use it.
     _ = loggingw.get_logger_with_level(f'{network_logger_name}.listener')
 
+    # One SSH broker lookup client per process, shared by every SocketWrapper here.
+    ssh_lookup_client = None
+    if config_static.ProcessName.get_process_name:
+        ssh_lookup_client = ssh_broker.SSHLookupClient(ssh_request_queue, ssh_response_queue, worker_id)
+
     for socket_wrapper_kwargs in socket_wrapper_kwargs_list:
         try:
             # noinspection PyTypeChecker
@@ -838,6 +894,8 @@ def _create_tcp_server_process(
             time.sleep(1)
             # network_logger_queue_listener.stop()
             sys.exit(1)
+
+        socket_wrapper_instance.ssh_lookup_client = ssh_lookup_client
 
         try:
             socket_wrapper_instance.start_listening_socket(
