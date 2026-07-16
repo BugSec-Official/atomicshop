@@ -142,6 +142,15 @@ class ProcessName:
     ssh_script_to_execute: Literal['process_from_port', 'process_from_ipv4'] = 'process_from_port'
 
 
+@dataclass
+class Performance:
+    # Single source of truth for process scheduling (no config.toml key — edit values here).
+    # process_priority: 'normal' (no change) | 'above_normal' | 'high'
+    process_priority: str = 'above_normal'
+    # True = opt out of Win11 EcoQoS power throttling so the process runs at full clock, not throttled.
+    disable_power_throttling: bool = True
+
+
 def load_config(
         config_toml_file_path: str,
         print_kwargs: dict = None

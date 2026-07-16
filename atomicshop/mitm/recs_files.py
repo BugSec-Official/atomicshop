@@ -52,7 +52,9 @@ def recs_archiver(
         recs_directory: str,
         logging_queue: multiprocessing.Queue,
         logger_name: str,
-        finalize_output_queue: multiprocessing.Queue
+        finalize_output_queue: multiprocessing.Queue,
+        process_priority: str = 'normal',
+        disable_power_throttling: bool = False,
 ) -> list | None:
     """
     Find recs files in a directory for each day.
@@ -71,6 +73,10 @@ def recs_archiver(
         logger_name=logger_name,
         add_queue_handler=True,
         log_queue=logging_queue)
+
+    from ..wrappers.psutilw import priority as process_priority_util
+    process_priority_util.boost_process_priority(
+        process_priority, disable_power_throttling, logger=rec_packer_logger_with_queue_handler)
 
     print_api.print_api(
         'Starting recs archiver process.', color='blue',
@@ -166,7 +172,9 @@ def recs_archiver_in_process(
         recs_directory: str,
         logging_queue: multiprocessing.Queue,
         logger_name: str,
-        finalize_output_queue: multiprocessing.Queue
+        finalize_output_queue: multiprocessing.Queue,
+        process_priority: str = 'normal',
+        disable_power_throttling: bool = False,
 ) -> multiprocessing.Process:
     """
     Archive recs files in a directory for each day in a separate process.
@@ -178,6 +186,8 @@ def recs_archiver_in_process(
     """
 
     process = multiprocessing.Process(
-        target=recs_archiver, args=(recs_directory, logging_queue, logger_name, finalize_output_queue))
+        target=recs_archiver,
+        args=(recs_directory, logging_queue, logger_name, finalize_output_queue,
+              process_priority, disable_power_throttling))
     process.start()
     return process

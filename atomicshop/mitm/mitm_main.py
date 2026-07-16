@@ -540,7 +540,9 @@ def mitm_server(config_file_path: str, script_version: str) -> int:
             config_static.LogRec.recordings_path,
             logging_queue=NETWORK_LOGGER_QUEUE,
             logger_name=network_logger_name,
-            finalize_output_queue=FINALIZE_RECS_ARCHIVE_QUEUE
+            finalize_output_queue=FINALIZE_RECS_ARCHIVE_QUEUE,
+            process_priority=config_static.Performance.process_priority,
+            disable_power_throttling=config_static.Performance.disable_power_throttling,
         )
 
         archiver_result = FINALIZE_RECS_ARCHIVE_QUEUE.get()
@@ -555,6 +557,12 @@ def mitm_server(config_file_path: str, script_version: str) -> int:
 
     # Logging Startup information.
     startup_output(system_logger, script_version)
+
+    from ..wrappers.psutilw import priority as process_priority_util
+    process_priority_util.boost_process_priority(
+        config_static.Performance.process_priority,
+        config_static.Performance.disable_power_throttling,
+        logger=system_logger)
 
     multiprocess_list: list[multiprocessing.Process] = list()
     # noinspection PyTypeHints
@@ -627,7 +635,9 @@ def mitm_server(config_file_path: str, script_version: str) -> int:
             pcap_process = multiprocessing.Process(
                 target=pcap_worker.pcap_writer_worker,
                 args=(PCAP_WRITER_QUEUE, NETWORK_LOGGER_QUEUE, network_logger_name,
-                      config_static.LogRec.recordings_path),
+                      config_static.LogRec.recordings_path,
+                      config_static.Performance.process_priority,
+                      config_static.Performance.disable_power_throttling),
                 name="pcap_writer",
                 daemon=True
             )
@@ -754,7 +764,9 @@ def mitm_server(config_file_path: str, script_version: str) -> int:
             cache_timeout_minutes=config_static.DNSServer.cache_timeout_minutes,
             logging_queue=NETWORK_LOGGER_QUEUE,
             logger_name=network_logger_name,
-            is_ready_multiprocessing=is_dns_process_ready
+            is_ready_multiprocessing=is_dns_process_ready,
+            process_priority=config_static.Performance.process_priority,
+            disable_power_throttling=config_static.Performance.disable_power_throttling,
         )
 
         dns_process = multiprocessing.Process(
@@ -856,6 +868,12 @@ def _create_tcp_server_process(
     system_logger: logging.Logger = loggingw.get_logger_with_level(f'{network_logger_name}.system')
     # If the listener logger is available in current process, the SocketWrapper will use it.
     _ = loggingw.get_logger_with_level(f'{network_logger_name}.listener')
+
+    from ..wrappers.psutilw import priority as process_priority_util
+    process_priority_util.boost_process_priority(
+        config_static.Performance.process_priority,
+        config_static.Performance.disable_power_throttling,
+        logger=system_logger)
 
     for socket_wrapper_kwargs in socket_wrapper_kwargs_list:
         try:
@@ -1022,7 +1040,9 @@ def _loop_at_midnight_recs_archive(network_logger_name):
                     config_static.LogRec.recordings_path,
                     logging_queue=NETWORK_LOGGER_QUEUE,
                     logger_name=network_logger_name,
-                    finalize_output_queue=FINALIZE_RECS_ARCHIVE_QUEUE
+                    finalize_output_queue=FINALIZE_RECS_ARCHIVE_QUEUE,
+                    process_priority=config_static.Performance.process_priority,
+                    disable_power_throttling=config_static.Performance.disable_power_throttling,
                 )
 
                 archiver_result = FINALIZE_RECS_ARCHIVE_QUEUE.get()

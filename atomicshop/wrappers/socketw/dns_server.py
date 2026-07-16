@@ -1011,7 +1011,9 @@ def start_dns_server_multiprocessing_worker(
         cache_timeout_minutes: int,
         logging_queue: multiprocessing.Queue,
         logger_name: str,
-        is_ready_multiprocessing: multiprocessing.Event=None
+        is_ready_multiprocessing: multiprocessing.Event=None,
+        process_priority: str = 'normal',
+        disable_power_throttling: bool = False,
 ):
     # Setting the current thread name to the current process name.
     current_process_name = multiprocessing.current_process().name
@@ -1046,6 +1048,11 @@ def start_dns_server_multiprocessing_worker(
         # Wait for the message to be printed and saved to file.
         time.sleep(1)
         return 1
+
+    # Boost priority once DnsServer owns this process's logger, so the tuning line reaches the log file.
+    from ...wrappers.psutilw import priority as process_priority_util
+    process_priority_util.boost_process_priority(
+        process_priority, disable_power_throttling, logger=dns_server_instance.logger)
 
     dns_server_instance.start(is_ready_multiprocessing=is_ready_multiprocessing)
 

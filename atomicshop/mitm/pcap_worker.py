@@ -10,7 +10,9 @@ def pcap_writer_worker(
         pcap_queue: multiprocessing.Queue,
         logging_queue: multiprocessing.Queue,
         logger_name: str,
-        recordings_path: str
+        recordings_path: str,
+        process_priority: str = 'normal',
+        disable_power_throttling: bool = False,
 ):
     """
     Multiprocessing worker that receives pcap data from a queue and writes
@@ -34,6 +36,9 @@ def pcap_writer_worker(
         log_queue=logging_queue,
     )
     logger = loggingw.get_logger_with_level(f'{logger_name}.pcap_writer')
+
+    from ..wrappers.psutilw import priority as process_priority_util
+    process_priority_util.boost_process_priority(process_priority, disable_power_throttling, logger=logger)
 
     # Suppress scapy import warning.
     import logging as _logging
