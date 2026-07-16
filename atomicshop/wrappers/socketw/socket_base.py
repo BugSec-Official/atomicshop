@@ -106,7 +106,7 @@ def get_host_name_from_ip_address_with_timeout(ip_address: str, timeout: float =
     """
     from concurrent.futures import ThreadPoolExecutor, TimeoutError
 
-    executor = ThreadPoolExecutor(max_workers=1)
+    executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='reverse_dns_lookup')
     future = executor.submit(socket.gethostbyaddr, ip_address)
     try:
         result = future.result(timeout=timeout)

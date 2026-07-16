@@ -6,10 +6,9 @@ import queue
 def current_thread_id():
     # Trying to get the ID of the current thread. If we're not in a thread, then we'll get "IndexError"
     try:
-        # "threading.current_thread().name" returns string of "Thread-N (target)" - need to remove the " (target)" part
-        # and re-set the name back for use in other functions
-        threading.current_thread().name = threading.current_thread().name.split()[0]
-        # Extracting only the index number and converting to integer
+        # Thread names arrive as "Thread-N (target)"; strip the " (target)" suffix
+        # (re-setting it for later callers), then extract N as an integer.
+        strip_current_thread_name_suffix()
         thread_id: int = int(threading.current_thread().name.split("-")[1])
     # If we're not in the multithreaded thread, but in the main thread
     except IndexError:
@@ -24,6 +23,12 @@ def get_current_thread_name():
 
 def set_current_thread_name(name: str):
     threading.current_thread().name = name
+
+
+def strip_current_thread_name_suffix():
+    """Drop Python 3.10+'s auto-added ' (target)' suffix from the current thread name."""
+    current = threading.current_thread()
+    current.name = current.name.split()[0]
 
 
 def set_current_thread_name_by_process_name():

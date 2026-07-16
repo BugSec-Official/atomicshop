@@ -17,7 +17,7 @@ from ..loggingw import loggingw
 from ... import package_mains_processor
 from ...permissions import permissions
 from ... import filesystem, certificates
-from ...basics import booleans, tracebacks
+from ...basics import booleans, threads, tracebacks
 from ...print_api import print_api
 from ...import ssh_remote
 
@@ -683,6 +683,10 @@ class SocketWrapper:
         :param callable_function: callable, function to execute for this connection.
         :param callable_args: tuple, additional arguments for callable_function.
         """
+
+        # Python auto-names this thread "Thread-N (_serve_connection)". Strip the suffix now so
+        # the connection-setup logs read "Thread-N", matching the name the worker later composes.
+        threads.strip_current_thread_name_suffix()
 
         source_ip: str = client_address[0]
         source_port: int = client_address[1]
