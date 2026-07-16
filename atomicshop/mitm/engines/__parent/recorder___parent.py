@@ -42,6 +42,10 @@ class RecorderParent:
         # Initialize a queue to hold messages
         self.message_queue: queue.Queue = queue.Queue()
         self.recorder_worker_thread = None
+        # Guards the once-only first-call setup in record(). The recorder is shared
+        # between the two relay sub-threads, which can both hit record() before the
+        # worker is up; without this, both could build the path and spawn a worker.
+        self._record_init_lock = threading.Lock()
 
     # "self.__module__" is fully qualified module name: classes.engines.ENGINE-NAME.MODULE-NAME
     def get_engine_module(self):
@@ -50,11 +54,11 @@ class RecorderParent:
     def build_record_path_to_engine(self):
         self.engine_record_path = self.record_path + os.sep + self.engine_name
 
-    def build_record_full_file_path(self):
+    def build_record_full_file_path(self, class_client_message):
         # If HTTP Path is not defined, 'http_path' will be empty, and it will not interfere with file name.
         self.record_file_path: str = (
-            f"{self.engine_record_path}{os.sep}th{self.class_client_message.thread_id}_"
-            f"{self.class_client_message.server_name}{self.file_extension}")
+            f"{self.engine_record_path}{os.sep}th{class_client_message.thread_id}_"
+            f"{class_client_message.server_name}{self.file_extension}")
 
     def convert_messages(self):
         """
@@ -73,25 +77,32 @@ class RecorderParent:
     ):
         self.class_client_message = class_client_message
 
-        # Build full file path if it is not already built.
-        if not self.record_file_path:
-            self.build_record_full_file_path()
-
-        # Start the worker thread if it is not already running
-        if not self.recorder_worker_thread:
-            self.recorder_worker_thread = threading.Thread(
-                target=save_message_worker,
-                args=(self.record_file_path, self.message_queue, self.logger),
-                name=f"{self.class_client_message.thread_process}-{class_client_message.destination_port}-Recorder",
-                daemon=True
-            )
-            self.recorder_worker_thread.start()
+        # Once-only first-call setup. The recorder is shared between the two relay
+        # sub-threads, which can both reach record() before the worker is up; the lock
+        # + double-check keeps a single path build and a single worker thread. The
+        # argument (stable for the call) feeds the path and the worker name, not the
+        # scratch self.class_client_message, so a concurrent caller can't race either.
+        if not self.record_file_path or not self.recorder_worker_thread:
+            with self._record_init_lock:
+                if not self.record_file_path:
+                    self.build_record_full_file_path(class_client_message)
+                if not self.recorder_worker_thread:
+                    self.recorder_worker_thread = threading.Thread(
+                        target=save_message_worker,
+                        args=(self.record_file_path, self.message_queue, self.logger),
+                        name=f"{class_client_message.thread_process}-{class_client_message.destination_port}-Recorder",
+                        daemon=True
+                    )
+                    self.recorder_worker_thread.start()
 
         self.logger.info("Putting Message to Recorder Thread Queue...")
 
-        # Put a copy of the client message object to the queue,
-        # so the worker can convert to JSON and/or pcap independently.
-        self.message_queue.put(copy.copy(self.class_client_message))
+        # Snapshot the ARGUMENT, not self.class_client_message. The recorder is shared
+        # between the two relay sub-threads, which call record() concurrently; the
+        # instance attr is a scratch ref one caller's next-cycle reinitialize_dynamic_vars
+        # can null (timestamp -> None) before another caller's copy. The argument is stable
+        # for the call's duration (record runs synchronously on the caller's thread).
+        self.message_queue.put(copy.copy(class_client_message))
 
         return self.record_file_path
 
@@ -138,6 +149,10 @@ def save_message_worker(
 
             record_message_dict: dict = dict(class_client_message)
 
+            # append_to_json edits the file's tail in place (O(record)), so this runs
+            # directly on the per-connection recorder thread — off the relay threads and
+            # cheap enough not to need a separate writer process (unlike the shared pcap
+            # file below, which one process serializes).
             try:
                 jsons.append_to_json(
                     record_message_dict, record_file_path, indent=2,
@@ -146,10 +161,9 @@ def save_message_worker(
             except TypeError as e:
                 print_api(str(e), logger_method="critical", logger=logger)
                 raise e
-
             logger.info(f"Recorded to file: {record_file_path}")
 
-        # Write pcap if enabled — send data to the pcap writer process via queue.
+        # Write pcap if enabled -- send data to the pcap writer process via queue.
         if config_static.LogRec.record_pcap and PCAP_QUEUE is not None:
             if class_client_message.action == "client_receive":
                 raw_bytes = class_client_message.request_raw_bytes

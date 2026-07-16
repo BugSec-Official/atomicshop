@@ -1,4 +1,6 @@
 import json
+import os
+import textwrap
 from typing import Union
 
 from .file_io import read_file_decorator, write_file_decorator
@@ -159,6 +161,19 @@ def append_to_json(
     :return:
     """
 
+    if use_default_indent:
+        indent = 2
+    if print_kwargs is None:
+        print_kwargs = {}
+
+    # Fast path: append ONE record to an existing JSON array by editing only the file's
+    # tail, so the cost is O(record) rather than re-reading + re-serializing the whole
+    # file every call (the old behavior made a per-connection recording O(n^2) and held
+    # the GIL, starving the relay). Returns False for a missing/empty file or a
+    # non-array (legacy bare-dict) file, which the full-rewrite fallback below handles.
+    if _append_record_to_json_array_in_place(dict_or_list, json_file_path, indent):
+        return
+
     # Read existing data from the file
     try:
         with open(json_file_path, 'r') as f:
@@ -182,3 +197,78 @@ def append_to_json(
     write_json_file(
         final_json_list_of_dicts, json_file_path, indent=indent, use_default_indent=use_default_indent,
         enable_long_file_path=enable_long_file_path, **print_kwargs)
+
+
+def _append_record_to_json_array_in_place(record: Union[dict, list], json_file_path: str, indent) -> bool:
+    """Append ``record`` to an existing pretty-printed JSON array by truncating the
+    trailing ``]`` and re-writing only the tail — no full read/parse/rewrite. The result
+    is byte-identical to ``json.dumps(existing + [record], indent=indent)``.
+
+    Returns False (caller must fall back to the full rewrite) when the file is missing,
+    empty, not a JSON array (a legacy single bare dict), uses an unsupported ``indent``,
+    or the tail can't be located within the read window.
+    """
+    # Only the compact (None) and integer-spaces indent modes are byte-reproducible here;
+    # anything else falls back to the full rewrite.
+    if indent is not None and not isinstance(indent, int):
+        return False
+
+    try:
+        size = os.path.getsize(json_file_path)
+    except OSError:
+        return False
+    if size == 0:
+        return False
+
+    read_length = min(size, 512)
+    try:
+        with open(json_file_path, 'rb') as file_object:
+            head = file_object.read(min(size, 8))
+            file_object.seek(size - read_length)
+            tail = file_object.read(read_length)
+    except OSError:
+        return False
+
+    # First non-whitespace byte must be '[' — otherwise it's a bare dict / not an array.
+    stripped_head = head.lstrip()
+    if not stripped_head or stripped_head[:1] != b'[':
+        return False
+
+    # Find the closing ']' and the last non-whitespace byte before it: '}' means the
+    # array already has elements (insert a separator), '[' means it's empty.
+    close_bracket = tail.rfind(b']')
+    if close_bracket == -1:
+        return False
+    index = close_bracket - 1
+    while index >= 0 and tail[index:index + 1] in (b' ', b'\t', b'\r', b'\n'):
+        index -= 1
+    if index < 0:
+        return False
+    previous_byte = tail[index:index + 1]
+    insert_at = (size - read_length) + index + 1
+
+    element = json.dumps(record, indent=indent)
+    if indent is None:
+        if previous_byte == b'}':
+            addition = ', ' + element + ']'
+        elif previous_byte == b'[':
+            addition = element + ']'
+        else:
+            return False
+    else:
+        element = textwrap.indent(element, ' ' * indent)
+        if previous_byte == b'}':
+            addition = ',\n' + element + '\n]'
+        elif previous_byte == b'[':
+            addition = '\n' + element + '\n]'
+        else:
+            return False
+
+    try:
+        with open(json_file_path, 'rb+') as file_object:
+            file_object.seek(insert_at)
+            file_object.truncate()
+            file_object.write(addition.encode('utf-8'))
+    except OSError:
+        return False
+    return True

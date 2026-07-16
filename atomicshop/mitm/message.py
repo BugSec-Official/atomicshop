@@ -69,7 +69,8 @@ class ClientMessage:
             if key == 'request_raw_bytes':
                 value = str(value)
             elif key == 'timestamp':
-                value = value.strftime('%Y-%m-%d-%H:%M:%S.%f')
+                # Nullable: None until the first receive cycle, and after reinitialize_dynamic_vars.
+                value = value.strftime('%Y-%m-%d-%H:%M:%S.%f') if value is not None else None
             elif key == 'request_auto_parsed':
                 if isinstance(value, (http.HTTPRequestParse, http2.Http2RequestParse)):
                     value = dicts.convert_complex_object_to_dict(value)
