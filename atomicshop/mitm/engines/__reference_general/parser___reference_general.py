@@ -64,7 +64,7 @@ class ParserGeneral(ParserParent):
     #         pass
 
     # ==================================================================================================================
-    # HTTP/2 (Http2RequestParse) — fields available on self.class_client_message.request_auto_parsed when ALPN=h2:
+    # HTTP/2 (Http2RequestParse) -- fields available on self.class_client_message.request_auto_parsed when ALPN=h2:
     #   .command         -> ':method' uppercased ('GET', 'POST', ...)
     #   .path            -> ':path' (full path + query, e.g. '/api/v1/foo?bar=baz')
     #   .authority       -> ':authority' (Host equivalent)
@@ -82,7 +82,7 @@ class ParserGeneral(ParserParent):
     #     if ar.command == 'POST' and ar.path.startswith('/api/v1/parse'):
     #         self.parse_example_request()
     #
-    #     # 2. Read a regular header — keys are always lowercase in HTTP/2
+    #     # 2. Read a regular header -- keys are always lowercase in HTTP/2
     #     user_agent: str = ar.headers.get('user-agent', '')
     #
     #     # 3. Read a pseudo-header explicitly (':authority' is the Host equivalent)

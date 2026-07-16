@@ -181,10 +181,10 @@ class ResponderParent:
         Auto-filled from class_client_message + self._h2_state:
           - stream_id        <- request_auto_parsed.stream_id
           - DATA framing     <- self._h2_state.max_frame_size (client SETTINGS)
-          - content-length   <- len(body) when absent from headers
+          - content-length   <- len(body) when absent from headers and body is non-empty
 
         HPACK encoding uses sensitive=True per http2._encode_header_block docstring;
-        the dynamic table is intentionally NOT shared across calls — this prevents
+        the dynamic table is intentionally NOT shared across calls -- this prevents
         synthesised responses from polluting the client's HPACK decoder state on
         proxies that mix synthesised and forwarded traffic.
 
@@ -213,7 +213,7 @@ class ResponderParent:
         if body and not has_length_header:
             headers['content-length'] = str(len(body))
 
-        # MAX_HEADER_LIST_SIZE enforcement per RFC 7541 §4.1 (name + value + 32 bytes).
+        # MAX_HEADER_LIST_SIZE enforcement per RFC 7541 Section 4.1 (name + value + 32 bytes).
         all_headers = [(':status', str(status_code))] + list(headers.items())
         header_size = sum(len(k) + len(v) + 32 for k, v in all_headers)
         limit = self._h2_state.max_header_list_size
@@ -346,10 +346,10 @@ class ResponderParent:
 
     # ------------------------------------------------------------------
     # WebSocket server->client frame builders. All auto-fill mask=False
-    # (RFC 6455 §5.1) and deflate from self._ws_state.permessage_deflate_negotiated.
+    # (RFC 6455 Section 5.1) and deflate from self._ws_state.permessage_deflate_negotiated.
     # ------------------------------------------------------------------
 
-    # RFC 6455 §5.2 control-frame opcodes.
+    # RFC 6455 Section 5.2 control-frame opcodes.
     _WS_OPCODE_CLOSE = 0x8
     _WS_OPCODE_PING = 0x9
     _WS_OPCODE_PONG = 0xA
