@@ -14,9 +14,11 @@ from . import creator
 from .receiver import Receiver
 from .sender import Sender
 from . import ssl_base
+from . import socket_base
 from .. import cryptographyw
 from ..loggingw import loggingw
 from ... import print_api
+from ... import ip_addresses
 from ...file_io import file_io
 from ...basics import tracebacks
 
@@ -29,6 +31,49 @@ def lookup_mtls_client_pem(
     if isinstance(mtls_subdomains, dict):
         return mtls_subdomains.get(subdomain)
     return None
+
+
+def select_origin_target(sni_host: str | None, fallback_domain: str) -> str:
+    """Origin connect target: the ClientHello SNI when present, else the DNS/engine domain —
+    mirrors the worker's ``client_socket.server_hostname or domain_from_dns``."""
+    return sni_host or fallback_domain
+
+
+def mirror_alpn_list(origin_selected_alpn: str | None) -> list[str] | None:
+    """ALPN list to offer the client so the inbound leg mirrors the origin's choice: the single
+    protocol the origin negotiated, or None when it negotiated none (None -> caller skips
+    set_alpn_protocols -> ServerHello omits ALPN)."""
+    return [origin_selected_alpn] if origin_selected_alpn else None
+
+
+def create_origin_socket_client(
+        server_name: str,
+        service_port: int,
+        client_ip: str,
+        is_tls: bool,
+        mtls_subdomains: dict | set | None,
+        logger,
+        enable_sslkeylogfile_env_to_client_ssl_context: bool,
+        sslkeylog_file_path: str | None,
+        forwarding_dns_servers_list: list[str] | None,
+        client_alpn_offers: list[str] | None,
+) -> "SocketClient":
+    """Build (do NOT connect) the origin SocketClient, picking one of three address branches:
+    IP-direct / localhost -> forwarding DNS / domain-direct. Relocated from the worker's nested
+    create_client_socket so the accept path can connect the origin before the client handshake."""
+    custom_client_pem_certificate_path = lookup_mtls_client_pem(mtls_subdomains, server_name)
+    common = dict(
+        service_name=server_name, service_port=service_port, tls=is_tls, logger=logger,
+        custom_pem_client_certificate_file_path=custom_client_pem_certificate_path,
+        enable_sslkeylogfile_env_to_client_ssl_context=enable_sslkeylogfile_env_to_client_ssl_context,
+        sslkeylog_file_path=sslkeylog_file_path, client_alpn_offers=client_alpn_offers,
+    )
+    if ip_addresses.is_ip_address(server_name, ip_type='ipv4'):
+        return SocketClient(connection_ip=server_name, **common)
+    # Localhost clients resolve engine domains through the forwarding DNS list.
+    if client_ip in socket_base.THIS_DEVICE_IP_LIST:
+        return SocketClient(dns_servers_list=forwarding_dns_servers_list, **common)
+    return SocketClient(**common)
 
 
 class SocketClient:
@@ -441,3 +486,9 @@ class SocketClient:
         elif cert_output_type == 'cryptography':
             # Convert DER certificate from socket to X509 cryptography module object.
             return cryptographyw.convert_der_to_x509_object(certificate_from_socket_der_bytes)
+
+    def get_peer_certificate_der(self) -> bytes:
+        """Peer cert (DER x509 bytes) from the already-connected socket, WITHOUT closing it —
+        the socket stays alive for the data path. Contrast get_certificate_from_server(), which
+        connects then closes."""
+        return ssl_base.get_certificate_from_socket(self.socket_instance)

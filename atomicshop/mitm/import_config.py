@@ -12,6 +12,25 @@ from . import config_static, initialize_engines
 from .engines import encoding as engine_encoding
 
 
+def read_reuse_server_socket_certificate(certificates: dict) -> bool:
+    """New key, else the pre-rename key, else False (upgrade-safe)."""
+    return bool(certificates.get(
+        'reuse_server_socket_certificate',
+        certificates.get('sni_get_server_certificate_from_server_socket', False)))
+
+
+def read_reuse_server_socket_certificate_download_directory(certificates: dict) -> str:
+    return certificates.get(
+        'reuse_server_socket_certificate_download_directory',
+        certificates.get('sni_server_certificate_from_server_socket_download_directory', 'certs_from_socket'))
+
+
+def read_fail_fast_on_origin_connect_error(certificates: dict) -> bool:
+    """When the origin is unreachable: True = abort before the client handshake; False (default)
+    = complete the client handshake and record the error (today's behavior)."""
+    return bool(certificates.get('fail_fast_on_origin_connect_error', False))
+
+
 def import_config_files(
         config_file_path: str,
         print_kwargs: dict = None
@@ -63,8 +82,12 @@ def import_config_files(
     config_static.Certificates.custom_private_key_path = config_toml['certificates']['custom_private_key_path']
     config_static.Certificates.sni_create_server_certificate_for_each_domain = bool(config_toml['certificates']['sni_create_server_certificate_for_each_domain'])
     config_static.Certificates.sni_server_certificates_cache_directory = config_toml['certificates']['sni_server_certificates_cache_directory']
-    config_static.Certificates.sni_get_server_certificate_from_server_socket = bool(config_toml['certificates']['sni_get_server_certificate_from_server_socket'])
-    config_static.Certificates.sni_server_certificate_from_server_socket_download_directory = config_toml['certificates']['sni_server_certificate_from_server_socket_download_directory']
+    config_static.Certificates.reuse_server_socket_certificate = \
+        read_reuse_server_socket_certificate(config_toml['certificates'])
+    config_static.Certificates.reuse_server_socket_certificate_download_directory = \
+        read_reuse_server_socket_certificate_download_directory(config_toml['certificates'])
+    config_static.Certificates.fail_fast_on_origin_connect_error = \
+        read_fail_fast_on_origin_connect_error(config_toml['certificates'])
 
     config_static.SkipExtensions.tls_web_client_authentication = bool(config_toml['skip_extensions']['tls_web_client_authentication'])
     config_static.SkipExtensions.crl_distribution_points = bool(config_toml['skip_extensions']['crl_distribution_points'])
@@ -386,9 +409,9 @@ def manipulations_after_import():
 
     config_static.Certificates.sni_server_certificates_cache_directory = filesystem.check_absolute_path___add_full(
         config_static.Certificates.sni_server_certificates_cache_directory, config_static.MainConfig.SCRIPT_DIRECTORY)
-    config_static.Certificates.sni_server_certificate_from_server_socket_download_directory = \
+    config_static.Certificates.reuse_server_socket_certificate_download_directory = \
         filesystem.check_absolute_path___add_full(
-            config_static.Certificates.sni_server_certificate_from_server_socket_download_directory,
+            config_static.Certificates.reuse_server_socket_certificate_download_directory,
             config_static.MainConfig.SCRIPT_DIRECTORY)
     config_static.Certificates.sslkeylog_file_path = (f"{config_static.LogRec.logs_path}{os.sep}"
                                                       f"{config_static.Certificates.sslkeylog_file_name}")

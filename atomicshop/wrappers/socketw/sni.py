@@ -52,8 +52,8 @@ class SNISetup:
             sni_add_new_domains_to_default_server_certificate: bool,
             sni_create_server_certificate_for_each_domain: bool,
             sni_server_certificates_cache_directory: str | None,
-            sni_get_server_certificate_from_server_socket: bool,
-            sni_server_certificate_from_server_socket_download_directory: str | None,
+            reuse_server_socket_certificate: bool,
+            reuse_server_socket_certificate_download_directory: str | None,
             custom_server_certificate_usage: bool,
             custom_server_certificate_path: str | None,
             custom_private_key_path: str | None,
@@ -65,7 +65,8 @@ class SNISetup:
             enable_sslkeylogfile_env_to_client_ssl_context: bool = False,
             sslkeylog_file_path: str = None,
             mtls_subdomains: dict | set | None = None,
-            client_alpn_offers: list[str] | None = None
+            server_alpn_protocols: list[str] | None = None,
+            origin_socket_client=None
     ):
         self.ca_certificate_name = ca_certificate_name
         self.ca_certificate_filepath = ca_certificate_filepath
@@ -79,9 +80,9 @@ class SNISetup:
         self.sni_add_new_domains_to_default_server_certificate = sni_add_new_domains_to_default_server_certificate
         self.sni_create_server_certificate_for_each_domain = sni_create_server_certificate_for_each_domain
         self.sni_server_certificates_cache_directory = sni_server_certificates_cache_directory
-        self.sni_get_server_certificate_from_server_socket = sni_get_server_certificate_from_server_socket
-        self.sni_server_certificate_from_server_socket_download_directory = (
-            sni_server_certificate_from_server_socket_download_directory)
+        self.reuse_server_socket_certificate = reuse_server_socket_certificate
+        self.reuse_server_socket_certificate_download_directory = (
+            reuse_server_socket_certificate_download_directory)
         self.custom_server_certificate_usage = custom_server_certificate_usage
         self.custom_server_certificate_path = custom_server_certificate_path
         self.custom_private_key_path = custom_private_key_path
@@ -95,10 +96,11 @@ class SNISetup:
         self.enable_sslkeylogfile_env_to_client_ssl_context: bool = enable_sslkeylogfile_env_to_client_ssl_context
         self.sslkeylog_file_path: str | None = sslkeylog_file_path
         self.mtls_subdomains = mtls_subdomains
-        # Mirror the client's ALPN offers from the inbound ClientHello onto both
-        # the initial and SNI-swapped server contexts, so the ALPN negotiation
-        # on the inbound leg matches what the client actually asked for.
-        self.client_alpn_offers = client_alpn_offers
+        # Mirror the origin's ALPN selection onto both the initial and
+        # SNI-swapped server contexts, so the ALPN negotiation on the
+        # inbound leg matches what the origin actually selected.
+        self.server_alpn_protocols = server_alpn_protocols
+        self.origin_socket_client = origin_socket_client
 
     def wrap_socket_with_ssl_context_server_sni_extended(
             self,
@@ -148,7 +150,7 @@ class SNISetup:
         ssl_context: ssl.SSLContext = creator.create_ssl_context_for_server(
             allow_legacy=True, enable_sslkeylogfile_env_to_client_ssl_context=self.enable_sslkeylogfile_env_to_client_ssl_context,
             sslkeylog_file_path=self.sslkeylog_file_path,
-            alpn_protocols=self.client_alpn_offers)
+            alpn_protocols=self.server_alpn_protocols)
 
         self.certificator_instance = certificator.Certificator(
             ca_certificate_name=self.ca_certificate_name,
@@ -158,20 +160,17 @@ class SNISetup:
             default_server_certificate_directory=self.default_server_certificate_directory,
             default_certificate_domain_list=self.default_certificate_domain_list,
             sni_server_certificates_cache_directory=self.sni_server_certificates_cache_directory,
-            sni_get_server_certificate_from_server_socket=self.sni_get_server_certificate_from_server_socket,
-            sni_server_certificate_from_server_socket_download_directory=(
-                self.sni_server_certificate_from_server_socket_download_directory),
+            reuse_server_socket_certificate=self.reuse_server_socket_certificate,
+            reuse_server_socket_certificate_download_directory=(
+                self.reuse_server_socket_certificate_download_directory),
             custom_server_certificate_usage=self.custom_server_certificate_usage,
             custom_server_certificate_path=self.custom_server_certificate_path,
             custom_private_key_path=self.custom_private_key_path,
-            forwarding_dns_service_ipv4_list___only_for_localhost=(
-                self.forwarding_dns_service_ipv4_list___only_for_localhost),
             skip_extension_id_list=self.skip_extension_id_list,
-            tls=self.tls,
             enable_sslkeylogfile_env_to_client_ssl_context=self.enable_sslkeylogfile_env_to_client_ssl_context,
             sslkeylog_file_path=self.sslkeylog_file_path,
-            mtls_subdomains=self.mtls_subdomains,
-            client_alpn_offers=self.client_alpn_offers
+            server_alpn_protocols=self.server_alpn_protocols,
+            origin_socket_client=self.origin_socket_client,
         )
 
         # Add SNI callback function to the SSL context.
@@ -242,7 +241,7 @@ class SNISetup:
                 enable_sslkeylogfile_env_to_client_ssl_context=(
                     self.certificator_instance.enable_sslkeylogfile_env_to_client_ssl_context),
                 sslkeylog_file_path=self.certificator_instance.sslkeylog_file_path,
-                client_alpn_offers=self.client_alpn_offers,
+                server_alpn_protocols=self.server_alpn_protocols,
                 # Pass the raw TCP socket through so the SNI handler /
                 # certificator can resolve peer/local addresses on it.
                 # ``getattr`` fallback keeps the legacy ``wrap_socket``-based
@@ -268,7 +267,7 @@ class SNIHandler:
             exceptions_logger: loggingw.ExceptionCsvLogger,
             enable_sslkeylogfile_env_to_client_ssl_context: bool,
             sslkeylog_file_path: str,
-            client_alpn_offers: list[str] | None = None,
+            server_alpn_protocols: list[str] | None = None,
             raw_socket: Optional[socket.socket] = None
     ):
         self.sni_use_default_callback_function_extended = sni_use_default_callback_function_extended
@@ -280,7 +279,7 @@ class SNIHandler:
         self.exceptions_logger = exceptions_logger
         self.enable_sslkeylogfile_env_to_client_ssl_context: bool = enable_sslkeylogfile_env_to_client_ssl_context
         self.sslkeylog_file_path: str = sslkeylog_file_path
-        self.client_alpn_offers = client_alpn_offers
+        self.server_alpn_protocols = server_alpn_protocols
         # Raw TCP socket the handshake is riding on. Needed because the SNI
         # callback receives an ``ssl.SSLObject`` (from ``wrap_bio``) which
         # has no ``getsockname``/``getpeername`` — address lookups go
@@ -444,7 +443,7 @@ class SNIHandler:
                         inherit_from=self.sni_received_parameters.ssl_socket.context,
                         enable_sslkeylogfile_env_to_client_ssl_context=self.enable_sslkeylogfile_env_to_client_ssl_context,
                         sslkeylog_file_path=self.sslkeylog_file_path,
-                        alpn_protocols=self.client_alpn_offers
+                        alpn_protocols=self.server_alpn_protocols
                     )
                 )
             else:

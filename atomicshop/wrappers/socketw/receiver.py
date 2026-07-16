@@ -4,7 +4,6 @@ import socket
 import ssl
 from collections.abc import Callable
 
-import h11
 import select
 from collections import deque
 from pathlib import Path
@@ -195,8 +194,10 @@ class Receiver:
 
         Returns bytes (b'' = clean peer EOF). Raises stdlib ConnectionError,
         ssl.SSLError, TimeoutError, InterruptedError, or PeerClosedMidMessage
-        on failure. Receive-path failures carry any partial bytes as
-        exc.received.
+        on failure; these carry any partial bytes as exc.received. A framer that
+        hits a malformed/unexpected wire shape raises its own parse error (e.g.
+        h11.RemoteProtocolError), which propagates here instead of degrading to
+        passthrough.
         """
         self.logger.info(f"Waiting for data from {self.peer_address}:{self.peer_port}")
 
@@ -242,22 +243,13 @@ class Receiver:
             framer = self._framer
             assert framer is not None, "framer swap to None mid-protocol-loop is unsupported"
 
-            # 'framer.consume(chunk)' should return a fully framed message if the current chunk is enough to complete one
-            # or an empty list if the chunk is not enough to complete a message.
-            # If there are multiple messages in the chunk, it should return all of them.
-            try:
-                complete_framed_messages: list[bytes] = framer.consume(chunk)
-            except h11.RemoteProtocolError as exc:
-                # Sniffer's guess was wrong (or the upstream is non-conformant). Drop the
-                # framer, migrate its buffered bytes (which include this chunk) to the
-                # unframed buffer, disable detection, fall through as opaque passthrough.
-                self.logger.info(
-                    f"Framer raised {type(exc).__name__}: {exc}; degrading to passthrough.")
-                self._do_set_framer(None)
-                self._protocol_detector = None
-                if self._unframed_buffer:
-                    return self._flush_unframed_buffer()
-                return self._recv_message_unframed()
+            # 'framer.consume(chunk)' returns any messages this chunk completed (empty list
+            # if not enough bytes yet; several if the chunk finished more than one).
+            # A malformed/unexpected wire shape makes the framer raise (e.g.
+            # h11.RemoteProtocolError) — let it propagate to the thread's exception handler.
+            # A framing error is a real defect; surface it instead of silently degrading to
+            # opaque passthrough.
+            complete_framed_messages: list[bytes] = framer.consume(chunk)
             self._framed_messages.extend(complete_framed_messages)
 
     def _handle_protocol_eof(self) -> bytes:

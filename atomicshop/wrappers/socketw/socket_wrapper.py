@@ -21,8 +21,8 @@ from ...print_api import print_api
 from ...import ssh_remote
 
 from . import (
-    socket_base, creator, process_getter, accepter, statistics_csv, ssl_base,
-    sni, buffered_socket,
+    socket_base, creator, accepter, statistics_csv, ssl_base,
+    sni, buffered_socket, socket_client,
 )
 
 
@@ -61,8 +61,10 @@ class SocketWrapper:
             sni_add_new_domains_to_default_server_certificate: bool = False,
             sni_create_server_certificate_for_each_domain: bool = False,
             sni_server_certificates_cache_directory: str | None = None,
-            sni_get_server_certificate_from_server_socket: bool = False,
-            sni_server_certificate_from_server_socket_download_directory: str | None = None,
+            reuse_server_socket_certificate: bool = False,
+            reuse_server_socket_certificate_download_directory: str | None = None,
+            is_offline: bool = False,
+            fail_fast_on_origin_connect_error: bool = False,
             skip_extension_id_list: list | None = None,
             custom_server_certificate_usage: bool = False,
             custom_server_certificate_path: str | None = None,
@@ -132,10 +134,15 @@ class SocketWrapper:
             server will be added to default server certificate.
         :param sni_create_server_certificate_for_each_domain: boolean, if True, server certificate will be
             created and used for each domain that hit the tcp server.
-        :param sni_get_server_certificate_from_server_socket: boolean, if True, server certificate will be
+        :param reuse_server_socket_certificate: boolean, if True, server certificate will be
             downloaded from the server socket.
-        :param sni_server_certificate_from_server_socket_download_directory: string, path to directory where
+        :param reuse_server_socket_certificate_download_directory: string, path to directory where
             server certificate will be downloaded from the server socket.
+        :param is_offline: bool, when True the server runs without an upstream/origin connection
+            (offline responder mode).
+        :param fail_fast_on_origin_connect_error: bool, when True abort before the client TLS
+            handshake if the origin is unreachable; when False (default) complete the handshake
+            and record the connect error.
         :param default_server_certificate_name: default server certificate name.
         :param default_certificate_domain_list: list of string, domains to create the default certificate with.
         :param default_server_certificate_directory: string, path to directory where default certificate file
@@ -204,9 +211,11 @@ class SocketWrapper:
         self.sni_add_new_domains_to_default_server_certificate: bool = sni_add_new_domains_to_default_server_certificate
         self.sni_create_server_certificate_for_each_domain: bool = sni_create_server_certificate_for_each_domain
         self.sni_server_certificates_cache_directory: str | None = sni_server_certificates_cache_directory
-        self.sni_get_server_certificate_from_server_socket: bool = sni_get_server_certificate_from_server_socket
-        self.sni_server_certificate_from_server_socket_download_directory: str | None = \
-            sni_server_certificate_from_server_socket_download_directory
+        self.reuse_server_socket_certificate: bool = reuse_server_socket_certificate
+        self.reuse_server_socket_certificate_download_directory: str | None = \
+            reuse_server_socket_certificate_download_directory
+        self.is_offline: bool = is_offline
+        self.fail_fast_on_origin_connect_error: bool = fail_fast_on_origin_connect_error
         self.skip_extension_id_list: list | None = skip_extension_id_list
         self.custom_server_certificate_usage: bool = custom_server_certificate_usage
         self.custom_server_certificate_path: str | None = custom_server_certificate_path
@@ -341,9 +350,9 @@ class SocketWrapper:
                       "If you're not going to use default certificates [default_server_certificate_usage = False]"
             raise SocketWrapperConfigurationValuesError(message)
 
-        if self.sni_get_server_certificate_from_server_socket and \
+        if self.reuse_server_socket_certificate and \
                 not self.sni_create_server_certificate_for_each_domain:
-            message = "You set [sni_get_server_certificate_from_server_socket = True],\n" \
+            message = "You set [reuse_server_socket_certificate = True],\n" \
                       "But you didn't set [sni_create_server_certificate_for_each_domain = True]."
             raise SocketWrapperConfigurationValuesError(message)
 
@@ -680,6 +689,12 @@ class SocketWrapper:
         process_name: str = ''
         source_hostname: str = ''
 
+        # The origin is dialed at accept-time below. Track it and whether it was handed to the
+        # worker, so a failed client handshake / early return / pre-dispatch exception doesn't
+        # abandon the upstream TLS connection (the worker's finish_thread owns it once handed off).
+        origin_socket_client = None
+        handed_off: bool = False
+
         try:
             # Not always there will be a hostname resolved by the IP address,
             # so we will leave it empty if it fails.
@@ -700,30 +715,6 @@ class SocketWrapper:
             # ---- Consume the ClientHello up front (sans-io pattern) ----
             # https://github.com/brettcannon/sans-io
             # https://sans-io.readthedocs.io/
-            #
-            # History — why we stopped peeking
-            # --------------------------------
-            # The previous accept flow called three separate ``MSG_PEEK``
-            # helpers on the raw socket before letting OpenSSL take over:
-            #   * ``ssl_base.__is_tls``          — peek 3 B to decide TLS-or-not
-            #   * ``ssl_base.__peek_alpn_offers`` — peek 5 B header, then peek
-            #                                      the declared record length
-            #                                      and parse ALPN out of it
-            #   * ``receiver.__peek_first_bytes`` — the underlying peek primitive
-            # (All three are retired in place at the bottom of their modules
-            # with the ``__`` prefix, for historical reference.)
-            #
-            # ``MSG_PEEK`` returns only whatever is *already sitting in the
-            # kernel receive buffer at the instant of the syscall*. A
-            # ClientHello that spans multiple TCP segments (multiple packets) — extremely
-            # common under TLS 1.3 + post-quantum key_share, which pushes
-            # the record to ~1500–2500 B — came back as a short peek on
-            # the first call. The ALPN parser then either bailed with
-            # ``None`` (silently losing upstream ALPN mirroring) or, if
-            # the caller retried, hit the per-peek socket timeout.
-            # In production, we saw this as frequent "TLS detection timed
-            # out" drops on otherwise healthy connections.
-            #
             # Sans-io best practice
             # ---------------------
             # Read the first bytes into a buffer, inspect them, then replay
@@ -735,8 +726,8 @@ class SocketWrapper:
             tls_properties = None
 
             try:
-                is_tls, client_alpn_offers, prefetched_bytes, tls_properties = \
-                    ssl_base.consume_client_hello(client_socket, timeout=10)
+                is_tls, client_alpn_offers, prefetched_bytes, tls_properties = (
+                    ssl_base.consume_client_hello(client_socket, timeout=10))
             except (TimeoutError, ConnectionError) as exc:
                 # ClientHello sniff aborted — timed out or peer hung up. Drop the socket either way.
                 error: str
@@ -762,6 +753,40 @@ class SocketWrapper:
             else:
                 tls_type, tls_version = None, None
 
+            # ---- Accept-time origin connection (mirror source) ----
+            # Connect the origin BEFORE completing the client handshake so we can mirror its
+            # negotiated ALPN (and clone its cert). Offline keeps no origin leg.
+            origin_socket_client = None
+            origin_socket = None
+            origin_connect_error = None
+            server_alpn_protocols = client_alpn_offers   # default (offline / connect failure) = today's behavior
+            if not self.is_offline:
+                sni_host = ssl_base.parse_sni_from_client_hello_record(prefetched_bytes) if is_tls else None
+                origin_target = socket_client.select_origin_target(sni_host, destination_domain)
+                origin_socket_client = socket_client.create_origin_socket_client(
+                    server_name=origin_target, service_port=dest_port, client_ip=source_ip,
+                    is_tls=is_tls, mtls_subdomains=(self.engine.mtls if self.engine else None),
+                    logger=self.logger,
+                    enable_sslkeylogfile_env_to_client_ssl_context=self.enable_sslkeylogfile_env_to_client_ssl_context,
+                    sslkeylog_file_path=self.sslkeylog_file_path,
+                    forwarding_dns_servers_list=self.forwarding_dns_service_ipv4_list___only_for_localhost,
+                    client_alpn_offers=client_alpn_offers)
+                origin_socket, origin_connect_error = origin_socket_client.service_connection()
+                if origin_connect_error:
+                    self.logger.error(f"Origin connect failed: {origin_connect_error}")
+                    if self.fail_fast_on_origin_connect_error:
+                        self.statistics_writer.write_accept_error(
+                            engine=engine_name, source_host=source_hostname, source_ip=source_ip,
+                            error_message=f"Origin unreachable (fail-fast): {origin_connect_error}",
+                            dest_port=str(dest_port), host=destination_domain, process_name=process_name)
+                        client_socket.close()
+                        return
+                    # preserve-today: complete the client handshake with a generated cert + raw client offers;
+                    # null the client so cert-cloning is skipped (no dead-socket clone) and the worker records the error.
+                    origin_socket_client = None
+                elif is_tls:
+                    server_alpn_protocols = socket_client.mirror_alpn_list(origin_socket.selected_alpn_protocol())
+
             # ---- TLS path: hand the consumed bytes to the BIO pump ----
             ssl_client_socket = None
             if is_tls:
@@ -780,10 +805,10 @@ class SocketWrapper:
                     sni_server_certificates_cache_directory=self.sni_server_certificates_cache_directory,
                     sni_create_server_certificate_for_each_domain=(
                         self.sni_create_server_certificate_for_each_domain),
-                    sni_get_server_certificate_from_server_socket=(
-                        self.sni_get_server_certificate_from_server_socket),
-                    sni_server_certificate_from_server_socket_download_directory=(
-                        self.sni_server_certificate_from_server_socket_download_directory),
+                    reuse_server_socket_certificate=(
+                        self.reuse_server_socket_certificate),
+                    reuse_server_socket_certificate_download_directory=(
+                        self.reuse_server_socket_certificate_download_directory),
                     skip_extension_id_list=self.skip_extension_id_list,
                     ca_certificate_name=self.ca_certificate_name,
                     ca_certificate_filepath=self.ca_certificate_filepath,
@@ -798,7 +823,8 @@ class SocketWrapper:
                     enable_sslkeylogfile_env_to_client_ssl_context=self.enable_sslkeylogfile_env_to_client_ssl_context,
                     sslkeylog_file_path=self.sslkeylog_file_path,
                     mtls_subdomains=self.engine.mtls if self.engine else None,
-                    client_alpn_offers=client_alpn_offers
+                    server_alpn_protocols=server_alpn_protocols,
+                    origin_socket_client=origin_socket_client,
                 )
 
                 # ``prefetched=prefetched_bytes`` is the whole point of the
@@ -870,8 +896,11 @@ class SocketWrapper:
             # Build args and call the callable_function directly (we're already in a thread).
             thread_args = (
                 (client_socket, process_name, is_tls, tls_type, tls_version, destination_domain,
-                 self.statistics_writer, [self.engine], client_alpn_offers) + callable_args)
+                 self.statistics_writer, [self.engine], client_alpn_offers,
+                 origin_socket_client, origin_socket, origin_connect_error) + callable_args)
 
+            # Ownership of the origin socket transfers to the worker here; its finish_thread closes it.
+            handed_off = True
             try:
                 callable_function(*thread_args)
             except Exception as e:
@@ -899,6 +928,17 @@ class SocketWrapper:
             exception_string: str = tracebacks.get_as_string()
             full_string: str = f"Engine: [{engine_name}] | {exception_string}"
             self.exceptions_logger.write(full_string)
+        finally:
+            # If the origin was connected at accept-time but never handed to the worker
+            # (client-handshake failure, early return, or a pre-dispatch exception), the worker's
+            # finish_thread never runs — close the upstream leg here so we don't abandon a live
+            # upstream TLS connection. close_socket() is not None-safe, so guard on socket_instance.
+            if not handed_off and origin_socket_client is not None \
+                    and origin_socket_client.socket_instance is not None:
+                try:
+                    origin_socket_client.close_socket()
+                except OSError:
+                    pass
 
 
 def before_socket_thread_worker(

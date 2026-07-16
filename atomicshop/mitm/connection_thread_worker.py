@@ -40,6 +40,9 @@ def thread_worker_main(
         statistics_writer,
         engines_list: list[initialize_engines.ModuleCategory],
         client_alpn_offers: list[str] | None,
+        origin_service_client_instance,
+        service_socket_instance,
+        origin_connect_error,
 
         # These parameters come from the main mitm module.
         config_static: cf
@@ -387,59 +390,6 @@ def thread_worker_main(
         exception_or_close_in_receiving_thread.set()
         finish_thread(send_connection_reset=True)
         return 'return'
-
-    def create_client_socket(client_message: ClientMessage):
-        # Per-subdomain mTLS client cert (None when not configured).
-        custom_client_pem_certificate_path: str | None = socket_client.lookup_mtls_client_pem(
-            found_domain_module.mtls, client_message.server_name)
-
-        # Check if the destination service is an ip address or a domain name.
-        if ip_addresses.is_ip_address(client_message.server_name, ip_type='ipv4'):
-            # If it's an ip address, connect to the ip address directly.
-            service_client_instance = socket_client.SocketClient(
-                service_name=client_message.server_name,
-                connection_ip=client_message.server_name,
-                service_port=client_message.destination_port,
-                tls=is_tls,
-                logger=network_logger,
-                custom_pem_client_certificate_file_path=custom_client_pem_certificate_path,
-                enable_sslkeylogfile_env_to_client_ssl_context=(
-                    config_static.Certificates.enable_sslkeylogfile_env_to_client_ssl_context),
-                sslkeylog_file_path=config_static.Certificates.sslkeylog_file_path,
-                client_alpn_offers=client_alpn_offers,
-            )
-        # If it's a domain name, then we'll use the DNS to resolve it.
-        else:
-            # If we're on localhost, then use external services list in order to resolve the domain:
-            # config['tcp']['forwarding_dns_service_ipv4_list___only_for_localhost']
-            if client_message.client_ip in socket_base.THIS_DEVICE_IP_LIST:
-                service_client_instance = socket_client.SocketClient(
-                    service_name=client_message.server_name,
-                    service_port=client_message.destination_port,
-                    tls=is_tls,
-                    dns_servers_list=[config_static.DNSServer.forwarding_dns_service_ipv4],
-                    logger=network_logger,
-                    custom_pem_client_certificate_file_path=custom_client_pem_certificate_path,
-                    enable_sslkeylogfile_env_to_client_ssl_context=(
-                        config_static.Certificates.enable_sslkeylogfile_env_to_client_ssl_context),
-                    sslkeylog_file_path=config_static.Certificates.sslkeylog_file_path,
-                    client_alpn_offers=client_alpn_offers,
-                )
-            # If we're not on localhost, then connect to domain directly.
-            else:
-                service_client_instance = socket_client.SocketClient(
-                    service_name=client_message.server_name,
-                    service_port=client_message.destination_port,
-                    tls=is_tls,
-                    logger=network_logger,
-                    custom_pem_client_certificate_file_path=custom_client_pem_certificate_path,
-                    enable_sslkeylogfile_env_to_client_ssl_context=(
-                        config_static.Certificates.enable_sslkeylogfile_env_to_client_ssl_context),
-                    sslkeylog_file_path=config_static.Certificates.sslkeylog_file_path,
-                    client_alpn_offers=client_alpn_offers,
-                )
-
-        return service_client_instance
 
     def process_client_raw_data(
             client_received_raw_data: bytes,
@@ -1220,32 +1170,29 @@ def thread_worker_main(
         network_logger.info(f"Thread Created - Client [{client_ip}:{source_port}] | "
                             f"Destination service: [{server_name}:{destination_port}]")
 
-        origin_service_client_instance = None
         client_receive_count: int = 0
         server_receive_count: int = 0
         client_message_connection = client_message_first_start()
 
-        # If we're not in offline mode, then we'll create the client socket to the service.
-        # noinspection PyTypeChecker
-        connection_error: str = None
-        service_socket_instance = None
+        # Origin connection is established at accept-time (SocketWrapper) and injected here;
+        # the worker no longer connects. Offline mode has no origin leg.
+        connection_error: str = origin_connect_error
         client_message_connection.action = 'service_connect'
         client_message_connection.timestamp = datetime.now()
 
         if config_static.MainConfig.is_offline:
             client_message_connection.info = 'Offline Mode'
+        elif connection_error:
+            client_message_connection.errors.append(connection_error)
+            record_and_statistics_write(client_message_connection)
         else:
-            origin_service_client_instance = create_client_socket(client_message_connection)
-            service_socket_instance, connection_error = origin_service_client_instance.service_connection()
+            # Record the origin IP resolved during the accept-time connect.
+            server_ip = service_socket_instance.getpeername()[0]
+            client_message_connection.server_ip = server_ip
 
-            if connection_error:
-                client_message_connection.errors.append(connection_error)
-                record_and_statistics_write(client_message_connection)
-            else:
-                # Now we'll update the server IP with the IP of the service.
-                server_ip = service_socket_instance.getpeername()[0]
-                client_message_connection.server_ip = server_ip
-
+        # Single-writer-per-socket: the client thread writes only the service socket and the
+        # service thread only the client socket (pure relay, no proxy-generated frames), so no
+        # send lock is needed — each TLS socket has exactly one writer.
         if not connection_error:
             client_exception_queue: queue.Queue = queue.Queue()
             client_thread = threading.Thread(

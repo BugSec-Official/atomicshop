@@ -3,11 +3,12 @@ import sys
 
 from cryptography import x509
 
-from . import creator, socket_base, socket_client
+from . import creator, socket_base, ssl_base
 from .. import pyopensslw, cryptographyw
 from ..certauthw.certauthw import CertAuthWrapper
 from ...print_api import print_api
 from ... import filesystem
+from ...file_io import file_io
 
 
 class Certificator:
@@ -23,18 +24,16 @@ class Certificator:
             default_server_certificate_directory: str,
             default_certificate_domain_list: list,
             sni_server_certificates_cache_directory: str,
-            sni_get_server_certificate_from_server_socket: bool,
-            sni_server_certificate_from_server_socket_download_directory: str,
+            reuse_server_socket_certificate: bool,
+            reuse_server_socket_certificate_download_directory: str,
             custom_server_certificate_usage: bool,
             custom_server_certificate_path: str,
             custom_private_key_path: str,
-            forwarding_dns_service_ipv4_list___only_for_localhost: list,
             skip_extension_id_list: list,
-            tls: bool,
             enable_sslkeylogfile_env_to_client_ssl_context: bool,
             sslkeylog_file_path: str,
-            mtls_subdomains: dict | set | None = None,
-            client_alpn_offers: list[str] | None = None
+            server_alpn_protocols: list[str] | None = None,
+            origin_socket_client=None
     ):
         self.ca_certificate_name = ca_certificate_name
         self.ca_certificate_filepath = ca_certificate_filepath
@@ -43,21 +42,18 @@ class Certificator:
         self.default_server_certificate_directory = default_server_certificate_directory
         self.default_certificate_domain_list = default_certificate_domain_list
         self.sni_server_certificates_cache_directory = sni_server_certificates_cache_directory
-        self.sni_get_server_certificate_from_server_socket = sni_get_server_certificate_from_server_socket
-        self.sni_server_certificate_from_server_socket_download_directory = (
-            sni_server_certificate_from_server_socket_download_directory)
+        self.reuse_server_socket_certificate = reuse_server_socket_certificate
+        self.reuse_server_socket_certificate_download_directory = (
+            reuse_server_socket_certificate_download_directory)
         self.custom_server_certificate_usage = custom_server_certificate_usage
         self.custom_server_certificate_path = custom_server_certificate_path
         self.custom_private_key_path = custom_private_key_path
-        self.forwarding_dns_service_ipv4_list___only_for_localhost = (
-            forwarding_dns_service_ipv4_list___only_for_localhost)
         self.skip_extension_id_list = skip_extension_id_list
-        self.tls = tls
         self.enable_sslkeylogfile_env_to_client_ssl_context: bool = (
             enable_sslkeylogfile_env_to_client_ssl_context)
         self.sslkeylog_file_path: str = sslkeylog_file_path
-        self.mtls_subdomains = mtls_subdomains
-        self.client_alpn_offers = client_alpn_offers
+        self.server_alpn_protocols = server_alpn_protocols
+        self.origin_socket_client = origin_socket_client
 
         # noinspection PyTypeChecker
         self.certauth_wrapper: CertAuthWrapper = None
@@ -146,87 +142,38 @@ class Certificator:
             sni_received_parameters,
             print_kwargs: dict = None
     ):
-        # === Connect to the domain and get the certificate. ===========================================================
+        # === Clone the certificate from the reused origin socket. =====================================================
         certificate_from_socket_x509 = None
-        if self.sni_get_server_certificate_from_server_socket:
-            # Generate PEM certificate file path string for downloaded certificates. Signed certificates will go to the
-            # 'certs' folder.
-            certificate_from_socket_file_path: str = \
-                self.sni_server_certificate_from_server_socket_download_directory + \
-                os.sep + sni_received_parameters.destination_name + ".pem"
-            # Get client ip.
-            # Under the sans-io consume+MemoryBIO accept path,
-            # ``ssl_socket`` is an ``ssl.SSLObject`` which does NOT
-            # implement ``getpeername`` / ``getsockname``. ``raw_socket``
-            # is the underlying TCP socket and is always populated on
-            # ``sni_received_parameters`` for exactly these addressing
-            # calls.
-            client_ip = socket_base.get_source_address_from_socket(sni_received_parameters.raw_socket)[0]
+        if self.reuse_server_socket_certificate and self.origin_socket_client is not None:
+            certificate_from_socket_file_path: str = (
+                self.reuse_server_socket_certificate_download_directory + os.sep
+                + sni_received_parameters.destination_name + ".pem")
 
-            # Per-subdomain mTLS client cert for the cert-fetch leg — same lookup the
-            # data-path leg uses, so upstreams that require mTLS will hand us their
-            # real server cert for cloning.
-            mtls_client_pem_path = socket_client.lookup_mtls_client_pem(
-                self.mtls_subdomains, sni_received_parameters.destination_name)
-
-            # If we're on localhost, then use external services list in order to resolve the domain:
-            if client_ip in socket_base.THIS_DEVICE_IP_LIST:
-                service_client = socket_client.SocketClient(
-                    service_name=sni_received_parameters.destination_name,
-                    service_port=socket_base.get_destination_address_from_socket(sni_received_parameters.raw_socket)[1],
-                    tls=self.tls,
-                    dns_servers_list=self.forwarding_dns_service_ipv4_list___only_for_localhost,
-                    logger=print_kwargs.get('logger') if print_kwargs else None,
-                    custom_pem_client_certificate_file_path=mtls_client_pem_path,
-                    client_alpn_offers=self.client_alpn_offers,
-                )
-            # If we're not on localhost, then connect to domain directly.
-            else:
-                service_client = socket_client.SocketClient(
-                    service_name=sni_received_parameters.destination_name,
-                    service_port=socket_base.get_destination_address_from_socket(sni_received_parameters.raw_socket)[1],
-                    tls=self.tls,
-                    logger=print_kwargs.get('logger') if print_kwargs else None,
-                    custom_pem_client_certificate_file_path=mtls_client_pem_path,
-                    client_alpn_offers=self.client_alpn_offers,
-                )
-
-            # If certificate from socket exists, then we don't need to get it from the socket and write to file.
-            # and we will return None, since no certificate was fetched.
             # noinspection PyTypeChecker
             certificate_from_socket_x509_cryptography_object: x509.Certificate = None
             if not filesystem.is_file_exists(certificate_from_socket_file_path):
-                print_api("Certificate from socket doesn't exist, fetching.", **(print_kwargs or {}))
-                # Get certificate from socket and convert to X509 cryptography module object.
-                certificate_from_socket_x509_cryptography_object: x509.Certificate = (
-                    service_client.get_certificate_from_server(
-                        save_as_file=True, cert_file_path=certificate_from_socket_file_path,
-                        cert_output_type='cryptography')
-                )
+                print_api("Certificate from socket doesn't exist, cloning from the live origin socket.",
+                          **(print_kwargs or {}))
+                # DER off the already-connected data socket — no new connection, socket stays alive.
+                der = self.origin_socket_client.get_peer_certificate_der()
+                certificate_from_socket_x509_cryptography_object = cryptographyw.convert_der_to_x509_object(der)
+                pem_string = ssl_base.convert_der_x509_bytes_to_pem_string(der)
+                file_io.write_file(pem_string, file_path=certificate_from_socket_file_path)
             else:
                 print_api("The Certificate from socket already exists, not fetching", **(print_kwargs or {}))
-                certificate_from_socket_x509_cryptography_object: x509.Certificate = (
-                    cryptographyw.convert_object_to_x509(certificate_from_socket_file_path))
+                certificate_from_socket_x509_cryptography_object = \
+                    cryptographyw.convert_object_to_x509(certificate_from_socket_file_path)
 
-            # skip_extensions = ['1.3.6.1.5.5.7.3.2', '2.5.29.31', '1.3.6.1.5.5.7.1.1']
-
-            # If certificate was downloaded successfully, then remove extensions if they were provided.
-            # If certificate was downloaded successfully and no extensions to skip were provided, then use it as is.
             if certificate_from_socket_x509_cryptography_object and self.skip_extension_id_list:
-                # Copy extensions from old certificate to new certificate, without specified extensions.
                 certificate_from_socket_x509_cryptography_object, _ = \
                     cryptographyw.copy_extensions_from_old_cert_to_new_cert(
                         certificate_from_socket_x509_cryptography_object,
                         skip_extensions=self.skip_extension_id_list,
-                        print_kwargs=print_kwargs
-                    )
+                        print_kwargs=print_kwargs)
 
-            # If certificate was downloaded successfully, then convert it to pyopenssl object.
             if certificate_from_socket_x509_cryptography_object:
-                # Convert X509 cryptography module object to pyopenssl, since certauth uses pyopenssl.
-                certificate_from_socket_x509 = \
-                    pyopensslw.convert_cryptography_object_to_pyopenssl(
-                        certificate_from_socket_x509_cryptography_object)
+                certificate_from_socket_x509 = pyopensslw.convert_cryptography_object_to_pyopenssl(
+                    certificate_from_socket_x509_cryptography_object)
 
         # === EOF Get certificate from the domain. =====================================================================
 
@@ -258,6 +205,6 @@ class Certificator:
                 inherit_from=sni_received_parameters.ssl_socket.context,
                 enable_sslkeylogfile_env_to_client_ssl_context=self.enable_sslkeylogfile_env_to_client_ssl_context,
                 sslkeylog_file_path=self.sslkeylog_file_path,
-                alpn_protocols=self.client_alpn_offers,
+                alpn_protocols=self.server_alpn_protocols,
             )
         )

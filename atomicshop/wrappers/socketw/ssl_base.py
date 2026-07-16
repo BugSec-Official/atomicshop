@@ -43,22 +43,6 @@ def consume_client_hello(
     vs non-TLS, and — if TLS — parse the client's ALPN offers out of the
     ClientHello record.
 
-    Why this exists
-    ---------------
-    Replaces the old peek-based pair (``is_tls`` + ``peek_alpn_offers``, now
-    retired at the bottom of this module). The peek approach relied on
-    ``MSG_PEEK`` to inspect a ClientHello without consuming bytes, which has
-    two fundamental limits:
-
-    * ``MSG_PEEK`` returns only what's currently sitting in the kernel receive
-      buffer. A ClientHello that spans multiple TCP segments (common under
-      TLS 1.3 with post-quantum key_share, ~1500–2500 B) comes back as a
-      short read and the ALPN parser has to bail. The upstream leg then
-      never receives a faithful ALPN offer list.
-    * Each stage (detect-TLS, read-header, read-record) cost a separate
-      ``recv(MSG_PEEK)`` syscall on kernel buffer state that isn't stable
-      between calls.
-
     The sans-io fix — applied here — is to *consume* bytes into a Python
     buffer, parse the record in Python, then re-inject the same bytes into
     OpenSSL via a ``MemoryBIO`` so the real TLS handshake replays them (see
@@ -195,5 +179,29 @@ def _parse_alpn_from_client_hello_record(record: bytes) -> Optional[list[str]]:
             if names is not None:
                 return [bytes(name).decode("ascii") for name in names] or None
     except Exception:                          # malformed ClientHello -> degrade to no ALPN mirroring
+        return None
+    return None
+
+
+def parse_sni_from_client_hello_record(record: bytes) -> str | None:
+    """Extract the SNI host from a full ClientHello record, or None when the record isn't a
+    ClientHello, carries no SNI extension, or won't parse. Never raises — the caller reads
+    None as "no SNI, fall back to the DNS/engine domain".
+
+    Like the ALPN parser, ClientHello dissection is delegated to tlslite-ng; we only strip the
+    record + handshake framing and read the first host name back out.
+    """
+    body = record[5:]                          # drop the 5-byte TLS record header
+    if len(body) < 4 or body[0] != 0x01:       # handshake header; 0x01 == ClientHello
+        return None
+    try:
+        parser = _TlsLiteParser(body)
+        parser.get(1)                          # consume handshake type; parse() reads its own length
+        client_hello = _TlsLiteClientHello().parse(parser)
+        for extension in (client_hello.extensions or []):
+            host_names = getattr(extension, "hostNames", None)  # only SNIExtension has this
+            if host_names:
+                return bytes(host_names[0]).decode("ascii")
+    except Exception:                          # malformed ClientHello -> no SNI
         return None
     return None

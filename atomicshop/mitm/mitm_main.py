@@ -512,9 +512,9 @@ def mitm_server(config_file_path: str, script_version: str) -> int:
     # Create folders.
     filesystem.create_directory(config_static.LogRec.logs_path)
 
-    if config_static.Certificates.sni_get_server_certificate_from_server_socket:
+    if config_static.Certificates.reuse_server_socket_certificate:
         filesystem.create_directory(
-            config_static.Certificates.sni_server_certificate_from_server_socket_download_directory)
+            config_static.Certificates.reuse_server_socket_certificate_download_directory)
 
     network_logger_name = config_static.MainConfig.LOGGER_NAME
 
@@ -730,10 +730,12 @@ def mitm_server(config_file_path: str, script_version: str) -> int:
                         config_static.Certificates.sni_create_server_certificate_for_each_domain),
                     sni_server_certificates_cache_directory=(
                         config_static.Certificates.sni_server_certificates_cache_directory),
-                    sni_get_server_certificate_from_server_socket=(
-                        config_static.Certificates.sni_get_server_certificate_from_server_socket),
-                    sni_server_certificate_from_server_socket_download_directory=(
-                        config_static.Certificates.sni_server_certificate_from_server_socket_download_directory),
+                    reuse_server_socket_certificate=(
+                        config_static.Certificates.reuse_server_socket_certificate),
+                    reuse_server_socket_certificate_download_directory=(
+                        config_static.Certificates.reuse_server_socket_certificate_download_directory),
+                    is_offline=config_static.MainConfig.is_offline,
+                    fail_fast_on_origin_connect_error=config_static.Certificates.fail_fast_on_origin_connect_error,
                     custom_server_certificate_usage=config_static.Certificates.custom_server_certificate_usage,
                     custom_server_certificate_path=config_static.Certificates.custom_server_certificate_path,
                     custom_private_key_path=config_static.Certificates.custom_private_key_path,

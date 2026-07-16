@@ -113,8 +113,9 @@ class Certificates:
 
     sni_create_server_certificate_for_each_domain: bool
     sni_server_certificates_cache_directory: str
-    sni_get_server_certificate_from_server_socket: bool
-    sni_server_certificate_from_server_socket_download_directory: str
+    reuse_server_socket_certificate: bool
+    reuse_server_socket_certificate_download_directory: str
+    fail_fast_on_origin_connect_error: bool
 
     domains_all_times: list[str]
     sslkeylog_file_path: str
