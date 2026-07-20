@@ -29,6 +29,10 @@ class ModuleCategory:
         self.ssh_user: str | None = None
         self.ssh_pass: str | None = None
 
+        # Per-engine override of the global get_process_name flag. None = no
+        # override (inherit config.toml); True/False = force on/off for this engine.
+        self.get_process_name: bool | None = None
+
         self.parser_file_path: str = str()
         self.requester_file_path: str = str()
         self.responder_file_path: str = str()
@@ -88,6 +92,11 @@ class ModuleCategory:
             )
         self.ssh_user = engine_ssh_user
         self.ssh_pass = engine_ssh_pass
+
+        # get_process_name override: absent/commented -> None (inherit global);
+        # 0/1 -> force off/on for this engine (resolved in mitm_main.py).
+        engine_get_process_name = process_name_section.get('get_process_name')
+        self.get_process_name = None if engine_get_process_name is None else bool(engine_get_process_name)
 
         # If there's module configuration file, but no domains in it, there's no point to continue.
         # Since, each engine is based on domains.

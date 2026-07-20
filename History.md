@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.15.0 - 20.07.2026
+  * mitm and wrappers - reworks.
 * 3.14.11 - 21.06.2026
   * dependencies - pyopenssl, cryptography version alignment.
 * 3.14.10 - 16.06.2026
