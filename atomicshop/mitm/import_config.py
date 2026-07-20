@@ -85,7 +85,12 @@ def import_config_files(
         return result
 
     result = check_engines_configs()
-    return result
+    if result != 0:
+        return result
+
+    # After engines are parsed: a per-engine get_process_name override may enable the
+    # feature even when the global flag is off, so the admin pre-flight runs here.
+    return check_admin_rights_for_process_name()
 
 
 def import_engines_configs(print_kwargs: dict) -> int:
@@ -146,6 +151,37 @@ def import_engines_configs(print_kwargs: dict) -> int:
     return 0
 
 
+def check_admin_rights_for_process_name() -> int:
+    """Localhost process-name lookup needs admin rights; return 1 (exit) if missing.
+
+    Runs AFTER engines are parsed, so the effective get_process_name is the global
+    config.toml flag OR any engine forcing it on via its per-engine override.
+    """
+    process_name_enabled: bool = config_static.ProcessName.get_process_name or any(
+        engine.get_process_name is True for engine in (config_static.ENGINES_LIST or []))
+    if not process_name_enabled:
+        return 0
+
+    is_admin = permissions.is_admin()
+    message: str = (
+        "Need to run the script with administrative rights to get the process name while TCP "
+        "running on the same computer.\nExiting...")
+
+    # resolve-by-engine + localhost target -> the process command line is read on this
+    # machine, which some processes only allow with admin rights.
+    if config_static.DNSServer.resolve_by_engine:
+        if config_static.MainConfig.is_localhost and not is_admin:
+            print_api(message, color='red')
+            return 1
+    if config_static.DNSServer.resolve_all_domains_to_ipv4:
+        if config_static.DNSServer.target_ipv4 in socket_base.THIS_DEVICE_IP_LIST or \
+                config_static.DNSServer.target_ipv4.startswith('127.'):
+            if not is_admin:
+                print_api(message, color='red')
+                return 1
+    return 0
+
+
 def check_config() -> int:
     """
     Check the main configurations from the 'config.toml' file.
@@ -166,31 +202,9 @@ def check_config() -> int:
         print_api(message, color='red')
         return 1
 
-    # Check admin right if on localhost ============================================================================
-    # If any of the DNS IP target addresses is localhost loopback, then we need to check if the script
-    # is executed with admin rights. There are some processes that 'psutil' can't get their command line if not
-    # executed with administrative privileges.
-    # Also, check Admin privileges only if 'config.tcp['get_process_name']' was set to 'True' in 'config.ini' of
-    # the script.
-    if config_static.ProcessName.get_process_name:
-        # If the DNS server was set to resolve by engines, we need to check all relevant engine settings.
-        if config_static.DNSServer.resolve_by_engine:
-            # Check if the DNS target is localhost loopback.
-            if config_static.MainConfig.is_localhost and not is_admin:
-                message: str = \
-                    ("Need to run the script with administrative rights to get the process name while TCP "
-                     "running on the same computer.\nExiting...")
-                print_api(message, color='red')
-                return 1
-        if config_static.DNSServer.resolve_all_domains_to_ipv4:
-            if config_static.DNSServer.target_ipv4 in socket_base.THIS_DEVICE_IP_LIST or \
-                    config_static.DNSServer.target_ipv4.startswith('127.'):
-                if not is_admin:
-                    message: str = \
-                        ("Need to run the script with administrative rights to get the process name while TCP "
-                         "running on the same computer.\nExiting...")
-                    print_api(message, color='red')
-                    return 1
+    # Process-name admin pre-flight moved to check_admin_rights_for_process_name(),
+    # which runs after engines are parsed so a per-engine get_process_name override
+    # (feature on while the global config.toml flag is off) is honored too.
 
     if (config_static.MainConfig.set_default_dns_gateway or
             config_static.MainConfig.set_default_dns_gateway_to_localhost or

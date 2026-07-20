@@ -92,7 +92,8 @@ FINALIZE_RECS_ARCHIVE_QUEUE: multiprocessing.Queue = multiprocessing.Queue()
 
 PCAP_WRITER_QUEUE: multiprocessing.Queue = None  # Created only if record_pcap is enabled
 
-# Request queue to the SSH broker; created only if get_process_name is enabled.
+# Request queue to the SSH broker; created when the broker is needed (global
+# get_process_name on, or any engine's per-engine override turns it on).
 SSH_REQUEST_QUEUE: multiprocessing.Queue = None
 
 
@@ -448,6 +449,24 @@ def get_ipv4s_for_tcp_server() -> int:
     return 0
 
 
+def _resolve_engine_get_process_name(engine, global_get_process_name: bool) -> bool:
+    """Effective get_process_name for one listener: engine override wins when set, else global."""
+    if engine is not None and engine.get_process_name is not None:
+        return engine.get_process_name
+    return global_get_process_name
+
+
+def _is_broker_needed(listening_interfaces: list, global_get_process_name: bool) -> bool:
+    """SSH broker starts when the global flag is on or any engine's override turns it on."""
+    if global_get_process_name:
+        return True
+    return any(
+        interface_dict['engine'] is not None
+        and interface_dict['engine'].get_process_name is True
+        for interface_dict in listening_interfaces
+    )
+
+
 def mitm_server(config_file_path: str, script_version: str) -> int:
     on_exit.register_exit_handler(exit_cleanup, at_exit=False, kill_signal=False)
 
@@ -646,10 +665,16 @@ def mitm_server(config_file_path: str, script_version: str) -> int:
         # Start the SSH broker process if process-name attribution is enabled.
         # One request queue is shared by all listeners; each listener gets its own
         # response queue (indexed by worker_id) so replies route back to the caller.
+        # The broker is a single shared subprocess, so it must start when the
+        # global flag is on OR any engine's per-engine override turns the feature
+        # on (per-engine get_process_name can flip it either way).
+        broker_needed: bool = _is_broker_needed(
+            listening_interfaces, config_static.ProcessName.get_process_name)
+
         global SSH_REQUEST_QUEUE
         ssh_request_queue: multiprocessing.Queue | None = None
         ssh_response_queues: list = list()
-        if config_static.ProcessName.get_process_name:
+        if broker_needed:
             ssh_request_queue = multiprocessing.Queue()
             SSH_REQUEST_QUEUE = ssh_request_queue
             for _ in listening_interfaces:
@@ -685,9 +710,9 @@ def mitm_server(config_file_path: str, script_version: str) -> int:
             # the main config.toml. The no-engines listener
             # (interface_dict['engine'] is None) always uses the globals
             # because there is no engine TOML to override from.
-            # Note: the get_process_name flag and ssh_script_to_execute are
-            # NOT per-engine -- they remain global so a single engine can't
-            # turn the feature on or off, only swap which credentials are used.
+            # Note: ssh_script_to_execute remains global. get_process_name IS
+            # per-engine (resolved below) -- an engine can turn the feature on or
+            # off for itself, or swap which credentials are used.
             engine_for_kwargs = interface_dict['engine']
             if engine_for_kwargs is not None and engine_for_kwargs.ssh_user is not None:
                 resolved_ssh_user = engine_for_kwargs.ssh_user
@@ -695,6 +720,10 @@ def mitm_server(config_file_path: str, script_version: str) -> int:
             else:
                 resolved_ssh_user = config_static.ProcessName.ssh_user
                 resolved_ssh_pass = config_static.ProcessName.ssh_pass
+
+            # Engine override wins when set (not None); otherwise inherit the global.
+            resolved_get_process_name = _resolve_engine_get_process_name(
+                engine_for_kwargs, config_static.ProcessName.get_process_name)
 
             for port in interface_dict['ports']:
                 socket_wrapper_kwargs: dict = dict(
@@ -726,7 +755,7 @@ def mitm_server(config_file_path: str, script_version: str) -> int:
                     custom_server_certificate_usage=config_static.Certificates.custom_server_certificate_usage,
                     custom_server_certificate_path=config_static.Certificates.custom_server_certificate_path,
                     custom_private_key_path=config_static.Certificates.custom_private_key_path,
-                    get_process_name=config_static.ProcessName.get_process_name,
+                    get_process_name=resolved_get_process_name,
                     ssh_user=resolved_ssh_user,
                     ssh_pass=resolved_ssh_pass,
                     ssh_script_to_execute=config_static.ProcessName.ssh_script_to_execute,
@@ -751,7 +780,7 @@ def mitm_server(config_file_path: str, script_version: str) -> int:
             is_ready_multiprocessing_event_list.append(is_tcp_process_ready)
 
             # This listener's SSH response queue (None when the feature is off).
-            ssh_response_queue = ssh_response_queues[worker_id] if config_static.ProcessName.get_process_name else None
+            ssh_response_queue = ssh_response_queues[worker_id] if broker_needed else None
 
             tcp_process: multiprocessing.Process = multiprocessing.Process(
                 target=_create_tcp_server_process,
@@ -874,8 +903,11 @@ def _create_tcp_server_process(
     _ = loggingw.get_logger_with_level(f'{network_logger_name}.listener')
 
     # One SSH broker lookup client per process, shared by every SocketWrapper here.
+    # Gate on the broker actually running (this worker got a response queue) rather
+    # than the global flag, so a worker whose engine enabled the feature while the
+    # global is off still gets a working client.
     ssh_lookup_client = None
-    if config_static.ProcessName.get_process_name:
+    if ssh_response_queue is not None:
         ssh_lookup_client = ssh_broker.SSHLookupClient(ssh_request_queue, ssh_response_queue, worker_id)
 
     for socket_wrapper_kwargs in socket_wrapper_kwargs_list:
