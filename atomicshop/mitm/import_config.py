@@ -37,6 +37,9 @@ def format_duplicate_domain_entries(engines_list: list) -> str:
     Domain keys are normalized (lowercased, trailing dot stripped), so entries that look
     distinct in the TOML can collapse onto the same domain:port. The report quotes the
     entry verbatim and gives its position in the list, so it can be found and deleted.
+
+    Emitted by mitm_main.startup_output(), not from the parse path: every TCP server
+    process re-parses the engine configs, so reporting there repeats it per process.
     """
 
     lines: list[str] = list()
@@ -182,12 +185,6 @@ def import_engines_configs(print_kwargs: dict) -> int:
         domains_engine_list_full.extend(current_module.domain_list)
         # Append the object to the engines list
         engines_list.append(current_module)
-
-    # A domain:port pair maps to exactly one listening socket, so repeats are ignored rather than
-    # bound twice. Warn (not fatal) with every offending line at once, naming what to delete.
-    duplicate_report: str = format_duplicate_domain_entries(engines_list)
-    if duplicate_report:
-        print_api(duplicate_report, color='yellow')
     # === EOF Importing engine modules =============================================================================
     # ==== Initialize Reference Module =============================================================================
     reference_module: initialize_engines.ModuleCategory = initialize_engines.ModuleCategory(config_static.MainConfig.SCRIPT_DIRECTORY)
