@@ -18,6 +18,10 @@ class ModuleCategory:
         self.domain_target_dict: dict = dict()
         self.port_target_dict: dict = dict()
 
+        # 'domains' entries dropped as duplicates (same domain:port after key normalization).
+        # import_config reports them, so a stale config line stays visible instead of vanishing.
+        self.duplicate_domain_entries: list[dict] = list()
+
         self.is_localhost: bool = bool()
         self.on_port_connect: dict = dict()
         self.mtls: dict = dict()
@@ -127,10 +131,21 @@ class ModuleCategory:
             # DNS names are case-insensitive (RFC 4343); normalize keys for case-safe matching.
             domain = domain.strip().lower().rstrip(".")
 
+            port = int(port)
             if domain not in self.domain_target_dict:
-                self.domain_target_dict[domain] = {'ip': None, 'ports': [int(port)]}
+                self.domain_target_dict[domain] = {'ip': None, 'ports': [port]}
+            # Key normalization merges case/trailing-dot variants, so the same domain:port can
+            # arrive twice. A repeat would bind the domain's single IP twice and the listener's
+            # port-in-use pre-check would hit its own socket. Unique ports, config order kept.
+            elif port not in self.domain_target_dict[domain]['ports']:
+                self.domain_target_dict[domain]['ports'].append(port)
             else:
-                self.domain_target_dict[domain]['ports'].append(int(port))
+                self.duplicate_domain_entries.append({
+                    'entry': domain_port_string,
+                    'position': domain_index + 1,
+                    'domain': domain,
+                    'port': port
+                })
 
         for port, value in self.on_port_connect.items():
             self.port_target_dict[port] = {'ip': None, 'port': int(port)}
