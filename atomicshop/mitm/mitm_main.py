@@ -21,7 +21,7 @@ from ..wrappers import netshw
 from ..basics import multiprocesses
 
 from .connection_thread_worker import thread_worker_main
-from . import config_static, recs_files, ssh_broker, import_config
+from . import config_static, recs_files, ssh_broker
 
 
 # If you have 'pip-system-certs' package installed, this section overrides this behavior, since it injects
@@ -238,12 +238,6 @@ def startup_output(system_logger, script_version: str):
         print_api.print_api("-------------------------", logger=system_logger)
 
         # print_api.print_api(f"[*] TCP Listening Interfaces: {engine.tcp_listening_address_list}", logger=system_logger)
-
-    # Duplicate [domain:port] entries dropped during parsing. Reported here because this runs
-    # once in the main process, while every TCP server process re-parses the engine configs.
-    duplicate_report: str = import_config.format_duplicate_domain_entries(config_static.ENGINES_LIST or [])
-    if duplicate_report:
-        print_api.print_api(duplicate_report, color="yellow", logger=system_logger)
 
     if config_static.DNSServer.is_enabled:
         print_api.print_api("DNS Server is enabled.", logger=system_logger)

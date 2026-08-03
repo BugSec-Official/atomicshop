@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import socket
+import multiprocessing
 
 from ..print_api import print_api
 from .. import config_init, filesystem, dns
@@ -29,31 +30,6 @@ def read_fail_fast_on_origin_connect_error(certificates: dict) -> bool:
     """When the origin is unreachable: True = abort before the client handshake; False (default)
     = complete the client handshake and record the error (today's behavior)."""
     return bool(certificates.get('fail_fast_on_origin_connect_error', False))
-
-
-def format_duplicate_domain_entries(engines_list: list) -> str:
-    """One line per ignored duplicate 'domains' entry across all engines; '' when there are none.
-
-    Domain keys are normalized (lowercased, trailing dot stripped), so entries that look
-    distinct in the TOML can collapse onto the same domain:port. The report quotes the
-    entry verbatim and gives its position in the list, so it can be found and deleted.
-
-    Emitted by mitm_main.startup_output(), not from the parse path: every TCP server
-    process re-parses the engine configs, so reporting there repeats it per process.
-    """
-
-    lines: list[str] = list()
-    for engine in engines_list:
-        for duplicate in engine.duplicate_domain_entries:
-            lines.append(
-                f"  Engine [{engine.engine_name}] domains entry #{duplicate['position']}: "
-                f"'{duplicate['entry']}' -> {duplicate['domain']}:{duplicate['port']} is already listed.")
-
-    if not lines:
-        return ''
-
-    return ("[!] Duplicate [domain:port] entries in engine configs were ignored "
-            "(one listening socket per domain:port):\n" + "\n".join(lines))
 
 
 def import_config_files(
@@ -386,6 +362,15 @@ def check_engines_configs() -> int:
                     f"This is not supported.")
                 print_api(message, color="red")
                 return 1
+
+    # Duplicate [domain:port] entries dropped while parsing. Not fatal -- warn so a stale config
+    # line stays visible. Main process only: every TCP server process re-parses the engine configs,
+    # so an ungated report repeats once per listening domain.
+    if multiprocessing.parent_process() is None:
+        duplicate_report: str = initialize_engines.format_duplicate_domain_entries(
+            config_static.ENGINES_LIST or [])
+        if duplicate_report:
+            print_api(duplicate_report, color="yellow")
 
     return 0
 
