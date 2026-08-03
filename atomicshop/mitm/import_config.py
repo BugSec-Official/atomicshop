@@ -11,6 +11,28 @@ from ..basics import booleans
 from . import config_static, initialize_engines
 
 
+def format_duplicate_domain_entries(engines_list: list) -> str:
+    """One line per ignored duplicate 'domains' entry across all engines; '' when there are none.
+
+    Domain keys are normalized (lowercased, trailing dot stripped), so entries that look
+    distinct in the TOML can collapse onto the same domain:port. The report quotes the
+    entry verbatim and gives its position in the list, so it can be found and deleted.
+    """
+
+    lines: list[str] = list()
+    for engine in engines_list:
+        for duplicate in engine.duplicate_domain_entries:
+            lines.append(
+                f"  Engine [{engine.engine_name}] domains entry #{duplicate['position']}: "
+                f"'{duplicate['entry']}' -> {duplicate['domain']}:{duplicate['port']} is already listed.")
+
+    if not lines:
+        return ''
+
+    return ("[!] Duplicate [domain:port] entries in engine configs were ignored "
+            "(one listening socket per domain:port):\n" + "\n".join(lines))
+
+
 def import_config_files(
         config_file_path: str,
         print_kwargs: dict = None
@@ -125,6 +147,12 @@ def import_engines_configs(print_kwargs: dict) -> int:
         domains_engine_list_full.extend(current_module.domain_list)
         # Append the object to the engines list
         engines_list.append(current_module)
+
+    # A domain:port pair maps to exactly one listening socket, so repeats are ignored rather than
+    # bound twice. Warn (not fatal) with every offending line at once, naming what to delete.
+    duplicate_report: str = format_duplicate_domain_entries(engines_list)
+    if duplicate_report:
+        print_api(duplicate_report, color='yellow')
     # === EOF Importing engine modules =============================================================================
     # ==== Initialize Reference Module =============================================================================
     reference_module: initialize_engines.ModuleCategory = initialize_engines.ModuleCategory(config_static.MainConfig.SCRIPT_DIRECTORY)
