@@ -1,6 +1,5 @@
 atomicshop.egg-info/
 build/
-dist/
 .idea/
 .claude/
 __pycache__/
