@@ -665,6 +665,16 @@ class SocketWrapper:
         process_name: str = ''
         source_hostname: str = ''
 
+        # Engine source_ip: a client the engine isn't bound to gets no engine (general module).
+        # DNS already routes such clients elsewhere; this covers stale OS DNS caches and hardcoded IPs.
+        connection_engines: list = [self.engine]
+        if self.engine is not None and self.engine.source_ip and self.engine.source_ip != source_ip:
+            connection_engines = []
+            engine_name = ''
+            self.logger.info(
+                f"Client [{source_ip}] doesn't match engine [{self.engine.engine_name}] "
+                f"source_ip [{self.engine.source_ip}]: engine not assigned, general module handles the connection.")
+
         try:
             # Not always there will be a hostname resolved by the IP address,
             # so we will leave it empty if it fails.
@@ -796,7 +806,7 @@ class SocketWrapper:
                 if engine_name == '':
                     sni_hostname: str = ssl_client_socket.server_hostname
                     if sni_hostname:
-                        engine_name = get_engine_name(sni_hostname, [self.engine])
+                        engine_name = get_engine_name(sni_hostname, connection_engines)
 
             # Swap to SSL socket if available.
             if ssl_client_socket:
@@ -810,7 +820,7 @@ class SocketWrapper:
             # Build args and call the callable_function directly (we're already in a thread).
             thread_args = (
                 (client_socket, process_name, is_tls, tls_type, tls_version, domain_from_engine,
-                 self.statistics_writer, [self.engine]) + callable_args)
+                 self.statistics_writer, connection_engines) + callable_args)
 
             try:
                 callable_function(*thread_args)
