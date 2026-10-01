@@ -3,10 +3,10 @@
 
 * 3.15.0 - 20.07.2026
   * mitm and wrappers - reworks.
+* 3.14.17 - 01.10.2026
+  * mitm/initialize_engines, mitm/mitm_main, mitm/engines/create_module_template, wrappers/socketw/dns_server, wrappers/socketw/socket_wrapper - per-engine source_ip filter in engine_config.toml [engine] section.
 * 3.14.16 - 03.08.2026
   * mitm/import_config, mitm/initialize_engines - the duplicate [domain:port] warning is reported once from the engine config checks instead of once per TCP server process.
-* 3.14.15 - 03.08.2026
-  * mitm/initialize_engines, mitm/import_config - duplicate [domain:port] entries in engine config are ignored instead of binding the same address twice, and reported at startup.
 * 3.14.15 - 03.08.2026
   * mitm/initialize_engines, mitm/import_config - duplicate [domain:port] entries in engine config are ignored instead of binding the same address twice, and reported at startup.
 * 3.14.14 - 20.07.2026
