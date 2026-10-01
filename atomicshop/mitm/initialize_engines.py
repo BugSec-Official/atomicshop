@@ -1,4 +1,5 @@
 import os
+import ipaddress
 from pathlib import Path
 
 from .. import ip_addresses
@@ -15,6 +16,8 @@ class ModuleCategory:
 
         self.domain_list: list[str] = list()
         self.domain_exclude_list: list[str] = list()
+        # Only client IPv4 this engine serves; '' = every client.
+        self.source_ip: str = str()
         self.domain_target_dict: dict = dict()
         self.port_target_dict: dict = dict()
 
@@ -73,6 +76,15 @@ class ModuleCategory:
 
         if 'domains_exclude' in configuration_data['engine']:
             self.domain_exclude_list: list[str] = configuration_data['engine']['domains_exclude']
+
+        # Absent / commented / '' -> '' (every client), so pre-source_ip configs keep loading.
+        self.source_ip = str(configuration_data['engine'].get('source_ip', '')).strip()
+        if self.source_ip and not ip_addresses.is_ip_address(self.source_ip, ip_type='ipv4'):
+            return 1, (f"Engine [{self.engine_name}] source_ip is not a valid IPv4 address: "
+                       f"'{self.source_ip}' ({engine_config_file_path})")
+        if self.source_ip and ipaddress.IPv4Address(self.source_ip).is_loopback:
+            return 1, (f"Engine [{self.engine_name}] source_ip '{self.source_ip}' is a localhost address, "
+                       f"which is not supported ({engine_config_file_path})")
 
         if 'on_port_connect' in configuration_data:
             self.on_port_connect = configuration_data['on_port_connect']
@@ -249,6 +261,15 @@ def get_ipv4_from_engine_on_connect_port(
             return None
 
     return ip_port_address_from_config
+
+
+def engines_for_source_ip(engines_list: list, source_ip: str) -> list:
+    """Engines that serve this client IP: exact source_ip matches first, then engines without
+    source_ip, each in config order. Engines bound to another IP are dropped."""
+
+    matched: list = [engine for engine in engines_list if engine.source_ip and engine.source_ip == source_ip]
+    unfiltered: list = [engine for engine in engines_list if not engine.source_ip]
+    return matched + unfiltered
 
 
 def assign_class_by_domain(

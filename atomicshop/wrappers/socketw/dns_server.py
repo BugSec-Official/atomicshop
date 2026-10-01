@@ -17,6 +17,7 @@ from ..psutilw import psutil_networks
 from ...basics import booleans, tracebacks
 from ...file_io import csvs
 from ... import networks
+from ...mitm import initialize_engines
 
 # noinspection PyPackageRequirements
 import dnslib
@@ -185,6 +186,32 @@ class DnsStatisticsCSVWriter:
         )
 
 
+class ClientEngineView:
+    """Engines, domains and domains_exclude patterns that apply to one client IPv4 (engine source_ip)."""
+
+    def __init__(self, engine_list: list, client_ip: str):
+        self.engines: list = [
+            engine for engine in initialize_engines.engines_for_source_ip(engine_list, client_ip)
+            if engine.engine_name != '__reference_general']
+        self.domains: list[str] = [domain for engine in self.engines for domain in engine.domain_target_dict]
+        self.exclude_rx: list = _compile_exclude_patterns(
+            [pattern for engine in self.engines for pattern in engine.domain_exclude_list])
+
+    def intercepts(self, domain_norm: str) -> bool:
+        """True when the domain or one of its parents is an engine domain and no exclude pattern hits it."""
+        intercept_hit = any(domain_norm == d or domain_norm.endswith("." + d) for d in self.domains)
+        excluded_hit = any(rx.search(domain_norm) for rx in self.exclude_rx)
+        return intercept_hit and not excluded_hit
+
+    def target_ipv4(self, domain_norm: str) -> Optional[str]:
+        """Virtual IP of the first engine (source_ip matches first) that lists the domain."""
+        for engine in self.engines:
+            resolved_target_ipv4 = get_target_ip_from_engine(domain_norm, engine.domain_target_dict)
+            if resolved_target_ipv4:
+                return resolved_target_ipv4
+        return None
+
+
 class DnsServer:
     """
     DnsServer class is responsible to handle DNS Requests on port 53 based on configuration and send DNS Response back.
@@ -289,17 +316,14 @@ class DnsServer:
         self.resolve_all_domains_to_ipv4_enable: bool
         self.resolve_all_domains_target: str
 
+        # All engines' domains, for the startup listing only; per-query matching uses ClientEngineView.
         self.intercept_domain_dict: dict = dict()
-        self.intercept_domain_exclude_list: list[str] = list()
         for engine in self.engine_list:
-            # If the engine is not a reference engine.
             if engine.engine_name != '__reference_general':
-                # Get the domains from the engine.
                 self.intercept_domain_dict.update(engine.domain_target_dict)
-                # Get the excluded domains from the engine.
-                self.intercept_domain_exclude_list.extend(engine.domain_exclude_list)
-        # Compile the exclude patterns for faster matching.
-        self._exclude_rx = _compile_exclude_patterns(self.intercept_domain_exclude_list)
+
+        # client IPv4 -> ClientEngineView. Engines don't change at runtime, so views never go stale.
+        self._client_engine_views: dict[str, ClientEngineView] = dict()
 
         # Settings for static DNS Responses in offline mode.
         self.offline_route_ipv4: str = '10.10.10.10'
@@ -405,6 +429,14 @@ class DnsServer:
             self.dns_questions_to_answers_cache = dict()
             self.logger.info("*** DNS cache cleared")
 
+    def _client_engine_view(self, client_ip: str) -> ClientEngineView:
+        """Memoized ClientEngineView for this client IPv4."""
+        view = self._client_engine_views.get(client_ip)
+        if view is None:
+            view = ClientEngineView(self.engine_list, client_ip)
+            self._client_engine_views[client_ip] = view
+        return view
+
     def _forward_query_and_reply(self, client_data: bytes, client_address: tuple, reply_socket: socket.socket):
         """Worker (runs on the forward pool): forward one query upstream with failover +
         retries, then send the reply to the client and cache it. Runs off the receive loop
@@ -428,7 +460,8 @@ class DnsServer:
             return
 
         # Cache and log the returned addresses (same observability as the inline path).
-        self.dns_questions_to_answers_cache.update({client_data: dns_response})
+        # Same (client IP, query bytes) key as the lookup in start().
+        self.dns_questions_to_answers_cache.update({(client_address[0], client_data): dns_response})
         try:
             dns_response_parsed: dnslib.dns.DNSRecord = DNSRecord.parse(dns_response)
             if dns_response_parsed.rr:
@@ -592,13 +625,15 @@ class DnsServer:
 
                     # Nullifying the DNS cache for current request before check.
                     dns_cached_request = False
-                    # Check if the received data request from client is already in the cache
-                    if client_data in self.dns_questions_to_answers_cache:
+                    # Check if the received data request from client is already in the cache.
+                    # Keyed per client: with engine source_ip, the same query bytes can need different answers.
+                    cache_key: tuple = (client_address[0], client_data)
+                    if cache_key in self.dns_questions_to_answers_cache:
                         # message = "!!! Request / Response is already in the dictionary..."
                         # self.logger.info(message)
 
                         # Get the response from the cached answers list
-                        dns_response = self.dns_questions_to_answers_cache[client_data]
+                        dns_response = self.dns_questions_to_answers_cache[cache_key]
 
                         # Since the request is already in the cached dictionary, we'll set the flag for later usage.
                         dns_cached_request = True
@@ -610,23 +645,9 @@ class DnsServer:
                             # If so, we need to check if the incoming domain contain any of the domains in the list.
                             if self.resolve_by_engine_enable:
                                 question_domain_norm = question_domain.strip().lower().rstrip(".")
-
-                                # Stronger and safer than `x in question_domain`: matches the domain itself or any subdomain of it
-                                intercept_hit = any(
-                                    question_domain_norm == d or question_domain_norm.endswith("." + d)
-                                    for d in self.intercept_domain_dict.keys()
-                                )
-
-                                excluded_hit = any(rx.search(question_domain_norm) for rx in self._exclude_rx)
-
-                                # If current query domain (+ subdomains) CONTAIN any of the domains from modules config
-                                # files and current request contains "A" (IPv4) record.
-                                if intercept_hit and not excluded_hit:
-                                    # If incoming domain contains any of the 'engine_domains' then domain will
-                                    # be forwarded to our TCP Server.
-                                    forward_to_tcp_server = True
-                                else:
-                                    forward_to_tcp_server = False
+                                # Only engines that serve this client IP count (engine source_ip).
+                                client_engine_view = self._client_engine_view(client_address[0])
+                                forward_to_tcp_server = client_engine_view.intercepts(question_domain_norm)
 
                             # If 'route_to_tcp_server_all_domains' was set to 'False' in 'config.ini' file then
                             # we'll forward all 'A' records domains to the Built-in TCP Server.
@@ -642,13 +663,9 @@ class DnsServer:
                         # from auto-upgrading HTTP to HTTPS when only port 80 is configured.
                         elif qtype_string == "HTTPS" and self.resolve_by_engine_enable:
                             question_domain_norm = question_domain.strip().lower().rstrip(".")
-                            intercept_hit = any(
-                                question_domain_norm == d or question_domain_norm.endswith("." + d)
-                                for d in self.intercept_domain_dict.keys()
-                            )
-                            excluded_hit = any(rx.search(question_domain_norm) for rx in self._exclude_rx)
+                            client_engine_view = self._client_engine_view(client_address[0])
 
-                            if intercept_hit and not excluded_hit:
+                            if client_engine_view.intercepts(question_domain_norm):
                                 self.logger.info(
                                     "Blocked HTTPS DNS record for engine domain (preventing browser upgrade)")
                                 dns_built_response = dns_object.reply()
@@ -666,12 +683,8 @@ class DnsServer:
                         if forward_to_tcp_server:
                             resolved_target_ipv4 = None
                             if self.resolve_by_engine_enable:
-                                for engine in self.engine_list:
-                                    # Match on the normalized name; config domains are normalized too.
-                                    resolved_target_ipv4 = get_target_ip_from_engine(question_domain_norm, engine.domain_target_dict)
-                                    # If the domain was found in the current engine's domain list, we can stop the loop.
-                                    if resolved_target_ipv4:
-                                        break
+                                # Match on the normalized name; config domains are normalized too.
+                                resolved_target_ipv4 = client_engine_view.target_ipv4(question_domain_norm)
                             elif self.resolve_all_domains_to_ipv4_enable:
                                 # Assign the target IPv4 address to the resolved target IPv4 variable.
                                 resolved_target_ipv4 = self.resolve_all_domains_target

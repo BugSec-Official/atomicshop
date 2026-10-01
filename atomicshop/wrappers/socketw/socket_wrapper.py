@@ -689,6 +689,17 @@ class SocketWrapper:
         process_name: str = ''
         source_hostname: str = ''
 
+        # Engine source_ip: a client the engine isn't bound to gets no engine (general module).
+        # DNS already routes such clients elsewhere; this covers stale OS DNS caches and hardcoded IPs.
+        connection_engines: list = [self.engine]
+        if self.engine is not None and self.engine.source_ip and self.engine.source_ip != source_ip:
+            connection_engines = []
+            engine_name = ''
+            self.logger.info(
+                f"Client [{source_ip}] doesn't match engine [{self.engine.engine_name}] "
+                f"source_ip [{self.engine.source_ip}]: engine not assigned, general module handles the connection.")
+        connection_engine = connection_engines[0] if connection_engines else None
+
         # The origin is dialed at accept-time below. Track it and whether it was handed to the
         # worker, so a failed client handshake / early return / pre-dispatch exception doesn't
         # abandon the upstream TLS connection (the worker's finish_thread owns it once handed off).
@@ -765,7 +776,7 @@ class SocketWrapper:
                 origin_target = socket_client.select_origin_target(sni_host, destination_domain)
                 origin_socket_client = socket_client.create_origin_socket_client(
                     server_name=origin_target, service_port=dest_port, client_ip=source_ip,
-                    is_tls=is_tls, mtls_subdomains=(self.engine.mtls if self.engine else None),
+                    is_tls=is_tls, mtls_subdomains=(connection_engine.mtls if connection_engine else None),
                     logger=self.logger,
                     enable_sslkeylogfile_env_to_client_ssl_context=self.enable_sslkeylogfile_env_to_client_ssl_context,
                     sslkeylog_file_path=self.sslkeylog_file_path,
@@ -822,7 +833,7 @@ class SocketWrapper:
                     exceptions_logger=self.exceptions_logger,
                     enable_sslkeylogfile_env_to_client_ssl_context=self.enable_sslkeylogfile_env_to_client_ssl_context,
                     sslkeylog_file_path=self.sslkeylog_file_path,
-                    mtls_subdomains=self.engine.mtls if self.engine else None,
+                    mtls_subdomains=connection_engine.mtls if connection_engine else None,
                     server_alpn_protocols=server_alpn_protocols,
                     origin_socket_client=origin_socket_client,
                 )
@@ -868,7 +879,7 @@ class SocketWrapper:
                 if engine_name == '':
                     sni_hostname: str = ssl_client_socket.server_hostname
                     if sni_hostname:
-                        engine_name = get_engine_name(sni_hostname, [self.engine])
+                        engine_name = get_engine_name(sni_hostname, connection_engines)
 
             # Swap to SSL socket if available.
             if ssl_client_socket:
@@ -896,7 +907,7 @@ class SocketWrapper:
             # Build args and call the callable_function directly (we're already in a thread).
             thread_args = (
                 (client_socket, process_name, is_tls, tls_type, tls_version, destination_domain,
-                 self.statistics_writer, [self.engine], client_alpn_offers,
+                 self.statistics_writer, connection_engines, client_alpn_offers,
                  origin_socket_client, origin_socket, origin_connect_error) + callable_args)
 
             # Ownership of the origin socket transfers to the worker here; its finish_thread closes it.

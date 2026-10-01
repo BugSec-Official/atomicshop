@@ -82,7 +82,9 @@ class CreateModuleTemplate:
 
         config_lines_list.append('[engine]')
         config_lines_list.append(f'domains = [{", ".join(domains_with_quotes)}]')
-        config_lines_list.append(f'domains_exclude = []\n')
+        config_lines_list.append(f'domains_exclude = []')
+        # source_ip -- optional: serve only this client IPv4; commented / '' -> every client.
+        config_lines_list.append("#source_ip = ''\n")
         config_lines_list.append('[on_port_connect]')
         config_lines_list.append('#5000 = "31.31.31.31:443"')
         config_lines_list.append('#5000 = "ip_port_address.txt"\n')
