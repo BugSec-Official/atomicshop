@@ -364,7 +364,14 @@ def thread_worker_main(
         else:
             # Creating response for parsed message and printing
             responder_responses: list = responder.create_response(client_message)
-            if responder_responses is None:
+            if responder_responses is None and config_static.MainConfig.is_offline:
+                # None = pass the real server's response through; offline has no real server.
+                print_api(f"Offline Mode: responder provided no response for this "
+                          f"[{protocol or 'unknown'}] request, and there is no real server - nothing sent.",
+                          logger=network_logger, logger_method='warning', color='yellow')
+                responses: list = []
+                is_synthesized: bool = False
+            elif responder_responses is None:
                 responses: list = [client_message.response_raw_bytes]
                 is_synthesized: bool = False
             else:
