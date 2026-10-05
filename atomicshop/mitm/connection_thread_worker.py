@@ -616,9 +616,14 @@ def thread_worker_main(
             process_client_raw_data(request_custom_raw, error_message, client_message)
             record_and_statistics_write(client_message)
 
-        print_api("Offline Mode, sending to responder directly.", logger=network_logger,
-                  logger_method='info')
-        bytes_to_send_list, block_defect = create_responder_response(client_message)
+        # HTTP/2 piece without a request (preface/SETTINGS/WINDOW_UPDATE/PING, RST-aborted stream):
+        # stream-0 upkeep that offline_client_output below answers — no responder call.
+        if h2_request_parser is not None and client_message.request_auto_parsed is None:
+            bytes_to_send_list, block_defect = [], None
+        else:
+            print_api("Offline Mode, sending to responder directly.", logger=network_logger,
+                      logger_method='info')
+            bytes_to_send_list, block_defect = create_responder_response(client_message)
         # HTTP/2 offline has no origin to relay, so the proxy itself owes the client a
         # server preface (its first frame must be SETTINGS) and an ACK for the client's
         # SETTINGS. Prepend those owed stream-0 frames ahead of the responder's reply.
