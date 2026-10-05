@@ -161,6 +161,9 @@ class Http2DirectionParser:
             accum.body.extend(frame.data)
             if 'END_STREAM' in flags:
                 accum.end_stream = True
+            # Flow-controlled bytes (data + padding); the offline worker grants them back.
+            if self._state is not None:
+                self._state.window_consumed += frame.flow_controlled_length
         elif isinstance(frame, hyperframe.frame.SettingsFrame):
             # A peer's non-ACK SETTINGS (either leg) owes an ACK we must send back; the
             # worker drains settings_acks_owed. ACK frames carry no settings, need no reply.
@@ -274,6 +277,11 @@ def validate_response_trailers(raw_trailers) -> str | None:
 
 _DEFAULT_MAX_FRAME_SIZE = 16384  # HTTP/2 SETTINGS_MAX_FRAME_SIZE default
 _MAX_PING_ACKS_OWED = 32  # Offline drains every piece; the cap only matters online (never drained).
+_DEFAULT_WINDOW_SIZE = 65535  # RFC 9113 §6.9.2 initial flow-control window (stream + connection)
+_MAX_WINDOW_SIZE = 2**31 - 1  # RFC 9113 §6.9.1 largest flow-control window
+_SETTINGS_INITIAL_WINDOW_SIZE = 0x04
+# Offline preface SETTINGS: max stream windows, so no upload stalls on flow control.
+_OFFLINE_LOCAL_SETTINGS = {_SETTINGS_INITIAL_WINDOW_SIZE: _MAX_WINDOW_SIZE}
 
 
 class Http2ConnectionState:
@@ -281,12 +289,15 @@ class Http2ConnectionState:
 
     settings_acks_owed counts received non-ACK SETTINGS awaiting our ACK; preface_sent
     tracks whether we've sent our own SETTINGS preface on this leg; ping_acks_owed holds
-    the opaque bytes of received non-ACK PINGs. The offline worker drains both debts. HPACK
+    the opaque bytes of received non-ACK PINGs; window_consumed counts received DATA bytes
+    (flow-controlled) not yet granted back. The offline worker drains the debts. HPACK
     encoder state is intentionally NOT tracked here — _encode_header_block uses a
     per-call encoder with sensitive=True (see its docstring) to keep synthesised
     responses from polluting the client's HPACK dynamic table.
     """
-    __slots__ = ('max_frame_size', 'max_header_list_size', 'settings_acks_owed', 'preface_sent', 'ping_acks_owed')
+    __slots__ = (
+        'max_frame_size', 'max_header_list_size', 'settings_acks_owed', 'preface_sent', 'ping_acks_owed',
+        'window_consumed')
 
     def __init__(self):
         self.max_frame_size: int = _DEFAULT_MAX_FRAME_SIZE  # 16384, RFC 7540 §6.5.2
@@ -295,6 +306,7 @@ class Http2ConnectionState:
         self.preface_sent: bool = False
         # Bounded: online nobody drains it (the origin answers the client's PINGs).
         self.ping_acks_owed: deque[bytes] = deque(maxlen=_MAX_PING_ACKS_OWED)
+        self.window_consumed: int = 0
 
 
 def _encode_header_block(headers) -> bytes:
@@ -340,6 +352,27 @@ def ping_acks_output(state: Http2ConnectionState) -> bytes:
     return out
 
 
+def encode_http2_window_update(stream_id: int, increment: int) -> bytes:
+    """Serialize a WINDOW_UPDATE granting the peer `increment` more bytes (stream 0 = connection)."""
+    wf = hyperframe.frame.WindowUpdateFrame(stream_id=stream_id)
+    wf.window_increment = increment
+    return wf.serialize()
+
+
+def connection_window_output(state: Http2ConnectionState, *, opening: bool) -> bytes:
+    """Offline upload credit on the connection window: open it to the max with the preface
+    (opening), then top it back up once more than half is used. Drains window_consumed on a
+    top-up. Stream windows come from the preface's INITIAL_WINDOW_SIZE instead."""
+    if opening:
+        # Bytes consumed before this keep counting: window = max - window_consumed.
+        return encode_http2_window_update(0, _MAX_WINDOW_SIZE - _DEFAULT_WINDOW_SIZE)
+    if state.window_consumed <= _MAX_WINDOW_SIZE // 2:
+        return b''
+    increment = state.window_consumed
+    state.window_consumed = 0
+    return encode_http2_window_update(0, increment)
+
+
 def settings_handshake_output(
         state: Http2ConnectionState, *,
         include_preface: bool, local_settings: dict[int, int] | None = None) -> bytes:
@@ -358,13 +391,18 @@ def settings_handshake_output(
 def offline_client_output(
         state: Http2ConnectionState, responder_messages, *, is_http2: bool) -> list:
     """Offline send list for the client: prefix the owed stream-0 frames (preface once,
-    SETTINGS ACKs, PING ACKs) ahead of the responder's HTTP/2 reply, so the client gets a
-    server preface, its SETTINGS is ACKed and its PINGs answered. Non-HTTP/2 connections
-    pass through unchanged."""
+    SETTINGS ACKs, connection WINDOW_UPDATE, PING ACKs) ahead of the responder's HTTP/2
+    reply, so the client gets a server preface, its SETTINGS is ACKed, its uploads never
+    stall on flow control and its PINGs are answered. Non-HTTP/2 connections pass through
+    unchanged."""
     if not is_http2:
         return list(responder_messages)
+    opening = not state.preface_sent
     # Preface first: a server's first frame must be SETTINGS (RFC 9113 §3.4).
-    handshake = settings_handshake_output(state, include_preface=True) + ping_acks_output(state)
+    handshake = (
+        settings_handshake_output(state, include_preface=True, local_settings=_OFFLINE_LOCAL_SETTINGS)
+        + connection_window_output(state, opening=opening)
+        + ping_acks_output(state))
     return ([handshake] if handshake else []) + list(responder_messages)
 
 

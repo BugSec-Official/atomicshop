@@ -633,8 +633,8 @@ def thread_worker_main(
             bytes_to_send_list, block_defect = create_responder_response(client_message)
         # HTTP/2 offline has no origin to relay, so the proxy itself owes the client a
         # server preface (its first frame must be SETTINGS), an ACK for the client's
-        # SETTINGS and a PING ACK per client PING. Prepend those owed stream-0 frames
-        # ahead of the responder's reply.
+        # SETTINGS, upload credit (max windows + WINDOW_UPDATE top-ups) and a PING ACK per
+        # client PING. Prepend those owed stream-0 frames ahead of the responder's reply.
         acks_owed = h2_state.settings_acks_owed                         # read before drain
         pings_owed = len(h2_state.ping_acks_owed)
         preface_pending = h2_request_parser is not None and not h2_state.preface_sent
