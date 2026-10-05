@@ -15,6 +15,7 @@ frame parsing and HPACK decoding without role-validation, which is exactly
 what the autoparser needs.
 """
 
+from collections import deque
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 
@@ -174,8 +175,14 @@ class Http2DirectionParser:
                     if 0x06 in frame.settings:
                         self._state.max_header_list_size = frame.settings[0x06]
             return
+        elif isinstance(frame, hyperframe.frame.PingFrame):
+            # A peer's non-ACK PING owes a PING ACK echoing its 8 opaque bytes (RFC 9113 §6.7);
+            # the offline worker drains ping_acks_owed. Online the origin answers.
+            if self._state is not None and 'ACK' not in flags:
+                self._state.ping_acks_owed.append(frame.opaque_data)
+            return
         else:
-            # WINDOW_UPDATE / PING / GOAWAY / PRIORITY / PUSH_PROMISE: ignored.
+            # WINDOW_UPDATE / GOAWAY / PRIORITY / PUSH_PROMISE: ignored.
             return
 
         accum = self._streams.get(sid)
@@ -266,24 +273,28 @@ def validate_response_trailers(raw_trailers) -> str | None:
 # ============================================================================
 
 _DEFAULT_MAX_FRAME_SIZE = 16384  # HTTP/2 SETTINGS_MAX_FRAME_SIZE default
+_MAX_PING_ACKS_OWED = 32  # Offline drains every piece; the cap only matters online (never drained).
 
 
 class Http2ConnectionState:
     """Observed peer SETTINGS + handshake debt, populated by Http2DirectionParser.
 
     settings_acks_owed counts received non-ACK SETTINGS awaiting our ACK; preface_sent
-    tracks whether we've sent our own SETTINGS preface on this leg. The worker drains
-    both. HPACK encoder state is intentionally NOT tracked here — _encode_header_block
-    uses a per-call encoder with sensitive=True (see its docstring) to keep
-    synthesised responses from polluting the client's HPACK dynamic table.
+    tracks whether we've sent our own SETTINGS preface on this leg; ping_acks_owed holds
+    the opaque bytes of received non-ACK PINGs. The offline worker drains both debts. HPACK
+    encoder state is intentionally NOT tracked here — _encode_header_block uses a
+    per-call encoder with sensitive=True (see its docstring) to keep synthesised
+    responses from polluting the client's HPACK dynamic table.
     """
-    __slots__ = ('max_frame_size', 'max_header_list_size', 'settings_acks_owed', 'preface_sent')
+    __slots__ = ('max_frame_size', 'max_header_list_size', 'settings_acks_owed', 'preface_sent', 'ping_acks_owed')
 
     def __init__(self):
         self.max_frame_size: int = _DEFAULT_MAX_FRAME_SIZE  # 16384, RFC 7540 §6.5.2
         self.max_header_list_size: int | None = None
         self.settings_acks_owed: int = 0
         self.preface_sent: bool = False
+        # Bounded: online nobody drains it (the origin answers the client's PINGs).
+        self.ping_acks_owed: deque[bytes] = deque(maxlen=_MAX_PING_ACKS_OWED)
 
 
 def _encode_header_block(headers) -> bytes:
@@ -314,6 +325,21 @@ def encode_http2_settings_ack() -> bytes:
     return sf.serialize()
 
 
+def encode_http2_ping_ack(opaque_data: bytes) -> bytes:
+    """Serialize a PING frame with ACK set, echoing the peer's 8 opaque bytes."""
+    pf = hyperframe.frame.PingFrame(stream_id=0)
+    pf.flags.add('ACK')
+    pf.opaque_data = opaque_data
+    return pf.serialize()
+
+
+def ping_acks_output(state: Http2ConnectionState) -> bytes:
+    """One PING ACK per received non-ACK PING, in arrival order. Drains the state."""
+    out = b''.join(encode_http2_ping_ack(opaque) for opaque in state.ping_acks_owed)
+    state.ping_acks_owed.clear()
+    return out
+
+
 def settings_handshake_output(
         state: Http2ConnectionState, *,
         include_preface: bool, local_settings: dict[int, int] | None = None) -> bytes:
@@ -331,12 +357,14 @@ def settings_handshake_output(
 
 def offline_client_output(
         state: Http2ConnectionState, responder_messages, *, is_http2: bool) -> list:
-    """Offline send list for the client: prefix the owed stream-0 handshake (preface
-    once + ACKs) ahead of the responder's HTTP/2 reply, so the client gets a server
-    preface and its SETTINGS is ACKed. Non-HTTP/2 connections pass through unchanged."""
+    """Offline send list for the client: prefix the owed stream-0 frames (preface once,
+    SETTINGS ACKs, PING ACKs) ahead of the responder's HTTP/2 reply, so the client gets a
+    server preface, its SETTINGS is ACKed and its PINGs answered. Non-HTTP/2 connections
+    pass through unchanged."""
     if not is_http2:
         return list(responder_messages)
-    handshake = settings_handshake_output(state, include_preface=True)
+    # Preface first: a server's first frame must be SETTINGS (RFC 9113 §3.4).
+    handshake = settings_handshake_output(state, include_preface=True) + ping_acks_output(state)
     return ([handshake] if handshake else []) + list(responder_messages)
 
 

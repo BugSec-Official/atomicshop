@@ -632,15 +632,17 @@ def thread_worker_main(
                       logger_method='info')
             bytes_to_send_list, block_defect = create_responder_response(client_message)
         # HTTP/2 offline has no origin to relay, so the proxy itself owes the client a
-        # server preface (its first frame must be SETTINGS) and an ACK for the client's
-        # SETTINGS. Prepend those owed stream-0 frames ahead of the responder's reply.
+        # server preface (its first frame must be SETTINGS), an ACK for the client's
+        # SETTINGS and a PING ACK per client PING. Prepend those owed stream-0 frames
+        # ahead of the responder's reply.
         acks_owed = h2_state.settings_acks_owed                         # read before drain
+        pings_owed = len(h2_state.ping_acks_owed)
         preface_pending = h2_request_parser is not None and not h2_state.preface_sent
         bytes_to_send_list = offline_client_output(
             h2_state, bytes_to_send_list, is_http2=h2_request_parser is not None)
-        if h2_request_parser is not None and (acks_owed or preface_pending):
-            print_api(f"HTTP/2: sending SETTINGS handshake to offline client "
-                      f"(preface={preface_pending}, acks={acks_owed})",
+        if h2_request_parser is not None and (acks_owed or pings_owed or preface_pending):
+            print_api(f"HTTP/2: sending stream-0 answers to offline client "
+                      f"(preface={preface_pending}, acks={acks_owed}, ping_acks={pings_owed})",
                       logger=network_logger, logger_method='info')
 
         error_on_send: str = str()
