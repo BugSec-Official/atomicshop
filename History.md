@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.14.18 - 06.10.2026
+  * mitm/connection_thread_worker, mitm/message, wrappers/socketw/socket_wrapper, wrappers/socketw/statistics_csv - removed the client IP reverse-DNS (hostname) lookup; statistics.csv no longer has the source_host column.
 * 3.14.17 - 01.10.2026
   * mitm/initialize_engines, mitm/mitm_main, mitm/engines/create_module_template, wrappers/socketw/dns_server, wrappers/socketw/socket_wrapper - per-engine source_ip filter in engine_config.toml [engine] section.
 * 3.14.16 - 03.08.2026
