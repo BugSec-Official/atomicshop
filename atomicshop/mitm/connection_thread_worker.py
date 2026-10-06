@@ -15,7 +15,7 @@ from .. import ip_addresses
 from ..wrappers.protocol_parsers import websocket
 from ..wrappers.protocol_parsers.http import HTTPRequestParse, HTTPResponseParse
 from ..wrappers.protocol_parsers.http2 import (
-    Http2ConnectionState, Http2DirectionParser, Http2RequestParse, Http2ResponseParse,
+    Http2ConnectionState, Http2DirectionParser, Http2RequestParse, Http2ResponseParse, Http2SendPacer,
     offline_client_output)
 from ..wrappers.protocol_parsers.mqtt import MqttConnectionState, MqttDirectionParser
 from ..wrappers.protocol_parsers.websocket import WebSocketConnectionState
@@ -563,6 +563,25 @@ def thread_worker_main(
 
         return None
 
+    def send_to_client_offline(
+            wire_bytes: bytes,
+            client_message: ClientMessage,
+            sending_socket: ssl.SSLSocket | socket.socket
+    ) -> str:
+        """Send wire_bytes to the client (no-op when empty); record a send error. Returns the error string."""
+        if not wire_bytes:
+            return str()
+        error_on_send: str = sender.Sender(
+            ssl_socket=sending_socket, bytes_to_send=wire_bytes, logger=network_logger).send()
+        if error_on_send:
+            client_message.reinitialize_dynamic_vars()
+            client_message.errors.append(error_on_send)
+            client_message.timestamp = datetime.now()
+            client_message.action = 'service_send'
+
+            record_and_statistics_write(client_message)
+        return error_on_send
+
     def receive_send_client_offline(
             client_message: ClientMessage,
             receiving_socket: ssl.SSLSocket | socket.socket,
@@ -645,7 +664,12 @@ def thread_worker_main(
                       f"(preface={preface_pending}, acks={acks_owed}, ping_acks={pings_owed})",
                       logger=network_logger, logger_method='info')
 
+        is_http2: bool = h2_request_parser is not None
         error_on_send: str = str()
+        # HTTP/2: response DATA queued for lack of client window goes first, as far as the
+        # client's latest WINDOW_UPDATEs (possibly in the piece just parsed) allow.
+        if is_http2:
+            error_on_send = send_to_client_offline(h2_state.send_pacer.flush(), client_message, receiving_socket)
         for bytes_to_send_single in bytes_to_send_list:
             client_message.reinitialize_dynamic_vars()
             client_message.timestamp = datetime.now()
@@ -654,17 +678,13 @@ def thread_worker_main(
             process_server_raw_data(bytes_to_send_single, '', client_message)
             record_and_statistics_write(client_message)
 
-            error_on_send: str = sender.Sender(
-                ssl_socket=receiving_socket, bytes_to_send=bytes_to_send_single,
-                logger=network_logger).send()
-
-            if error_on_send:
-                client_message.reinitialize_dynamic_vars()
-                client_message.errors.append(error_on_send)
-                client_message.timestamp = datetime.now()
-                client_message.action = 'service_send'
-
-                record_and_statistics_write(client_message)
+            # Recorded in full above; on the wire HTTP/2 DATA is paced to the client's windows.
+            wire_bytes: bytes = (
+                h2_state.send_pacer.send(bytes_to_send_single) if is_http2 else bytes_to_send_single)
+            error_on_send = send_to_client_offline(wire_bytes, client_message, receiving_socket)
+        if is_http2 and h2_state.send_pacer.waiting_bytes:
+            print_api(f"HTTP/2: {h2_state.send_pacer.waiting_bytes} response bytes waiting for "
+                      f"client WINDOW_UPDATE", logger=network_logger, logger_method='info')
 
         # If the socket was closed on message receive, then we'll break the loop only after send.
         if is_socket_closed or error_on_send:
@@ -1099,6 +1119,9 @@ def thread_worker_main(
     # Eagerly allocated even when the corresponding protocol isn't used (cheap; lets
     # responder.add_args wire all three unconditionally).
     h2_state: Http2ConnectionState = Http2ConnectionState()
+    if config_static.MainConfig.is_offline:
+        # Offline the proxy sends responses itself, so it must honor the client's flow-control windows.
+        h2_state.send_pacer = Http2SendPacer()
     # Separate per-leg state: the response parser counts the origin's SETTINGS into its
     # own ACK debt, kept distinct from the client leg's.
     h2_response_state: Http2ConnectionState = Http2ConnectionState()
