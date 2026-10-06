@@ -135,12 +135,23 @@ class Http2DirectionParser:
     def _on_frame(self, frame) -> Iterator[Http2RequestParse | Http2ResponseParse]:
         sid = frame.stream_id
         flags = frame.flags
+        # Offline: the peer's flow-control frames feed the pacer that sends our responses.
+        pacer = self._state.send_pacer if self._state is not None else None
 
         if isinstance(frame, hyperframe.frame.RstStreamFrame):
             self._streams.pop(sid, None)
+            if pacer is not None:
+                pacer.on_stream_reset(sid)
+            return
+
+        if isinstance(frame, hyperframe.frame.WindowUpdateFrame):
+            if pacer is not None:
+                pacer.on_window_update(sid, frame.window_increment)
             return
 
         if isinstance(frame, hyperframe.frame.HeadersFrame):
+            if pacer is not None:
+                pacer.on_stream_opened(sid)
             accum = self._streams.setdefault(sid, _StreamAccum())
             accum.pending_block.extend(frame.data)
             if 'END_STREAM' in flags:
@@ -177,6 +188,8 @@ class Http2DirectionParser:
                         self._state.max_frame_size = frame.settings[0x05]
                     if 0x06 in frame.settings:
                         self._state.max_header_list_size = frame.settings[0x06]
+                if pacer is not None and _SETTINGS_INITIAL_WINDOW_SIZE in frame.settings:
+                    pacer.on_settings_initial_window(frame.settings[_SETTINGS_INITIAL_WINDOW_SIZE])
             return
         elif isinstance(frame, hyperframe.frame.PingFrame):
             # A peer's non-ACK PING owes a PING ACK echoing its 8 opaque bytes (RFC 9113 §6.7);
@@ -185,7 +198,7 @@ class Http2DirectionParser:
                 self._state.ping_acks_owed.append(frame.opaque_data)
             return
         else:
-            # WINDOW_UPDATE / GOAWAY / PRIORITY / PUSH_PROMISE: ignored.
+            # GOAWAY / PRIORITY / PUSH_PROMISE: ignored.
             return
 
         accum = self._streams.get(sid)
@@ -297,7 +310,7 @@ class Http2ConnectionState:
     """
     __slots__ = (
         'max_frame_size', 'max_header_list_size', 'settings_acks_owed', 'preface_sent', 'ping_acks_owed',
-        'window_consumed')
+        'window_consumed', 'send_pacer')
 
     def __init__(self):
         self.max_frame_size: int = _DEFAULT_MAX_FRAME_SIZE  # 16384, RFC 7540 §6.5.2
@@ -307,6 +320,8 @@ class Http2ConnectionState:
         # Bounded: online nobody drains it (the origin answers the client's PINGs).
         self.ping_acks_owed: deque[bytes] = deque(maxlen=_MAX_PING_ACKS_OWED)
         self.window_consumed: int = 0
+        # Offline only (set by the worker): paces our responses to the client's windows.
+        self.send_pacer: 'Http2SendPacer | None' = None
 
 
 def _encode_header_block(headers) -> bytes:
@@ -404,6 +419,111 @@ def offline_client_output(
         + connection_window_output(state, opening=opening)
         + ping_acks_output(state))
     return ([handshake] if handshake else []) + list(responder_messages)
+
+
+def _iter_frames(wire: bytes) -> Iterator[tuple[hyperframe.frame.Frame, bytes]]:
+    """Yield (parsed frame, its exact wire bytes) for each whole frame in wire."""
+    i = 0
+    while i + HTTP2_FRAME_HEADER_LEN <= len(wire):
+        frame, length = hyperframe.frame.Frame.parse_frame_header(memoryview(wire[i:i + HTTP2_FRAME_HEADER_LEN]))
+        end = i + HTTP2_FRAME_HEADER_LEN + length
+        frame.parse_body(memoryview(wire[i + HTTP2_FRAME_HEADER_LEN:end]))
+        yield frame, wire[i:end]
+        i = end
+
+
+class Http2SendPacer:
+    """Offline outbound flow control (RFC 9113 §6.9): sends response DATA only as far as the
+    client's stream + connection windows allow, queues the rest per stream (wire order) and
+    sends it as the client's WINDOW_UPDATEs arrive. Fed by the request parser."""
+
+    def __init__(self):
+        self._initial_window: int = _DEFAULT_WINDOW_SIZE  # Client's SETTINGS_INITIAL_WINDOW_SIZE.
+        self._connection_window: int = _DEFAULT_WINDOW_SIZE
+        # Open streams only: added at the request HEADERS, dropped at our END_STREAM / client RST.
+        self._stream_windows: dict[int, int] = {}
+        # Per stream: (frame, wire bytes) not sent yet; a blocked DATA holds back what follows it.
+        self._queues: dict[int, deque] = {}
+
+    @property
+    def waiting_bytes(self) -> int:
+        """DATA bytes queued until the client grants more window."""
+        return sum(frame.flow_controlled_length for queue in self._queues.values()
+                   for frame, _ in queue if isinstance(frame, hyperframe.frame.DataFrame))
+
+    # --- Fed by the request parser (client's frames). ---
+
+    def on_stream_opened(self, stream_id: int) -> None:
+        self._stream_windows.setdefault(stream_id, self._initial_window)
+
+    def on_settings_initial_window(self, value: int) -> None:
+        """New INITIAL_WINDOW_SIZE shifts every open stream's window by the difference (§6.9.2)."""
+        delta = value - self._initial_window
+        self._initial_window = value
+        for stream_id in self._stream_windows:
+            self._stream_windows[stream_id] += delta
+
+    def on_window_update(self, stream_id: int, increment: int) -> None:
+        if stream_id == 0:
+            self._connection_window += increment
+        elif stream_id in self._stream_windows:  # Closed stream: nothing left to send on it.
+            self._stream_windows[stream_id] += increment
+
+    def on_stream_reset(self, stream_id: int) -> None:
+        self._queues.pop(stream_id, None)
+        self._stream_windows.pop(stream_id, None)
+
+    # --- Used by the worker. ---
+
+    def send(self, wire: bytes) -> bytes:
+        """Queue a message's frames; return the bytes the windows allow now (stream-0 frames at once)."""
+        out = bytearray()
+        for frame, frame_bytes in _iter_frames(wire):
+            if frame.stream_id == 0:
+                out += frame_bytes
+            else:
+                self._queues.setdefault(frame.stream_id, deque()).append((frame, frame_bytes))
+        return bytes(out + self.flush())
+
+    def flush(self) -> bytes:
+        """Bytes from the queues that the current windows allow."""
+        out = bytearray()
+        for stream_id in list(self._queues):
+            queue = self._queues[stream_id]
+            while queue:
+                frame, frame_bytes = queue[0]
+                if isinstance(frame, hyperframe.frame.DataFrame):
+                    window = min(self._connection_window,
+                                 self._stream_windows.setdefault(stream_id, self._initial_window))
+                    size = frame.flow_controlled_length
+                    if size > window:
+                        # Padded DATA goes whole (no re-padding on a split).
+                        if window > 0 and 'PADDED' not in frame.flags:
+                            out += self._send_data_head(queue, window)
+                        break
+                    self._connection_window -= size
+                    self._stream_windows[stream_id] -= size
+                queue.popleft()
+                out += frame_bytes
+                if 'END_STREAM' in frame.flags or isinstance(frame, hyperframe.frame.RstStreamFrame):
+                    self._stream_windows.pop(stream_id, None)
+            if not queue:
+                del self._queues[stream_id]
+        return bytes(out)
+
+    def _send_data_head(self, queue: deque, size: int) -> bytes:
+        """Split the queued DATA at size: return the head (no END_STREAM), keep the rest queued."""
+        frame, _ = queue[0]
+        head = hyperframe.frame.DataFrame(stream_id=frame.stream_id)
+        head.data = frame.data[:size]
+        rest = hyperframe.frame.DataFrame(stream_id=frame.stream_id)
+        rest.data = frame.data[size:]
+        if 'END_STREAM' in frame.flags:
+            rest.flags.add('END_STREAM')
+        queue[0] = (rest, rest.serialize())
+        self._connection_window -= size
+        self._stream_windows[frame.stream_id] -= size
+        return head.serialize()
 
 
 def _serialize_data_frames(
