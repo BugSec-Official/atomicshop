@@ -82,7 +82,6 @@ def thread_worker_main(
         statistics_writer.write_row(
             thread_id=str(thread_id),
             engine=client_message.engine_name,
-            source_host=client_message.client_name,
             source_ip=client_message.client_ip,
             tls_type=tls_type,
             tls_version=tls_version,
@@ -360,7 +359,6 @@ def thread_worker_main(
 
     def client_message_first_start() -> ClientMessage:
         client_message: ClientMessage = ClientMessage()
-        client_message.client_name = client_name
         client_message.client_ip = client_ip
         client_message.server_ip = server_ip
         client_message.source_port = source_port
@@ -813,10 +811,6 @@ def thread_worker_main(
 
     try:
         client_ip, source_port = client_socket.getpeername()
-
-        client_name: str = socket_base.get_host_name_from_ip_address_with_timeout(client_ip)
-
-        client_name = client_name.lower()
         destination_port: int = client_socket.getsockname()[1]
         destination_port_str: str = str(destination_port)
 

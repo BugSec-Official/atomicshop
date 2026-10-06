@@ -23,7 +23,6 @@ class ClientMessage:
         self.response_raw_hex: hex = None
         self.server_name: str = str()
         self.server_ip: str = str()
-        self.client_name: str = str()
         self.client_ip: str = str()
         self.source_port: int = int()
         self.destination_port: int = int()
