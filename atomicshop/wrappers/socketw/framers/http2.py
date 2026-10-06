@@ -1,6 +1,6 @@
 from collections.abc import Iterator
 
-from hyperframe.frame import Frame, HeadersFrame, DataFrame
+from hyperframe.frame import Frame, HeadersFrame, DataFrame, WindowUpdateFrame
 
 from ...protocol_parsers.http2 import HTTP2_CLIENT_PREFACE, HTTP2_FRAME_HEADER_LEN
 from .base import Direction, Framer
@@ -48,8 +48,9 @@ class Http2Framer(Framer):
             # connection-level frame (SETTINGS/PING/GOAWAY/connection WINDOW_UPDATE), so
             # control frames relay promptly instead of buffering until the next END_STREAM
             # (the peer then ACKs SETTINGS itself — no proxy-generated frames needed).
+            # Also at a WINDOW_UPDATE on any stream: the peer is blocked on that credit.
             end_of_stream = isinstance(frame, (HeadersFrame, DataFrame)) and 'END_STREAM' in frame.flags
-            if end_of_stream or frame.stream_id == 0:
+            if end_of_stream or frame.stream_id == 0 or isinstance(frame, WindowUpdateFrame):
                 wire_slice = bytes(self._wire_buf[:self._wire_cursor])
                 del self._wire_buf[:self._wire_cursor]
                 self._wire_cursor = 0
