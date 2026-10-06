@@ -21,7 +21,7 @@ from ...print_api import print_api
 from ...import ssh_remote
 
 from . import (
-    socket_base, creator, accepter, statistics_csv, ssl_base,
+    creator, accepter, statistics_csv, ssl_base,
     sni, buffered_socket, socket_client,
 )
 
@@ -546,7 +546,6 @@ class SocketWrapper:
         while True:
             engine_name: str = ''
             source_ip: str = ''
-            source_hostname: str = ''
             dest_port: int = 0
             destination_domain: str = ''
 
@@ -596,7 +595,6 @@ class SocketWrapper:
                 else:
                     self.statistics_writer.write_accept_error(
                         engine=engine_name,
-                        source_host=source_hostname,
                         source_ip=source_ip,
                         error_message=accept_error_message,
                         dest_port=str(dest_port),
@@ -611,7 +609,6 @@ class SocketWrapper:
                 full_string: str = f"{str(e)} | {exception_string}"
                 self.statistics_writer.write_accept_error(
                     engine=engine_name,
-                    source_host=source_hostname,
                     source_ip=source_ip,
                     error_message=full_string,
                     dest_port=str(dest_port),
@@ -668,7 +665,7 @@ class SocketWrapper:
     ):
         """
         Handle an accepted connection in its own thread.
-        Performs hostname resolution, process name detection, TLS detection, SSL wrapping,
+        Performs process name detection, TLS detection, SSL wrapping,
         and invokes the callable_function.
 
         :param client_socket: socket, client socket that was accepted.
@@ -687,7 +684,6 @@ class SocketWrapper:
         source_ip: str = client_address[0]
         source_port: int = client_address[1]
         process_name: str = ''
-        source_hostname: str = ''
 
         # Engine source_ip: a client the engine isn't bound to gets no engine (general module).
         # DNS already routes such clients elsewhere; this covers stale OS DNS caches and hardcoded IPs.
@@ -707,11 +703,6 @@ class SocketWrapper:
         handed_off: bool = False
 
         try:
-            # Not always there will be a hostname resolved by the IP address,
-            # so we will leave it empty if it fails.
-            source_hostname = socket_base.get_host_name_from_ip_address_with_timeout(source_ip)
-            source_hostname = source_hostname.lower()
-
             # This is the earliest stage to ask for process name.
             # SSH Remote / LOCALHOST script execution to identify process section.
             # If 'get_process_name' was set to True, then this will be executed.
@@ -750,7 +741,6 @@ class SocketWrapper:
                 self.logger.error(error)
                 self.statistics_writer.write_accept_error(
                     engine=engine_name,
-                    source_host=source_hostname,
                     source_ip=source_ip,
                     error_message=error,
                     dest_port=str(dest_port),
@@ -787,7 +777,7 @@ class SocketWrapper:
                     self.logger.error(f"Origin connect failed: {origin_connect_error}")
                     if self.fail_fast_on_origin_connect_error:
                         self.statistics_writer.write_accept_error(
-                            engine=engine_name, source_host=source_hostname, source_ip=source_ip,
+                            engine=engine_name, source_ip=source_ip,
                             error_message=f"Origin unreachable (fail-fast): {origin_connect_error}",
                             dest_port=str(dest_port), host=destination_domain, process_name=process_name)
                         client_socket.close()
@@ -863,7 +853,6 @@ class SocketWrapper:
                     # Write statistics after wrap if there was an error.
                     self.statistics_writer.write_accept_error(
                         engine=engine_name,
-                        source_host=source_hostname,
                         source_ip=source_ip,
                         error_message=accept_error_message,
                         dest_port=str(dest_port),
@@ -928,7 +917,6 @@ class SocketWrapper:
             full_string: str = f"{str(e)} | {exception_string}"
             self.statistics_writer.write_accept_error(
                 engine=engine_name,
-                source_host=source_hostname,
                 source_ip=source_ip,
                 error_message=full_string,
                 dest_port=str(dest_port),

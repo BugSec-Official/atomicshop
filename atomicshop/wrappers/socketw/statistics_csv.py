@@ -6,7 +6,7 @@ from ..loggingw import loggingw
 
 LOGGER_NAME: str = 'statistics'
 STATISTICS_HEADER: str = (
-    'request_time_sent,thread_id,engine,source_host,source_ip,tls,protocol,protocol2,protocol3,dest_port,host,path,command,status_code,request_size_bytes,'
+    'request_time_sent,thread_id,engine,source_ip,tls,protocol,protocol2,protocol3,dest_port,host,path,command,status_code,request_size_bytes,'
     'response_size_bytes,file_path,process_cmd,action,error')
 
 
@@ -51,7 +51,6 @@ class StatisticsCSVWriter(loggingw.CsvLogger):
             self,
             thread_id: str,
             engine: str,
-            source_host: str,
             source_ip: str,
             host: str,
             tls_type: str,
@@ -83,7 +82,6 @@ class StatisticsCSVWriter(loggingw.CsvLogger):
             timestamp,
             thread_id,
             engine,
-            source_host,
             source_ip,
             tls_info,
             protocol,
@@ -108,7 +106,6 @@ class StatisticsCSVWriter(loggingw.CsvLogger):
             self,
             engine: str,
             source_ip: str,
-            source_host: str,
             error_message: str,
             dest_port: str,
             host: str,
@@ -121,7 +118,6 @@ class StatisticsCSVWriter(loggingw.CsvLogger):
 
         :param engine: string, engine name.
         :param source_ip: string, source IP address.
-        :param source_host: string, source host name.
         :param error_message: string, error message.
         :param dest_port: string, destination port.
         :param host: string, host, the domain or IP address.
@@ -133,7 +129,6 @@ class StatisticsCSVWriter(loggingw.CsvLogger):
         self.write_row(
             thread_id=thread_id,
             engine=engine,
-            source_host=source_host,
             source_ip=source_ip,
             tls_type='',
             tls_version='',
