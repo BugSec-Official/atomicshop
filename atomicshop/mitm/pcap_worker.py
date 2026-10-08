@@ -1,8 +1,13 @@
 import os
+import queue
 import multiprocessing
 from datetime import datetime
 
 from . import recs_files
+
+
+# Max idle wait on the queue, so past-day files are closed soon after midnight even with no traffic.
+IDLE_CHECK_SECONDS: float = 10
 
 
 def pcap_writer_worker(
@@ -33,8 +38,9 @@ def pcap_writer_worker(
     from scapy.utils import PcapNgWriter
     from scapy.config import conf
 
-    # {engine_dir: {'writer': PcapNgWriter, 'date': str, 'path': str}}
+    # {engine_dir: {'writer': PcapNgWriter, 'path': str}} — all open writers belong to writers_date.
     writers: dict = {}
+    writers_date: str = datetime.now().strftime(recs_files.REC_FILE_DATE_FORMAT)
 
     # Per-connection TCP sequence tracking so Wireshark sees coherent streams.
     # Key: frozenset({(ip1, port1), (ip2, port2)})
@@ -43,20 +49,38 @@ def pcap_writer_worker(
 
     try:
         while True:
-            msg = pcap_queue.get()
+            try:
+                msg = pcap_queue.get(timeout=IDLE_CHECK_SECONDS)
+            except queue.Empty:
+                msg = False
 
             # None = stop signal
             if msg is None:
                 break
 
-            engine_dir = msg['engine_dir']
             current_date = datetime.now().strftime(recs_files.REC_FILE_DATE_FORMAT)
 
-            # Get or create writer, handle daily rotation
+            # Day changed: close every engine's file (idle ones too), so past-day files are released
+            # right after midnight instead of at each engine's first packet of the new day.
+            if current_date != writers_date:
+                for info in writers.values():
+                    try:
+                        info['writer'].close()
+                        logger.info(f"Closed pcap file: {info['path']}")
+                    except OSError as e:
+                        logger.error(f"Failed to close pcap file: {info['path']} | {e}")
+                writers.clear()
+                writers_date = current_date
+
+            # Idle timeout, no packet.
+            if msg is False:
+                continue
+
+            engine_dir = msg['engine_dir']
+
+            # Get or create today's writer.
             writer_info = writers.get(engine_dir)
-            if writer_info is None or writer_info['date'] != current_date:
-                if writer_info is not None:
-                    writer_info['writer'].close()
+            if writer_info is None:
                 pcap_file_path = f'{engine_dir}{os.sep}{current_date}.pcapng'
                 append = os.path.exists(pcap_file_path) and os.path.getsize(pcap_file_path) > 0
                 # PcapNgWriter always opens in "wb" (truncating). When appending,
@@ -70,7 +94,7 @@ def pcap_writer_worker(
                     # manually — scapy's write() needs it.
                     writer.linktype = conf.l2types.layer2num[IP]
                 writer.sync = True
-                writer_info = {'writer': writer, 'date': current_date, 'path': pcap_file_path}
+                writer_info = {'writer': writer, 'path': pcap_file_path}
                 writers[engine_dir] = writer_info
 
             # Max payload per packet: 65000 bytes.
