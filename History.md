@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.14.19 - 08.10.2026
+  * mitm/pcap_worker - daily pcapng files of all engines are closed right after midnight, not at each engine's first packet of the new day (yesterday's file can be moved at once).
 * 3.14.18 - 06.10.2026
   * mitm/connection_thread_worker, mitm/message, wrappers/socketw/socket_wrapper, wrappers/socketw/statistics_csv - removed the client IP reverse-DNS (hostname) lookup; statistics.csv no longer has the source_host column.
 * 3.14.17 - 01.10.2026
