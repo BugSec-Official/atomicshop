@@ -110,7 +110,9 @@ def _graceful_shutdown(signum, frame):
 
 
 def exit_cleanup():
-    if not config_static.MainConfig.is_localhost:
+    # name stays None until get_ipv4s_for_tcp_server() resolves the adapter (e.g. config load failed): nothing to revert.
+    # Checked first: is_localhost is unset if config.toml failed to parse.
+    if NETWORK_INTERFACE_SETTINGS.name is not None and not config_static.MainConfig.is_localhost:
         # Remove all the virtual IPs from the interface.
         current_virtual_ips: list[str] = networks.get_interface_ips_powershell(NETWORK_INTERFACE_SETTINGS.name, "virtual")
         for ip in current_virtual_ips:

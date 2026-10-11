@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 3.14.20 - 11.10.2026
+  * mitm/import_config, mitm/config_static, mitm/mitm_main, wrappers/socketw/certificator, wrappers/socketw/sni, wrappers/socketw/socket_wrapper - config.toml [certificates] keys renamed to 'reuse_server_socket_certificate' / 'reuse_server_socket_certificate_download_directory' (old 'sni_get_server_certificate_from_server_socket' / 'sni_server_certificate_from_server_socket_download_directory' are still read as a fallback); SocketWrapper / SNISetup / Certificator parameters renamed the same way.
+  * mitm/mitm_main - exit cleanup no longer touches the network adapter when startup failed before the adapter was resolved (e.g. config load error).
 * 3.14.19 - 08.10.2026
   * mitm/pcap_worker - daily pcapng files of all engines are closed right after midnight, not at each engine's first packet of the new day (yesterday's file can be moved at once).
 * 3.14.18 - 06.10.2026
