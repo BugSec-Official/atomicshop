@@ -38,8 +38,8 @@ class SNISetup:
             sni_add_new_domains_to_default_server_certificate: bool,
             sni_create_server_certificate_for_each_domain: bool,
             sni_server_certificates_cache_directory: str,
-            sni_get_server_certificate_from_server_socket: bool,
-            sni_server_certificate_from_server_socket_download_directory: str,
+            reuse_server_socket_certificate: bool,
+            reuse_server_socket_certificate_download_directory: str,
             custom_server_certificate_usage: bool,
             custom_server_certificate_path: str,
             custom_private_key_path: str,
@@ -63,9 +63,9 @@ class SNISetup:
         self.sni_add_new_domains_to_default_server_certificate = sni_add_new_domains_to_default_server_certificate
         self.sni_create_server_certificate_for_each_domain = sni_create_server_certificate_for_each_domain
         self.sni_server_certificates_cache_directory = sni_server_certificates_cache_directory
-        self.sni_get_server_certificate_from_server_socket = sni_get_server_certificate_from_server_socket
-        self.sni_server_certificate_from_server_socket_download_directory = (
-            sni_server_certificate_from_server_socket_download_directory)
+        self.reuse_server_socket_certificate = reuse_server_socket_certificate
+        self.reuse_server_socket_certificate_download_directory = (
+            reuse_server_socket_certificate_download_directory)
         self.custom_server_certificate_usage = custom_server_certificate_usage
         self.custom_server_certificate_path = custom_server_certificate_path
         self.custom_private_key_path = custom_private_key_path
@@ -98,9 +98,9 @@ class SNISetup:
             default_server_certificate_directory=self.default_server_certificate_directory,
             default_certificate_domain_list=self.default_certificate_domain_list,
             sni_server_certificates_cache_directory=self.sni_server_certificates_cache_directory,
-            sni_get_server_certificate_from_server_socket=self.sni_get_server_certificate_from_server_socket,
-            sni_server_certificate_from_server_socket_download_directory=(
-                self.sni_server_certificate_from_server_socket_download_directory),
+            reuse_server_socket_certificate=self.reuse_server_socket_certificate,
+            reuse_server_socket_certificate_download_directory=(
+                self.reuse_server_socket_certificate_download_directory),
             custom_server_certificate_usage=self.custom_server_certificate_usage,
             custom_server_certificate_path=self.custom_server_certificate_path,
             custom_private_key_path=self.custom_private_key_path,

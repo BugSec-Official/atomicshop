@@ -57,8 +57,8 @@ class SocketWrapper:
             sni_add_new_domains_to_default_server_certificate: bool = False,
             sni_create_server_certificate_for_each_domain: bool = False,
             sni_server_certificates_cache_directory: str = None,
-            sni_get_server_certificate_from_server_socket: bool = False,
-            sni_server_certificate_from_server_socket_download_directory: str = None,
+            reuse_server_socket_certificate: bool = False,
+            reuse_server_socket_certificate_download_directory: str = None,
             skip_extension_id_list: list = None,
             custom_server_certificate_usage: bool = False,
             custom_server_certificate_path: str = None,
@@ -128,9 +128,9 @@ class SocketWrapper:
             server will be added to default server certificate.
         :param sni_create_server_certificate_for_each_domain: boolean, if True, server certificate will be
             created and used for each domain that hit the tcp server.
-        :param sni_get_server_certificate_from_server_socket: boolean, if True, server certificate will be
+        :param reuse_server_socket_certificate: boolean, if True, server certificate will be
             downloaded from the server socket.
-        :param sni_server_certificate_from_server_socket_download_directory: string, path to directory where
+        :param reuse_server_socket_certificate_download_directory: string, path to directory where
             server certificate will be downloaded from the server socket.
         :param default_server_certificate_name: default server certificate name.
         :param default_certificate_domain_list: list of string, domains to create the default certificate with.
@@ -200,9 +200,9 @@ class SocketWrapper:
         self.sni_add_new_domains_to_default_server_certificate: bool = sni_add_new_domains_to_default_server_certificate
         self.sni_create_server_certificate_for_each_domain: bool = sni_create_server_certificate_for_each_domain
         self.sni_server_certificates_cache_directory: str | None = sni_server_certificates_cache_directory
-        self.sni_get_server_certificate_from_server_socket: bool = sni_get_server_certificate_from_server_socket
-        self.sni_server_certificate_from_server_socket_download_directory: str | None = \
-            sni_server_certificate_from_server_socket_download_directory
+        self.reuse_server_socket_certificate: bool = reuse_server_socket_certificate
+        self.reuse_server_socket_certificate_download_directory: str | None = \
+            reuse_server_socket_certificate_download_directory
         self.skip_extension_id_list: list | None = skip_extension_id_list
         self.custom_server_certificate_usage: bool = custom_server_certificate_usage
         self.custom_server_certificate_path: str | None = custom_server_certificate_path
@@ -337,9 +337,9 @@ class SocketWrapper:
                       "If you're not going to use default certificates [default_server_certificate_usage = False]"
             raise SocketWrapperConfigurationValuesError(message)
 
-        if self.sni_get_server_certificate_from_server_socket and \
+        if self.reuse_server_socket_certificate and \
                 not self.sni_create_server_certificate_for_each_domain:
-            message = "You set [sni_get_server_certificate_from_server_socket = True],\n" \
+            message = "You set [reuse_server_socket_certificate = True],\n" \
                       "But you didn't set [sni_create_server_certificate_for_each_domain = True]."
             raise SocketWrapperConfigurationValuesError(message)
 
@@ -744,10 +744,10 @@ class SocketWrapper:
                     sni_server_certificates_cache_directory=self.sni_server_certificates_cache_directory,
                     sni_create_server_certificate_for_each_domain=(
                         self.sni_create_server_certificate_for_each_domain),
-                    sni_get_server_certificate_from_server_socket=(
-                        self.sni_get_server_certificate_from_server_socket),
-                    sni_server_certificate_from_server_socket_download_directory=(
-                        self.sni_server_certificate_from_server_socket_download_directory),
+                    reuse_server_socket_certificate=(
+                        self.reuse_server_socket_certificate),
+                    reuse_server_socket_certificate_download_directory=(
+                        self.reuse_server_socket_certificate_download_directory),
                     skip_extension_id_list=self.skip_extension_id_list,
                     ca_certificate_name=self.ca_certificate_name,
                     ca_certificate_filepath=self.ca_certificate_filepath,

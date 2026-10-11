@@ -23,8 +23,8 @@ class Certificator:
             default_server_certificate_directory: str,
             default_certificate_domain_list: list,
             sni_server_certificates_cache_directory: str,
-            sni_get_server_certificate_from_server_socket: bool,
-            sni_server_certificate_from_server_socket_download_directory: str,
+            reuse_server_socket_certificate: bool,
+            reuse_server_socket_certificate_download_directory: str,
             custom_server_certificate_usage: bool,
             custom_server_certificate_path: str,
             custom_private_key_path: str,
@@ -41,9 +41,9 @@ class Certificator:
         self.default_server_certificate_directory = default_server_certificate_directory
         self.default_certificate_domain_list = default_certificate_domain_list
         self.sni_server_certificates_cache_directory = sni_server_certificates_cache_directory
-        self.sni_get_server_certificate_from_server_socket = sni_get_server_certificate_from_server_socket
-        self.sni_server_certificate_from_server_socket_download_directory = (
-            sni_server_certificate_from_server_socket_download_directory)
+        self.reuse_server_socket_certificate = reuse_server_socket_certificate
+        self.reuse_server_socket_certificate_download_directory = (
+            reuse_server_socket_certificate_download_directory)
         self.custom_server_certificate_usage = custom_server_certificate_usage
         self.custom_server_certificate_path = custom_server_certificate_path
         self.custom_private_key_path = custom_private_key_path
@@ -144,11 +144,11 @@ class Certificator:
     ):
         # === Connect to the domain and get the certificate. ===========================================================
         certificate_from_socket_x509 = None
-        if self.sni_get_server_certificate_from_server_socket:
+        if self.reuse_server_socket_certificate:
             # Generate PEM certificate file path string for downloaded certificates. Signed certificates will go to the
             # 'certs' folder.
             certificate_from_socket_file_path: str = \
-                self.sni_server_certificate_from_server_socket_download_directory + \
+                self.reuse_server_socket_certificate_download_directory + \
                 os.sep + sni_received_parameters.destination_name + ".pem"
             # Get client ip.
             client_ip = socket_base.get_source_address_from_socket(sni_received_parameters.ssl_socket)[0]
