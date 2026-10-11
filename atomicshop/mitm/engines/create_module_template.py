@@ -103,7 +103,7 @@ class CreateModuleTemplate:
 
         config_file_path = self.new_engine_directory + os.sep + CONFIG_FILE_NAME
 
-        with open(config_file_path, 'w') as output_file:
+        with open(config_file_path, 'w', encoding='utf-8') as output_file:
             output_file.write('\n'.join(config_lines_list))
 
         console.print(f"Config File Created: {config_file_path}", style="bright_blue")
@@ -135,7 +135,7 @@ class CreateModuleTemplate:
 
             new_module_full_path = self.new_engine_directory + os.sep + new_module_file_name
 
-            with open(new_module_full_path, 'w') as output_file:
+            with open(new_module_full_path, 'w', encoding='utf-8') as output_file:
                 output_file.write(new_content_string)
 
         print(f"Converted: {file_path}")
