@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 3.14.21 - 11.10.2026
+  * mitm/engines/create_module_template - new engine files and engine_config.toml are written as UTF-8 instead of the Windows code page (a non-ASCII character from the reference became an invalid byte such as 0x92; a non-ASCII engine name crashed the template).
+  * mitm/engines/__reference_general/responder___reference_general - typographic quotes in a comment replaced with ASCII.
 * 3.14.20 - 11.10.2026
   * mitm/import_config, mitm/config_static, mitm/mitm_main, wrappers/socketw/certificator, wrappers/socketw/sni, wrappers/socketw/socket_wrapper - config.toml [certificates] keys renamed to 'reuse_server_socket_certificate' / 'reuse_server_socket_certificate_download_directory' (old 'sni_get_server_certificate_from_server_socket' / 'sni_server_certificate_from_server_socket_download_directory' are still read as a fallback); SocketWrapper / SNISetup / Certificator parameters renamed the same way.
   * mitm/mitm_main - exit cleanup no longer touches the network adapter when startup failed before the adapter was resolved (e.g. config load error).

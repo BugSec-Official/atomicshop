@@ -258,7 +258,7 @@ class ResponderGeneral(ResponderParent):
     #     resp_body_text: bytes = b"<html><body>TEST OK!</body></html>\n"
     #     resp_status_code: int = 200
     #     resp_headers: dict = {
-    #         # Tell the browser it’s plain text (could be “text/html” if you wrap it in HTML).
+    #         # Tell the browser it's plain text (could be "text/html" if you wrap it in HTML).
     #         "Content-Type": "text/html; charset=utf-8"}
     #
     #     # Build the raw bytes to send.
