@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.14.22 - 18.10.2026
+  * basics/multiprocesses - 'MultiProcessorRecursive' removed. Its only user (FDB) keeps its own fixed copy; this one re-raised worker errors inside the pool's result thread, which killed the thread and hung the next run_process(). The unused 'threading' import was removed with it.
 * 3.14.21 - 11.10.2026
   * mitm/engines/create_module_template - new engine files and engine_config.toml are written as UTF-8 instead of the Windows code page (a non-ASCII character from the reference became an invalid byte such as 0x92; a non-ASCII engine name crashed the template).
   * mitm/engines/__reference_general/responder___reference_general - typographic quotes in a comment replaced with ASCII.
