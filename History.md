@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.14.23 - 22.10.2026
+  * mitm/ssh_broker - every target host has its own request queue and 3 worker threads, each with its own SSH connection, so a slow or unreachable host no longer delays process-name lookups of other hosts. After 3 failed lookups in a row a host is answered without SSH for 30 seconds, then one lookup re-tests it. Requests whose TCP server already stopped waiting are skipped.
 * 3.14.22 - 18.10.2026
   * basics/multiprocesses - 'MultiProcessorRecursive' removed. Its only user (FDB) keeps its own fixed copy; this one re-raised worker errors inside the pool's result thread, which killed the thread and hung the next run_process(). The unused 'threading' import was removed with it.
 * 3.14.21 - 11.10.2026
