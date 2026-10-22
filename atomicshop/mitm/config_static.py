@@ -148,6 +148,15 @@ class ProcessName:
 
     ssh_script_to_execute: Literal['process_from_port', 'process_from_ipv4'] = 'process_from_port'
 
+    # SSH broker tuning (no config.toml key — edit values here).
+    ssh_pool_threads: int = 16                          # shared pool for healthy hosts
+    ssh_connections_per_host: int = 3                   # healthy host: max parallel lookups
+    ssh_host_fail_limit: int = 3                        # failures in a row -> answer "host down" without SSH
+    ssh_host_down_seconds: float = 30.0                 # how long "host down" answers last before one retry
+    ssh_problem_thread_idle_seconds: float = 300.0      # dedicated thread closes after this long with no requests
+    ssh_connection_idle_seconds: float = 300.0          # unused SSH connection is closed after this long
+    ssh_problem_host_forget_seconds: float = 86400.0    # problematic host's row deleted after this long with no requests
+
 
 @dataclass
 class Performance:
