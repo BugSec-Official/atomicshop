@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.14.25 - 29.10.2026
+  * http_parse - the request/response body is read also when the Content-Length header name is not written exactly 'Content-Length' (e.g. lowercase 'content-length'); before, 'body' and 'content_length' stayed None. A response with 'Content-Length: 0' gets an empty body instead of the whole response.
 * 3.14.24 - 22.10.2026
   * mitm/ssh_broker, mitm/config_static - healthy hosts share one fixed pool of 16 threads again (each host up to 3 SSH connections; its extra requests wait in the host's own line, not in a pool thread). A host whose lookup fails gets its own thread until a lookup succeeds, then returns to the pool; on its own thread it is answered without SSH for 30 seconds after 3 failed lookups in a row. Unused SSH connections and idle problem-host threads close after 5 minutes, and a problem host is forgotten after 24 hours without requests. The values are in config_static.ProcessName (ssh_*), not in config.toml.
 * 3.14.23 - 22.10.2026
