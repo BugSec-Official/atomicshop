@@ -150,8 +150,10 @@ class HTTPRequestParse(BaseHTTPRequestHandler):
 
             # Before checking for body, we need to make sure that ".headers" property exists, if not, return empty values.
             if hasattr(self, 'headers'):
-                # The "body" of request is in the 'Content-Length' key. If it exists in "headers" - get the body
-                if 'Content-Length' in self.headers.keys():
+                # The "body" of request is in the 'Content-Length' key. If it exists in "headers" - get the body.
+                # 'in self.headers' is case-insensitive; 'in self.headers.keys()' is a plain list and missed
+                # 'content-length' (lowercase header names).
+                if 'Content-Length' in self.headers:
                     # "self.headers.get('Content-Length')" returns number in string format, "int" converts it to integer
                     self.content_length = int(self.headers.get('Content-Length'))
                     self.body = self.rfile.read(self.content_length)
@@ -247,7 +249,8 @@ class HTTPResponseParse:
                 # if not, return empty values.
                 self.response_raw_parsed.content_length = None
                 self.response_raw_parsed.body = None
-                if header_exists and 'Content-Length' in self.response_raw_parsed.headers.keys():
+                # 'in headers' is case-insensitive, unlike 'in headers.keys()' (a plain list).
+                if header_exists and 'Content-Length' in self.response_raw_parsed.headers:
                     # The "body" of response is in the 'Content-Length' key. If it exists in "headers" - get the body.
                     # "self.response_raw_decoded.headers.get('Content-Length')" returns number in string format,
                     # "int" converts it to integer.
@@ -255,6 +258,11 @@ class HTTPResponseParse:
                     # Basically we need to extract only the number of bytes specified in 'Content-Length' from the end
                     # of the response that we received.
                     # self.response_raw_bytes[-23:]
-                    self.response_raw_parsed.body = self.response_raw_bytes[-self.response_raw_parsed.content_length:]
+                    # 'Content-Length: 0' is checked separately: [-0:] is the whole response, not an empty body.
+                    if self.response_raw_parsed.content_length:
+                        self.response_raw_parsed.body = (
+                            self.response_raw_bytes[-self.response_raw_parsed.content_length:])
+                    else:
+                        self.response_raw_parsed.body = b''
 
         return self.response_raw_parsed, self.is_http, self.error
