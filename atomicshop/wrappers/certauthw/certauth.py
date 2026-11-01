@@ -11,6 +11,9 @@ import threading
 from .. import pyopensslw
 from ... import domains, ip_addresses, certificates
 
+from cryptography import x509
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.serialization import pkcs12
 from OpenSSL import crypto
 
 
@@ -178,10 +181,13 @@ class CertificateAuthority(object):
         return res[2]
 
     def get_root_PKCS12(self):
-        p12 = crypto.PKCS12()
-        p12.set_certificate(self.ca_cert)
-        p12.set_privatekey(self.ca_key)
-        return p12.export()
+        # pyOpenSSL 26.0.0 removed crypto.PKCS12. Not encrypted, as its export() without a passphrase was.
+        return pkcs12.serialize_key_and_certificates(
+            name=None,
+            key=self.ca_key.to_cryptography_key(),
+            cert=self.ca_cert.to_cryptography(),
+            cas=None,
+            encryption_algorithm=serialization.NoEncryption())
 
     def get_root_pem(self):
         return self.ca_file_cache.get(ROOT_CA)
@@ -192,28 +198,24 @@ class CertificateAuthority(object):
     def generate_ca_root(self, ca_name, hash_algo: str = 'sha256'):
         # Generate key
         key = pyopensslw.generate_private_key()
+        public_key = key.to_cryptography_key().public_key()
 
-        # Generate cert
-        cert = pyopensslw.generate_server_certificate_empty(ca_name, self.cert_not_before, self.cert_not_after)
+        # Generate self-signed cert. Built with cryptography: pyOpenSSL 26.4.0 removed X509Extension.
+        name = pyopensslw.name_from_common_name(ca_name)
+        builder = pyopensslw.certificate_builder(
+            subject=name, issuer=name, public_key=public_key,
+            seconds_not_before=self.cert_not_before, seconds_not_after=self.cert_not_after)
 
-        cert.set_issuer(cert.get_subject())
-        cert.set_pubkey(key)
+        builder = builder.add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
+        builder = builder.add_extension(
+            x509.KeyUsage(
+                digital_signature=False, content_commitment=False, key_encipherment=False,
+                data_encipherment=False, key_agreement=False, key_cert_sign=True, crl_sign=True,
+                encipher_only=False, decipher_only=False),
+            critical=True)
+        builder = builder.add_extension(x509.SubjectKeyIdentifier.from_public_key(public_key), critical=False)
 
-        cert.add_extensions([
-            crypto.X509Extension(b"basicConstraints",
-                                 True,
-                                 b"CA:TRUE, pathlen:0"),
-
-            crypto.X509Extension(b"keyUsage",
-                                 True,
-                                 b"keyCertSign, cRLSign"),
-
-            crypto.X509Extension(b"subjectKeyIdentifier",
-                                 False,
-                                 b"hash",
-                                 subject=cert),
-            ])
-        cert.sign(key, hash_algo)
+        cert = pyopensslw.sign_certificate(builder, key, hash_algo)
 
         return cert, key
 
