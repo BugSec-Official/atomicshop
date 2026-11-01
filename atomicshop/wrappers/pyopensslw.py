@@ -1,7 +1,17 @@
+import ipaddress
+from datetime import datetime, timedelta, timezone
 from secrets import randbits
+
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes
+from cryptography.x509.oid import NameOID
 from OpenSSL import crypto
 
 from .. import certificates
+
+# pyOpenSSL 26.4.0 removed X509Req, X509Extension and X509.add_extensions. Certificates that need extensions
+# and certificate requests are built with cryptography's builders; certificates are handed back as pyOpenSSL
+# X509 objects, which the callers keep working with.
 
 
 def convert_der_to_x509_object(certificate) -> crypto.X509:
@@ -69,18 +79,80 @@ def generate_private_key(crypto_type=crypto.TYPE_RSA, bits: int = 2048):
     return key
 
 
+def _hash_algorithm(hash_algo: str) -> hashes.HashAlgorithm:
+    """'sha256' -> hashes.SHA256(), the form cryptography's builders take."""
+    return getattr(hashes, hash_algo.upper())()
+
+
+def name_from_common_name(name) -> x509.Name:
+    # X.520 ub-common-name caps CN at 64 characters; long FQDNs overflow the ASN.1 encoder. Full host stays in SAN.
+    if isinstance(name, bytes):
+        name = name.decode('utf-8')
+    return x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, name[:64])])
+
+
+def _random_serial_number() -> int:
+    # RFC 5280: serial must be positive and non-zero
+    # 1 … 2⁶⁴-1
+    serial_number = randbits(64)
+    if serial_number <= 0:
+        raise RuntimeError(f"Refusing to create a certificate with non-positive serial: {str(serial_number)}")
+    return serial_number
+
+
+def certificate_builder(
+        subject: x509.Name,
+        issuer: x509.Name,
+        public_key,
+        seconds_not_before: int = 0,
+        seconds_not_after: int = certificates.SECONDS_NOT_AFTER_3_YEARS
+) -> x509.CertificateBuilder:
+    """Start a cryptography certificate (always X.509 v3) with a random serial, valid from now.
+
+    :param subject: cryptography x509.Name of the certificate.
+    :param issuer: cryptography x509.Name of the issuer; the subject itself for a self-signed certificate.
+    :param public_key: cryptography public key the certificate is for.
+    :param seconds_not_before: int, seconds from now when the certificate becomes valid. Probably should be 0.
+    :param seconds_not_after: int, seconds from now when the certificate stops being valid.
+    :return: cryptography x509.CertificateBuilder. Add extensions to it, then pass it to 'sign_certificate'.
+    """
+
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    return (x509.CertificateBuilder()
+            .subject_name(subject)
+            .issuer_name(issuer)
+            .public_key(public_key)
+            .serial_number(_random_serial_number())
+            .not_valid_before(now + timedelta(seconds=seconds_not_before))
+            .not_valid_after(now + timedelta(seconds=seconds_not_after)))
+
+
+def sign_certificate(builder: x509.CertificateBuilder, signing_key: crypto.PKey, hash_algo: str = 'sha256') -> crypto.X509:
+    """Sign a cryptography certificate builder and return the certificate as pyOpenSSL X509 object.
+
+    :param builder: cryptography x509.CertificateBuilder, e.g. from 'certificate_builder'.
+    :param signing_key: pyOpenSSL private key of the issuer.
+    :param hash_algo: string, hash algorithm. Default: 'sha256'.
+    :return: certificate in pyOpenSSL x509 object.
+    """
+
+    certificate = builder.sign(signing_key.to_cryptography_key(), _hash_algorithm(hash_algo))
+    return crypto.X509.from_cryptography(certificate)
+
+
 def generate_certificate_signing_request(domain=None, certificate=None, key=None, hash_algo: str = 'sha256'):
     """Generate CSR - Certificate Signing Request.
 
-    Using pyOpenSSL.
+    Using cryptography: pyOpenSSL 26.4.0 removed its X509Req.
 
     :param domain: domain name that will be used for CSR CN field.
         If 'certificate' and 'domain' are provided, 'domain' will be ignored.
-    :param certificate: certificate object. If provided, domain name will be taken from it.
+    :param certificate: pyOpenSSL x509 certificate object. If provided, domain name will be taken from it.
         If 'certificate' and 'domain' are provided, 'domain' will be ignored.
-    :param key: private key. If not provided, a new RSA 2048-bit key will be generated.
+    :param key: pyOpenSSL private key. If not provided, a new RSA 2048-bit key will be generated.
     :param hash_algo: string, hash algorithm. Default: 'sha256'.
-    :return: certificate request.
+    :return: tuple of the pyOpenSSL private key and the request,
+        a cryptography x509.CertificateSigningRequest (was pyOpenSSL X509Req before 3.14.26).
     """
 
     if not domain and not certificate:
@@ -90,20 +162,14 @@ def generate_certificate_signing_request(domain=None, certificate=None, key=None
     if not key:
         key = generate_private_key()
 
-    # Create a new certificate request.
-    csr_request = crypto.X509Req()
-
     if not certificate:
-        # X.520 ub-common-name caps CN at 64 octets; long FQDNs overflow the ASN.1 encoder. Full host stays in SAN.
-        csr_request.get_subject().CN = domain[:64]
+        subject = name_from_common_name(domain)
     else:
         # Set the domain name from provided certificate.
-        csr_request.get_subject().CN = certificate.get_subject().CN
+        subject = name_from_common_name(certificate.get_subject().CN)
 
-    # Set the public key.
-    csr_request.set_pubkey(key)
-    # Sign the request with the private key.
-    csr_request.sign(key, hash_algo)
+    csr_request = x509.CertificateSigningRequestBuilder().subject_name(subject).sign(
+        key.to_cryptography_key(), _hash_algorithm(hash_algo))
 
     return key, csr_request
 
@@ -159,43 +225,38 @@ def generate_server_certificate_ca_signed(
     if not cert_fqdns:
         cert_fqdns = set()
 
-    # The host name must be encoded in UTF-8. Most of the examples state that it can be used as string, which is great,
-    # but in reality there will be numerous SSL Protocol mismatch errors from the client side.
-    host_utf8 = host.encode('utf-8')
+    # The new key of the server certificate.
+    key = generate_private_key()
 
-    # Generate key and CSR - Certificate Signing Request.
-    key, csr_request = generate_certificate_signing_request(domain=host_utf8, certificate=certificate)
-
-    if not certificate:
-        # Generate Cert
-        server_certificate = generate_server_certificate_empty(host_utf8, seconds_not_before, seconds_not_after)
-    else:
+    if certificate:
+        # Re-sign the given certificate (e.g. one taken from the real server): it keeps its subject, serial,
+        # validity and extensions, and gets the CA as issuer and the new key.
         server_certificate = certificate
+        server_certificate.set_issuer(ca_cert.get_subject())
+        server_certificate.set_pubkey(key)
+        server_certificate.sign(ca_key, hash_algo)
+        return server_certificate, key
 
-    server_certificate.set_issuer(ca_cert.get_subject())
-    server_certificate.set_pubkey(csr_request.get_pubkey())
+    all_hosts = [x509.DNSName(host)]
 
-    if not certificate:
-        all_hosts = ['DNS:'+host]
+    if wildcard:
+        all_hosts += [x509.DNSName('*.' + host)]
 
-        if wildcard:
-            all_hosts += ['DNS:*.' + host]
+    elif is_host_ip:
+        all_hosts += [x509.IPAddress(ipaddress.ip_address(host))]
 
-        elif is_host_ip:
-            all_hosts += ['IP:' + host]
+    all_hosts += [x509.IPAddress(ipaddress.ip_address(str(ip).strip())) for ip in cert_ips]
+    all_hosts += [x509.DNSName(str(fqdn).strip()) for fqdn in cert_fqdns]
 
-        all_hosts += ['IP: {}'.format(ip) for ip in cert_ips]
-        all_hosts += ['DNS: {}'.format(fqdn) for fqdn in cert_fqdns]
+    builder = certificate_builder(
+        subject=name_from_common_name(host),
+        issuer=ca_cert.to_cryptography().subject,
+        public_key=key.to_cryptography_key().public_key(),
+        seconds_not_before=seconds_not_before,
+        seconds_not_after=seconds_not_after)
+    builder = builder.add_extension(x509.SubjectAlternativeName(all_hosts), critical=False)
 
-        san_hosts = ', '.join(all_hosts)
-        san_hosts = san_hosts.encode('utf-8')
-
-        server_certificate.add_extensions([
-            crypto.X509Extension(b'subjectAltName',
-                                 False,
-                                 san_hosts)])
-
-    server_certificate.sign(ca_key, hash_algo)
+    server_certificate = sign_certificate(builder, ca_key, hash_algo)
     return server_certificate, key
 
 
