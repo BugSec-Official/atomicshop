@@ -10,6 +10,10 @@ from ...basics import tracebacks
 from ..loggingw import loggingw
 
 
+class SSLErrorCustomFirstZeroByte(ssl.SSLError):
+    """TLS client finished the handshake, then closed without sending its first message."""
+
+
 def peek_first_bytes(
         client_socket,
         bytes_amount: int = 1,
