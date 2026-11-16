@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.14.28 - 16.11.2026
+  * mitm/connection_thread_worker, wrappers/socketw/receiver - new 'SSLErrorCustomFirstZeroByte' error (subclass of ssl.SSLError): when a TLS client finishes the handshake and closes the connection without sending any data on its first message, the 'client_receive' statistics row (request 0 bytes) gets this error and it is logged as critical. Before, the row had no error. Non-TLS connections and a close after the first message are unchanged.
 * 3.14.27 - 16.11.2026
   * mitm/engines/__parent/recorder___parent - in offline mode the responder's response is written to the pcap file as a server to client packet (before, only the client's request was written). Online recording is unchanged.
 * 3.14.26 - 01.11.2026
