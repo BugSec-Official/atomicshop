@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.14.27 - 16.11.2026
+  * mitm/engines/__parent/recorder___parent - in offline mode the responder's response is written to the pcap file as a server to client packet (before, only the client's request was written). Online recording is unchanged.
 * 3.14.26 - 01.11.2026
   * wrappers/pyopensslw, wrappers/certauthw/certauth - CA and server certificates (and certificate requests) are built with cryptography's builders: pyOpenSSL 26.4.0 removed X509Extension, X509Req and X509.add_extensions, so creating any certificate failed with it. The certificates are the same as before and are still returned as pyOpenSSL X509 / PKey objects. 'generate_certificate_signing_request' now returns a cryptography CertificateSigningRequest. 'get_root_PKCS12' works again (pyOpenSSL 26.0.0 had removed crypto.PKCS12).
   * Dependencies - 'cryptography>=46.0.5,<51' and 'pyopenssl>=26.0.0,<26.5' instead of exact pins, so the versions FACT pins (cryptography 50.0.1, pyopenssl 26.4.0) also satisfy atomicshop and 'pip install -U atomicshop' no longer switches them back. Tested with both ends.

@@ -172,7 +172,8 @@ def save_message_worker(
                 dest_ip = class_client_message.server_ip
                 dest_port = class_client_message.destination_port
                 timestamp = int(class_client_message.timestamp.timestamp())
-            elif class_client_message.action == "service_receive":
+            # Offline has no origin socket: the responder's reply is the server -> client packet.
+            elif class_client_message.action in ("service_receive", "client_responder_offline"):
                 raw_bytes = class_client_message.response_raw_bytes
                 source_ip = class_client_message.server_ip
                 source_port = class_client_message.destination_port
