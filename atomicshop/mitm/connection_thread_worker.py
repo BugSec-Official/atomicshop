@@ -588,6 +588,17 @@ def thread_worker_main(
             raise receiver.SSLErrorCustomFirstZeroByte(
                 "Client closed the TLS connection without sending any data on the first message")
 
+    def to_first_receive_custom_error(exc: BaseException) -> BaseException:
+        """On a TLS client's first receive, swap a listed stdlib error for its SSLErrorCustomFirst* twin."""
+        custom_class = receiver.FIRST_RECEIVE_CUSTOM_ERRORS.get(type(exc))
+        # A set close event means the service thread closed the sockets — not the client's doing.
+        if (custom_class is None or not is_tls or client_receive_count != 1
+                or exception_or_close_in_receiving_thread.is_set()):
+            return exc
+        custom_error = custom_class(str(exc))
+        custom_error.__cause__ = exc
+        return custom_error
+
     def receive_send_client_offline(
             client_message: ClientMessage,
             receiving_socket: ssl.SSLSocket | socket.socket,
@@ -609,7 +620,7 @@ def thread_worker_main(
             error_cause: BaseException | None = None
         except (ConnectionError, ssl.SSLError, TimeoutError, InterruptedError) as exc:
             received_raw_data = getattr(exc, 'received', b'')
-            error_cause = exc
+            error_cause = to_first_receive_custom_error(exc)
         # is_socket_closed acts as the stop signal for the receive loop —
         # set on clean EOF (b'') or any receive error.
         is_socket_closed: bool = (received_raw_data == b'') or (error_cause is not None)
@@ -728,7 +739,7 @@ def thread_worker_main(
             error_cause: BaseException | None = None
         except (ConnectionError, ssl.SSLError, TimeoutError, InterruptedError) as exc:
             received_raw_data = getattr(exc, 'received', b'')
-            error_cause = exc
+            error_cause = to_first_receive_custom_error(exc)
         is_socket_closed: bool = (received_raw_data == b'') or (error_cause is not None)
         error_on_receive: str | None = (
             f"{type(error_cause).__name__}: {error_cause}" if error_cause else None)
