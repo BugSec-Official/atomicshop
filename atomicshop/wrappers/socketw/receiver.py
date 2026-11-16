@@ -10,8 +10,40 @@ from ...basics import tracebacks
 from ..loggingw import loggingw
 
 
-class SSLErrorCustomFirstZeroByte(ssl.SSLError):
+class SSLErrorCustom(ssl.SSLError):
+    """Base of our own SSLError subclasses; str() is the plain message."""
+    def __str__(self) -> str:
+        # ssl.SSLError built from one message prints the args tuple: "('text',)".
+        return str(self.args[0]) if len(self.args) == 1 else super().__str__()
+
+
+class SSLErrorCustomFirstZeroByte(SSLErrorCustom):
     """TLS client finished the handshake, then closed without sending its first message."""
+
+
+# === Stdlib errors on a TLS client's first receive, renamed SSLErrorCustomFirst<stdlib name> ===
+class SSLErrorCustomFirstConnectionRefusedError(SSLErrorCustom):
+    """ConnectionRefusedError on a TLS client's first receive."""
+
+
+class SSLErrorCustomFirstConnectionAbortedError(SSLErrorCustom):
+    """ConnectionAbortedError on a TLS client's first receive."""
+
+
+class SSLErrorCustomFirstConnectionResetError(SSLErrorCustom):
+    """ConnectionResetError on a TLS client's first receive."""
+
+
+class SSLErrorCustomFirstTimeoutError(SSLErrorCustom):
+    """TimeoutError on a TLS client's first receive."""
+
+
+FIRST_RECEIVE_CUSTOM_ERRORS: dict[type[BaseException], type[SSLErrorCustom]] = {
+    ConnectionRefusedError: SSLErrorCustomFirstConnectionRefusedError,
+    ConnectionAbortedError: SSLErrorCustomFirstConnectionAbortedError,
+    ConnectionResetError: SSLErrorCustomFirstConnectionResetError,
+    TimeoutError: SSLErrorCustomFirstTimeoutError,
+}
 
 
 def peek_first_bytes(

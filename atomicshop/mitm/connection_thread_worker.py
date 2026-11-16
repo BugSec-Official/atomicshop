@@ -416,14 +416,24 @@ def thread_worker_main(
 
         return None
 
-    def first_zero_byte_error(received_raw_data: bytes, error_on_receive: str | None) -> str | None:
-        """Return the SSLErrorCustomFirstZeroByte text when a TLS client's first receive is a clean close."""
+    def first_receive_custom_error(received_raw_data: bytes, error_on_receive: str | None) -> str | None:
+        """On a TLS client's first receive, return the SSLErrorCustomFirst* error text; else the error as is."""
         # A set close flag means the service thread closed the sockets - not the client's doing.
-        if (is_tls and client_receive_count == 1 and received_raw_data == b'' and not error_on_receive
-                and not exception_or_close_in_receiving_thread):
+        if not is_tls or client_receive_count != 1 or exception_or_close_in_receiving_thread:
+            return error_on_receive
+
+        # Clean close before the first byte.
+        if received_raw_data == b'' and not error_on_receive:
             exc = receiver.SSLErrorCustomFirstZeroByte(
                 "Client closed the TLS connection without sending any data on the first message")
             return f"{type(exc).__name__}: {exc}"
+
+        # Receiver error texts start with the stdlib class name: swap it for the custom class name.
+        if error_on_receive:
+            for stdlib_class, custom_class in receiver.FIRST_RECEIVE_CUSTOM_ERRORS.items():
+                if error_on_receive.startswith(f"{stdlib_class.__name__}:"):
+                    return custom_class.__name__ + error_on_receive[len(stdlib_class.__name__):]
+
         return error_on_receive
 
     def receive_send_client_offline(
@@ -439,7 +449,7 @@ def thread_worker_main(
         network_logger.info(f"Initializing Receiver for Client cycle: {str(client_receive_count)}")
         received_raw_data, is_socket_closed, error_message = receiver.Receiver(
             ssl_socket=receiving_socket, logger=network_logger).receive()
-        error_message = first_zero_byte_error(received_raw_data, error_message)
+        error_message = first_receive_custom_error(received_raw_data, error_message)
         client_message.timestamp = datetime.now()
 
         process_client_raw_data(received_raw_data, error_message, client_message)
@@ -523,7 +533,7 @@ def thread_worker_main(
         # Getting message from the client over the socket using specific class.
         received_raw_data, is_socket_closed, error_on_receive = receiver.Receiver(
             ssl_socket=receiving_socket, logger=network_logger).receive()
-        error_on_receive = first_zero_byte_error(received_raw_data, error_on_receive)
+        error_on_receive = first_receive_custom_error(received_raw_data, error_on_receive)
         client_message.timestamp = datetime.now()
 
         process_client_raw_data(received_raw_data, error_on_receive, client_message)

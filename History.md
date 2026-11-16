@@ -1,6 +1,9 @@
 <!-- HISTORY -->
 ## History
 
+* 3.14.29 - 16.11.2026
+  * mitm/connection_thread_worker, wrappers/socketw/receiver - on the first message of a TLS client, the receive errors ConnectionRefusedError, ConnectionAbortedError, ConnectionResetError and TimeoutError are written to the statistics and the log with the 'SSLErrorCustomFirst' prefix (e.g. 'SSLErrorCustomFirstTimeoutError'; new classes, subclasses of ssl.SSLError). On later messages, on non-TLS connections and on the service side the names are unchanged.
+  * wrappers/socketw/receiver - fixed the 'SSLErrorCustomFirstZeroByte' text of 3.14.28: the message was written as a tuple, "('Client closed ...',)"; now it is the plain message.
 * 3.14.28 - 16.11.2026
   * mitm/connection_thread_worker, wrappers/socketw/receiver - new 'SSLErrorCustomFirstZeroByte' error (subclass of ssl.SSLError): when a TLS client finishes the handshake and closes the connection without sending any data on its first message, the 'client_receive' statistics row (request 0 bytes) gets this error and it is logged as critical. Before, the row had no error. Non-TLS connections and a close after the first message are unchanged.
 * 3.14.27 - 16.11.2026
