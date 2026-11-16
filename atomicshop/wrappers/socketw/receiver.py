@@ -14,10 +14,15 @@ from .framers.base import Framer
 
 # === Receive-path exceptions ===
 # Stdlib socket / TLS exceptions flow through unchanged. Receive-path failures
-# carry partial bytes via exc.received. PeerClosedMidMessage is the only custom
-# one — represents framer-level truncation with no stdlib equivalent.
+# carry partial bytes via exc.received. Custom ones cover cases with no stdlib
+# equivalent: PeerClosedMidMessage (framer-level truncation) and
+# SSLErrorCustomFirstZeroByte (TLS client left before its first byte).
 class PeerClosedMidMessage(ConnectionError):
     """Peer closed while a framer had a partial (truncated) message."""
+
+
+class SSLErrorCustomFirstZeroByte(ssl.SSLError):
+    """TLS client finished the handshake, then closed without sending its first message."""
 
 
 def recv_exact(

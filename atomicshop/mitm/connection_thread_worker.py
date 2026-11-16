@@ -580,6 +580,14 @@ def thread_worker_main(
             record_and_statistics_write(client_message)
         return error_on_send
 
+    def raise_on_first_zero_byte(received_raw_data: bytes) -> None:
+        """Raise SSLErrorCustomFirstZeroByte when a TLS client's first receive is a clean EOF."""
+        # A set close event means the service thread closed the sockets — not the client's doing.
+        if (is_tls and client_receive_count == 1 and received_raw_data == b''
+                and not exception_or_close_in_receiving_thread.is_set()):
+            raise receiver.SSLErrorCustomFirstZeroByte(
+                "Client closed the TLS connection without sending any data on the first message")
+
     def receive_send_client_offline(
             client_message: ClientMessage,
             receiving_socket: ssl.SSLSocket | socket.socket,
@@ -597,6 +605,7 @@ def thread_worker_main(
         # socket/TLS exceptions tagged with partial bytes as 'received'.
         try:
             received_raw_data: bytes = side_receiver.receive()
+            raise_on_first_zero_byte(received_raw_data)
             error_cause: BaseException | None = None
         except (ConnectionError, ssl.SSLError, TimeoutError, InterruptedError) as exc:
             received_raw_data = getattr(exc, 'received', b'')
@@ -715,6 +724,7 @@ def thread_worker_main(
         # socket/TLS exceptions tagged with partial bytes as 'received'.
         try:
             received_raw_data: bytes = side_receiver.receive()
+            raise_on_first_zero_byte(received_raw_data)
             error_cause: BaseException | None = None
         except (ConnectionError, ssl.SSLError, TimeoutError, InterruptedError) as exc:
             received_raw_data = getattr(exc, 'received', b'')
