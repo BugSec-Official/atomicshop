@@ -1,6 +1,8 @@
 <!-- HISTORY -->
 ## History
 
+* 3.14.30 - 24.11.2026
+  * wrappers/socketw/dns_server, mitm/config_static, mitm/mitm_main - DNS requests that are forwarded to the forwarding DNS service are sent from a pool of up to 50 threads, so a forwarding service that does not answer no longer delays the answers to other DNS requests (before, all requests waited, up to 30 seconds per unanswered request). Each attempt waits 2 seconds (was 5) and there are 2 attempts (was 6); if the forwarding service does not answer, the request is sent to the fallback '1.1.1.1'. The values are in config_static.DNSServer ('forwarding_dns_service_timeout', 'dns_service_retries', 'forwarding_dns_service_fallback_ipv4_list'), not in config.toml.
 * 3.14.29 - 16.11.2026
   * mitm/connection_thread_worker, wrappers/socketw/receiver - on the first message of a TLS client, the receive errors ConnectionRefusedError, ConnectionAbortedError, ConnectionResetError and TimeoutError are written to the statistics and the log with the 'SSLErrorCustomFirst' prefix (e.g. 'SSLErrorCustomFirstTimeoutError'; new classes, subclasses of ssl.SSLError). On later messages, on non-TLS connections and on the service side the names are unchanged.
   * wrappers/socketw/receiver - fixed the 'SSLErrorCustomFirstZeroByte' text of 3.14.28: the message was written as a tuple, "('Client closed ...',)"; now it is the plain message.
